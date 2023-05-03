@@ -2,11 +2,32 @@
 #include "canvas.h"
 #include <QtWidgets>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <dwmapi.h>
+#pragma comment(lib, "Dwmapi.lib")
+#endif
+
+/*------------------------------------------------------------------------------------------------*/
+
+namespace {
+
+    void setDarkTitleBar(WId window) {
+    #ifdef Q_OS_WIN
+        BOOL USE_DARK_MODE = true;
+        DwmSetWindowAttribute(
+            (HWND)window, DWMWINDOWATTRIBUTE::DWMWA_USE_IMMERSIVE_DARK_MODE,
+            &USE_DARK_MODE, sizeof(USE_DARK_MODE));
+    #endif
+    }
+
+}
+
 ui::stick_man::stick_man(QWidget* parent) :
     QMainWindow(parent)
 {
+    setDarkTitleBar(winId());
     setDockNestingEnabled(true);
-
     QScrollArea* scroller = new QScrollArea();
     scroller->setWidget(canvas_ = new canvas());
     scroller->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
