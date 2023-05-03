@@ -1,11 +1,17 @@
 #include "stick_man.h"
+#include "canvas.h"
 #include <QtWidgets>
 
 ui::stick_man::stick_man(QWidget* parent) :
     QMainWindow(parent)
 {
     setDockNestingEnabled(true);
-    setCentralWidget(canvas_ = new QWidget());
+
+    QScrollArea* scroller = new QScrollArea();
+    scroller->setWidget(canvas_ = new canvas());
+    scroller->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+
+    setCentralWidget(scroller);
     createMainMenu();
 }
 
