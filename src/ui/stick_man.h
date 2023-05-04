@@ -15,8 +15,12 @@ namespace ui {
         void addDockTab();
 
     private:
+        void showEvent(QShowEvent* event) override;
+        void resizeEvent(QResizeEvent* event) override;
+
         void createMainMenu();
 
+        bool was_shown_;
         QWidget* canvas_;
     };
 

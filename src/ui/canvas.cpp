@@ -1,5 +1,6 @@
 #include "canvas.h"
 #include <boost/geometry.hpp>
+#include <ranges>
 
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
@@ -32,7 +33,6 @@ namespace {
 }
 
 ui::canvas::canvas() {
-    setFixedSize(k_initial_dim, k_initial_dim);
 }
 
 void ui::canvas::paintEvent(QPaintEvent* event) {
@@ -62,3 +62,4 @@ void ui::canvas::mouseMoveEvent(QMouseEvent* event) {
 void ui::canvas::mouseReleaseEvent(QMouseEvent* event) {
 
 }
+

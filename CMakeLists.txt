@@ -17,8 +17,10 @@ set(CMAKE_AUTOUIC ON)
 add_executable(stick_man
     src/ui/stick_man.cpp
     src/ui/canvas.cpp
+    src/ui/tool_palette.cpp
+    src/ui/flowlayout.cpp
     src/main.cpp
-)
+ "src/ui/tool_palette.cpp" "src/ui/tool_palette.h")
 
 target_link_libraries(stick_man PRIVATE Qt6::Widgets)
 
