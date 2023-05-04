@@ -39,24 +39,26 @@ ui::stick_man::stick_man(QWidget* parent) :
 }
 
 void ui::stick_man::showEvent(QShowEvent* event) {
+    QMainWindow::showEvent(event);
     was_shown_ = true;
 }
 
 void ui::stick_man::resizeEvent(QResizeEvent* event) {
+    QMainWindow::resizeEvent(event);
     if (was_shown_ && canvas_->size() == QSize(0, 0)) {
-        QSize size = this->size();
-        QLayout* layout = this->layout();
-        QMargins margins = layout->contentsMargins();
-        int width = size.width() - margins.left() - margins.right();
-        int height = size.height() - margins.top() - margins.bottom() - 
-            menuBar()->height();
-        QSize client_size = QSize(width, height);
+        auto size = this->size();
+        auto* layout = this->layout();
+        auto marg = layout->contentsMargins();
+        QSize client_size = QSize(
+            size.width() - marg.left() - marg.right(),
+            size.height() - marg.top() - marg.bottom() - menuBar()->height()
+        );
 
         for (QDockWidget* dw : findChildren<QDockWidget*>()) {
             if (dw->isVisible() && !dw->isFloating()) {
                 auto area = dockWidgetArea(dw);
                 if (area == Qt::LeftDockWidgetArea || area == Qt::RightDockWidgetArea) {
-                    client_size.setWidth( client_size.width() - dw->size().width());
+                    client_size.setWidth(client_size.width() - dw->size().width());
                 } else {
                     client_size.setHeight(client_size.height() - dw->size().height());
                 }
