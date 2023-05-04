@@ -15,6 +15,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 add_executable(stick_man
+    src/ui/stick_man.qrc
     src/ui/stick_man.cpp
     src/ui/canvas.cpp
     src/ui/tool_palette.cpp
