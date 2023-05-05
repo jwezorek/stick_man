@@ -1,7 +1,7 @@
 #include "tool_palette.h"
 #include "flowlayout.h"
 #include <ranges>
-#include <array>
+#include <vector>
 #include <tuple>
 
 namespace r = std::ranges;
@@ -17,10 +17,12 @@ namespace {
         const char* rsrc_name;
     };
 
-    static const std::array<tool_info, 2> k_tools = {{
+    static const std::vector<tool_info> k_tools = {
         {ui::tool_id::pan, "pan", "pan_icon.png"},
-        {ui::tool_id::zoom, "zoom", "zoom_icon.png"}
-    }};
+        {ui::tool_id::zoom, "zoom", "zoom_icon.png"},
+        {ui::tool_id::add_joint, "add joint", "add_joint_icon.png"},
+        {ui::tool_id::add_bone, "add bone", "add_bone_icon.png"}
+    };
 
 }
 
@@ -32,11 +34,11 @@ namespace ui {
         QString bkgd_color_str_;
     public:
         tool_btn(tool_id id, QString icon_rsrc) : id_(id) {
-            QString rsrc_path = QString(":/images/") + icon_rsrc;
-            QIcon icon(rsrc_path);
+            QIcon icon(QString(":/images/") + icon_rsrc);
             setIcon(icon);
             setIconSize(QSize(32, 32));
             bkgd_color_str_ = palette().color(QWidget::backgroundRole()).name();
+            setStyleSheet("tooltip-text-color: white");
         }
 
         void deactivate() {
@@ -57,7 +59,13 @@ namespace ui {
 ui::tool_palette::tool_palette(QMainWindow* wnd, bool vertical) :
         QDockWidget(tr(""), wnd), curr_tool_id_(tool_id::none) {
     setFeatures(QDockWidget::DockWidgetMovable);
-    setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+
+    auto title_bar = new QLabel("");
+    title_bar->setPixmap(QPixmap(":/images/tool_palette_thumb.png"));
+    title_bar->setStyleSheet(QString("background-color: ") + 
+        palette().color(QWidget::backgroundRole()).name());
+    setTitleBarWidget(title_bar);
+
     auto layout = new FlowLayout(nullptr, -1,1,0);
 
     for (const auto& [id, name, rsrc] : k_tools) {
@@ -71,6 +79,10 @@ ui::tool_palette::tool_palette(QMainWindow* wnd, bool vertical) :
     auto* widget = new QWidget(this);
     widget->setLayout(layout);
     this->setWidget(widget);
+
+    connect(this, &QDockWidget::topLevelChanged,
+        [this]() { this->adjustSize(); }
+    );
 }
 
 void ui::tool_palette::handle_tool_click(tool_btn* btn) {
