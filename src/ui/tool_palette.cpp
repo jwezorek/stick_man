@@ -18,6 +18,8 @@ namespace {
     };
 
     static const std::vector<tool_info> k_tools = {
+        {ui::tool_id::arrow, "arrow", "arrow_icon.png"},
+        {ui::tool_id::hand, "hand", "hand_icon.png"},
         {ui::tool_id::pan, "pan", "pan_icon.png"},
         {ui::tool_id::zoom, "zoom", "zoom_icon.png"},
         {ui::tool_id::add_joint, "add joint", "add_joint_icon.png"},
@@ -58,7 +60,7 @@ namespace ui {
 
 ui::tool_palette::tool_palette(QMainWindow* wnd, bool vertical) :
         QDockWidget(tr(""), wnd), curr_tool_id_(tool_id::none) {
-    setFeatures(QDockWidget::DockWidgetMovable);
+    //setFeatures(QDockWidget::DockWidgetMovable);
 
     auto title_bar = new QLabel("");
     title_bar->setPixmap(QPixmap(":/images/tool_palette_thumb.png"));
@@ -81,7 +83,11 @@ ui::tool_palette::tool_palette(QMainWindow* wnd, bool vertical) :
     this->setWidget(widget);
 
     connect(this, &QDockWidget::topLevelChanged,
-        [this]() { this->adjustSize(); }
+        [this]() { 
+            if (isFloating()) {
+                this->adjustSize();
+            }
+        }
     );
 }
 

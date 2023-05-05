@@ -9,6 +9,8 @@ namespace ui {
 
     enum class tool_id {
         none,
+        arrow,
+        hand,
         pan,
         zoom,
         add_joint,
