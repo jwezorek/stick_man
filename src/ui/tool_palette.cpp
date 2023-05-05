@@ -58,7 +58,7 @@ namespace ui {
 
 }
 
-ui::tool_palette::tool_palette(QMainWindow* wnd, bool vertical) :
+ui::tool_palette::tool_palette(QMainWindow* wnd) :
         QDockWidget(tr(""), wnd), curr_tool_id_(tool_id::none) {
 
     auto title_bar = new QLabel("");
@@ -129,10 +129,3 @@ ui::tool_btn* ui::tool_palette::tool_from_id(tool_id id)
     );
 }
 
-bool ui::tool_palette::is_vertical() const {
-    return is_vertical_;
-}
-
-void ui::tool_palette::set_orientation(bool vert) {
-
-}

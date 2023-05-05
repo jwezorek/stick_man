@@ -1,6 +1,10 @@
 #pragma once
 
 #include <QtWidgets/QMainWindow>
+#include "animation_pane.h"
+#include "tool_palette.h"
+#include "properties_pane.h"
+#include "canvas.h"
 
 namespace ui {
 
@@ -21,7 +25,10 @@ namespace ui {
         void createMainMenu();
 
         bool was_shown_;
-        QWidget* canvas_;
+        canvas* canvas_;
+        tool_palette* tool_pal_;
+        animation_pane* anim_pane_;
+        properties_pane* prop_pane_;
     };
 
 }

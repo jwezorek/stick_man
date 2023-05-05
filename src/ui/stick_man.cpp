@@ -1,6 +1,4 @@
 #include "stick_man.h"
-#include "canvas.h"
-#include "tool_palette.h"
 #include <QtWidgets>
 
 #ifdef Q_OS_WIN
@@ -29,13 +27,15 @@ ui::stick_man::stick_man(QWidget* parent) :
     setDarkTitleBar(winId());
 
     setDockNestingEnabled(true);
-    addDockWidget(Qt::LeftDockWidgetArea, new tool_palette(this, true));
+    addDockWidget(Qt::LeftDockWidgetArea, tool_pal_ = new tool_palette(this));
+    addDockWidget(Qt::RightDockWidgetArea, prop_pane_ = new properties_pane(this));
+    addDockWidget(Qt::BottomDockWidgetArea, anim_pane_ = new animation_pane(this));
+
     QScrollArea* scroller = new QScrollArea();
     scroller->setWidget(canvas_ = new canvas());
     scroller->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
     setCentralWidget(scroller);
     createMainMenu();
-
 }
 
 void ui::stick_man::showEvent(QShowEvent* event) {
