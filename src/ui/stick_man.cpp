@@ -23,16 +23,21 @@ namespace {
 }
 
 ui::stick_man::stick_man(QWidget* parent) :
-        QMainWindow(parent), was_shown_(false) {
+        QMainWindow(parent), 
+        was_shown_(false),
+        tool_mgr_(this),
+        tool_pal_(new tool_palette(this)),
+        prop_pane_(new properties_pane(this)),
+        anim_pane_(new animation_pane(this)) {
     setDarkTitleBar(winId());
 
     setDockNestingEnabled(true);
-    addDockWidget(Qt::LeftDockWidgetArea, tool_pal_ = new tool_palette(this));
-    addDockWidget(Qt::RightDockWidgetArea, prop_pane_ = new properties_pane(this));
-    addDockWidget(Qt::BottomDockWidgetArea, anim_pane_ = new animation_pane(this));
+    addDockWidget(Qt::LeftDockWidgetArea, tool_pal_);
+    addDockWidget(Qt::RightDockWidgetArea, prop_pane_);
+    addDockWidget(Qt::BottomDockWidgetArea, anim_pane_);
 
     QScrollArea* scroller = new QScrollArea();
-    scroller->setWidget(canvas_ = new canvas());
+    scroller->setWidget(canvas_ = new ui::canvas());
     scroller->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
     setCentralWidget(scroller);
     createMainMenu();
@@ -73,19 +78,12 @@ void ui::stick_man::open()
 {
 }
 
-void ui::stick_man::addDockTab()
-{
-    QDockWidget* dock = new QDockWidget(tr("foobar"), this);
-    auto some_text = new QListWidget(dock);
-    some_text->addItems(QStringList()
-        << "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "
-        << "eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut "
-        << "enim ad minim veniam, quis nostrud exercitation ullamco "
-        << "laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure "
-        << "dolor in reprehenderit in voluptate velit esse cillum dolore eu "
-        << "fugiat nulla pariatur. Excepteur sint occaecat cupidatat non ");
-    dock->setWidget(some_text);
-    addDockWidget(Qt::BottomDockWidgetArea, dock);
+ui::canvas& ui::stick_man::canvas() {
+    return *canvas_;
+}
+
+ui::tool_manager& ui::stick_man::tool_mgr() {
+    return tool_mgr_;
 }
 
 void ui::stick_man::createMainMenu()
@@ -96,7 +94,6 @@ void ui::stick_man::createMainMenu()
     file_menu->addAction(actionOpen);
 
     auto view_menu = menuBar()->addMenu(tr("View"));
-    QAction* actionNewDockTab = new QAction(tr("Add Dock Tab"), this);
-    connect(actionNewDockTab, &QAction::triggered, this, &stick_man::addDockTab);
+    QAction* actionNewDockTab = new QAction(tr("foo"), this);
     view_menu->addAction(actionNewDockTab);
 }

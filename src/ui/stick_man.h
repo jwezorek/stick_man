@@ -5,6 +5,7 @@
 #include "tool_palette.h"
 #include "properties_pane.h"
 #include "canvas.h"
+#include "tools.h"
 
 namespace ui {
 
@@ -16,7 +17,8 @@ namespace ui {
         stick_man(QWidget* parent = Q_NULLPTR);
 
         void open();
-        void addDockTab();
+        ui::canvas& canvas();
+        tool_manager& tool_mgr();
 
     private:
         void showEvent(QShowEvent* event) override;
@@ -25,7 +27,8 @@ namespace ui {
         void createMainMenu();
 
         bool was_shown_;
-        canvas* canvas_;
+        ui::canvas* canvas_;
+        tool_manager tool_mgr_;
         tool_palette* tool_pal_;
         animation_pane* anim_pane_;
         properties_pane* prop_pane_;

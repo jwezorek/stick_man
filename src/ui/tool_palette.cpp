@@ -1,5 +1,6 @@
 #include "tool_palette.h"
 #include "flowlayout.h"
+#include "stick_man.h"
 #include <ranges>
 #include <vector>
 #include <tuple>
@@ -8,25 +9,6 @@ namespace r = std::ranges;
 namespace rv = std::ranges::views;
 
 /*------------------------------------------------------------------------------------------------*/
-
-namespace {
-
-    struct tool_info {
-        ui::tool_id id;
-        const char* name;
-        const char* rsrc_name;
-    };
-
-    static const std::vector<tool_info> k_tools = { 
-        {ui::tool_id::pan, "pan tool", "pan_icon.png"},
-        {ui::tool_id::zoom, "zoom tool", "zoom_icon.png"},
-        {ui::tool_id::arrow, "arrow tool", "arrow_icon.png"},
-        {ui::tool_id::move, "move tool", "move_icon.png"},
-        {ui::tool_id::add_joint, "add joint tool", "add_joint_icon.png"},
-        {ui::tool_id::add_bone, "add bone tool", "add_bone_icon.png"}
-    };
-
-}
 
 namespace ui {
 
@@ -59,7 +41,8 @@ namespace ui {
 }
 
 ui::tool_palette::tool_palette(QMainWindow* wnd) :
-        QDockWidget(tr(""), wnd), curr_tool_id_(tool_id::none) {
+        QDockWidget(tr(""), wnd),
+        tools_(static_cast<stick_man*>(wnd)->tool_mgr()) {
 
     auto title_bar = new QLabel("");
     title_bar->setPixmap(QPixmap(":/images/tool_palette_thumb.png"));
@@ -69,7 +52,7 @@ ui::tool_palette::tool_palette(QMainWindow* wnd) :
 
     auto layout = new FlowLayout(nullptr, -1,1,0);
 
-    for (const auto& [id, name, rsrc] : k_tools) {
+    for (const auto& [id, name, rsrc] : tools_.tool_info()) {
         auto tool = new tool_btn(id, rsrc);
         layout->addWidget(tool);
         connect(tool, &QPushButton::clicked,
@@ -100,23 +83,7 @@ QSize ui::tool_palette::sizeHint() const {
     }
     return bounds.size();
 }
-
- QSize ui::tool_palette::minimumSizeHint() const {
-     return QWidget::
-}
 */
-
-void ui::tool_palette::handle_tool_click(tool_btn* btn) {
-    if (btn->id() == curr_tool_id_) {
-        return;
-    }
-    if (curr_tool_id_ != tool_id::none) {
-        tool_from_id(curr_tool_id_)->deactivate();
-    }
-    btn->activate();
-    curr_tool_id_ = btn->id();
-    emit selected_tool_changed(curr_tool_id_);
-}
 
 ui::tool_btn* ui::tool_palette::tool_from_id(tool_id id)
 {
@@ -127,5 +94,34 @@ ui::tool_btn* ui::tool_palette::tool_from_id(tool_id id)
     return *r::find_if(tools,
         [id](auto ptr) {return ptr->id() == id; }
     );
+}
+
+/*
+if (btn->id() == curr_tool_id_) {
+        return;
+    }
+    if (curr_tool_id_ != tool_id::none) {
+        tool_from_id(curr_tool_id_)->deactivate();
+    }
+    btn->activate();
+    curr_tool_id_ = btn->id();
+    emit selected_tool_changed(curr_tool_id_);
+*/
+
+void ui::tool_palette::handle_tool_click(tool_btn* btn) {
+
+    tool_id current_tool_id = (tools_.has_current_tool()) ? 
+        tools_.current_tool().id() : tool_id::none;
+
+    if (btn->id() == current_tool_id) {
+        return;
+    }
+    
+    if (current_tool_id != tool_id::none) {
+        tool_from_id(current_tool_id)->deactivate();
+    }
+
+    btn->activate();
+    tools_.set_current_tool( btn->id() );
 }
 
