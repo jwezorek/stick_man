@@ -17,13 +17,13 @@ namespace {
         const char* rsrc_name;
     };
 
-    static const std::vector<tool_info> k_tools = {
-        {ui::tool_id::arrow, "arrow", "arrow_icon.png"},
-        {ui::tool_id::hand, "hand", "hand_icon.png"},
-        {ui::tool_id::pan, "pan", "pan_icon.png"},
-        {ui::tool_id::zoom, "zoom", "zoom_icon.png"},
-        {ui::tool_id::add_joint, "add joint", "add_joint_icon.png"},
-        {ui::tool_id::add_bone, "add bone", "add_bone_icon.png"}
+    static const std::vector<tool_info> k_tools = { 
+        {ui::tool_id::pan, "pan tool", "pan_icon.png"},
+        {ui::tool_id::zoom, "zoom tool", "zoom_icon.png"},
+        {ui::tool_id::arrow, "arrow tool", "arrow_icon.png"},
+        {ui::tool_id::move, "move tool", "move_icon.png"},
+        {ui::tool_id::add_joint, "add joint tool", "add_joint_icon.png"},
+        {ui::tool_id::add_bone, "add bone tool", "add_bone_icon.png"}
     };
 
 }
@@ -60,7 +60,6 @@ namespace ui {
 
 ui::tool_palette::tool_palette(QMainWindow* wnd, bool vertical) :
         QDockWidget(tr(""), wnd), curr_tool_id_(tool_id::none) {
-    //setFeatures(QDockWidget::DockWidgetMovable);
 
     auto title_bar = new QLabel("");
     title_bar->setPixmap(QPixmap(":/images/tool_palette_thumb.png"));
@@ -90,6 +89,22 @@ ui::tool_palette::tool_palette(QMainWindow* wnd, bool vertical) :
         }
     );
 }
+
+/*
+QSize ui::tool_palette::sizeHint() const {
+    auto children = findChildren<tool_btn*>();
+    auto bounds = QRect(0,0,0,0);
+    for (auto btn : children) {
+        auto rect = btn->geometry();
+        bounds = bounds.united(rect);
+    }
+    return bounds.size();
+}
+
+ QSize ui::tool_palette::minimumSizeHint() const {
+     return QWidget::
+}
+*/
 
 void ui::tool_palette::handle_tool_click(tool_btn* btn) {
     if (btn->id() == curr_tool_id_) {

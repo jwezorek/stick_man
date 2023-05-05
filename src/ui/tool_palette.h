@@ -10,7 +10,7 @@ namespace ui {
     enum class tool_id {
         none,
         arrow,
-        hand,
+        move,
         pan,
         zoom,
         add_joint,
@@ -36,6 +36,8 @@ namespace ui {
         tool_palette(QMainWindow* wnd, bool vertical);
         bool is_vertical() const;
         void set_orientation(bool vert);
+        //QSize sizeHint() const override;
+        //QSize minimumSizeHint() const override;
 
     signals:
         void selected_tool_changed(tool_id id);

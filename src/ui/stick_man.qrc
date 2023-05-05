@@ -6,6 +6,6 @@
         <file>images/add_bone_icon.png</file>
         <file>images/tool_palette_thumb.png</file>
         <file>images/arrow_icon.png</file>
-        <file>images/hand_icon.png</file>
+        <file>images/move_icon.png</file>
     </qresource>
 </RCC>
