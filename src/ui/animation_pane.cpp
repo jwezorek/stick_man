@@ -1,4 +1,5 @@
 #include "animation_pane.h"
+#include "util.h"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -7,12 +8,8 @@ namespace {
 }
 
 ui::animation_pane::animation_pane(QMainWindow* wnd) :
-        QDockWidget(tr("animation"), wnd) {
-    auto title_bar = new QLabel("animation");
-    title_bar->setPixmap(QPixmap(":/images/tool_palette_thumb.png"));
-    title_bar->setStyleSheet(QString("background-color: ") +
-        palette().color(QWidget::backgroundRole()).name());
-    //setTitleBarWidget(title_bar);
+        QDockWidget(tr(""), wnd) {
+    setTitleBarWidget( custom_title_bar("animation") );
 
     auto placeholder = new QWidget();
     placeholder->setMinimumHeight(200);
