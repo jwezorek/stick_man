@@ -32,6 +32,7 @@ namespace ui {
         tool_palette* tool_pal_;
         animation_pane* anim_pane_;
         properties_pane* prop_pane_;
+        QScrollArea* scroller_;
     };
 
 }

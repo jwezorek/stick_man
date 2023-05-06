@@ -36,10 +36,11 @@ ui::stick_man::stick_man(QWidget* parent) :
     addDockWidget(Qt::RightDockWidgetArea, prop_pane_);
     addDockWidget(Qt::BottomDockWidgetArea, anim_pane_);
 
-    QScrollArea* scroller = new QScrollArea();
-    scroller->setWidget(canvas_ = new ui::canvas());
-    scroller->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
-    setCentralWidget(scroller);
+    scroller_ = new QScrollArea();
+    scroller_->setWidget(canvas_ = new ui::canvas());
+    scroller_->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+    scroller_->setWidgetResizable(true);
+    setCentralWidget(scroller_);
     createMainMenu();
 }
 
@@ -50,27 +51,8 @@ void ui::stick_man::showEvent(QShowEvent* event) {
 
 void ui::stick_man::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
-    if (was_shown_ && canvas_->size() == QSize(0, 0)) {
-        auto size = this->size();
-        auto* layout = this->layout();
-        auto marg = layout->contentsMargins();
-        QSize client_size = QSize(
-            size.width() - marg.left() - marg.right(),
-            size.height() - marg.top() - marg.bottom() - menuBar()->height()
-        );
-
-        for (QDockWidget* dw : findChildren<QDockWidget*>()) {
-            if (dw->isVisible() && !dw->isFloating()) {
-                auto area = dockWidgetArea(dw);
-                if (area == Qt::LeftDockWidgetArea || area == Qt::RightDockWidgetArea) {
-                    client_size.setWidth(client_size.width() - dw->size().width());
-                } else {
-                    client_size.setHeight(client_size.height() - dw->size().height());
-                }
-            }
-        }
-
-        canvas_->setFixedSize(client_size);
+    if (was_shown_ && scroller_->widgetResizable()) {
+        scroller_->setWidgetResizable(false);
     }
 }
 
