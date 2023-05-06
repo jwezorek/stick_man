@@ -36,11 +36,10 @@ ui::stick_man::stick_man(QWidget* parent) :
     addDockWidget(Qt::RightDockWidgetArea, prop_pane_);
     addDockWidget(Qt::BottomDockWidgetArea, anim_pane_);
 
-    scroller_ = new QScrollArea();
-    scroller_->setWidget(canvas_ = new ui::canvas());
-    scroller_->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
-    scroller_->setWidgetResizable(true);
-    setCentralWidget(scroller_);
+    view_ = new QGraphicsView();
+    view_->setScene(canvas_ = new ui::canvas());
+    //canvas_->setSceneRect(QRectF(0, 0, 5000, 5000));
+    setCentralWidget(view_);
     createMainMenu();
 }
 
@@ -51,8 +50,11 @@ void ui::stick_man::showEvent(QShowEvent* event) {
 
 void ui::stick_man::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
-    if (was_shown_ && scroller_->widgetResizable()) {
-        scroller_->setWidgetResizable(false);
+    
+    if (was_shown_ ) {
+        auto rect = canvas_->sceneRect();
+        int aaa;
+        aaa = 5;
     }
 }
 
