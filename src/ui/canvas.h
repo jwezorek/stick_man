@@ -10,6 +10,7 @@ namespace ui {
 
     class canvas_view; 
     class stick_man;
+    class tool_manager;
 
     class canvas : public QGraphicsScene {
 
@@ -19,6 +20,8 @@ namespace ui {
 
         constexpr static auto k_grid_line_spacing = 10;
         double scale_ = 1.0;
+
+        tool_manager& tool_mgr();
 
     public:
 

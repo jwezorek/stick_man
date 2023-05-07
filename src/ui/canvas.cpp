@@ -1,5 +1,6 @@
 #include "canvas.h"
 #include "stick_man.h"
+#include "tools.h"
 #include <boost/geometry.hpp>
 #include <ranges>
 
@@ -63,36 +64,40 @@ void ui::canvas::drawBackground(QPainter* painter, const QRectF& rect) {
     draw_grid_lines(painter, rect, k_grid_line_spacing);
 }
 
+ui::tool_manager& ui::canvas::tool_mgr() {
+    return view().main_window().tool_mgr();
+}
+
 ui::canvas_view& ui::canvas::view() {
     return *static_cast<ui::canvas_view*>(this->views()[0]);
 }
 
 void ui::canvas::keyPressEvent(QKeyEvent* event) {
-
+    tool_mgr().keyPressEvent(*this, event);
 }
 
 void ui::canvas::keyReleaseEvent(QKeyEvent* event) {
-
+    tool_mgr().keyReleaseEvent(*this, event);
 }
 
 void ui::canvas::mousePressEvent(QGraphicsSceneMouseEvent* event) {
-
+    tool_mgr().mousePressEvent(*this, event);
 }
 
 void ui::canvas::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
-
+    tool_mgr().mouseMoveEvent(*this, event);
 }
 
 void ui::canvas::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
-    qDebug() << "mouse up";
+    tool_mgr().mouseReleaseEvent(*this, event);
 }
 
 void ui::canvas::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
-
+    tool_mgr().mouseDoubleClickEvent(*this, event);
 }
 
 void ui::canvas::wheelEvent(QGraphicsSceneWheelEvent* event) {
-
+    tool_mgr().wheelEvent(*this, event);
 }
 
 /*------------------------------------------------------------------------------------------------*/

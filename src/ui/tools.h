@@ -1,5 +1,6 @@
 #pragma once
 
+#include "canvas.h"
 #include <QWidget>
 #include <QtWidgets>
 #include <vector>
@@ -33,10 +34,17 @@ namespace ui {
         tool_id id() const;
         QString name() const;
         QString icon_rsrc() const;
-        virtual void handle_key_press(canvas* c, QKeyEvent* event) = 0;
-        virtual void handle_mouse_press(canvas* c, QMouseEvent* event) = 0;
-        virtual void handle_mouse_move(canvas* c, QMouseEvent* event) = 0;
-        virtual void handle_mouse_release(canvas* c, QMouseEvent* event) = 0;
+        virtual void activate(canvas& c) = 0;
+        virtual void keyPressEvent(canvas& c, QKeyEvent* event) = 0;
+        virtual void keyReleaseEvent(canvas& c, QKeyEvent* event) = 0;
+        virtual void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) = 0;
+        virtual void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) = 0;
+        virtual void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) = 0;
+        virtual void mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) = 0;
+        virtual void wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) = 0;
+        virtual void deactivate(canvas& c) = 0;
+
+
     private:
         tool_id id_;
         QString name_;
@@ -46,19 +54,29 @@ namespace ui {
     class zoom_tool : public abstract_tool {
     public:
         zoom_tool();
-        void handle_key_press(canvas* c, QKeyEvent* event) override;
-        void handle_mouse_press(canvas* c, QMouseEvent* event) override;
-        void handle_mouse_move(canvas* c, QMouseEvent* event) override;
-        void handle_mouse_release(canvas* c, QMouseEvent* event) override;
+        void activate(canvas& c) override;
+        void keyPressEvent(canvas& c, QKeyEvent* event) override;
+        void keyReleaseEvent(canvas& c, QKeyEvent* event) override;
+        void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) override;
+        void deactivate(canvas& c) override;
     };
 
     class pan_tool : public abstract_tool {
     public:
         pan_tool();
-        void handle_key_press(canvas* c, QKeyEvent* event) override;
-        void handle_mouse_press(canvas* c, QMouseEvent* event) override;
-        void handle_mouse_move(canvas* c, QMouseEvent* event) override;
-        void handle_mouse_release(canvas* c, QMouseEvent* event) override;
+        void activate(canvas& c) override;
+        void keyPressEvent(canvas& c, QKeyEvent* event) override;
+        void keyReleaseEvent(canvas& c, QKeyEvent* event) override;
+        void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) override;
+        void deactivate(canvas& c) override;
     };
 
     class stick_man;
@@ -67,12 +85,18 @@ namespace ui {
     private:
         stick_man& main_window_;
         int curr_item_index_;
+
+        int index_from_id(tool_id id) const;
+
     public:
         tool_manager(stick_man* c);
-        void handle_key_press(QKeyEvent* event) ;
-        void handle_mouse_press(QMouseEvent* event) ;
-        void handle_mouse_move( QMouseEvent* event) ;
-        void handle_mouse_release(QMouseEvent* event);
+        void keyPressEvent(canvas& c, QKeyEvent* event);
+        void keyReleaseEvent(canvas& c, QKeyEvent* event);
+        void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event);
+        void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event);
+        void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event);
+        void mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event);
+        void wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event);
         std::span<const tool_info> tool_info() const;
         bool has_current_tool() const;
         abstract_tool& current_tool() const;

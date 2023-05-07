@@ -18,7 +18,7 @@ namespace ui {
 
         void open();
         tool_manager& tool_mgr();
-
+        canvas_view& view();
     private:
         void showEvent(QShowEvent* event) override;
         void resizeEvent(QResizeEvent* event) override;

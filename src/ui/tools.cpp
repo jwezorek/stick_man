@@ -1,5 +1,6 @@
 #include "tools.h"
 #include "stick_man.h"
+#include <QGraphicsScene>
 #include <array>
 #include <functional>
 #include <ranges>
@@ -13,10 +14,15 @@ namespace {
     class placeholder : public ui::abstract_tool {
     public:
         placeholder(QString name, QString rsrc, ui::tool_id id) : abstract_tool(name, rsrc, id) {}
-        void handle_key_press(ui::canvas*, QKeyEvent* ) override {}
-        void handle_mouse_press(ui::canvas*, QMouseEvent* ) override {}
-        void handle_mouse_move(ui::canvas*, QMouseEvent* ) override {}
-        void handle_mouse_release(ui::canvas*, QMouseEvent* ) override {}
+        void activate(ui::canvas& c) override {}
+        void keyPressEvent(ui::canvas& c, QKeyEvent* event) override {}
+        void keyReleaseEvent(ui::canvas& c, QKeyEvent* event) override {}
+        void mousePressEvent(ui::canvas& c, QGraphicsSceneMouseEvent* event) override {}
+        void mouseMoveEvent(ui::canvas& c, QGraphicsSceneMouseEvent* event) override {}
+        void mouseReleaseEvent(ui::canvas& c, QGraphicsSceneMouseEvent* event) override {}
+        void mouseDoubleClickEvent(ui::canvas& c, QGraphicsSceneMouseEvent* event) override {}
+        void wheelEvent(ui::canvas& c, QGraphicsSceneWheelEvent* event) override {}
+        void deactivate(ui::canvas& c) override {}
     };
 
     auto k_tool_registry = std::to_array<std::unique_ptr<ui::abstract_tool>>({
@@ -54,43 +60,85 @@ QString ui::abstract_tool::icon_rsrc() const {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::zoom_tool::zoom_tool() : abstract_tool("zoom", "zoom_icon.png", ui::tool_id::zoom) {
-}
-
-void ui::zoom_tool::handle_key_press(canvas* c, QKeyEvent* event) {
 
 }
 
-void ui::zoom_tool::handle_mouse_press(canvas* c, QMouseEvent* event) {
+void ui::zoom_tool::activate(canvas& c) {
+    qDebug() << "zoom_tool::activate";
+}
+
+void ui::zoom_tool::keyPressEvent(canvas& c, QKeyEvent* event) {
 
 }
 
-void ui::zoom_tool::handle_mouse_move(canvas* c, QMouseEvent* event) {
+void ui::zoom_tool::keyReleaseEvent(canvas& c, QKeyEvent* event) {
 
 }
 
-void ui::zoom_tool::handle_mouse_release(canvas* c, QMouseEvent* event) {
+void ui::zoom_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
 
+}
+
+void ui::zoom_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+
+}
+
+void ui::zoom_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+
+}
+
+void ui::zoom_tool::mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+
+}
+
+void ui::zoom_tool::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {
+
+}
+
+void ui::zoom_tool::deactivate(canvas& c) {
+    qDebug() << "zoom_tool::deactivate";
 }
 
 /*------------------------------------------------------------------------------------------------*/
- 
+
 ui::pan_tool::pan_tool() : abstract_tool("pan", "pan_icon.png", ui::tool_id::pan) {
-}
-
-void ui::pan_tool::handle_mouse_press(canvas* c, QMouseEvent* event) {
 
 }
 
-void ui::pan_tool::handle_key_press(canvas* c, QKeyEvent* event) {
+void ui::pan_tool::keyPressEvent(canvas& c, QKeyEvent* event) {
 
 }
 
-void ui::pan_tool::handle_mouse_move(canvas* c, QMouseEvent* event) {
+void ui::pan_tool::keyReleaseEvent(canvas& c, QKeyEvent* event) {
 
 }
 
-void ui::pan_tool::handle_mouse_release(canvas* c, QMouseEvent* event) {
+void ui::pan_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
 
+}
+
+void ui::pan_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+
+}
+
+void ui::pan_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+
+}
+
+void ui::pan_tool::mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+
+}
+
+void ui::pan_tool::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {
+
+}
+
+void ui::pan_tool::deactivate(canvas& c) {
+    c.view().setDragMode(QGraphicsView::NoDrag);
+}
+
+void ui::pan_tool::activate(canvas& c) {
+    c.view().setDragMode(QGraphicsView::ScrollHandDrag);
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -98,6 +146,48 @@ void ui::pan_tool::handle_mouse_release(canvas* c, QMouseEvent* event) {
 ui::tool_manager::tool_manager(stick_man* sm) :
         main_window_(*sm),
         curr_item_index_(-1){
+}
+
+void ui::tool_manager::keyPressEvent(canvas& c, QKeyEvent* event) {
+    if (has_current_tool()) {
+        current_tool().keyPressEvent(c, event);
+    }
+}
+
+void ui::tool_manager::keyReleaseEvent(canvas& c, QKeyEvent* event) {
+    if (has_current_tool()) {
+        current_tool().keyReleaseEvent(c, event);
+    }
+}
+
+void ui::tool_manager::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+    if (has_current_tool()) {
+        current_tool().mousePressEvent(c, event);
+    }
+}
+
+void ui::tool_manager::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+    if (has_current_tool()) {
+        current_tool().mouseMoveEvent(c, event);
+    }
+}
+
+void ui::tool_manager::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+    if (has_current_tool()) {
+        current_tool().mouseReleaseEvent(c, event);
+    }
+}
+
+void ui::tool_manager::mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+    if (has_current_tool()) {
+        current_tool().mouseDoubleClickEvent(c, event);
+    }
+}
+
+void ui::tool_manager::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {
+    if (has_current_tool()) {
+        current_tool().wheelEvent(c, event);
+    }
 }
 
 std::span<const ui::tool_info> ui::tool_manager::tool_info() const {
@@ -115,22 +205,6 @@ std::span<const ui::tool_info> ui::tool_manager::tool_info() const {
     return tool_records;
 }
 
-void ui::tool_manager::handle_key_press(QKeyEvent* event) {
-
-}
-
-void ui::tool_manager::handle_mouse_press(QMouseEvent* event) {
-
-}
-
-void ui::tool_manager::handle_mouse_move(QMouseEvent* event) {
-
-}
-
-void ui::tool_manager::handle_mouse_release(QMouseEvent* event) {
-
-}
-
 bool ui::tool_manager::has_current_tool() const {
     return curr_item_index_ >= 0;
 }
@@ -140,6 +214,19 @@ ui::abstract_tool& ui::tool_manager::current_tool() const {
 }
 
 void ui::tool_manager::set_current_tool(tool_id id) {
+    int new_tool_index = index_from_id(id);
+    if (new_tool_index == curr_item_index_) {
+        return;
+    }
+    auto& canvas = main_window_.view().canvas();
+    if (has_current_tool()) {
+        current_tool().deactivate(canvas);
+    }
+    curr_item_index_ = new_tool_index;
+    current_tool().activate(canvas);
+}
+
+int ui::tool_manager::index_from_id(tool_id id) const {
     auto iter = r::find_if(k_tool_registry, [id](const auto& t) {return id == t->id(); });
-    curr_item_index_ = std::distance(k_tool_registry.begin(), iter);
+    return std::distance(k_tool_registry.begin(), iter);
 }

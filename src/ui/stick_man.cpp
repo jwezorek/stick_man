@@ -60,6 +60,10 @@ ui::tool_manager& ui::stick_man::tool_mgr() {
     return tool_mgr_;
 }
 
+ui::canvas_view& ui::stick_man::view() {
+    return *view_;
+}
+
 void ui::stick_man::createMainMenu()
 {
     auto file_menu = menuBar()->addMenu(tr("&File"));
