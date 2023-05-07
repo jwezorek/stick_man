@@ -13,8 +13,8 @@ namespace {
 
     void draw_grid_lines(QPainter* painter, const QRectF& r, double line_spacing) {
         qreal dimmer = 0.6666;
-        QPen blue_pen(QColor::fromCmykF(0.4*dimmer, 0, 0, 0.1 * dimmer));
-        QPen dark_blue_pen(QColor::fromCmykF(0.8 * dimmer, 0, 0, 0.1 * dimmer));
+        QPen blue_pen(QColor::fromCmykF(0.4*dimmer, 0, 0, 0.1 * dimmer), 0.0);
+        QPen dark_blue_pen(QColor::fromCmykF(0.8 * dimmer, 0, 0, 0.1 * dimmer), 0.0);
         qreal x1, y1, x2, y2;
         r.getCoords(&x1, &y1, &x2, &y2);
 

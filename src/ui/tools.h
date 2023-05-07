@@ -52,6 +52,8 @@ namespace ui {
     };
 
     class zoom_tool : public abstract_tool {
+        int zoom_level_;
+        qreal scale_from_zoom_level() const;
     public:
         zoom_tool();
         void activate(canvas& c) override;

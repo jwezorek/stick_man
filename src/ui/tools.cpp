@@ -59,12 +59,24 @@ QString ui::abstract_tool::icon_rsrc() const {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::zoom_tool::zoom_tool() : abstract_tool("zoom", "zoom_icon.png", ui::tool_id::zoom) {
+ui::zoom_tool::zoom_tool() : 
+        abstract_tool("zoom", "zoom_icon.png", ui::tool_id::zoom),
+        zoom_level_(0) {
+}
 
+qreal ui::zoom_tool::scale_from_zoom_level() const {
+    if (zoom_level_ == 0) {
+        return 1.0;
+    }
+    if (zoom_level_ > 0) {
+        qreal zoom = static_cast<qreal>(zoom_level_);
+        return zoom + 1.0;
+    }
+    qreal zoom = -1.0 * zoom_level_;
+    return 1.0 / (zoom + 1.0);
 }
 
 void ui::zoom_tool::activate(canvas& c) {
-    qDebug() << "zoom_tool::activate";
 }
 
 void ui::zoom_tool::keyPressEvent(canvas& c, QKeyEvent* event) {
@@ -84,7 +96,17 @@ void ui::zoom_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
 }
 
 void ui::zoom_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
-
+    if (! event->modifiers().testFlag(Qt::AltModifier)) {
+        zoom_level_++;
+    } else {
+        zoom_level_--;
+    }
+    auto zoom = scale_from_zoom_level();
+    auto& view = c.view();
+    auto old_matrix = view.transform();
+    view.resetTransform();
+    view.translate(old_matrix.dx(), old_matrix.dy());
+    view.scale(zoom, zoom);
 }
 
 void ui::zoom_tool::mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
@@ -96,42 +118,18 @@ void ui::zoom_tool::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {
 }
 
 void ui::zoom_tool::deactivate(canvas& c) {
-    qDebug() << "zoom_tool::deactivate";
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::pan_tool::pan_tool() : abstract_tool("pan", "pan_icon.png", ui::tool_id::pan) {
-
-}
-
-void ui::pan_tool::keyPressEvent(canvas& c, QKeyEvent* event) {
-
-}
-
-void ui::pan_tool::keyReleaseEvent(canvas& c, QKeyEvent* event) {
-
-}
-
-void ui::pan_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
-
-}
-
-void ui::pan_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
-
-}
-
-void ui::pan_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
-
-}
-
-void ui::pan_tool::mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
-
-}
-
-void ui::pan_tool::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {
-
-}
+ui::pan_tool::pan_tool() : abstract_tool("pan", "pan_icon.png", ui::tool_id::pan) {}
+void ui::pan_tool::keyPressEvent(canvas& c, QKeyEvent* event) {}
+void ui::pan_tool::keyReleaseEvent(canvas& c, QKeyEvent* event) {}
+void ui::pan_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
+void ui::pan_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
+void ui::pan_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
+void ui::pan_tool::mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
+void ui::pan_tool::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {}
 
 void ui::pan_tool::deactivate(canvas& c) {
     c.view().setDragMode(QGraphicsView::NoDrag);
