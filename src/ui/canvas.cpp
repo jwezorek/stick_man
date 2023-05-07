@@ -103,7 +103,7 @@ void ui::canvas::wheelEvent(QGraphicsSceneWheelEvent* event) {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::canvas_view::canvas_view() {
-
+    setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
     setScene(new ui::canvas()); /*
     connect(view_, &QGraphicsView::rubberBandChanged,
         [](QRect rubberBandRect, QPointF fromScenePoint, QPointF toScenePoint) {
