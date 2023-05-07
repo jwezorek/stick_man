@@ -17,7 +17,6 @@ namespace ui {
         stick_man(QWidget* parent = Q_NULLPTR);
 
         void open();
-        ui::canvas& canvas();
         tool_manager& tool_mgr();
 
     private:
@@ -27,12 +26,11 @@ namespace ui {
         void createMainMenu();
 
         bool was_shown_;
-        ui::canvas* canvas_;
         tool_manager tool_mgr_;
         tool_palette* tool_pal_;
         animation_pane* anim_pane_;
         properties_pane* prop_pane_;
-        QGraphicsView* view_;
+        canvas_view* view_;
     };
 
 }

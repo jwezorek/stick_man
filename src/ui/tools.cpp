@@ -95,8 +95,8 @@ void ui::pan_tool::handle_mouse_release(canvas* c, QMouseEvent* event) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::tool_manager::tool_manager(QMainWindow* mw) : 
-        canvas_(static_cast<stick_man*>(mw)->canvas()),
+ui::tool_manager::tool_manager(stick_man* sm) :
+        main_window_(*sm),
         curr_item_index_(-1){
 }
 

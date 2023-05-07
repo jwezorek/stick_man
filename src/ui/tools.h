@@ -1,6 +1,5 @@
 #pragma once
 
-#include "canvas.h"
 #include <QWidget>
 #include <QtWidgets>
 #include <vector>
@@ -26,6 +25,7 @@ namespace ui {
         QString name;
         QString rsrc_name;
     };
+    class canvas;
 
     class abstract_tool {
     public:
@@ -61,12 +61,14 @@ namespace ui {
         void handle_mouse_release(canvas* c, QMouseEvent* event) override;
     };
 
+    class stick_man;
+
     class tool_manager {
     private:
-        canvas& canvas_;
+        stick_man& main_window_;
         int curr_item_index_;
     public:
-        tool_manager(QMainWindow* c);
+        tool_manager(stick_man* c);
         void handle_key_press(QKeyEvent* event) ;
         void handle_mouse_press(QMouseEvent* event) ;
         void handle_mouse_move( QMouseEvent* event) ;

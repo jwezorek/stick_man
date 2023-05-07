@@ -1,9 +1,12 @@
 #include "canvas.h"
+#include "stick_man.h"
 #include <boost/geometry.hpp>
 #include <ranges>
 
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
+
+/*------------------------------------------------------------------------------------------------*/
 
 namespace {
 
@@ -31,12 +34,27 @@ namespace {
         }
 
     }
+
+    void add_test_poly(ui::canvas* c) {
+        auto poly = new QGraphicsPolygonItem();
+        QPainterPath path;
+        path.moveTo(200, 50);
+        path.arcTo(150, 0, 50, 50, 0, 90);
+        path.arcTo(50, 0, 50, 50, 90, 90);
+        path.arcTo(50, 50, 50, 50, 180, 90);
+        path.arcTo(150, 50, 50, 50, 270, 90);
+        path.lineTo(200, 25);
+        auto myPolygon = path.toFillPolygon();
+        poly->setPolygon(myPolygon);
+        c->addItem(poly);
+    }
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
 ui::canvas::canvas(){
     setSceneRect(QRectF(-1000, -1000, 2000, 2000));
+    add_test_poly(this);
 }
 
 void ui::canvas::drawBackground(QPainter* painter, const QRectF& rect) {
@@ -45,16 +63,8 @@ void ui::canvas::drawBackground(QPainter* painter, const QRectF& rect) {
     draw_grid_lines(painter, rect, k_grid_line_spacing);
 }
 
-void ui::canvas::dragEnterEvent(QGraphicsSceneDragDropEvent* event) {
-
-}
-
-void ui::canvas::dragMoveEvent(QGraphicsSceneDragDropEvent* event) {
-
-}
-
-void ui::canvas::dragLeaveEvent(QGraphicsSceneDragDropEvent* event) {
-
+ui::canvas_view& ui::canvas::view() {
+    return *static_cast<ui::canvas_view*>(this->views()[0]);
 }
 
 void ui::canvas::keyPressEvent(QKeyEvent* event) {
@@ -74,7 +84,7 @@ void ui::canvas::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
 }
 
 void ui::canvas::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
-
+    qDebug() << "mouse up";
 }
 
 void ui::canvas::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
@@ -85,4 +95,23 @@ void ui::canvas::wheelEvent(QGraphicsSceneWheelEvent* event) {
 
 }
 
+/*------------------------------------------------------------------------------------------------*/
 
+ui::canvas_view::canvas_view() {
+
+    setScene(new ui::canvas()); /*
+    connect(view_, &QGraphicsView::rubberBandChanged,
+        [](QRect rubberBandRect, QPointF fromScenePoint, QPointF toScenePoint) {
+            qDebug() << "rubber band";
+        }
+    );
+    */
+}
+
+ui::canvas& ui::canvas_view::canvas() {
+    return *static_cast<ui::canvas*>(this->scene());
+}
+
+ui::stick_man& ui::canvas_view::main_window() {
+    return *static_cast<stick_man*>( parentWidget() );
+}

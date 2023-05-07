@@ -36,10 +36,7 @@ ui::stick_man::stick_man(QWidget* parent) :
     addDockWidget(Qt::RightDockWidgetArea, prop_pane_);
     addDockWidget(Qt::BottomDockWidgetArea, anim_pane_);
 
-    view_ = new QGraphicsView();
-    view_->setScene(canvas_ = new ui::canvas());
-    //canvas_->setSceneRect(QRectF(0, 0, 5000, 5000));
-    setCentralWidget(view_);
+    setCentralWidget(view_ = new canvas_view());
     createMainMenu();
 }
 
@@ -52,18 +49,11 @@ void ui::stick_man::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
     
     if (was_shown_ ) {
-        auto rect = canvas_->sceneRect();
-        int aaa;
-        aaa = 5;
     }
 }
 
 void ui::stick_man::open()
 {
-}
-
-ui::canvas& ui::stick_man::canvas() {
-    return *canvas_;
 }
 
 ui::tool_manager& ui::stick_man::tool_mgr() {
