@@ -12,6 +12,7 @@ namespace rv = std::ranges::views;
 namespace {
 
     void draw_grid_lines(QPainter* painter, const QRectF& r, double line_spacing) {
+        painter->fillRect(r, Qt::white);
         qreal dimmer = 0.6666;
         QPen blue_pen(QColor::fromCmykF(0.4*dimmer, 0, 0, 0.1 * dimmer), 0.0);
         QPen dark_blue_pen(QColor::fromCmykF(0.8 * dimmer, 0, 0, 0.1 * dimmer), 0.0);
@@ -21,7 +22,7 @@ namespace {
         int left_gridline_index = static_cast<int>(std::ceil(x1 / line_spacing));
         int right_gridline_index = static_cast<int>(std::floor(x2 / line_spacing));
         for (auto i : rv::iota(left_gridline_index, right_gridline_index + 1)) {
-            int x = static_cast<int>(i * line_spacing);
+            auto x = i * line_spacing;
             painter->setPen( (i % 5) ? blue_pen : dark_blue_pen  );
             painter->drawLine(x, y1, x, y2);
         }
@@ -29,11 +30,10 @@ namespace {
         int top_gridline_index = static_cast<int>(std::ceil(y1 / line_spacing));
         int bottom_gridline_index = static_cast<int>(std::floor(y2 / line_spacing));
         for (auto i : rv::iota(top_gridline_index, bottom_gridline_index + 1)) {
-            int y = static_cast<int>(i * line_spacing);
+            auto y = i * line_spacing;
             painter->setPen((i % 5) ? blue_pen : dark_blue_pen);
             painter->drawLine(x1, y, x2, y);
         }
-
     }
 
     void add_test_poly(ui::canvas* c) {
@@ -54,13 +54,16 @@ namespace {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::canvas::canvas(){
-    setSceneRect(QRectF(-1000, -1000, 2000, 2000));
+    setSceneRect(QRectF(-1500, -1500, 3000, 3000));
     add_test_poly(this);
 }
 
-void ui::canvas::drawBackground(QPainter* painter, const QRectF& rect) {
-    painter->fillRect(rect, Qt::white);
+void ui::canvas::drawBackground(QPainter* painter, const QRectF& dirty_rect) {
+    painter->fillRect(dirty_rect, QColor::fromRgb(53,53,53));
     painter->setRenderHint(QPainter::Antialiasing, true);
+    auto scene_rect = sceneRect();
+    auto rect = dirty_rect.intersected(scene_rect);
+
     draw_grid_lines(painter, rect, k_grid_line_spacing);
 }
 
