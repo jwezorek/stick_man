@@ -34,15 +34,15 @@ namespace ui {
         tool_id id() const;
         QString name() const;
         QString icon_rsrc() const;
-        virtual void activate(canvas& c) = 0;
-        virtual void keyPressEvent(canvas& c, QKeyEvent* event) = 0;
-        virtual void keyReleaseEvent(canvas& c, QKeyEvent* event) = 0;
-        virtual void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) = 0;
-        virtual void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) = 0;
-        virtual void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) = 0;
-        virtual void mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) = 0;
-        virtual void wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) = 0;
-        virtual void deactivate(canvas& c) = 0;
+        virtual void activate(canvas& c);
+        virtual void keyPressEvent(canvas& c, QKeyEvent* event);
+        virtual void keyReleaseEvent(canvas& c, QKeyEvent* event);
+        virtual void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event);
+        virtual void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event);
+        virtual void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event);
+        virtual void mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event);
+        virtual void wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) ;
+        virtual void deactivate(canvas& c);
 
 
     private:
@@ -56,28 +56,13 @@ namespace ui {
         qreal scale_from_zoom_level() const;
     public:
         zoom_tool();
-        void activate(canvas& c) override;
-        void keyPressEvent(canvas& c, QKeyEvent* event) override;
-        void keyReleaseEvent(canvas& c, QKeyEvent* event) override;
-        void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) override;
-        void deactivate(canvas& c) override;
     };
 
     class pan_tool : public abstract_tool {
     public:
         pan_tool();
         void activate(canvas& c) override;
-        void keyPressEvent(canvas& c, QKeyEvent* event) override;
-        void keyReleaseEvent(canvas& c, QKeyEvent* event) override;
-        void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) override;
         void deactivate(canvas& c) override;
     };
 
