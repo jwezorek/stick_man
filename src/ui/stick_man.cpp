@@ -64,6 +64,10 @@ ui::canvas_view& ui::stick_man::view() {
     return *view_;
 }
 
+sm::ik_sandbox& ui::stick_man::sandbox() {
+    return sandbox_;
+}
+
 void ui::stick_man::createMainMenu()
 {
     auto file_menu = menuBar()->addMenu(tr("&File"));

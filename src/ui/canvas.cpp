@@ -1,6 +1,7 @@
 #include "canvas.h"
 #include "stick_man.h"
 #include "tools.h"
+#include "../core/ik_sandbox.h"
 #include <boost/geometry.hpp>
 #include <ranges>
 
@@ -10,6 +11,8 @@ namespace rv = std::ranges::views;
 /*------------------------------------------------------------------------------------------------*/
 
 namespace {
+
+    constexpr double k_joint_radius = 8.0;
 
     void draw_grid_lines(QPainter* painter, const QRectF& r, double line_spacing) {
         painter->fillRect(r, Qt::white);
@@ -35,27 +38,12 @@ namespace {
             painter->drawLine(x1, y, x2, y);
         }
     }
-
-    void add_test_poly(ui::canvas* c) {
-        auto poly = new QGraphicsPolygonItem();
-        QPainterPath path;
-        path.moveTo(200, 50);
-        path.arcTo(150, 0, 50, 50, 0, 90);
-        path.arcTo(50, 0, 50, 50, 90, 90);
-        path.arcTo(50, 50, 50, 50, 180, 90);
-        path.arcTo(150, 50, 50, 50, 270, 90);
-        path.lineTo(200, 25);
-        auto myPolygon = path.toFillPolygon();
-        poly->setPolygon(myPolygon);
-        c->addItem(poly);
-    }
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
 ui::canvas::canvas(){
     setSceneRect(QRectF(-1500, -1500, 3000, 3000));
-    add_test_poly(this);
 }
 
 void ui::canvas::drawBackground(QPainter* painter, const QRectF& dirty_rect) {
@@ -122,4 +110,19 @@ ui::canvas& ui::canvas_view::canvas() {
 
 ui::stick_man& ui::canvas_view::main_window() {
     return *static_cast<stick_man*>( parentWidget() );
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
+ui::joint_item::joint_item(sm::joint& joint) :
+    joint_(joint),
+    QGraphicsEllipseItem(
+        joint.x() - k_joint_radius, 
+        joint.y() - k_joint_radius, 
+        2.0 * k_joint_radius, 
+        2.0 * k_joint_radius
+    )
+{
+    setBrush(QBrush(Qt::white));
+    setPen(QPen(Qt::black, 2));
 }

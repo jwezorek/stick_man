@@ -66,6 +66,12 @@ namespace ui {
         void deactivate(canvas& c) override;
     };
 
+    class add_joint_tool : public abstract_tool {
+    public:
+        add_joint_tool();
+        void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+    };
+
     class stick_man;
 
     class tool_manager {

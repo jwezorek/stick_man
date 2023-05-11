@@ -30,7 +30,7 @@ namespace {
         std::make_unique<ui::zoom_tool>(),
         std::make_unique<placeholder>("arrow tool", "arrow_icon.png", ui::tool_id::arrow),
         std::make_unique<placeholder>("move tool", "move_icon.png", ui::tool_id::move),
-        std::make_unique<placeholder>("add joint tool", "add_joint_icon.png", ui::tool_id::add_joint),
+        std::make_unique<ui::add_joint_tool>(),
         std::make_unique<placeholder>("add bone tool", "add_bone_icon.png", ui::tool_id::add_bone) 
     });
 
@@ -110,6 +110,20 @@ void ui::pan_tool::deactivate(canvas& c) {
 
 void ui::pan_tool::activate(canvas& c) {
     c.view().setDragMode(QGraphicsView::ScrollHandDrag);
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
+ui::add_joint_tool::add_joint_tool() : 
+    abstract_tool("add joint tool", "add_joint_icon.png", ui::tool_id::add_joint) {}
+
+void ui::add_joint_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
+    auto pt = event->scenePos();
+    auto& sandbox = canv.view().main_window().sandbox();
+    auto j = sandbox.create_joint({}, pt.x(), pt.y());
+
+    auto item = new ui::joint_item(j->get());
+    canv.addItem(item);
 }
 
 /*------------------------------------------------------------------------------------------------*/

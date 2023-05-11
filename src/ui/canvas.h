@@ -6,6 +6,12 @@
 
 /*------------------------------------------------------------------------------------------------*/
 
+namespace sm {
+    class joint;
+    class bone;
+    class ik_sandbox;
+}
+
 namespace ui {
 
     class canvas_view; 
@@ -48,6 +54,13 @@ namespace ui {
         canvas_view();
         canvas& canvas();
         stick_man& main_window();
+    };
+
+    class joint_item : public QGraphicsEllipseItem {
+    private:
+        sm::joint& joint_;
+    public:
+        joint_item(sm::joint& joint);
     };
 
 }

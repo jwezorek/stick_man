@@ -6,6 +6,7 @@
 #include "properties_pane.h"
 #include "canvas.h"
 #include "tools.h"
+#include "../core/ik_sandbox.h"
 
 namespace ui {
 
@@ -19,6 +20,7 @@ namespace ui {
         void open();
         tool_manager& tool_mgr();
         canvas_view& view();
+        sm::ik_sandbox& sandbox();
     private:
         void showEvent(QShowEvent* event) override;
         void resizeEvent(QResizeEvent* event) override;
@@ -31,6 +33,7 @@ namespace ui {
         animation_pane* anim_pane_;
         properties_pane* prop_pane_;
         canvas_view* view_;
+        sm::ik_sandbox sandbox_;
     };
 
 }
