@@ -1,10 +1,15 @@
 #include "ik_sandbox.h"
+#include <cmath>
 
 /*------------------------------------------------------------------------------------------------*/
 
 namespace {
 
-
+    double distance(const sm::point& u, const sm::point& v) {
+        auto x_diff = u.x - v.x;
+        auto y_diff = u.y - v.y;
+        return std::sqrt(x_diff * x_diff + y_diff * y_diff);
+    }
 
 }
 
@@ -18,11 +23,11 @@ std::string sm::joint::name() const {
     return name_;
 }
 
-std::optional<const std::reference_wrapper<sm::bone>> sm::joint::parent_bone() const {
+sm::maybe_bone_ref sm::joint::parent_bone() const {
     return parent_;
 }
 
-std::span<const std::reference_wrapper<sm::bone>> sm::joint::child_bones() const {
+std::span<sm::const_bone_ref> sm::joint::child_bones() const {
     return children_;
 }
 
@@ -32,6 +37,10 @@ double sm::joint::x() const {
 
 double sm::joint::y() const {
     return y_;
+}
+
+sm::point sm::joint::pos() const {
+    return { x_, y_ };
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -53,11 +62,40 @@ sm::joint& sm::bone::child_joint() const {
     return v_;
 }
 
+std::tuple<sm::point, sm::point> sm::bone::line_segment() const {
+    return { u_.pos(), v_.pos() };
+}
+
+double sm::bone::length() const {
+    return std::apply(distance, line_segment());
+}
+
+double sm::bone::absolute_rotation() const {
+    auto [u, v] = line_segment();
+    return std::atan2(
+        (v.y - u.y),
+        (v.x - u.x)
+    );
+}
+
+double sm::bone::rotation() const {
+    auto parent = parent_bone();
+    if (!parent) {
+        return absolute_rotation();
+    }
+    return absolute_rotation() - parent->get().absolute_rotation();
+}
+
+
+sm::maybe_bone_ref  sm::bone::parent_bone() const {
+    return u_.parent_bone();
+}
+
 /*------------------------------------------------------------------------------------------------*/
 
 sm::ik_sandbox::ik_sandbox() : joint_id_(0), bone_id_(0) {};
 
-std::expected<const std::reference_wrapper<sm::joint>, sm::result> sm::ik_sandbox::create_joint(
+std::expected<sm::const_joint_ref, sm::result> sm::ik_sandbox::create_joint(
         const std::string& joint_name, double x, double y) {
     auto name = (joint_name.empty()) ? "joint-" + std::to_string(++joint_id_) : joint_name;
     if (joints_.contains(name)) {
@@ -80,7 +118,7 @@ sm::result sm::ik_sandbox::test_bone_location(joint& u, joint& v) const {
     return sm::result::no_error;
 }
 
-std::expected<const std::reference_wrapper<sm::bone>, sm::result> sm::ik_sandbox::create_bone(
+std::expected<sm::const_bone_ref, sm::result> sm::ik_sandbox::create_bone(
         const std::string& bone_name, joint& u, joint& v) {
     auto name = (bone_name.empty()) ? "bone-" + std::to_string(++bone_id_) : bone_name;
     if (bones_.contains(name)) {

@@ -8,25 +8,29 @@
 #include <span>
 #include <unordered_map>
 #include <expected>
+#include <tuple>
 
 /*------------------------------------------------------------------------------------------------*/
 
 namespace sm {
 
-    namespace detail{
+    namespace detail {
         template <typename T> class enable_protected_make_unique {
-        protected: 
+        protected:
             template <typename... Args>
             static std::unique_ptr<T> make_unique(Args &&... args) {
                 class make_unique_enabler : public T {
-                    public:
-                        make_unique_enabler(Args &&... args) : 
-                            T(std::forward<Args>(args)...) {}
+                public:
+                    make_unique_enabler(Args &&... args) :
+                        T(std::forward<Args>(args)...) {}
                 };
                 return std::make_unique<make_unique_enabler>(std::forward<Args>(args)...);
             }
         };
     }
+
+    class bone;
+    class joint;
 
     enum class result {
         no_error,
@@ -35,7 +39,17 @@ namespace sm {
         non_unique_name
     };
 
-    class bone;
+    using const_bone_ref = const std::reference_wrapper<bone>;
+    using const_joint_ref = const std::reference_wrapper<joint>;
+    using bone_ref = std::reference_wrapper<bone>;
+    using maybe_bone_ref = std::optional<const std::reference_wrapper<bone>>;
+    using expected_bone = std::expected<const_bone_ref, result>;
+    using expected_joint = std::expected<const_joint_ref, result>;
+
+    struct point {
+        double x;
+        double y;
+    };
 
     class joint : public detail::enable_protected_make_unique<joint> {
         friend class ik_sandbox;
@@ -43,8 +57,8 @@ namespace sm {
         std::string name_;
         double x_;
         double y_;
-        std::optional<const std::reference_wrapper<bone>> parent_;
-        std::vector<std::reference_wrapper<bone>> children_;
+        maybe_bone_ref parent_;
+        std::vector<bone_ref> children_;
 
     protected:
 
@@ -52,10 +66,11 @@ namespace sm {
 
     public:
         std::string name() const;
-        std::optional<const std::reference_wrapper<bone>> parent_bone() const;
-        std::span<const std::reference_wrapper<bone>> child_bones() const;
+        maybe_bone_ref parent_bone() const;
+        std::span<const_bone_ref> child_bones() const;
         double x() const;
         double y() const;
+        point pos() const;
     };
 
     class bone : public detail::enable_protected_make_unique<bone> {
@@ -73,6 +88,12 @@ namespace sm {
         std::string name() const;
         joint& parent_joint() const;
         joint& child_joint() const;
+
+        std::tuple<point, point> line_segment() const;
+        double length() const;
+        double absolute_rotation() const;
+        double rotation() const;
+        maybe_bone_ref parent_bone() const;
     };
 
 
@@ -87,11 +108,9 @@ namespace sm {
 
     public:
         ik_sandbox();
-        std::expected<const std::reference_wrapper<joint>, result> create_joint(
-            const std::string& name, double x, double y);
+        expected_joint create_joint(const std::string& name, double x, double y);
         bool set_joint_name(joint& j, const std::string& name);
-        std::expected<const std::reference_wrapper<bone>, result> create_bone(
-            const std::string& name, joint& u, joint& v);
+        expected_bone create_bone(const std::string& name, joint& u, joint& v);
         bool set_bone_name(bone& b, const std::string& name);
 
     };

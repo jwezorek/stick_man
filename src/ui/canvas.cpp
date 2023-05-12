@@ -42,8 +42,30 @@ namespace {
 
 /*------------------------------------------------------------------------------------------------*/
 
+QGraphicsRectItem* make_rect() {
+    QGraphicsRectItem* ri = new QGraphicsRectItem(0, 0, 40, 20);
+    ri->setTransformOriginPoint(20, 20);
+    ri->setBrush(Qt::yellow);
+    return ri;
+}
+
 ui::canvas::canvas(){
     setSceneRect(QRectF(-1500, -1500, 3000, 3000));
+
+    QTransform transform(
+        1, 0, 0,
+        0, 1, 0,
+        20, 10, 1
+    );
+    auto a = make_rect();
+    auto b = make_rect();
+    auto c = make_rect();
+    b->setParentItem(a);
+    b->setTransform(transform);
+    c->setParentItem(b);
+    c->setTransform(transform);
+    this->addItem(a);
+    b->setZValue(10);
 }
 
 void ui::canvas::drawBackground(QPainter* painter, const QRectF& dirty_rect) {
@@ -95,7 +117,10 @@ void ui::canvas::wheelEvent(QGraphicsSceneWheelEvent* event) {
 
 ui::canvas_view::canvas_view() {
     setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
-    setScene(new ui::canvas()); /*
+    setScene(new ui::canvas()); 
+    scale(1, -1);
+    
+    /*
     connect(view_, &QGraphicsView::rubberBandChanged,
         [](QRect rubberBandRect, QPointF fromScenePoint, QPointF toScenePoint) {
             qDebug() << "rubber band";

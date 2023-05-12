@@ -96,7 +96,7 @@ void ui::zoom_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event
     auto zoom = scale_from_zoom_level();
     auto& view = c.view();
     view.resetTransform();
-    view.scale(zoom, zoom);
+    view.scale(zoom, -zoom);
     view.centerOn(pt);
 }
 
