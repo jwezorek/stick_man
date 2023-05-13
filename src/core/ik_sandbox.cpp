@@ -13,11 +13,43 @@ namespace {
 
 }
 
+/*------------------------------------------------------------------------------------------------*/
+
+sm::point sm::point::operator += (const point& p) {
+    *this = *this + p;
+    return *this;
+}
+
+sm::point sm::point::operator-=(const point& p) {
+    *this = *this - p;
+    return *this;
+}
+
+sm::point sm::operator+(const sm::point& p1, const sm::point& p2) {
+    return {
+        p1.x + p2.x,
+        p1.y + p2.y
+    };
+}
+
+sm::point sm::operator-(const sm::point& p1, const sm::point& p2) {
+    return {
+        p1.x - p2.x,
+        p1.y - p2.y
+    };
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
 sm::joint::joint(const std::string& name, double x, double y) :
     name_(name),
     x_(x),
     y_(y)
 {}
+
+void sm::joint::set_parent(bone& b) {
+    parent_ = std::ref(b);
+}
 
 std::string sm::joint::name() const {
     return name_;
@@ -31,23 +63,39 @@ std::span<sm::const_bone_ref> sm::joint::child_bones() const {
     return children_;
 }
 
-double sm::joint::x() const {
+double sm::joint::world_x() const {
     return x_;
 }
 
-double sm::joint::y() const {
+double sm::joint::world_y() const {
     return y_;
 }
 
-sm::point sm::joint::pos() const {
+sm::point sm::joint::world_pos() const {
     return { x_, y_ };
+}
+
+sm::point sm::joint::pos() const {
+    if (!parent_) {
+        return world_pos();
+    }
+    auto origin = parent_->get().parent_joint().world_pos();
+    return world_pos() - origin;
+}
+
+std::any sm::joint::get_user_data() const {
+    return user_data_;
+}
+
+void sm::joint::set_user_data(std::any data) {
+    user_data_ = data;
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
 sm::bone::bone(std::string name, sm::joint& u, sm::joint& v) :
        name_(name), u_(u), v_(v) {
-
+    v.set_parent(*this);
 }
 
 std::string sm::bone::name() const {
@@ -63,14 +111,14 @@ sm::joint& sm::bone::child_joint() const {
 }
 
 std::tuple<sm::point, sm::point> sm::bone::line_segment() const {
-    return { u_.pos(), v_.pos() };
+    return { u_.world_pos(), v_.world_pos() };
 }
 
 double sm::bone::length() const {
     return std::apply(distance, line_segment());
 }
 
-double sm::bone::absolute_rotation() const {
+double sm::bone::world_rotation() const {
     auto [u, v] = line_segment();
     return std::atan2(
         (v.y - u.y),
@@ -81,14 +129,21 @@ double sm::bone::absolute_rotation() const {
 double sm::bone::rotation() const {
     auto parent = parent_bone();
     if (!parent) {
-        return absolute_rotation();
+        return world_rotation();
     }
-    return absolute_rotation() - parent->get().absolute_rotation();
+    return world_rotation() - parent->get().world_rotation();
 }
-
 
 sm::maybe_bone_ref  sm::bone::parent_bone() const {
     return u_.parent_bone();
+}
+
+std::any sm::bone::get_user_data() const {
+    return user_data_;
+}
+
+void sm::bone::set_user_data(std::any data) {
+    user_data_ = data;
 }
 
 /*------------------------------------------------------------------------------------------------*/

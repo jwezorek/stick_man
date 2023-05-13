@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <expected>
 #include <tuple>
+#include <any>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -42,35 +43,46 @@ namespace sm {
     using const_bone_ref = const std::reference_wrapper<bone>;
     using const_joint_ref = const std::reference_wrapper<joint>;
     using bone_ref = std::reference_wrapper<bone>;
-    using maybe_bone_ref = std::optional<const std::reference_wrapper<bone>>;
+    using maybe_bone_ref = std::optional<std::reference_wrapper<bone>>;
     using expected_bone = std::expected<const_bone_ref, result>;
     using expected_joint = std::expected<const_joint_ref, result>;
 
     struct point {
         double x;
         double y;
+
+        point operator+=(const point& p);
+        point operator-=(const point& p);
     };
+
+    point operator+(const point& p1, const point& p2);
+    point operator-(const point& p1, const point& p2);
 
     class joint : public detail::enable_protected_make_unique<joint> {
         friend class ik_sandbox;
+        friend class bone;
     private:
         std::string name_;
         double x_;
         double y_;
         maybe_bone_ref parent_;
         std::vector<bone_ref> children_;
-
+        std::any user_data_;
     protected:
 
         joint(const std::string& name, double x, double y);
+        void set_parent(bone& b);
 
     public:
         std::string name() const;
         maybe_bone_ref parent_bone() const;
         std::span<const_bone_ref> child_bones() const;
-        double x() const;
-        double y() const;
+        double world_x() const;
+        double world_y() const;
+        point world_pos() const;
         point pos() const;
+        std::any get_user_data() const;
+        void set_user_data(std::any data);
     };
 
     class bone : public detail::enable_protected_make_unique<bone> {
@@ -79,6 +91,7 @@ namespace sm {
         std::string name_;
         joint& u_;
         joint& v_;
+        std::any user_data_;
 
     protected:
 
@@ -91,9 +104,11 @@ namespace sm {
 
         std::tuple<point, point> line_segment() const;
         double length() const;
-        double absolute_rotation() const;
+        double world_rotation() const;
         double rotation() const;
         maybe_bone_ref parent_bone() const;
+        std::any get_user_data() const;
+        void set_user_data(std::any data);
     };
 
 

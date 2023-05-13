@@ -17,6 +17,7 @@ namespace ui {
     class canvas_view; 
     class stick_man;
     class tool_manager;
+    class joint_item;
 
     class canvas : public QGraphicsScene {
 
@@ -34,6 +35,7 @@ namespace ui {
         canvas();
         void drawBackground(QPainter* painter, const QRectF& rect) override;
         canvas_view& view();
+        joint_item* top_joint(const QPointF& pt) const;
 
     protected:
 
@@ -61,6 +63,16 @@ namespace ui {
         sm::joint& joint_;
     public:
         joint_item(sm::joint& joint);
+        sm::joint& joint() const;
+    };
+
+    class bone_item : public QGraphicsPolygonItem {
+    private:
+        sm::bone& bone_;
+    public:
+        bone_item(sm::bone& bone);
+        joint_item& parent_joint_item() const;
+        joint_item& child_joint_item() const;
     };
 
 }

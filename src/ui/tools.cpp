@@ -31,7 +31,7 @@ namespace {
         std::make_unique<placeholder>("arrow tool", "arrow_icon.png", ui::tool_id::arrow),
         std::make_unique<placeholder>("move tool", "move_icon.png", ui::tool_id::move),
         std::make_unique<ui::add_joint_tool>(),
-        std::make_unique<placeholder>("add bone tool", "add_bone_icon.png", ui::tool_id::add_bone) 
+        std::make_unique<ui::add_bone_tool>()
     });
 
 }
@@ -124,6 +124,38 @@ void ui::add_joint_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEven
 
     auto item = new ui::joint_item(j->get());
     canv.addItem(item);
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
+ui::add_bone_tool::add_bone_tool() :
+    parent_joint_(nullptr),
+    abstract_tool("add bone tool", "add_bone_icon.png", ui::tool_id::add_bone) {}
+
+void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
+    auto pt = event->scenePos();
+    auto joint = canv.top_joint(pt);
+    if (!joint) {
+        if (parent_joint_) {
+            parent_joint_->setBrush(QBrush(Qt::white));
+            parent_joint_ = nullptr;
+        }
+        return;
+    }
+    if (parent_joint_ == nullptr) {
+        parent_joint_ = joint;
+        parent_joint_->setBrush(QBrush(Qt::blue));
+    } else {
+        auto& sandbox = canv.view().main_window().sandbox();
+        auto bone = sandbox.create_bone({}, parent_joint_->joint(), joint->joint());
+        if (bone) {
+            auto item = new ui::bone_item(bone->get());
+        } else {
+            auto error = bone.error();
+        }
+        parent_joint_->setBrush(QBrush(Qt::white));
+        parent_joint_ = nullptr;
+    }
 }
 
 /*------------------------------------------------------------------------------------------------*/

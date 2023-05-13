@@ -72,6 +72,14 @@ namespace ui {
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
     };
 
+    class add_bone_tool : public abstract_tool {
+    private:
+        joint_item* parent_joint_;
+    public:
+        add_bone_tool();
+        void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+    };
+
     class stick_man;
 
     class tool_manager {
