@@ -62,82 +62,24 @@ namespace {
         };
         return { pts };
     }
+
+    auto child_bones(ui::joint_item* joint) {
+        auto bones = joint->joint().child_bones();
+        return bones |
+            rv::transform(
+                [](sm::const_bone_ref bone)->ui::bone_item& {
+                    return std::any_cast<std::reference_wrapper<ui::bone_item>>(
+                        bone.get().get_user_data()
+                    ).get();
+                }
+            );
+    }
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
-QGraphicsRectItem* make_rect() {
-    QGraphicsRectItem* ri = new QGraphicsRectItem(0, 0, 40, 20);
-    ri->setTransformOriginPoint(20, 10);
-    ri->setBrush(Qt::yellow);
-    return ri;
-}
-
-QGraphicsPolygonItem* make_poly() {
-    QGraphicsPolygonItem* ri = new QGraphicsPolygonItem(
-        QPolygon(
-            QList<QPoint>{
-                {-20,-20},
-                {-20,20},
-                {20, 20},
-                {20, -20},
-                { -20,-20 }
-            }
-        )
-    );
-    ri->setTransformOriginPoint(0, 0);
-    ri->setBrush(Qt::yellow);
-    return ri;
-}
-
 ui::canvas::canvas(){
     setSceneRect(QRectF(-1500, -1500, 3000, 3000));
-
-    QTransform transform(
-        1, 0, 0,
-        0, 1, 0,
-        20, 10, 1
-    );
-    /*
-    auto a = make_rect();
-    auto b = make_rect();
-    auto c = make_rect();
-    b->setParentItem(a);
-    b->setTransform(transform);
-    c->setParentItem(b);
-    c->setTransform(transform);
-    this->addItem(a);
-    b->setZValue(10);
-    */
-
-    /*
-    auto a = make_rect();
-    auto b = make_rect();
-    auto c = make_rect();
-
-    b->setParentItem(a);
-    b->setPos({ 20,10 });
-
-    c->setParentItem(b);
-    c->setPos({ 20,10 });
-
-    a->setPos(400, 0);
-    this->addItem(a);
-    */
-
-    auto a = new QGraphicsEllipseItem(-10,-10,20,20);
-    a->setPos(400, 0);
-    this->addItem(a);
-
-    auto b = make_poly();
-    auto c = make_poly();
-
-    b->setParentItem(a);
-    b->setPos({ 20,20 });
-
-    c->setParentItem(b);
-    c->setPos({ 20,20 });
-
     
 }
 
@@ -234,7 +176,7 @@ ui::joint_item::joint_item(sm::joint& joint) :
         2.0 * k_joint_radius
     )
 {
-    setBrush(QBrush(Qt::white));
+    setBrush(Qt::white);
     setPen(QPen(Qt::black, 2));
     joint_.set_user_data(std::ref(*this));
     setPos(joint.world_x(), joint.world_y());
@@ -250,6 +192,8 @@ sm::joint& ui::joint_item::joint() const {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::bone_item::bone_item(sm::bone& bone) : bone_(bone) {
+    setFlag(QGraphicsItem::ItemStacksBehindParent, true);
+    setBrush(Qt::black);
     auto length = bone.length();
     setPolygon(bone_polygon(length, k_joint_radius));
     setTransformOriginPoint({ 0,0 });
@@ -259,9 +203,13 @@ ui::bone_item::bone_item(sm::bone& bone) : bone_(bone) {
     setParentItem(&parent);
     
     auto& child = child_joint_item();
-    
     child.setParentItem(this);
     child.setPos( length, 0  );
+    for (bone_item& child_bone : child_bones(&child)) {
+        child_bone.setRotation(
+            radians_to_degrees(child_bone.bone().rotation())
+        );
+    }
     
     bone_.set_user_data(std::ref(*this));
 }
@@ -278,4 +226,9 @@ ui::joint_item& ui::bone_item::child_joint_item() const {
         bone_.child_joint().get_user_data()
     ).get();
     return child_joint;
+}
+
+
+sm::bone& ui::bone_item::bone() const {
+    return bone_;
 }

@@ -73,6 +73,7 @@ namespace ui {
         bone_item(sm::bone& bone);
         joint_item& parent_joint_item() const;
         joint_item& child_joint_item() const;
+        sm::bone& bone() const;
     };
 
 }

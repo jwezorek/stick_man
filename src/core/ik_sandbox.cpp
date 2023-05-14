@@ -51,6 +51,10 @@ void sm::joint::set_parent(bone& b) {
     parent_ = std::ref(b);
 }
 
+void sm::joint::add_child(bone& b) {
+    children_.push_back(std::ref(b));
+}
+
 std::string sm::joint::name() const {
     return name_;
 }
@@ -96,6 +100,7 @@ void sm::joint::set_user_data(std::any data) {
 sm::bone::bone(std::string name, sm::joint& u, sm::joint& v) :
        name_(name), u_(u), v_(v) {
     v.set_parent(*this);
+    u.add_child(*this);
 }
 
 std::string sm::bone::name() const {

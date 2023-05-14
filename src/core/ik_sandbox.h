@@ -72,6 +72,7 @@ namespace sm {
 
         joint(const std::string& name, double x, double y);
         void set_parent(bone& b);
+        void add_child(bone& b);
 
     public:
         std::string name() const;
