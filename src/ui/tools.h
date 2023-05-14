@@ -74,9 +74,12 @@ namespace ui {
 
     class add_bone_tool : public abstract_tool {
     private:
-        joint_item* parent_joint_;
+        QPointF origin_;
+        QGraphicsLineItem* rubber_band_;
     public:
         add_bone_tool();
+        void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
     };
 
@@ -84,9 +87,6 @@ namespace ui {
     private:
     public:
         arrow_tool();
-        void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
     };
 
     class move_tool : public abstract_tool {

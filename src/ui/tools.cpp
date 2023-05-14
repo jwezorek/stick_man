@@ -131,9 +131,43 @@ void ui::add_joint_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEven
 /*------------------------------------------------------------------------------------------------*/
 
 ui::add_bone_tool::add_bone_tool() :
-    parent_joint_(nullptr),
-    abstract_tool("add bone tool", "add_bone_icon.png", ui::tool_id::add_bone) {}
+    rubber_band_(nullptr),
+    abstract_tool("add bone tool", "add_bone_icon.png", ui::tool_id::add_bone) {
+}
 
+void ui::add_bone_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+    origin_ = event->scenePos();
+    if (!rubber_band_) {
+        c.addItem(rubber_band_ = new QGraphicsLineItem());
+        rubber_band_->setPen(QPen(Qt::black, 2.0, Qt::DotLine));
+    }
+    rubber_band_->setLine(QLineF(origin_, origin_));
+    rubber_band_->show();
+}
+
+void ui::add_bone_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+    rubber_band_->setLine(QLineF(origin_, event->scenePos()));
+}
+
+void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
+    rubber_band_->hide();
+    auto pt = event->scenePos();
+    auto parent_joint = canv.top_joint(origin_);
+    auto child_joint = canv.top_joint(event->scenePos());
+
+    if (parent_joint && child_joint) {
+        auto& sandbox = canv.view().main_window().sandbox();
+        auto bone = sandbox.create_bone({}, parent_joint->joint(), child_joint->joint());
+        if (bone) {
+            auto item = new ui::bone_item(bone->get());
+        } else {
+            auto error = bone.error();
+        }
+    }
+}
+
+
+/*
 void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     auto pt = event->scenePos();
     auto joint = canv.top_joint(pt);
@@ -159,22 +193,12 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
         parent_joint_ = nullptr;
     }
 }
+*/
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::arrow_tool::arrow_tool() : abstract_tool("arrow tool", "arrow_icon.png", ui::tool_id::arrow) {
-
-}
-
-void ui::arrow_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
-
-}
-
-void ui::arrow_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
-
-}
-
-void ui::arrow_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+ui::arrow_tool::arrow_tool() : 
+        abstract_tool("arrow tool", "arrow_icon.png", ui::tool_id::arrow) {
 
 }
 
