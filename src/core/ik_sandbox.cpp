@@ -1,9 +1,14 @@
 #include "ik_sandbox.h"
 #include <cmath>
+#include <variant>
+#include <stack>
+#include <unordered_set>
 
 /*------------------------------------------------------------------------------------------------*/
 
 namespace {
+
+    using joint_or_bone = std::variant<sm::const_bone_ref, sm::const_joint_ref>;
 
     double distance(const sm::point& u, const sm::point& v) {
         auto x_diff = u.x - v.x;
@@ -95,6 +100,10 @@ void sm::joint::set_user_data(std::any data) {
     user_data_ = data;
 }
 
+bool sm::joint::is_root() const {
+    return !parent_.has_value();
+}
+
 /*------------------------------------------------------------------------------------------------*/
 
 sm::bone::bone(std::string name, sm::joint& u, sm::joint& v) :
@@ -174,19 +183,20 @@ bool sm::ik_sandbox::set_joint_name(joint& j, const std::string& name) {
     return true;
 }
 
-sm::result sm::ik_sandbox::test_bone_location(joint& u, joint& v) const {
-    return sm::result::no_error;
-}
-
 std::expected<sm::const_bone_ref, sm::result> sm::ik_sandbox::create_bone(
         const std::string& bone_name, joint& u, joint& v) {
+
+    if (!v.is_root()) {
+        return std::unexpected(sm::result::multi_parent_joint);
+    }
+
+    if (is_reachable(u, v)) {
+        return std::unexpected(sm::result::cyclic_bones);
+    }
+
     auto name = (bone_name.empty()) ? "bone-" + std::to_string(++bone_id_) : bone_name;
     if (bones_.contains(name)) {
         return std::unexpected{ sm::result::non_unique_name };
-    }
-
-    if (auto res = test_bone_location(u, v); res != sm::result::no_error) {
-        return std::unexpected{ res };
     }
 
     bones_[name] = bone::make_unique(name, u, v);
@@ -194,5 +204,15 @@ std::expected<sm::const_bone_ref, sm::result> sm::ik_sandbox::create_bone(
 }
 
 bool sm::ik_sandbox::set_bone_name(sm::bone& b, const std::string& name) {
+    //TODO
     return false;
+}
+
+bool sm::ik_sandbox::is_reachable(joint& j1, joint& j2) {
+    return false;
+}
+
+void sm::ik_sandbox::dfs(joint& j1, joint_visitor visit_joint, bone_visitor visit_bone) {
+    std::stack<joint_or_bone> stack;
+    stack.push(std::ref(j1));
 }

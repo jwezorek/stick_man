@@ -144,6 +144,7 @@ void ui::canvas::wheelEvent(QGraphicsSceneWheelEvent* event) {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::canvas_view::canvas_view() {
+    setRenderHint(QPainter::Antialiasing, true);
     setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
     setScene(new ui::canvas()); 
     scale(1, -1);

@@ -155,7 +155,7 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
     auto parent_joint = canv.top_joint(origin_);
     auto child_joint = canv.top_joint(event->scenePos());
 
-    if (parent_joint && child_joint) {
+    if (parent_joint && child_joint && parent_joint != child_joint) {
         auto& sandbox = canv.view().main_window().sandbox();
         auto bone = sandbox.create_bone({}, parent_joint->joint(), child_joint->joint());
         if (bone) {
@@ -165,35 +165,6 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
         }
     }
 }
-
-
-/*
-void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
-    auto pt = event->scenePos();
-    auto joint = canv.top_joint(pt);
-    if (!joint) {
-        if (parent_joint_) {
-            parent_joint_->setBrush(QBrush(Qt::white));
-            parent_joint_ = nullptr;
-        }
-        return;
-    }
-    if (parent_joint_ == nullptr) {
-        parent_joint_ = joint;
-        parent_joint_->setBrush(QBrush(Qt::blue));
-    } else {
-        auto& sandbox = canv.view().main_window().sandbox();
-        auto bone = sandbox.create_bone({}, parent_joint_->joint(), joint->joint());
-        if (bone) {
-            auto item = new ui::bone_item(bone->get());
-        } else {
-            auto error = bone.error();
-        }
-        parent_joint_->setBrush(QBrush(Qt::white));
-        parent_joint_ = nullptr;
-    }
-}
-*/
 
 /*------------------------------------------------------------------------------------------------*/
 

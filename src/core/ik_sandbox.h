@@ -84,6 +84,7 @@ namespace sm {
         point pos() const;
         std::any get_user_data() const;
         void set_user_data(std::any data);
+        bool is_root() const;
     };
 
     class bone : public detail::enable_protected_make_unique<bone> {
@@ -112,6 +113,8 @@ namespace sm {
         void set_user_data(std::any data);
     };
 
+    using joint_visitor = std::function<void(joint&)>;
+    using bone_visitor = std::function<void(bone&)>;
 
     class ik_sandbox {
     private:
@@ -120,14 +123,13 @@ namespace sm {
         std::unordered_map<std::string, std::unique_ptr<joint>> joints_;
         std::unordered_map<std::string, std::unique_ptr<bone>> bones_;
 
-        result test_bone_location(joint& u, joint& v) const;
-
     public:
         ik_sandbox();
         expected_joint create_joint(const std::string& name, double x, double y);
         bool set_joint_name(joint& j, const std::string& name);
         expected_bone create_bone(const std::string& name, joint& u, joint& v);
         bool set_bone_name(bone& b, const std::string& name);
-
+        bool is_reachable(joint& j1, joint& j2);
+        void dfs(joint& j1, joint_visitor visit_joint = {}, bone_visitor visit_bone = {});
     };
 }
