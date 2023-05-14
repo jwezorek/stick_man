@@ -80,6 +80,21 @@ namespace ui {
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
     };
 
+    class arrow_tool : public abstract_tool {
+    private:
+    public:
+        arrow_tool();
+        void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+    };
+
+    class move_tool : public abstract_tool {
+    private:
+    public:
+        move_tool();
+    };
+
     class stick_man;
 
     class tool_manager {

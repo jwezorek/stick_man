@@ -11,6 +11,7 @@ namespace rv = std::ranges::views;
 /*------------------------------------------------------------------------------------------------*/
 
 namespace {
+    /*
     class placeholder : public ui::abstract_tool {
     public:
         placeholder(QString name, QString rsrc, ui::tool_id id) : abstract_tool(name, rsrc, id) {}
@@ -24,12 +25,13 @@ namespace {
         void wheelEvent(ui::canvas& c, QGraphicsSceneWheelEvent* event) override {}
         void deactivate(ui::canvas& c) override {}
     };
+    */
 
     auto k_tool_registry = std::to_array<std::unique_ptr<ui::abstract_tool>>({
         std::make_unique<ui::pan_tool>(),
         std::make_unique<ui::zoom_tool>(),
-        std::make_unique<placeholder>("arrow tool", "arrow_icon.png", ui::tool_id::arrow),
-        std::make_unique<placeholder>("move tool", "move_icon.png", ui::tool_id::move),
+        std::make_unique<ui::arrow_tool>(),
+        std::make_unique<ui::move_tool>(),
         std::make_unique<ui::add_joint_tool>(),
         std::make_unique<ui::add_bone_tool>()
     });
@@ -156,6 +158,30 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
         parent_joint_->setBrush(QBrush(Qt::white));
         parent_joint_ = nullptr;
     }
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
+ui::arrow_tool::arrow_tool() : abstract_tool("arrow tool", "arrow_icon.png", ui::tool_id::arrow) {
+
+}
+
+void ui::arrow_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+
+}
+
+void ui::arrow_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+
+}
+
+void ui::arrow_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
+ui::move_tool::move_tool() : abstract_tool("move tool", "move_icon.png", ui::tool_id::move) {
+
 }
 
 /*------------------------------------------------------------------------------------------------*/
