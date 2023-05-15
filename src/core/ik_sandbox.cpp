@@ -4,11 +4,67 @@
 #include <stack>
 #include <unordered_set>
 
+namespace r = std::ranges;
+namespace rv = std::ranges::views;
+
 /*------------------------------------------------------------------------------------------------*/
 
 namespace {
 
     using joint_or_bone = std::variant<sm::const_bone_ref, sm::const_joint_ref>;
+
+    class joint_or_bone_visitor {
+        sm::joint_visitor joint_visit_;
+        sm::bone_visitor bone_visit_;
+
+    public:
+        joint_or_bone_visitor(const sm::joint_visitor& j, sm::bone_visitor& b) :
+                joint_visit_(j),
+                bone_visit_(b) {
+        }
+
+        bool operator()(sm::const_joint_ref j_ref) {
+            return (joint_visit_) ? joint_visit_(j_ref.get()) : true;
+        }
+
+        bool operator()(sm::const_bone_ref b_ref) {
+            return (bone_visit_) ? bone_visit_(b_ref.get()) : true;
+        }
+    };
+
+    class joint_or_bone_neighbors_visitor {
+        bool downstream_;
+    public:
+        joint_or_bone_neighbors_visitor(bool downstream) : 
+            downstream_(downstream)
+        {}
+
+        std::vector<joint_or_bone> operator()(sm::const_joint_ref j_ref) {
+            auto& joint = j_ref.get();
+            auto neighbors = joint.child_bones() |
+                rv::transform(
+                    [](sm::bone_ref child)->joint_or_bone {
+                        return child;
+                    }
+                ) | r::to <std::vector<joint_or_bone>>();
+            if (!downstream_) {
+                if (joint.parent_bone().has_value()) {
+                    neighbors.push_back(joint.parent_bone().value());
+                }
+            }
+            return neighbors;
+        }
+
+        std::vector<joint_or_bone> operator()(sm::const_bone_ref b_ref) {
+            auto& bone = b_ref.get();
+            std::vector<joint_or_bone> neighbors;
+            if (!downstream_) {
+                neighbors.push_back(std::ref(bone.parent_joint()));
+            }
+            neighbors.push_back(std::ref(bone.child_joint()));
+            return neighbors;
+        }
+    };
 
     double distance(const sm::point& u, const sm::point& v) {
         auto x_diff = u.x - v.x;
@@ -16,6 +72,16 @@ namespace {
         return std::sqrt(x_diff * x_diff + y_diff * y_diff);
     }
 
+    uint64_t get_id(const joint_or_bone& var) {
+        auto ptr = std::visit(
+            [](auto val_ref)->void* {
+                auto& val = val_ref.get();
+                return reinterpret_cast<void*>(&val);
+            },
+            var
+        );
+        return reinterpret_cast<uint64_t>(ptr);
+    }
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -209,10 +275,41 @@ bool sm::ik_sandbox::set_bone_name(sm::bone& b, const std::string& name) {
 }
 
 bool sm::ik_sandbox::is_reachable(joint& j1, joint& j2) {
-    return false;
+    auto found = false;
+    auto visit_joint = [&found, &j2](joint& j) {
+        if (&j == &j2) {
+            found = true;
+            return false;
+        }
+        return true;
+    };
+    dfs(j1, visit_joint);
+    return found;
 }
 
-void sm::ik_sandbox::dfs(joint& j1, joint_visitor visit_joint, bone_visitor visit_bone) {
+void sm::ik_sandbox::dfs(joint& j1, joint_visitor visit_joint, bone_visitor visit_bone,
+        bool just_downstream) {
     std::stack<joint_or_bone> stack;
+    std::unordered_set<uint64_t> visited;
+    joint_or_bone_visitor visitor(visit_joint, visit_bone);
+    joint_or_bone_neighbors_visitor neighbors_visitor(just_downstream);
     stack.push(std::ref(j1));
+
+    while (!stack.empty()) {
+        auto node = stack.top();
+        stack.pop();
+        auto id = get_id(node);
+        if (visited.contains(id)) {
+            continue;
+        }
+        auto result = std::visit(visitor, node);
+        visited.insert(id);
+        if (!result) {
+            return;
+        }
+        auto neighbors = std::visit(neighbors_visitor, node);
+        for (const auto& neighbor : neighbors) {
+            stack.push(neighbor);
+        }
+    }
 }

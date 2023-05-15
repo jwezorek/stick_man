@@ -113,8 +113,8 @@ namespace sm {
         void set_user_data(std::any data);
     };
 
-    using joint_visitor = std::function<void(joint&)>;
-    using bone_visitor = std::function<void(bone&)>;
+    using joint_visitor = std::function<bool(joint&)>;
+    using bone_visitor = std::function<bool(bone&)>;
 
     class ik_sandbox {
     private:
@@ -130,6 +130,7 @@ namespace sm {
         expected_bone create_bone(const std::string& name, joint& u, joint& v);
         bool set_bone_name(bone& b, const std::string& name);
         bool is_reachable(joint& j1, joint& j2);
-        void dfs(joint& j1, joint_visitor visit_joint = {}, bone_visitor visit_bone = {});
+        void dfs(joint& j1, joint_visitor visit_joint = {}, bone_visitor visit_bone = {}, 
+            bool just_downstream = false);
     };
 }
