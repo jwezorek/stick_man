@@ -46,7 +46,7 @@ namespace {
                     [](sm::bone_ref child)->joint_or_bone {
                         return child;
                     }
-                ) | r::to <std::vector<joint_or_bone>>();
+                ) | r::to<std::vector<joint_or_bone>>();
             if (!downstream_) {
                 if (joint.parent_bone().has_value()) {
                     neighbors.push_back(joint.parent_bone().value());

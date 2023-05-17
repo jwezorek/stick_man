@@ -22,6 +22,7 @@ add_executable(stick_man
     src/ui/flowlayout.cpp
     src/ui/tools.cpp
     src/ui/properties_pane.cpp
+    src/ui/tool_settings_pane.cpp
     src/ui/animation_pane.cpp
     src/ui/util.cpp
     src/core/ik_sandbox.cpp
