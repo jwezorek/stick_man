@@ -4,6 +4,8 @@
 #include <QtWidgets>
 #include <QGraphicsScene>
 
+#include <vector>
+
 /*------------------------------------------------------------------------------------------------*/
 
 namespace sm {
@@ -18,6 +20,7 @@ namespace ui {
     class stick_man;
     class tool_manager;
     class joint_item;
+    class bone_item;
 
     class canvas : public QGraphicsScene {
 
@@ -36,6 +39,9 @@ namespace ui {
         void drawBackground(QPainter* painter, const QRectF& rect) override;
         canvas_view& view();
         joint_item* top_joint(const QPointF& pt) const;
+        std::vector<joint_item*> root_joint_items() const;
+        std::vector<joint_item*> joint_items() const;
+        std::vector<bone_item*> bone_items() const;
 
     protected:
 
@@ -52,6 +58,7 @@ namespace ui {
     class canvas_view : public QGraphicsView {
     private:
         stick_man* main_window_;
+        
     public:
         canvas_view();
         canvas& canvas();

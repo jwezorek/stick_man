@@ -80,8 +80,8 @@ namespace sm {
         std::span<const_bone_ref> child_bones() const;
         double world_x() const;
         double world_y() const;
+        void set_world_pos(const point& pt);
         point world_pos() const;
-        point pos() const;
         std::any get_user_data() const;
         void set_user_data(std::any data);
         bool is_root() const;
@@ -93,6 +93,7 @@ namespace sm {
         std::string name_;
         joint& u_;
         joint& v_;
+        double length_;
         std::any user_data_;
 
     protected:
@@ -106,8 +107,11 @@ namespace sm {
 
         std::tuple<point, point> line_segment() const;
         double length() const;
+        double scaled_length() const;
         double world_rotation() const;
         double rotation() const;
+        double scale() const;
+        double absolute_scale() const;
         maybe_bone_ref parent_bone() const;
         std::any get_user_data() const;
         void set_user_data(std::any data);

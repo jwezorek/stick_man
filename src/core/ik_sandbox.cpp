@@ -146,16 +146,13 @@ double sm::joint::world_y() const {
     return y_;
 }
 
-sm::point sm::joint::world_pos() const {
-    return { x_, y_ };
+void sm::joint::set_world_pos(const point& pt) {
+    x_ = pt.x;
+    y_ = pt.y;
 }
 
-sm::point sm::joint::pos() const {
-    if (!parent_) {
-        return world_pos();
-    }
-    auto origin = parent_->get().parent_joint().world_pos();
-    return world_pos() - origin;
+sm::point sm::joint::world_pos() const {
+    return { x_, y_ };
 }
 
 std::any sm::joint::get_user_data() const {
@@ -176,6 +173,7 @@ sm::bone::bone(std::string name, sm::joint& u, sm::joint& v) :
        name_(name), u_(u), v_(v) {
     v.set_parent(*this);
     u.add_child(*this);
+    length_ = scaled_length();
 }
 
 std::string sm::bone::name() const {
@@ -195,6 +193,10 @@ std::tuple<sm::point, sm::point> sm::bone::line_segment() const {
 }
 
 double sm::bone::length() const {
+    return length_;
+}
+
+double sm::bone::scaled_length() const {
     return std::apply(distance, line_segment());
 }
 
@@ -212,6 +214,18 @@ double sm::bone::rotation() const {
         return world_rotation();
     }
     return world_rotation() - parent->get().world_rotation();
+}
+
+double sm::bone::scale() const {
+    auto parent = parent_bone();
+    if (!parent) {
+        return absolute_scale();
+    }
+    return absolute_scale() / parent->get().absolute_scale();
+}
+
+double sm::bone::absolute_scale() const {
+    return scaled_length() / length();
 }
 
 sm::maybe_bone_ref  sm::bone::parent_bone() const {

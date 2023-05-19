@@ -15,6 +15,16 @@ namespace {
 
     constexpr double k_joint_radius = 8.0;
 
+    template<typename T>
+    std::vector<T*> child_items_of_type(const QList<QGraphicsItem*>& items) {
+        return items |
+            rv::transform(
+                [](auto itm)->T* {  return dynamic_cast<T*>(itm); }
+            ) | rv::filter(
+                [](T* ptr)->bool { return ptr;  }
+            ) | r::to<std::vector<T*>>();
+    }
+
     double radians_to_degrees(double radians) {
         return radians * (180.0 / std::numbers::pi_v<double>);
     }
@@ -111,6 +121,24 @@ ui::joint_item* ui::canvas::top_joint(const QPointF& pt) const {
         return nullptr;
     }
     return *first;
+}
+
+std::vector<ui::joint_item*> ui::canvas::root_joint_items() const {
+    auto joints = joint_items();
+    return joints |
+        rv::filter(
+            [](auto j)->bool {
+                return !(j->parentItem());
+            }
+        ) | r::to< std::vector<ui::joint_item*>>();
+}
+
+std::vector<ui::joint_item*> ui::canvas::joint_items() const {
+    return child_items_of_type<joint_item>(items());
+}
+
+std::vector<ui::bone_item*> ui::canvas::bone_items() const {
+    return child_items_of_type<bone_item>(items());
 }
 
 void ui::canvas::keyPressEvent(QKeyEvent* event) {
