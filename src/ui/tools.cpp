@@ -1,5 +1,7 @@
 #include "tools.h"
 #include "stick_man.h"
+#include "tool_settings_pane.h"
+#include "util.h"
 #include <QGraphicsScene>
 #include <array>
 #include <functional>
@@ -59,6 +61,11 @@ QString ui::abstract_tool::icon_rsrc() const {
     return rsrc_;
 }
 
+void ui::abstract_tool::populate_settings(tool_settings_pane* pane) {
+    auto* layout = pane->layout();
+
+}
+
 void ui::abstract_tool::activate(canvas& c) {}
 void ui::abstract_tool::keyPressEvent(canvas& c, QKeyEvent* event) {}
 void ui::abstract_tool::keyReleaseEvent(canvas& c, QKeyEvent* event) {}
@@ -68,6 +75,7 @@ void ui::abstract_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* e
 void ui::abstract_tool::mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
 void ui::abstract_tool::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {}
 void ui::abstract_tool::deactivate(canvas& c) {}
+void ui::abstract_tool::populate_settings_aux(tool_settings_pane* pane) {}
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -159,7 +167,7 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
         auto& sandbox = canv.view().main_window().sandbox();
         auto bone = sandbox.create_bone({}, parent_joint->joint(), child_joint->joint());
         if (bone) {
-            auto item = new ui::bone_item(bone->get());
+            canv.addItem(new ui::bone_item(bone->get()));
         } else {
             auto error = bone.error();
         }

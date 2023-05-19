@@ -19,7 +19,6 @@ add_executable(stick_man
     src/ui/stick_man.cpp
     src/ui/canvas.cpp
     src/ui/tool_palette.cpp
-    src/ui/flowlayout.cpp
     src/ui/tools.cpp
     src/ui/properties_pane.cpp
     src/ui/tool_settings_pane.cpp

@@ -26,7 +26,9 @@ namespace ui {
         QString name;
         QString rsrc_name;
     };
+
     class canvas;
+    class tool_settings_pane;
 
     class abstract_tool {
     public:
@@ -34,6 +36,7 @@ namespace ui {
         tool_id id() const;
         QString name() const;
         QString icon_rsrc() const;
+        void populate_settings(tool_settings_pane* pane);
         virtual void activate(canvas& c);
         virtual void keyPressEvent(canvas& c, QKeyEvent* event);
         virtual void keyReleaseEvent(canvas& c, QKeyEvent* event);
@@ -43,6 +46,7 @@ namespace ui {
         virtual void mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event);
         virtual void wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) ;
         virtual void deactivate(canvas& c);
+        virtual void populate_settings_aux(tool_settings_pane* pane);
 
 
     private:

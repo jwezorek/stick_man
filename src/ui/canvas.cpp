@@ -14,6 +14,13 @@ namespace rv = std::ranges::views;
 namespace {
 
     constexpr double k_joint_radius = 8.0;
+    constexpr int k_joint_zorder = 10;
+    constexpr int k_bone_zorder = 5;
+
+    template<typename T, typename U>
+    T& item_from_sandbox(U& sandbox_obj) {
+        return std::any_cast<std::reference_wrapper<T>>(sandbox_obj.get_user_data()).get();
+    }
 
     template<typename T>
     std::vector<T*> child_items_of_type(const QList<QGraphicsItem*>& items) {
@@ -83,6 +90,14 @@ namespace {
                     ).get();
                 }
             );
+    }
+
+    void set_bone_item_pos(ui::bone_item* itm, double len, const sm::point& pos, double rot) {
+        itm->setPos(0, 0);
+        itm->setRotation(0);
+        itm->setPolygon(bone_polygon(len, k_joint_radius));
+        itm->setRotation(radians_to_degrees(rot));
+        itm->setPos(to_qt_pt(pos));
     }
 }
 
@@ -209,6 +224,7 @@ ui::joint_item::joint_item(sm::joint& joint) :
     setPen(QPen(Qt::black, 2));
     joint_.set_user_data(std::ref(*this));
     setPos(joint.world_x(), joint.world_y());
+    setZValue(k_joint_zorder);
 }
 
 
@@ -221,26 +237,16 @@ sm::joint& ui::joint_item::joint() const {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::bone_item::bone_item(sm::bone& bone) : bone_(bone) {
-    setFlag(QGraphicsItem::ItemStacksBehindParent, true);
     setBrush(Qt::black);
-    auto length = bone.length();
-    setPolygon(bone_polygon(length, k_joint_radius));
     setTransformOriginPoint({ 0,0 });
-    setRotation(radians_to_degrees(bone.rotation()));
-
-    auto& parent = parent_joint_item();
-    setParentItem(&parent);
-    
-    auto& child = child_joint_item();
-    child.setParentItem(this);
-    child.setPos( length, 0  );
-    for (bone_item& child_bone : child_bones(&child)) {
-        child_bone.setRotation(
-            radians_to_degrees(child_bone.bone().rotation())
-        );
-    }
-    
+    set_bone_item_pos(
+        this,
+        bone.scaled_length(),
+        bone.parent_joint().world_pos(),
+        bone.world_rotation()
+    );
     bone_.set_user_data(std::ref(*this));
+    setZValue(k_bone_zorder);
 }
 
 ui::joint_item&  ui::bone_item::parent_joint_item() const {

@@ -1,6 +1,6 @@
 #include "tool_palette.h"
-#include "flowlayout.h"
 #include "stick_man.h"
+#include "util.h"
 #include <ranges>
 #include <vector>
 #include <tuple>
@@ -51,7 +51,7 @@ ui::tool_palette::tool_palette(QMainWindow* wnd) :
         palette().color(QWidget::backgroundRole()).name());
     setTitleBarWidget(title_bar);
 
-    auto layout = new FlowLayout(nullptr, -1,1,0);
+    auto layout = new ui::FlowLayout(nullptr, -1,1,0);
 
     for (const auto& [id, name, rsrc] : tools_.tool_info()) {
         auto tool = new tool_btn(id, rsrc);
