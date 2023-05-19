@@ -23,6 +23,7 @@ namespace ui {
         tool_manager& tool_mgr();
         canvas_view& view();
         sm::ik_sandbox& sandbox();
+        tool_settings_pane& tool_pane();
     private:
         void showEvent(QShowEvent* event) override;
         void resizeEvent(QResizeEvent* event) override;

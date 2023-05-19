@@ -74,6 +74,10 @@ sm::ik_sandbox& ui::stick_man::sandbox() {
     return sandbox_;
 }
 
+ui::tool_settings_pane& ui::stick_man::tool_pane() {
+    return *tool_pane_;
+}
+
 void ui::stick_man::createMainMenu()
 {
     auto file_menu = menuBar()->addMenu(tr("&File"));

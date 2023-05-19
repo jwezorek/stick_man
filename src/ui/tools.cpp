@@ -62,8 +62,10 @@ QString ui::abstract_tool::icon_rsrc() const {
 }
 
 void ui::abstract_tool::populate_settings(tool_settings_pane* pane) {
-    auto* layout = pane->layout();
-
+    auto* layout = pane->contents();
+    clear_layout(layout);
+    layout->addWidget(new QLabel(name() + " settings"));
+    populate_settings_aux(pane);
 }
 
 void ui::abstract_tool::activate(canvas& c) {}
@@ -125,7 +127,7 @@ void ui::pan_tool::activate(canvas& c) {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::add_joint_tool::add_joint_tool() : 
-    abstract_tool("add joint tool", "add_joint_icon.png", ui::tool_id::add_joint) {}
+    abstract_tool("add joint", "add_joint_icon.png", ui::tool_id::add_joint) {}
 
 void ui::add_joint_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     auto pt = event->scenePos();
@@ -140,7 +142,7 @@ void ui::add_joint_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEven
 
 ui::add_bone_tool::add_bone_tool() :
     rubber_band_(nullptr),
-    abstract_tool("add bone tool", "add_bone_icon.png", ui::tool_id::add_bone) {
+    abstract_tool("add bone", "add_bone_icon.png", ui::tool_id::add_bone) {
 }
 
 void ui::add_bone_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
@@ -177,7 +179,7 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
 /*------------------------------------------------------------------------------------------------*/
 
 ui::arrow_tool::arrow_tool() : 
-        abstract_tool("arrow tool", "arrow_icon.png", ui::tool_id::arrow) {
+        abstract_tool("arrow", "arrow_icon.png", ui::tool_id::arrow) {
 
 }
 
@@ -270,6 +272,8 @@ void ui::tool_manager::set_current_tool(tool_id id) {
     }
     curr_item_index_ = new_tool_index;
     current_tool().activate(canvas);
+    auto& tool_pane = main_window_.tool_pane();
+    current_tool().populate_settings(&tool_pane);
 }
 
 int ui::tool_manager::index_from_id(tool_id id) const {
