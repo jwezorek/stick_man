@@ -6,6 +6,7 @@
 #include <vector>
 #include <memory>
 #include <span>
+#include <optional>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -91,12 +92,6 @@ namespace ui {
     private:
     public:
         arrow_tool();
-    };
-
-    class move_tool : public abstract_tool {
-    private:
-    public:
-        move_tool();
     };
 
     class stick_man;

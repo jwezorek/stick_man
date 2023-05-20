@@ -20,6 +20,7 @@ add_executable(stick_man
     src/ui/canvas.cpp
     src/ui/tool_palette.cpp
     src/ui/tools.cpp
+    src/ui/move_tool.cpp
     src/ui/properties_pane.cpp
     src/ui/tool_settings_pane.cpp
     src/ui/animation_pane.cpp

@@ -37,6 +37,7 @@ namespace ui {
     };
 
     QWidget* custom_title_bar(const QString& lbl);
+    void set_custom_title_bar_txt(QDockWidget* pane, const QString& txt);
     void clear_layout(QLayout* layout, bool deleteWidgets = true);
 
 

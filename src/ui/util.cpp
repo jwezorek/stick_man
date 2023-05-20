@@ -6,6 +6,7 @@
 namespace {
 
     class title_bar : public QWidget {
+        QLabel* label_;
     public:
         title_bar(const QString& lbl) {
             auto vert = new QVBoxLayout();
@@ -16,9 +17,8 @@ namespace {
 
             auto icon = new QLabel();
             icon->setPixmap(QPixmap(":/images/tool_palette_thumb.png"));
-            auto label = new QLabel(lbl);
             horz->addWidget(icon);
-            horz->addWidget(label);
+            horz->addWidget(label_ = new QLabel(lbl));
             horz->addStretch();
 
             QFrame* line = new QFrame();
@@ -32,6 +32,10 @@ namespace {
             vert->addWidget(line);
 
             setLayout(vert);
+        }
+
+        void set_text(const QString& str) {
+            label_->setText(str);
         }
     };
 
@@ -193,6 +197,11 @@ int ui::FlowLayout::smartSpacing(QStyle::PixelMetric pm) const
 
 QWidget* ui::custom_title_bar(const QString& lbl) {
     return new title_bar(lbl);
+}
+
+void ui::set_custom_title_bar_txt(QDockWidget* pane, const QString& txt) {
+    auto* tb = static_cast<title_bar*>(pane->titleBarWidget());
+    tb->set_text(txt);
 }
 
 void ui::clear_layout(QLayout* layout, bool deleteWidgets)

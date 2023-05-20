@@ -1,4 +1,5 @@
 #include "tools.h"
+#include "move_tool.h"
 #include "stick_man.h"
 #include "tool_settings_pane.h"
 #include "util.h"
@@ -13,21 +14,6 @@ namespace rv = std::ranges::views;
 /*------------------------------------------------------------------------------------------------*/
 
 namespace {
-    /*
-    class placeholder : public ui::abstract_tool {
-    public:
-        placeholder(QString name, QString rsrc, ui::tool_id id) : abstract_tool(name, rsrc, id) {}
-        void activate(ui::canvas& c) override {}
-        void keyPressEvent(ui::canvas& c, QKeyEvent* event) override {}
-        void keyReleaseEvent(ui::canvas& c, QKeyEvent* event) override {}
-        void mousePressEvent(ui::canvas& c, QGraphicsSceneMouseEvent* event) override {}
-        void mouseMoveEvent(ui::canvas& c, QGraphicsSceneMouseEvent* event) override {}
-        void mouseReleaseEvent(ui::canvas& c, QGraphicsSceneMouseEvent* event) override {}
-        void mouseDoubleClickEvent(ui::canvas& c, QGraphicsSceneMouseEvent* event) override {}
-        void wheelEvent(ui::canvas& c, QGraphicsSceneWheelEvent* event) override {}
-        void deactivate(ui::canvas& c) override {}
-    };
-    */
 
     auto k_tool_registry = std::to_array<std::unique_ptr<ui::abstract_tool>>({
         std::make_unique<ui::pan_tool>(),
@@ -37,7 +23,6 @@ namespace {
         std::make_unique<ui::add_joint_tool>(),
         std::make_unique<ui::add_bone_tool>()
     });
-
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -64,7 +49,7 @@ QString ui::abstract_tool::icon_rsrc() const {
 void ui::abstract_tool::populate_settings(tool_settings_pane* pane) {
     auto* layout = pane->contents();
     clear_layout(layout);
-    layout->addWidget(new QLabel(name() + " settings"));
+    ui::set_custom_title_bar_txt(pane, name() + " tool");
     populate_settings_aux(pane);
 }
 
@@ -182,13 +167,6 @@ ui::arrow_tool::arrow_tool() :
         abstract_tool("arrow", "arrow_icon.png", ui::tool_id::arrow) {
 
 }
-
-/*------------------------------------------------------------------------------------------------*/
-
-ui::move_tool::move_tool() : abstract_tool("move tool", "move_icon.png", ui::tool_id::move) {
-
-}
-
 /*------------------------------------------------------------------------------------------------*/
 
 ui::tool_manager::tool_manager(stick_man* sm) :
