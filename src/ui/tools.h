@@ -28,7 +28,6 @@ namespace ui {
         QString rsrc_name;
     };
 
-    class canvas;
     class tool_settings_pane;
 
     class abstract_tool {

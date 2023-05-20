@@ -17,11 +17,6 @@ namespace {
     constexpr int k_joint_zorder = 10;
     constexpr int k_bone_zorder = 5;
 
-    template<typename T, typename U>
-    T& item_from_sandbox(U& sandbox_obj) {
-        return std::any_cast<std::reference_wrapper<T>>(sandbox_obj.get_user_data()).get();
-    }
-
     template<typename T>
     std::vector<T*> child_items_of_type(const QList<QGraphicsItem*>& items) {
         return items |
