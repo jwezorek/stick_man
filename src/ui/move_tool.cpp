@@ -77,14 +77,6 @@ namespace {
         );
     }
 
-    void set_arc(
-            QGraphicsEllipseItem* gei, QPointF center, double radius,
-            double start_theta, double span_theta) {
-        gei->setRect(rect_from_circle(center, radius));
-        gei->setStartAngle(to_sixteenth_of_deg(-start_theta));
-        gei->setSpanAngle(to_sixteenth_of_deg(-span_theta));
-    }
-
     class fk_rotate_tool : public abstract_move_tool {
     public:
         fk_rotate_tool() :
@@ -103,19 +95,6 @@ namespace {
             }
 
             ms.bone_ = parent_bone(joint);
-            if (!ms.arc_rubber_band_) {
-                ms.canvas_->addItem(ms.arc_rubber_band_ = new QGraphicsEllipseItem());
-                ms.arc_rubber_band_->setPen(QPen(Qt::black, 2.0, Qt::DotLine));
-            }
-
-            set_arc(
-                ms.arc_rubber_band_,
-                ms.anchor_->scenePos(),
-                ms.bone_->bone().scaled_length(),
-                ms.bone_->bone().world_rotation(),
-                0.0
-            );
-            ms.arc_rubber_band_->show();
         };
 
         double angle_through_points(QPointF origin, QPointF pt) {
@@ -124,18 +103,14 @@ namespace {
         }
 
         void mouseMoveEvent(move_state& ms) override {
-            auto theta = angle_through_points(ms.anchor_->scenePos(), ms.event_->scenePos());
-            set_arc(
-                ms.arc_rubber_band_,
-                ms.anchor_->scenePos(),
-                ms.bone_->bone().scaled_length(),
-                ms.bone_->bone().world_rotation(),
-                theta - ms.bone_->bone().world_rotation()
-            );
+            auto theta = angle_through_points(ms.anchor_->scenePos(), ms.event_->scenePos()) -
+                ms.bone_->bone().world_rotation();
+
+            ms.bone_->bone().rotate(theta);
+            ms.canvas_->sync_to_model();
         };
 
         void mouseReleaseEvent(move_state& ms) override {
-            ms.arc_rubber_band_->hide();
         };
     };
 
@@ -177,7 +152,6 @@ ui::move_tool::move_state::move_state() :
     canvas_(nullptr), 
     anchor_(nullptr),
     bone_(nullptr),
-    arc_rubber_band_(nullptr),
     event_(nullptr) 
 {}
 

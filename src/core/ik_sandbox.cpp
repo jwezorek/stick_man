@@ -1,4 +1,5 @@
 #include "ik_sandbox.h"
+#include "ik_types.h"
 #include <cmath>
 #include <variant>
 #include <stack>
@@ -66,12 +67,6 @@ namespace {
         }
     };
 
-    double distance(const sm::point& u, const sm::point& v) {
-        auto x_diff = u.x - v.x;
-        auto y_diff = u.y - v.y;
-        return std::sqrt(x_diff * x_diff + y_diff * y_diff);
-    }
-
     uint64_t get_id(const joint_or_bone& var) {
         auto ptr = std::visit(
             [](auto val_ref)->void* {
@@ -82,32 +77,12 @@ namespace {
         );
         return reinterpret_cast<uint64_t>(ptr);
     }
-}
 
-/*------------------------------------------------------------------------------------------------*/
-
-sm::point sm::point::operator += (const point& p) {
-    *this = *this + p;
-    return *this;
-}
-
-sm::point sm::point::operator-=(const point& p) {
-    *this = *this - p;
-    return *this;
-}
-
-sm::point sm::operator+(const sm::point& p1, const sm::point& p2) {
-    return {
-        p1.x + p2.x,
-        p1.y + p2.y
-    };
-}
-
-sm::point sm::operator-(const sm::point& p1, const sm::point& p2) {
-    return {
-        p1.x - p2.x,
-        p1.y - p2.y
-    };
+    sm::matrix rotate_about_point(const sm::point& pt, double theta) {
+        return sm::translation_matrix(pt) *
+            sm::rotation_matrix(theta) *
+            sm::translation_matrix(-pt);
+    }
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -240,6 +215,15 @@ void sm::bone::set_user_data(std::any data) {
     user_data_ = data;
 }
 
+void sm::bone::rotate(double theta) {
+    auto rotate_mat = rotate_about_point(u_.world_pos(), theta);
+    auto rotate_about_u = [&rotate_mat](joint& j)->bool {
+        j.set_world_pos(transform(j.world_pos(), rotate_mat));
+        return true;
+    };
+    visit_joints(v_, rotate_about_u);
+}
+
 /*------------------------------------------------------------------------------------------------*/
 
 sm::ik_sandbox::ik_sandbox() : joint_id_(0), bone_id_(0) {};
@@ -284,7 +268,11 @@ std::expected<sm::const_bone_ref, sm::result> sm::ik_sandbox::create_bone(
 }
 
 bool sm::ik_sandbox::set_bone_name(sm::bone& b, const std::string& name) {
-    //TODO
+    if (bones_.contains(name)) {
+        return false;
+    }
+    bones_[name] = std::move(bones_[b.name()]);
+    bones_.erase(b.name());
     return false;
 }
 
@@ -301,7 +289,7 @@ bool sm::ik_sandbox::is_reachable(joint& j1, joint& j2) {
     return found;
 }
 
-void sm::ik_sandbox::dfs(joint& j1, joint_visitor visit_joint, bone_visitor visit_bone,
+void sm::dfs(joint& j1, joint_visitor visit_joint, bone_visitor visit_bone,
         bool just_downstream) {
     std::stack<joint_or_bone> stack;
     std::unordered_set<uint64_t> visited;
@@ -326,4 +314,8 @@ void sm::ik_sandbox::dfs(joint& j1, joint_visitor visit_joint, bone_visitor visi
             stack.push(neighbor);
         }
     }
+}
+
+void sm::visit_joints(joint& j, joint_visitor visit_joint) {
+    dfs(j, visit_joint, {}, true);
 }

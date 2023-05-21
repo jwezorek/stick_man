@@ -12,7 +12,6 @@ namespace ui {
             canvas* canvas_;
             ui::joint_item* anchor_;
             ui::bone_item* bone_;
-            QGraphicsEllipseItem* arc_rubber_band_;
             QGraphicsSceneMouseEvent* event_;
 
             move_state();

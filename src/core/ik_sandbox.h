@@ -10,6 +10,7 @@
 #include <expected>
 #include <tuple>
 #include <any>
+#include "ik_types.h"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -46,17 +47,6 @@ namespace sm {
     using maybe_bone_ref = std::optional<std::reference_wrapper<bone>>;
     using expected_bone = std::expected<const_bone_ref, result>;
     using expected_joint = std::expected<const_joint_ref, result>;
-
-    struct point {
-        double x;
-        double y;
-
-        point operator+=(const point& p);
-        point operator-=(const point& p);
-    };
-
-    point operator+(const point& p1, const point& p2);
-    point operator-(const point& p1, const point& p2);
 
     class joint : public detail::enable_protected_make_unique<joint> {
         friend class ik_sandbox;
@@ -115,6 +105,8 @@ namespace sm {
         maybe_bone_ref parent_bone() const;
         std::any get_user_data() const;
         void set_user_data(std::any data);
+
+        void rotate(double theta);
     };
 
     using joint_visitor = std::function<bool(joint&)>;
@@ -134,7 +126,11 @@ namespace sm {
         expected_bone create_bone(const std::string& name, joint& u, joint& v);
         bool set_bone_name(bone& b, const std::string& name);
         bool is_reachable(joint& j1, joint& j2);
-        void dfs(joint& j1, joint_visitor visit_joint = {}, bone_visitor visit_bone = {}, 
-            bool just_downstream = false);
+
     };
+
+    void dfs(joint& j1, joint_visitor visit_joint = {}, bone_visitor visit_bone = {},
+        bool just_downstream = false);
+
+    void visit_joints(joint& j, joint_visitor visit_joint);
 }

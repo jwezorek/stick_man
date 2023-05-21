@@ -9,6 +9,8 @@ if(Boost_FOUND)
     include_directories(${Boost_INCLUDE_DIRS}) 
 endif()
 
+find_package(Eigen3 3.3 REQUIRED)
+
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -27,9 +29,10 @@ add_executable(stick_man
     src/ui/util.cpp
     src/core/ik_sandbox.cpp
     src/main.cpp
+    src/core/ik_types.cpp
 )
 
-target_link_libraries(stick_man PRIVATE Qt6::Widgets)
+target_link_libraries(stick_man PRIVATE Qt6::Widgets  Eigen3::Eigen)
 
 set_target_properties(stick_man PROPERTIES
     WIN32_EXECUTABLE ON

@@ -42,6 +42,7 @@ namespace ui {
         std::vector<joint_item*> root_joint_items() const;
         std::vector<joint_item*> joint_items() const;
         std::vector<bone_item*> bone_items() const;
+        void sync_to_model();
 
     protected:
 

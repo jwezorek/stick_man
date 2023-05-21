@@ -24,7 +24,7 @@ namespace {
                 [](auto itm)->T* {  return dynamic_cast<T*>(itm); }
             ) | rv::filter(
                 [](T* ptr)->bool { return ptr;  }
-            ) | r::to<std::vector<T*>>();
+        ) | r::to<std::vector<T*>>();
     }
 
     double radians_to_degrees(double radians) {
@@ -38,7 +38,7 @@ namespace {
     void draw_grid_lines(QPainter* painter, const QRectF& r, double line_spacing) {
         painter->fillRect(r, Qt::white);
         qreal dimmer = 0.6666;
-        QPen blue_pen(QColor::fromCmykF(0.4*dimmer, 0, 0, 0.1 * dimmer), 0.0);
+        QPen blue_pen(QColor::fromCmykF(0.4 * dimmer, 0, 0, 0.1 * dimmer), 0.0);
         QPen dark_blue_pen(QColor::fromCmykF(0.8 * dimmer, 0, 0, 0.1 * dimmer), 0.0);
         qreal x1, y1, x2, y2;
         r.getCoords(&x1, &y1, &x2, &y2);
@@ -47,7 +47,7 @@ namespace {
         int right_gridline_index = static_cast<int>(std::floor(x2 / line_spacing));
         for (auto i : rv::iota(left_gridline_index, right_gridline_index + 1)) {
             auto x = i * line_spacing;
-            painter->setPen( (i % 5) ? blue_pen : dark_blue_pen  );
+            painter->setPen((i % 5) ? blue_pen : dark_blue_pen);
             painter->drawLine(x, y1, x, y2);
         }
 
@@ -84,7 +84,7 @@ namespace {
                         bone.get().get_user_data()
                     ).get();
                 }
-            );
+        );
     }
 
     void set_bone_item_pos(ui::bone_item* itm, double len, const sm::point& pos, double rot) {
@@ -94,8 +94,27 @@ namespace {
         itm->setRotation(radians_to_degrees(rot));
         itm->setPos(to_qt_pt(pos));
     }
-}
 
+    void sync_to_model(ui::joint_item* root) {
+        auto sync_joint = [](sm::joint& j)->bool {
+            ui::joint_item& ji = ui::item_from_sandbox<ui::joint_item>(j);
+            ji.setPos(to_qt_pt(j.world_pos()));
+            return true;
+        };
+        auto sync_bone = [](sm::bone& b)->bool {
+            ui::bone_item& bi = ui::item_from_sandbox<ui::bone_item>(b);
+            set_bone_item_pos(
+                &bi,
+                b.scaled_length(),
+                b.parent_joint().world_pos(),
+                b.world_rotation()
+            );
+            return true;
+        };
+        sm::dfs(root->joint(), sync_joint, sync_bone, true);
+    }
+
+}
 /*------------------------------------------------------------------------------------------------*/
 
 ui::canvas::canvas(){
@@ -114,6 +133,12 @@ void ui::canvas::drawBackground(QPainter* painter, const QRectF& dirty_rect) {
 
 ui::tool_manager& ui::canvas::tool_mgr() {
     return view().main_window().tool_mgr();
+}
+
+void ui::canvas::sync_to_model() {
+    for (auto* root : root_joint_items()) {
+        ::sync_to_model(root);
+    }
 }
 
 ui::canvas_view& ui::canvas::view() {
