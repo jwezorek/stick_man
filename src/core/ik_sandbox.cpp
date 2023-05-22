@@ -83,6 +83,27 @@ namespace {
             sm::rotation_matrix(theta) *
             sm::translation_matrix(-pt);
     }
+
+    double angle_from_u_to_v(const sm::point& u, const sm::point& v) {
+        auto diff = v - u;
+        return std::atan2(diff.y, diff.x);
+    }
+
+    sm::point point_on_line_at_distance(const sm::point& u, const sm::point& v, double d) {
+        auto pt = sm::point{ u.x + d, u.y };
+        return sm::transform(pt, rotate_about_point(u, angle_from_u_to_v(u, v)));
+    }
+
+    void reach(sm::bone& bone, double length, sm::joint& leader, sm::point target) {
+        if (leader.world_pos() != target) {
+            leader.set_world_pos(target);
+        }
+        sm::joint& follower = bone.opposite_joint(leader);
+        auto new_follower_pos = point_on_line_at_distance(
+            leader.world_pos(), follower.world_pos(), length
+        );
+        follower.set_world_pos(new_follower_pos);
+    }
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -161,6 +182,14 @@ sm::joint& sm::bone::parent_joint() const {
 
 sm::joint& sm::bone::child_joint() const {
     return v_;
+}
+
+sm::joint& sm::bone::opposite_joint(const joint& j) const {
+    if (&j == &u_) {
+        return v_;
+    } else {
+        return u_;
+    }
 }
 
 std::tuple<sm::point, sm::point> sm::bone::line_segment() const {
@@ -318,4 +347,10 @@ void sm::dfs(joint& j1, joint_visitor visit_joint, bone_visitor visit_bone,
 
 void sm::visit_joints(joint& j, joint_visitor visit_joint) {
     dfs(j, visit_joint, {}, true);
+}
+
+void sm::debug_reach(joint& j, sm::point pt) {
+    auto maybe_bone_ref = j.parent_bone();
+    auto& bone = maybe_bone_ref->get();
+    reach(bone, bone.scaled_length(), j, pt);
 }

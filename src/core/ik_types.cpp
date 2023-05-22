@@ -37,6 +37,10 @@ sm::point sm::operator-(const point& p) {
     return { -p.x, -p.y };
 }
 
+bool sm::operator==(const point& p1, const point& p2) {
+    return p1.x == p2.x && p1.y == p2.y;
+}
+
 /*------------------------------------------------------------------------------------------------*/
 sm::point sm::transform(const point& pt, const matrix& mat) {
     vec v;

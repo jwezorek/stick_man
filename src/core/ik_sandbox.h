@@ -94,6 +94,7 @@ namespace sm {
         std::string name() const;
         joint& parent_joint() const;
         joint& child_joint() const;
+        joint& opposite_joint(const joint& j) const;
 
         std::tuple<point, point> line_segment() const;
         double length() const;
@@ -126,11 +127,12 @@ namespace sm {
         expected_bone create_bone(const std::string& name, joint& u, joint& v);
         bool set_bone_name(bone& b, const std::string& name);
         bool is_reachable(joint& j1, joint& j2);
-
     };
 
     void dfs(joint& j1, joint_visitor visit_joint = {}, bone_visitor visit_bone = {},
         bool just_downstream = false);
 
     void visit_joints(joint& j, joint_visitor visit_joint);
+
+    void debug_reach(joint& j, sm::point pt);
 }

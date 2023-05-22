@@ -13,11 +13,9 @@ namespace {
 
     enum class move_mode {
         none = -1,
-        translate = 0,
-        rotate,
-        pinned_ik,
-        ik_free,
-        end
+        ik_translate,
+        fk_translate,
+        fk_rotate
     };
 
     class abstract_move_tool {
@@ -77,10 +75,19 @@ namespace {
         );
     }
 
+    sm::point from_qt_pt(QPointF pt) {
+        return { pt.x(), pt.y()};
+    }
+
+    double angle_through_points(QPointF origin, QPointF pt) {
+        auto diff = pt - origin;
+        return std::atan2(diff.y(), diff.x());
+    }
+
     class fk_rotate_tool : public abstract_move_tool {
     public:
         fk_rotate_tool() :
-            abstract_move_tool( move_mode::rotate, "rotate (forward kinematics)" )
+            abstract_move_tool( move_mode::fk_rotate, "rotate (fk)" )
         {}
 
         void mousePressEvent(move_state& ms) override {
@@ -97,11 +104,6 @@ namespace {
             ms.bone_ = parent_bone(joint);
         };
 
-        double angle_through_points(QPointF origin, QPointF pt) {
-            auto diff = pt - origin;
-            return std::atan2(diff.y(), diff.x());
-        }
-
         void mouseMoveEvent(move_state& ms) override {
             auto theta = angle_through_points(ms.anchor_->scenePos(), ms.event_->scenePos()) -
                 ms.bone_->bone().world_rotation();
@@ -114,32 +116,61 @@ namespace {
         };
     };
 
-    auto k_move_mode = std::to_array<std::unique_ptr<abstract_move_tool>>({
+    class ik_translate_tool : public abstract_move_tool {
+    public:
+        ik_translate_tool() :
+            abstract_move_tool(move_mode::ik_translate, "translate (ik)")
+        {}
 
-            std::make_unique<placeholder_move_tool>(
-                move_mode::translate ,
-                "translate (free)"
-            ),
+        void mousePressEvent(move_state& ms) override {
+            auto joint = ms.canvas_->top_joint(ms.event_->scenePos());
+            if (!joint) {
+                return;
+            }
+
+            ms.anchor_ = joint;
+            ms.bone_ = parent_bone(joint);
+        };
+
+        void mouseMoveEvent(move_state& ms) override {
+            debug_reach(ms.anchor_->joint(), from_qt_pt( ms.event_->scenePos()));
+            ms.canvas_->sync_to_model();
+        };
+
+        void mouseReleaseEvent(move_state& ms) override {
+        };
+    };
+
+    class fk_translate_tool : public abstract_move_tool {
+    public:
+        fk_translate_tool() :
+            abstract_move_tool(move_mode::fk_translate, "translate (fk)")
+        {}
+
+        void mousePressEvent(move_state& ms) override {
+        };
+
+        void mouseMoveEvent(move_state& ms) override {
+        };
+
+        void mouseReleaseEvent(move_state& ms) override {
+        };
+    };
+
+    auto k_move_mode_subtools = std::to_array<std::unique_ptr<abstract_move_tool>>({
             std::make_unique<fk_rotate_tool>(),
-            std::make_unique<placeholder_move_tool>(
-                 move_mode::pinned_ik ,
-                "translate pinned (ik)"
-            ),
-            std::make_unique<placeholder_move_tool>(
-                move_mode::ik_free ,
-                "translate unpinned (ik)"
-            )
+            std::make_unique<fk_translate_tool>(),
+            std::make_unique<ik_translate_tool>()
         });
 
     abstract_move_tool* tool_for_mode(move_mode mode) {
         static std::unordered_map<move_mode, abstract_move_tool*> tbl;
         if (tbl.empty()) {
-            auto end = static_cast<int>(move_mode::end);
-            for (int i = 0; i < end; ++i) {
-                tbl[static_cast<move_mode>(i)] = k_move_mode[i].get();
+            for (auto& tool : k_move_mode_subtools) {
+                tbl[tool->mode()] = tool.get();
             }
         }
-        if (mode == move_mode::none || mode == move_mode::end) {
+        if (mode == move_mode::none) {
             return nullptr;
         }
         return tbl.at(mode);
@@ -195,7 +226,7 @@ void ui::move_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event
 
 void ui::move_tool::populate_settings_aux(tool_settings_pane* pane) {
     btns_ = std::make_unique<QButtonGroup>();
-    for (const auto& mm : k_move_mode) {
+    for (const auto& mm : k_move_mode_subtools) {
         auto* btn = new QRadioButton(mm->name());
         btns_->addButton(btn, static_cast<int>(mm->mode()));
         pane->contents()->addWidget(btn);
