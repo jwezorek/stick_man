@@ -4,6 +4,7 @@
 #include <variant>
 #include <stack>
 #include <unordered_set>
+#include <unordered_map>
 
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
@@ -78,6 +79,41 @@ namespace {
         return reinterpret_cast<uint64_t>(ptr);
     }
 
+    uint64_t get_id(const sm::bone& var) {
+        return reinterpret_cast<uint64_t>(&var);
+    }
+
+    uint64_t get_id(const sm::joint& var) {
+        return reinterpret_cast<uint64_t>(&var);
+    }
+
+    std::unordered_map<uint64_t, double> build_bone_length_table(sm::joint& j) {
+        std::unordered_map<uint64_t, double> length_tbl;
+        auto visit_bone = [&length_tbl](sm::bone& b)->bool {
+            length_tbl[get_id(b)] = b.scaled_length();
+            return true;
+        };
+        sm::dfs(j, {}, visit_bone);
+        return length_tbl;
+    }
+
+    struct pinned_joint {
+        sm::joint& j;
+        sm::point pos;
+    };
+
+    std::vector<pinned_joint> find_pinned_joints(sm::joint& joint) {
+        std::vector<pinned_joint> pinned_joints;
+        auto visit_joint = [&pinned_joints](sm::joint& j)->bool {
+            if (j.is_pinned()) {
+                pinned_joints.emplace_back(j, j.world_pos());
+            }
+            return true;
+        };
+        sm::dfs(joint, visit_joint, {}, false);
+        return pinned_joints;
+    }
+
     sm::matrix rotate_about_point(const sm::point& pt, double theta) {
         return sm::translation_matrix(pt) *
             sm::rotation_matrix(theta) *
@@ -95,14 +131,33 @@ namespace {
     }
 
     void reach(sm::bone& bone, double length, sm::joint& leader, sm::point target) {
-        if (leader.world_pos() != target) {
-            leader.set_world_pos(target);
-        }
+        leader.set_world_pos(target);
         sm::joint& follower = bone.opposite_joint(leader);
         auto new_follower_pos = point_on_line_at_distance(
             leader.world_pos(), follower.world_pos(), length
         );
         follower.set_world_pos(new_follower_pos);
+    }
+
+    void perform_one_fabrik_pass(sm::joint& j, const sm::point& pt, 
+            const std::unordered_map<uint64_t, double>& bone_lengths) {
+        std::unordered_set<uint64_t> moved_joints;
+
+        auto perform_fabrik_on_bone = [&](sm::bone& b) {
+            sm::joint& moved_joint = moved_joints.contains(get_id(b.parent_joint())) ?
+                b.parent_joint() :
+                b.child_joint();
+            if (moved_joints.contains(get_id(b.opposite_joint(moved_joint)))) {
+                return true;
+            }
+            reach(b, bone_lengths.at(get_id(b)), moved_joint, moved_joint.world_pos());
+            moved_joints.insert(get_id(b.opposite_joint(moved_joint)));
+            return true;
+        };
+
+        j.set_world_pos(pt);
+        moved_joints.insert(get_id(j));
+        dfs(j, {}, perform_fabrik_on_bone, false);
     }
 }
 
@@ -111,7 +166,8 @@ namespace {
 sm::joint::joint(const std::string& name, double x, double y) :
     name_(name),
     x_(x),
-    y_(y)
+    y_(y),
+    is_pinned_(false)
 {}
 
 void sm::joint::set_parent(bone& b) {
@@ -163,6 +219,13 @@ bool sm::joint::is_root() const {
     return !parent_.has_value();
 }
 
+bool sm::joint::is_pinned() const {
+    return  is_pinned_;
+}
+
+void sm::joint::set_pinned(bool pinned) {
+    is_pinned_ = pinned;
+}
 /*------------------------------------------------------------------------------------------------*/
 
 sm::bone::bone(std::string name, sm::joint& u, sm::joint& v) :
@@ -353,4 +416,17 @@ void sm::debug_reach(joint& j, sm::point pt) {
     auto maybe_bone_ref = j.parent_bone();
     auto& bone = maybe_bone_ref->get();
     reach(bone, bone.scaled_length(), j, pt);
+}
+
+void sm::perform_fabrik(sm::joint& j, const sm::point& pt, double tolerance, int max_iter) {
+    auto bone_lengths = build_bone_length_table(j);
+    auto pinned_joints = find_pinned_joints(j);
+    int iter = 0;
+    while (distance(j.world_pos(),pt) > tolerance && iter < max_iter) {
+        ++iter;
+        perform_one_fabrik_pass(j, pt, bone_lengths);
+        for (auto& pinned_joint : pinned_joints) {
+            perform_one_fabrik_pass(pinned_joint.j, pinned_joint.pos, bone_lengths);
+        }
+    }
 }

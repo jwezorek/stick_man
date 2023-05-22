@@ -58,6 +58,8 @@ namespace sm {
         maybe_bone_ref parent_;
         std::vector<bone_ref> children_;
         std::any user_data_;
+        bool is_pinned_;
+
     protected:
 
         joint(const std::string& name, double x, double y);
@@ -73,8 +75,11 @@ namespace sm {
         void set_world_pos(const point& pt);
         point world_pos() const;
         std::any get_user_data() const;
-        void set_user_data(std::any data);
         bool is_root() const;
+        bool is_pinned() const;
+
+        void set_user_data(std::any data);
+        void set_pinned(bool pinned);
     };
 
     class bone : public detail::enable_protected_make_unique<bone> {
@@ -135,4 +140,5 @@ namespace sm {
     void visit_joints(joint& j, joint_visitor visit_joint);
 
     void debug_reach(joint& j, sm::point pt);
+    void perform_fabrik(joint& j, const sm::point& pt, double tolerance = 0.005, int max_iter = 100);
 }

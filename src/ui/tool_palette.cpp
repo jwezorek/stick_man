@@ -23,7 +23,7 @@ namespace ui {
             setIconSize(QSize(32, 32));
             setFixedSize(QSize(42, 42));
             bkgd_color_str_ = palette().color(QWidget::backgroundRole()).name();
-            setStyleSheet("tooltip-text-color: white");
+            setStyleSheet("QToolTip {  background-color: black; color: white; border: black solid 1px}");
         }
 
         void deactivate() {

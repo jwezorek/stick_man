@@ -29,19 +29,10 @@ namespace {
         QString name() const { return name_; }
         move_mode mode() const { return mode_; }
 
+        virtual void keyPressEvent(move_state& ms) = 0;
         virtual void mousePressEvent(move_state& ms) = 0;
         virtual void mouseMoveEvent(move_state& ms) = 0;
         virtual void mouseReleaseEvent(move_state& ms) = 0;
-    };
-
-    class placeholder_move_tool : public abstract_move_tool {
-    public:
-        placeholder_move_tool(move_mode mode, QString name) :
-            abstract_move_tool(mode, name)
-        {}
-        void mousePressEvent(move_state& ms) override {};
-        void mouseMoveEvent(move_state& ms) override {};
-        void mouseReleaseEvent(move_state& ms) override {};
     };
 
     ui::bone_item* parent_bone(ui::joint_item* j) {
@@ -90,6 +81,9 @@ namespace {
             abstract_move_tool( move_mode::fk_rotate, "rotate (fk)" )
         {}
 
+        void keyPressEvent(move_state& ms) override {
+        };
+
         void mousePressEvent(move_state& ms) override {
             auto joint = ms.canvas_->top_joint(ms.event_->scenePos());
             if (!joint) {
@@ -122,6 +116,10 @@ namespace {
             abstract_move_tool(move_mode::ik_translate, "translate (ik)")
         {}
 
+        void keyPressEvent(move_state& ms) override {
+            qDebug() << "foo";
+        };
+
         void mousePressEvent(move_state& ms) override {
             auto joint = ms.canvas_->top_joint(ms.event_->scenePos());
             if (!joint) {
@@ -129,11 +127,12 @@ namespace {
             }
 
             ms.anchor_ = joint;
-            ms.bone_ = parent_bone(joint);
+            //ms.bone_ = parent_bone(joint);
         };
 
         void mouseMoveEvent(move_state& ms) override {
-            debug_reach(ms.anchor_->joint(), from_qt_pt( ms.event_->scenePos()));
+            //debug_reach(ms.anchor_->joint(), from_qt_pt( ms.event_->scenePos()));
+            sm::perform_fabrik(ms.anchor_->joint(), from_qt_pt(ms.event_->scenePos()));
             ms.canvas_->sync_to_model();
         };
 
@@ -146,6 +145,9 @@ namespace {
         fk_translate_tool() :
             abstract_move_tool(move_mode::fk_translate, "translate (fk)")
         {}
+
+        void keyPressEvent(move_state& ms) override {
+        };
 
         void mousePressEvent(move_state& ms) override {
         };
@@ -191,10 +193,24 @@ void ui::move_tool::move_state::set(canvas& c, QGraphicsSceneMouseEvent* evnt) {
     event_ = evnt;
 }
 
+void  ui::move_tool::move_state::set(canvas& c, QKeyEvent* evnt) {
+    canvas_ = &c;
+    key_event_ = evnt;
+}
+
 /*------------------------------------------------------------------------------------------------*/
 
 ui::move_tool::move_tool() : abstract_tool("move", "move_icon.png", ui::tool_id::move) {
 
+}
+
+void ui::move_tool::keyPressEvent(canvas& c, QKeyEvent* event) {
+    auto mode = static_cast<move_mode>(btns_->checkedId());
+    if (mode == move_mode::none) {
+        return;
+    }
+    state_.set(c, event);
+    tool_for_mode(mode)->keyPressEvent(state_);
 }
 
 void ui::move_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
