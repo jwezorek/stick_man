@@ -200,7 +200,7 @@ namespace {
         return false;
     }
 
-    bool found_ik_solution(const std::vector<targeted_joint>& targeted_joints, double tolerance) {
+    bool found_ik_solution( std::span<targeted_joint> targeted_joints, double tolerance) {
         auto unsatisfied = r::find_if(targeted_joints,
             [tolerance](const auto& tj)->bool {
                 return !is_satisfied(tj, tolerance);
@@ -212,6 +212,26 @@ namespace {
     void  update_prev_positions(std::vector<targeted_joint>& targeted_joints) {
         for (auto& tj : targeted_joints) {
             tj.prev_pos = tj.joint.world_pos();
+        }
+    }
+
+    void solve_for_multiple_targets(std::span<targeted_joint> targeted_joints, 
+            double tolerance, const std::unordered_map<uint64_t, double>& bone_lengths,
+            int max_iter) {
+        int j = 0;
+        while (!found_ik_solution(targeted_joints, tolerance)) {
+            if (++j > max_iter) {
+                return;
+            }
+            if (j % 2 == 0) {
+                for (auto& pinned_joint : targeted_joints) {
+                    perform_one_fabrik_pass(pinned_joint.joint, pinned_joint.target_pos, bone_lengths);
+                }
+            } else {
+                for (auto& pinned_joint : targeted_joints | rv::reverse) {
+                    perform_one_fabrik_pass(pinned_joint.joint, pinned_joint.target_pos, bone_lengths);
+                }
+            }
         }
     }
 }
@@ -473,12 +493,15 @@ void sm::debug_reach(joint& j, sm::point pt) {
     reach(bone, bone.scaled_length(), j, pt);
 }
 
-void sm::perform_fabrik(sm::joint& j, const sm::point& pt, double tolerance, int max_iter) {
-    auto bone_lengths = build_bone_length_table(j);
-    auto targeted_joints = find_pinned_joints(j);
-    targeted_joints.emplace_back(j, pt);
+void sm::perform_fabrik(sm::joint& effector, const sm::point& target_pt, 
+        double tolerance, int max_iter) {
+
+    auto bone_lengths = build_bone_length_table(effector);
+    auto targeted_joints = find_pinned_joints(effector);
+    targeted_joints.emplace_back(effector, target_pt);
     auto& target = targeted_joints.back();
-    std::span<targeted_joint> pinned_joints(targeted_joints.begin(), std::prev(targeted_joints.end()));
+    auto pinned_joints = std::span{ targeted_joints.begin(), std::prev(targeted_joints.end())};
+    
     int iter = 0;
     while (! found_ik_solution(targeted_joints, tolerance)) {
         if (++iter >= max_iter) {
@@ -486,26 +509,11 @@ void sm::perform_fabrik(sm::joint& j, const sm::point& pt, double tolerance, int
         }
         update_prev_positions(targeted_joints);
 
-        if (iter % 2 == 0) {
-            for (auto& pinned_joint : pinned_joints) {
-                perform_one_fabrik_pass(pinned_joint.joint, pinned_joint.target_pos, bone_lengths);
-            }
-        } else {
-            for (auto& pinned_joint : pinned_joints | rv::reverse) {
-                perform_one_fabrik_pass(pinned_joint.joint, pinned_joint.target_pos, bone_lengths);
-            }
-        }
+        // reach for target from effector...
         perform_one_fabrik_pass(target.joint, target.target_pos, bone_lengths);
+
+        // reach for pinned locations from pinned joints
+        solve_for_multiple_targets(pinned_joints, tolerance, bone_lengths, max_iter);
     }
-    if (iter < max_iter) {
-        for (const auto& pj : pinned_joints) {
-            auto err = sm::distance(pj.joint.world_pos(), pj.target_pos);
-            if (err > 6.0) {
-                break;
-            }
-        }
-        bool check = found_ik_solution(targeted_joints, tolerance);
-    }
-    qDebug() << iter;
 }
 
