@@ -100,13 +100,18 @@ namespace {
         return length_tbl;
     }
 
-    struct pinned_joint {
-        sm::joint& j;
-        sm::point pos;
+    struct targeted_joint {
+        sm::joint& joint;
+        sm::point target_pos;
+        std::optional<sm::point> prev_pos;
+
+        targeted_joint(sm::joint& j, const sm::point& pt) :
+            joint(j), target_pos(pt), prev_pos()
+        {}
     };
 
-    std::vector<pinned_joint> find_pinned_joints(sm::joint& joint) {
-        std::vector<pinned_joint> pinned_joints;
+    std::vector<targeted_joint> find_pinned_joints(sm::joint& joint) {
+        std::vector<targeted_joint> pinned_joints;
         auto visit_joint = [&pinned_joints](sm::joint& j)->bool {
             if (j.is_pinned()) {
                 pinned_joints.emplace_back(j, j.world_pos());
@@ -117,14 +122,14 @@ namespace {
         return pinned_joints;
     }
 
-    double max_pinned_joint_dist(const std::vector<pinned_joint>& pinned_joints) {
+    double max_pinned_joint_dist(const std::vector<targeted_joint>& pinned_joints) {
         if (pinned_joints.empty()) {
             return 0;
         }
         return r::max(
             pinned_joints | rv::transform(
                 [](const auto& pj)->double {
-                    return sm::distance(pj.j.world_pos(), pj.pos);
+                    return sm::distance(pj.joint.world_pos(), pj.target_pos);
                 }
             )
         );
@@ -174,6 +179,40 @@ namespace {
         j.set_world_pos(pt);
         moved_joints.insert(get_id(j));
         dfs(j, {}, perform_fabrik_on_bone, false);
+    }
+
+    bool is_satisfied(const targeted_joint& tj, double tolerance) {
+        if (!tj.prev_pos) {
+            // ensure that at least one pass of FABRIK happens...
+            return false;
+        }
+
+        // has it reached the target?
+        if (sm::distance(tj.joint.world_pos(), tj.target_pos) < tolerance) {
+            return true;
+        }
+
+        // has it moved since the last iteration?
+        if (sm::distance(tj.joint.world_pos(), tj.prev_pos.value()) < tolerance) {
+            return true;
+        }
+
+        return false;
+    }
+
+    bool found_ik_solution(const std::vector<targeted_joint>& targeted_joints, double tolerance) {
+        auto unsatisfied = r::find_if(targeted_joints,
+            [tolerance](const auto& tj)->bool {
+                return !is_satisfied(tj, tolerance);
+            }
+        );
+        return (unsatisfied == targeted_joints.end());
+    }
+
+    void  update_prev_positions(std::vector<targeted_joint>& targeted_joints) {
+        for (auto& tj : targeted_joints) {
+            tj.prev_pos = tj.joint.world_pos();
+        }
     }
 }
 
@@ -436,21 +475,37 @@ void sm::debug_reach(joint& j, sm::point pt) {
 
 void sm::perform_fabrik(sm::joint& j, const sm::point& pt, double tolerance, int max_iter) {
     auto bone_lengths = build_bone_length_table(j);
-    auto pinned_joints = find_pinned_joints(j);
+    auto targeted_joints = find_pinned_joints(j);
+    targeted_joints.emplace_back(j, pt);
+    auto& target = targeted_joints.back();
+    std::span<targeted_joint> pinned_joints(targeted_joints.begin(), std::prev(targeted_joints.end()));
     int iter = 0;
-    while ((distance(j.world_pos(),pt) > tolerance || max_pinned_joint_dist(pinned_joints) > tolerance)
-            && iter < max_iter) {
-        ++iter;
-        perform_one_fabrik_pass(j, pt, bone_lengths);
-        if (iter % 2) {
-          for (auto& pinned_joint : pinned_joints) {
-              perform_one_fabrik_pass(pinned_joint.j, pinned_joint.pos, bone_lengths);
-          }
+    while (! found_ik_solution(targeted_joints, tolerance)) {
+        if (++iter >= max_iter) {
+            break;
+        }
+        update_prev_positions(targeted_joints);
+
+        if (iter % 2 == 0) {
+            for (auto& pinned_joint : pinned_joints) {
+                perform_one_fabrik_pass(pinned_joint.joint, pinned_joint.target_pos, bone_lengths);
+            }
         } else {
             for (auto& pinned_joint : pinned_joints | rv::reverse) {
-                perform_one_fabrik_pass(pinned_joint.j, pinned_joint.pos, bone_lengths);
+                perform_one_fabrik_pass(pinned_joint.joint, pinned_joint.target_pos, bone_lengths);
             }
         }
+        perform_one_fabrik_pass(target.joint, target.target_pos, bone_lengths);
+    }
+    if (iter < max_iter) {
+        for (const auto& pj : pinned_joints) {
+            auto err = sm::distance(pj.joint.world_pos(), pj.target_pos);
+            if (err > 6.0) {
+                break;
+            }
+        }
+        bool check = found_ik_solution(targeted_joints, tolerance);
     }
     qDebug() << iter;
 }
+
