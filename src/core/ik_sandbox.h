@@ -140,5 +140,5 @@ namespace sm {
     void visit_joints(joint& j, joint_visitor visit_joint);
 
     void debug_reach(joint& j, sm::point pt);
-    void perform_fabrik(joint& j, const sm::point& pt, double tolerance = 0.005, int max_iter = 100);
+    void perform_fabrik(joint& j, const sm::point& pt, double tolerance = 0.005, int max_iter = 10);
 }

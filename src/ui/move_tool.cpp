@@ -117,8 +117,17 @@ namespace {
         {}
 
         void keyPressEvent(move_state& ms) override {
-            qDebug() << "foo";
-        };
+            QPoint pos = QCursor::pos();
+            auto& view = ms.canvas_->view();
+            pos = view.mapFromGlobal(pos);
+            QPointF pos_scene = view.mapToScene(pos);
+
+            auto joint = ms.canvas_->top_joint(pos_scene);
+            if (!joint) {
+                return;
+            }
+            joint->set_pinned(true);
+        }
 
         void mousePressEvent(move_state& ms) override {
             auto joint = ms.canvas_->top_joint(ms.event_->scenePos());

@@ -5,6 +5,9 @@
 #include <stack>
 #include <unordered_set>
 #include <unordered_map>
+#include <limits>
+
+#include <qdebug.h>
 
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
@@ -112,6 +115,19 @@ namespace {
         };
         sm::dfs(joint, visit_joint, {}, false);
         return pinned_joints;
+    }
+
+    double max_pinned_joint_dist(const std::vector<pinned_joint>& pinned_joints) {
+        if (pinned_joints.empty()) {
+            return 0;
+        }
+        return r::max(
+            pinned_joints | rv::transform(
+                [](const auto& pj)->double {
+                    return sm::distance(pj.j.world_pos(), pj.pos);
+                }
+            )
+        );
     }
 
     sm::matrix rotate_about_point(const sm::point& pt, double theta) {
@@ -422,11 +438,19 @@ void sm::perform_fabrik(sm::joint& j, const sm::point& pt, double tolerance, int
     auto bone_lengths = build_bone_length_table(j);
     auto pinned_joints = find_pinned_joints(j);
     int iter = 0;
-    while (distance(j.world_pos(),pt) > tolerance && iter < max_iter) {
+    while ((distance(j.world_pos(),pt) > tolerance || max_pinned_joint_dist(pinned_joints) > tolerance)
+            && iter < max_iter) {
         ++iter;
         perform_one_fabrik_pass(j, pt, bone_lengths);
-        for (auto& pinned_joint : pinned_joints) {
-            perform_one_fabrik_pass(pinned_joint.j, pinned_joint.pos, bone_lengths);
+        if (iter % 2) {
+          for (auto& pinned_joint : pinned_joints) {
+              perform_one_fabrik_pass(pinned_joint.j, pinned_joint.pos, bone_lengths);
+          }
+        } else {
+            for (auto& pinned_joint : pinned_joints | rv::reverse) {
+                perform_one_fabrik_pass(pinned_joint.j, pinned_joint.pos, bone_lengths);
+            }
         }
     }
+    qDebug() << iter;
 }

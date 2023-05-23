@@ -233,6 +233,7 @@ ui::stick_man& ui::canvas_view::main_window() {
 
 ui::joint_item::joint_item(sm::joint& joint) :
     joint_(joint),
+    pin_(nullptr),
     QGraphicsEllipseItem(
         -k_joint_radius, 
         -k_joint_radius, 
@@ -247,6 +248,26 @@ ui::joint_item::joint_item(sm::joint& joint) :
     setZValue(k_joint_zorder);
 }
 
+void ui::joint_item::set_pinned(bool pinned) {
+    if (pinned) {
+        auto radius = k_joint_radius - 3.0;
+        pin_ = new
+            QGraphicsEllipseItem(
+                -radius,
+                -radius,
+                2.0 * radius,
+                2.0 * radius
+            );
+        pin_->setBrush(Qt::black);
+        pin_->setParentItem(this);
+    } else {
+        if (pin_) {
+            delete pin_;
+        }
+        pin_ = nullptr;
+    }
+    joint_.set_pinned(pinned);
+}
 
 sm::joint& ui::joint_item::joint() const {
 

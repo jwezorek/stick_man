@@ -69,9 +69,11 @@ namespace ui {
     class joint_item : public QGraphicsEllipseItem {
     private:
         sm::joint& joint_;
+        QGraphicsEllipseItem* pin_;
     public:
         joint_item(sm::joint& joint);
         sm::joint& joint() const;
+        void set_pinned(bool pinned);
     };
 
     class bone_item : public QGraphicsPolygonItem {
