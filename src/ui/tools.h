@@ -57,9 +57,8 @@ namespace ui {
 
     class zoom_tool : public abstract_tool {
         int zoom_level_;
-        QButtonGroup btns_;
         QWidget* settings_;
-
+        QComboBox* magnify_;
         static qreal scale_from_zoom_level(int zl);
         void handleButtonClick(int level);
 

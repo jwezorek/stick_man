@@ -99,12 +99,12 @@ QWidget* ui::zoom_tool::settings_widget() {
     if (!settings_) {
         settings_ = new QWidget();
         auto* flow = new ui::FlowLayout(settings_);
+        flow->addWidget(new QLabel("magnify"));
+        flow->addWidget(magnify_ = new QComboBox());
         for (int zoom_level = -4; zoom_level <= 4; zoom_level++) {
             int val = static_cast<int>(scale_from_zoom_level(zoom_level) * 100.0);
-            QString txt = QString::number(val) + "% magnification";
-            auto* btn = new QRadioButton(txt);
-            btns_.addButton(btn, zoom_level);
-            flow->addWidget(btn);
+            QString txt = QString::number(val) + "%";
+            magnify_->addItem(txt, zoom_level);
         }
     }
     return settings_;
