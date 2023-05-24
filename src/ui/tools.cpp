@@ -47,10 +47,7 @@ QString ui::abstract_tool::icon_rsrc() const {
 }
 
 void ui::abstract_tool::populate_settings(tool_settings_pane* pane) {
-    auto* layout = pane->contents();
-    clear_layout(layout);
-    ui::set_custom_title_bar_txt(pane, name() + " tool");
-    populate_settings_aux(pane);
+    pane->set_tool(name_, settings_widget());
 }
 
 void ui::abstract_tool::activate(canvas& c) {}
@@ -62,24 +59,25 @@ void ui::abstract_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* e
 void ui::abstract_tool::mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
 void ui::abstract_tool::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {}
 void ui::abstract_tool::deactivate(canvas& c) {}
-void ui::abstract_tool::populate_settings_aux(tool_settings_pane* pane) {}
+QWidget* ui::abstract_tool::settings_widget() { return nullptr; }
 
 /*------------------------------------------------------------------------------------------------*/
 
 ui::zoom_tool::zoom_tool() : 
         abstract_tool("zoom", "zoom_icon.png", ui::tool_id::zoom),
-        zoom_level_(0) {
+        zoom_level_(0),
+        settings_(nullptr) {
 }
 
-qreal ui::zoom_tool::scale_from_zoom_level() const {
-    if (zoom_level_ == 0) {
+qreal ui::zoom_tool::scale_from_zoom_level(int zoom_level)  {
+    if (zoom_level == 0) {
         return 1.0;
     }
-    if (zoom_level_ > 0) {
-        qreal zoom = static_cast<qreal>(zoom_level_);
+    if (zoom_level > 0) {
+        qreal zoom = static_cast<qreal>(zoom_level);
         return zoom + 1.0;
     }
-    qreal zoom = -1.0 * zoom_level_;
+    qreal zoom = -1.0 * zoom_level;
     return 1.0 / (zoom + 1.0);
 }
 
@@ -90,11 +88,26 @@ void ui::zoom_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event
         zoom_level_--;
     }
     auto pt = event->scenePos();
-    auto zoom = scale_from_zoom_level();
+    auto zoom = scale_from_zoom_level(zoom_level_);
     auto& view = c.view();
     view.resetTransform();
     view.scale(zoom, -zoom);
     view.centerOn(pt);
+}
+
+QWidget* ui::zoom_tool::settings_widget() {
+    if (!settings_) {
+        settings_ = new QWidget();
+        auto* flow = new ui::FlowLayout(settings_);
+        for (int zoom_level = -4; zoom_level <= 4; zoom_level++) {
+            int val = static_cast<int>(scale_from_zoom_level(zoom_level) * 100.0);
+            QString txt = QString::number(val) + "% magnification";
+            auto* btn = new QRadioButton(txt);
+            btns_.addButton(btn, zoom_level);
+            flow->addWidget(btn);
+        }
+    }
+    return settings_;
 }
 
 /*------------------------------------------------------------------------------------------------*/

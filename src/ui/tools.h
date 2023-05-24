@@ -46,7 +46,7 @@ namespace ui {
         virtual void mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event);
         virtual void wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) ;
         virtual void deactivate(canvas& c);
-        virtual void populate_settings_aux(tool_settings_pane* pane);
+        virtual QWidget* settings_widget();
 
 
     private:
@@ -57,10 +57,17 @@ namespace ui {
 
     class zoom_tool : public abstract_tool {
         int zoom_level_;
-        qreal scale_from_zoom_level() const;
+        QButtonGroup btns_;
+        QWidget* settings_;
+
+        static qreal scale_from_zoom_level(int zl);
+        void handleButtonClick(int level);
+
+
     public:
         zoom_tool();
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+        virtual QWidget* settings_widget() override;
     };
 
     class pan_tool : public abstract_tool {

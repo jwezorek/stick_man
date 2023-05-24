@@ -1,5 +1,6 @@
 #include "move_tool.h"
 #include "tool_settings_pane.h"
+#include "util.h"
 #include "../core/ik_sandbox.h"
 #include <unordered_map>
 #include <array>
@@ -209,12 +210,14 @@ void  ui::move_tool::move_state::set(canvas& c, QKeyEvent* evnt) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::move_tool::move_tool() : abstract_tool("move", "move_icon.png", ui::tool_id::move) {
+ui::move_tool::move_tool() : 
+        settings_(nullptr), 
+        abstract_tool("move", "move_icon.png", ui::tool_id::move) {
 
 }
 
 void ui::move_tool::keyPressEvent(canvas& c, QKeyEvent* event) {
-    auto mode = static_cast<move_mode>(btns_->checkedId());
+    auto mode = static_cast<move_mode>(btns_.checkedId());
     if (mode == move_mode::none) {
         return;
     }
@@ -223,7 +226,7 @@ void ui::move_tool::keyPressEvent(canvas& c, QKeyEvent* event) {
 }
 
 void ui::move_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
-    auto mode = static_cast<move_mode>(btns_->checkedId());
+    auto mode = static_cast<move_mode>(btns_.checkedId());
     if (mode == move_mode::none) {
         return;
     }
@@ -232,7 +235,7 @@ void ui::move_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) 
 }
 
 void ui::move_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
-    auto mode = static_cast<move_mode>(btns_->checkedId());
+    auto mode = static_cast<move_mode>(btns_.checkedId());
     if (mode == move_mode::none) {
         return;
     }
@@ -241,7 +244,7 @@ void ui::move_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
 }
 
 void ui::move_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
-    auto mode = static_cast<move_mode>(btns_->checkedId());
+    auto mode = static_cast<move_mode>(btns_.checkedId());
     if (mode == move_mode::none) {
         return;
     }
@@ -249,11 +252,15 @@ void ui::move_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event
     tool_for_mode(mode)->mouseReleaseEvent(state_);
 }
 
-void ui::move_tool::populate_settings_aux(tool_settings_pane* pane) {
-    btns_ = std::make_unique<QButtonGroup>();
-    for (const auto& mm : k_move_mode_subtools) {
-        auto* btn = new QRadioButton(mm->name());
-        btns_->addButton(btn, static_cast<int>(mm->mode()));
-        pane->contents()->addWidget(btn);
+QWidget* ui::move_tool::settings_widget() {
+    if (!settings_) {
+        settings_ = new QWidget();
+        auto* flow = new ui::FlowLayout(settings_);
+        for (const auto& mm : k_move_mode_subtools) {
+            auto* btn = new QRadioButton(mm->name());
+            btns_.addButton(btn, static_cast<int>(mm->mode()));
+            flow->addWidget(btn);
+        }
     }
+    return settings_;
 }

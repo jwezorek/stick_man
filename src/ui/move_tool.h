@@ -25,11 +25,11 @@ namespace ui {
         void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void populate_settings_aux(tool_settings_pane* pane) override;
+        QWidget* settings_widget() override;
 
     private: 
-
-        std::unique_ptr<QButtonGroup> btns_;
+        QWidget* settings_;
+        QButtonGroup btns_;
         move_state state_;
     };
 
