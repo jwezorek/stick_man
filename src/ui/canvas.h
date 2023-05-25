@@ -42,6 +42,8 @@ namespace ui {
         std::vector<joint_item*> root_joint_items() const;
         std::vector<joint_item*> joint_items() const;
         std::vector<bone_item*> bone_items() const;
+        void set_scale(double scale, std::optional<QPointF> pt = {});
+        double scale();
         void sync_to_model();
 
     protected:
@@ -80,7 +82,7 @@ namespace ui {
     private:
         sm::bone& bone_;
     public:
-        bone_item(sm::bone& bone);
+        bone_item(sm::bone& bone, double scale);
         joint_item& parent_joint_item() const;
         joint_item& child_joint_item() const;
         sm::bone& bone() const;

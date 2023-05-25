@@ -89,10 +89,7 @@ void ui::zoom_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event
     }
     auto pt = event->scenePos();
     auto zoom = scale_from_zoom_level(zoom_level_);
-    auto& view = c.view();
-    view.resetTransform();
-    view.scale(zoom, -zoom);
-    view.centerOn(pt);
+    c.set_scale(zoom, pt);
 }
 
 QWidget* ui::zoom_tool::settings_widget() {
@@ -167,7 +164,7 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
         auto& sandbox = canv.view().main_window().sandbox();
         auto bone = sandbox.create_bone({}, parent_joint->joint(), child_joint->joint());
         if (bone) {
-            canv.addItem(new ui::bone_item(bone->get()));
+            canv.addItem(new ui::bone_item(bone->get(), canv.scale()));
         } else {
             auto error = bone.error();
         }

@@ -60,8 +60,8 @@ namespace {
         }
     }
 
-    QPolygonF bone_polygon(double length, double joint_radius) {
-        auto r = static_cast<float>(joint_radius);
+    QPolygonF bone_polygon(double length, double joint_radius, double scale) {
+        auto r = static_cast<float>(joint_radius * (1.0/scale));
         auto d = static_cast<float>(length);
         auto x1 = (r * r) / d;
         auto y1 = r * std::sqrt(1.0f - (r * r) / (d * d));
@@ -87,27 +87,28 @@ namespace {
         );
     }
 
-    void set_bone_item_pos(ui::bone_item* itm, double len, const sm::point& pos, double rot) {
+    void set_bone_item_pos(ui::bone_item* itm, double len, const sm::point& pos, double rot, double scale) {
         itm->setPos(0, 0);
         itm->setRotation(0);
-        itm->setPolygon(bone_polygon(len, k_joint_radius));
+        itm->setPolygon(bone_polygon(len, k_joint_radius, scale));
         itm->setRotation(radians_to_degrees(rot));
         itm->setPos(to_qt_pt(pos));
     }
 
-    void sync_to_model(ui::joint_item* root) {
+    void sync_to_model(ui::joint_item* root, double scale) {
         auto sync_joint = [](sm::joint& j)->bool {
             ui::joint_item& ji = ui::item_from_sandbox<ui::joint_item>(j);
             ji.setPos(to_qt_pt(j.world_pos()));
             return true;
         };
-        auto sync_bone = [](sm::bone& b)->bool {
+        auto sync_bone = [scale](sm::bone& b)->bool {
             ui::bone_item& bi = ui::item_from_sandbox<ui::bone_item>(b);
             set_bone_item_pos(
                 &bi,
                 b.scaled_length(),
                 b.parent_joint().world_pos(),
-                b.world_rotation()
+                b.world_rotation(),
+                scale
             );
             return true;
         };
@@ -135,9 +136,25 @@ ui::tool_manager& ui::canvas::tool_mgr() {
     return view().main_window().tool_mgr();
 }
 
+
+void ui::canvas::set_scale(double scale, std::optional<QPointF> center) {
+    auto& view = this->view();
+    view.resetTransform();
+    view.scale(scale, -scale);
+    if (center) {
+        view.centerOn(*center);
+    }
+    sync_to_model();
+}
+
+double ui::canvas::scale() {
+    auto& view = this->view();
+    return view.transform().m11();
+}
+
 void ui::canvas::sync_to_model() {
     for (auto* root : root_joint_items()) {
-        ::sync_to_model(root);
+        ::sync_to_model(root, scale());
     }
 }
 
@@ -241,6 +258,7 @@ ui::joint_item::joint_item(sm::joint& joint) :
         2.0 * k_joint_radius
     )
 {
+    setFlag(QGraphicsItem::ItemIgnoresTransformations);
     setBrush(Qt::white);
     setPen(QPen(Qt::black, 2));
     joint_.set_user_data(std::ref(*this));
@@ -277,14 +295,15 @@ sm::joint& ui::joint_item::joint() const {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::bone_item::bone_item(sm::bone& bone) : bone_(bone) {
+ui::bone_item::bone_item(sm::bone& bone, double scale) : bone_(bone) {
     setBrush(Qt::black);
     setTransformOriginPoint({ 0,0 });
     set_bone_item_pos(
         this,
         bone.scaled_length(),
         bone.parent_joint().world_pos(),
-        bone.world_rotation()
+        bone.world_rotation(),
+        scale
     );
     bone_.set_user_data(std::ref(*this));
     setZValue(k_bone_zorder);
