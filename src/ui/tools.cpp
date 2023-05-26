@@ -129,7 +129,7 @@ void ui::add_joint_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEven
     auto& sandbox = canv.view().main_window().sandbox();
     auto j = sandbox.create_joint({}, pt.x(), pt.y());
 
-    auto item = new ui::joint_item(j->get());
+    auto item = new ui::joint_item(j->get(), canv.scale());
     canv.addItem(item);
 }
 

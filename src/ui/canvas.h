@@ -68,17 +68,24 @@ namespace ui {
         stick_man& main_window();
     };
 
-    class joint_item : public QGraphicsEllipseItem {
+    class abstract_stick_man_item {
+    public:
+        virtual void sync_to_model(canvas& canv) = 0;
+        canvas* canvas();
+    };
+
+    class joint_item : public abstract_stick_man_item, public QGraphicsEllipseItem {
     private:
         sm::joint& joint_;
         QGraphicsEllipseItem* pin_;
     public:
-        joint_item(sm::joint& joint);
+        joint_item(sm::joint& joint, double scale);
         sm::joint& joint() const;
         void set_pinned(bool pinned);
+        void sync_to_model(ui::canvas& canv) override;
     };
 
-    class bone_item : public QGraphicsPolygonItem {
+    class bone_item : public abstract_stick_man_item, public QGraphicsPolygonItem {
     private:
         sm::bone& bone_;
     public:
@@ -86,6 +93,7 @@ namespace ui {
         joint_item& parent_joint_item() const;
         joint_item& child_joint_item() const;
         sm::bone& bone() const;
+        void sync_to_model(ui::canvas& canv) override;
     };
 
     template<typename T, typename U>

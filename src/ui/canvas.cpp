@@ -14,6 +14,7 @@ namespace rv = std::ranges::views;
 namespace {
 
     constexpr double k_joint_radius = 8.0;
+    constexpr double k_pin_radius = k_joint_radius - 3.0;
     constexpr int k_joint_zorder = 10;
     constexpr int k_bone_zorder = 5;
 
@@ -61,7 +62,7 @@ namespace {
     }
 
     QPolygonF bone_polygon(double length, double joint_radius, double scale) {
-        auto r = static_cast<float>(joint_radius * (1.0/scale));
+        auto r = static_cast<float>(joint_radius * scale);
         auto d = static_cast<float>(length);
         auto x1 = (r * r) / d;
         auto y1 = r * std::sqrt(1.0f - (r * r) / (d * d));
@@ -87,32 +88,23 @@ namespace {
         );
     }
 
+    void set_circle(QGraphicsEllipseItem* ei, QPointF pos, double radius, double scale) {
+        ei->setPos(0, 0);
+        double r = radius * scale;
+        ei->setRect(
+            QRectF(
+                -r, -r, 2.0 * r, 2.0 * r
+            )
+        );
+        ei->setPos(pos);
+    }
+
     void set_bone_item_pos(ui::bone_item* itm, double len, const sm::point& pos, double rot, double scale) {
         itm->setPos(0, 0);
         itm->setRotation(0);
         itm->setPolygon(bone_polygon(len, k_joint_radius, scale));
         itm->setRotation(radians_to_degrees(rot));
         itm->setPos(to_qt_pt(pos));
-    }
-
-    void sync_to_model(ui::joint_item* root, double scale) {
-        auto sync_joint = [](sm::joint& j)->bool {
-            ui::joint_item& ji = ui::item_from_sandbox<ui::joint_item>(j);
-            ji.setPos(to_qt_pt(j.world_pos()));
-            return true;
-        };
-        auto sync_bone = [scale](sm::bone& b)->bool {
-            ui::bone_item& bi = ui::item_from_sandbox<ui::bone_item>(b);
-            set_bone_item_pos(
-                &bi,
-                b.scaled_length(),
-                b.parent_joint().world_pos(),
-                b.world_rotation(),
-                scale
-            );
-            return true;
-        };
-        sm::dfs(root->joint(), sync_joint, sync_bone, true);
     }
 
 }
@@ -153,8 +145,10 @@ double ui::canvas::scale() {
 }
 
 void ui::canvas::sync_to_model() {
-    for (auto* root : root_joint_items()) {
-        ::sync_to_model(root, scale());
+    for (auto* child : items()) {
+        if (auto* item = dynamic_cast<abstract_stick_man_item*>(child)) {
+            item->sync_to_model(*this);
+        }
     }
 }
 
@@ -248,34 +242,29 @@ ui::stick_man& ui::canvas_view::main_window() {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::joint_item::joint_item(sm::joint& joint) :
+ui::canvas* ui::abstract_stick_man_item::canvas() {
+    auto* ptr = dynamic_cast<QGraphicsItem*>(this);
+    return static_cast<ui::canvas*>(ptr->scene());
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
+ui::joint_item::joint_item(sm::joint& joint, double scale) :
     joint_(joint),
-    pin_(nullptr),
-    QGraphicsEllipseItem(
-        -k_joint_radius, 
-        -k_joint_radius, 
-        2.0 * k_joint_radius, 
-        2.0 * k_joint_radius
-    )
+    pin_(nullptr)
 {
-    setFlag(QGraphicsItem::ItemIgnoresTransformations);
     setBrush(Qt::white);
     setPen(QPen(Qt::black, 2));
     joint_.set_user_data(std::ref(*this));
-    setPos(joint.world_x(), joint.world_y());
+    set_circle(this, to_qt_pt(joint_.world_pos()), k_joint_radius, scale);
     setZValue(k_joint_zorder);
 }
 
 void ui::joint_item::set_pinned(bool pinned) {
     if (pinned) {
-        auto radius = k_joint_radius - 3.0;
-        pin_ = new
-            QGraphicsEllipseItem(
-                -radius,
-                -radius,
-                2.0 * radius,
-                2.0 * radius
-            );
+        pin_ = new QGraphicsEllipseItem();
+        set_circle(pin_, { 0,0 }, k_pin_radius, 1.0/canvas()->scale());
+        pin_->setPen(Qt::NoPen);
         pin_->setBrush(Qt::black);
         pin_->setParentItem(this);
     } else {
@@ -293,17 +282,27 @@ sm::joint& ui::joint_item::joint() const {
 
 }
 
+void ui::joint_item::sync_to_model(ui::canvas & canv) {
+    double inv_scale = 1.0 / canv.scale();
+    setPen(QPen(Qt::black, 2.0 * inv_scale));
+    set_circle(this, to_qt_pt(joint_.world_pos()), k_joint_radius, inv_scale);
+    if (pin_) {
+        set_circle(pin_, { 0,0 }, k_pin_radius, inv_scale);
+    }
+}
+
 /*------------------------------------------------------------------------------------------------*/
 
 ui::bone_item::bone_item(sm::bone& bone, double scale) : bone_(bone) {
     setBrush(Qt::black);
+    setPen(QPen(Qt::black, 1.0/scale));
     setTransformOriginPoint({ 0,0 });
     set_bone_item_pos(
         this,
         bone.scaled_length(),
         bone.parent_joint().world_pos(),
         bone.world_rotation(),
-        scale
+        1.0 / scale
     );
     bone_.set_user_data(std::ref(*this));
     setZValue(k_bone_zorder);
@@ -326,4 +325,15 @@ ui::joint_item& ui::bone_item::child_joint_item() const {
 
 sm::bone& ui::bone_item::bone() const {
     return bone_;
+}
+
+void ui::bone_item::sync_to_model(ui::canvas& canv) {
+    setPen(QPen(Qt::black, 1.0 / canv.scale()));
+    set_bone_item_pos(
+        this,
+        bone_.scaled_length(),
+        bone_.parent_joint().world_pos(),
+        bone_.world_rotation(),
+        1.0 / canv.scale()
+    );
 }
