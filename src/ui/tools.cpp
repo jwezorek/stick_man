@@ -255,6 +255,7 @@ void ui::tool_manager::set_current_tool(tool_id id) {
         return;
     }
     auto& canvas = main_window_.view().canvas();
+    canvas.setFocus();
     if (has_current_tool()) {
         current_tool().deactivate(canvas);
     }

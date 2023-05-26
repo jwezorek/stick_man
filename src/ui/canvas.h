@@ -104,7 +104,7 @@ namespace ui {
     };
 
     template<typename T, typename U>
-    T& item_from_sandbox(U& sandbox_obj) {
-        return std::any_cast<std::reference_wrapper<T>>(sandbox_obj.get_user_data()).get();
+    T& item_from_model(U& model_obj) {
+        return std::any_cast<std::reference_wrapper<T>>(model_obj.get_user_data()).get();
     }
 }

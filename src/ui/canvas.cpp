@@ -247,24 +247,25 @@ ui::canvas* ui::abstract_stick_man_item::canvas() {
 ui::joint_item::joint_item(sm::joint& joint, double scale) :
         has_stick_man_model<ui::joint_item, sm::joint&>(joint),
         pin_(nullptr) {
+    auto inv_scale = 1.0 / scale;
     setBrush(Qt::white);
-    setPen(QPen(Qt::black, 2));
-    set_circle(this, to_qt_pt(model_.world_pos()), k_joint_radius, scale);
+    setPen(QPen(Qt::black, 2.0 * inv_scale));
+    set_circle(this, to_qt_pt(model_.world_pos()), k_joint_radius, inv_scale);
     setZValue(k_joint_zorder);
 }
 
 void ui::joint_item::set_pinned(bool pinned) {
-    if (pinned) {
+    if (!pin_) {
         pin_ = new QGraphicsEllipseItem();
-        set_circle(pin_, { 0,0 }, k_pin_radius, 1.0/canvas()->scale());
+        set_circle(pin_, { 0,0 }, k_pin_radius, 1.0 / canvas()->scale());
         pin_->setPen(Qt::NoPen);
         pin_->setBrush(Qt::black);
         pin_->setParentItem(this);
+    }
+    if (pinned) {
+        pin_->show();
     } else {
-        if (pin_) {
-            delete pin_;
-        }
-        pin_ = nullptr;
+        pin_->hide();
     }
     model_.set_pinned(pinned);
 }

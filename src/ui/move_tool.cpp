@@ -41,7 +41,7 @@ namespace {
         if (!maybe_parent_bone) {
             return nullptr;
         }
-        return &ui::item_from_sandbox<ui::bone_item>(maybe_parent_bone->get());
+        return &ui::item_from_model<ui::bone_item>(maybe_parent_bone->get());
     }
 
     ui::joint_item* parent_joint(ui::joint_item* j) {
@@ -50,7 +50,7 @@ namespace {
             return nullptr;
         }
         auto& parent_bone = maybe_parent_bone->get();
-        auto& parent_joint = ui::item_from_sandbox<ui::joint_item>
+        auto& parent_joint = ui::item_from_model<ui::joint_item>
             (parent_bone.parent_joint()
         );
         return &parent_joint;
@@ -118,16 +118,19 @@ namespace {
         {}
 
         void keyPressEvent(move_state& ms) override {
-            QPoint pos = QCursor::pos();
-            auto& view = ms.canvas_->view();
-            pos = view.mapFromGlobal(pos);
-            QPointF pos_scene = view.mapToScene(pos);
+            if (ms.key_event_->key() == Qt::Key::Key_Space) {
+                QPoint pos = QCursor::pos();
+                auto& view = ms.canvas_->view();
+                pos = view.mapFromGlobal(pos);
+                QPointF pos_scene = view.mapToScene(pos);
 
-            auto joint = ms.canvas_->top_joint(pos_scene);
-            if (!joint) {
-                return;
+                auto joint = ms.canvas_->top_joint(pos_scene);
+                if (!joint) {
+                    return;
+                }
+                bool current_state = joint->model().is_pinned();
+                joint->set_pinned(!current_state);
             }
-            joint->set_pinned(true);
         }
 
         void mousePressEvent(move_state& ms) override {
@@ -140,11 +143,14 @@ namespace {
         };
 
         void mouseMoveEvent(move_state& ms) override {
-            sm::perform_fabrik(ms.anchor_->model(), from_qt_pt(ms.event_->scenePos()));
-            ms.canvas_->sync_to_model();
+            if (ms.anchor_) {
+                sm::perform_fabrik(ms.anchor_->model(), from_qt_pt(ms.event_->scenePos()));
+                ms.canvas_->sync_to_model();
+            }
         };
 
         void mouseReleaseEvent(move_state& ms) override {
+            ms.anchor_ = nullptr;
         };
     };
 
