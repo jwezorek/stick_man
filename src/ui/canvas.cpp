@@ -13,10 +13,29 @@ namespace rv = std::ranges::views;
 
 namespace {
 
+    const auto k_sel_color = QColorConstants::Svg::turquoise;
+    const auto k_dark_gridline_color = QColor::fromRgb(220, 220, 220);
+    const auto k_light_gridline_color = QColor::fromRgb(240, 240, 240);
+    constexpr double k_sel_thickness = 3.0;
     constexpr double k_joint_radius = 8.0;
     constexpr double k_pin_radius = k_joint_radius - 3.0;
+    constexpr double k_sel_frame_distance = 4.0;
     constexpr int k_joint_zorder = 10;
     constexpr int k_bone_zorder = 5;
+
+    template<typename T>
+    T* top_item_of_type(const QGraphicsScene& scene, QPointF pt) {
+        auto itms = scene.items(pt);
+        auto itms_at_pt = itms |
+            rv::transform(
+                [](auto itm)->T* {return dynamic_cast<T*>(itm); }
+        );
+        auto first = r::find_if(itms_at_pt, [](auto ptr)->bool { return ptr; });
+        if (first == itms_at_pt.end()) {
+            return nullptr;
+        }
+        return *first;
+    }
 
     template<typename T>
     std::vector<T*> child_items_of_type(const QList<QGraphicsItem*>& items) {
@@ -42,9 +61,8 @@ namespace {
 
     void draw_grid_lines(QPainter* painter, const QRectF& r, double line_spacing) {
         painter->fillRect(r, Qt::white);
-        qreal dimmer = 0.6666;
-        QPen blue_pen(QColor::fromCmykF(0.4 * dimmer, 0, 0, 0.1 * dimmer), 0.0);
-        QPen dark_blue_pen(QColor::fromCmykF(0.8 * dimmer, 0, 0, 0.1 * dimmer), 0.0);
+        QPen dark_pen(k_dark_gridline_color, 0);
+        QPen pen(k_light_gridline_color, 0);
         qreal x1, y1, x2, y2;
         r.getCoords(&x1, &y1, &x2, &y2);
 
@@ -52,7 +70,7 @@ namespace {
         int right_gridline_index = static_cast<int>(std::floor(x2 / line_spacing));
         for (auto i : rv::iota(left_gridline_index, right_gridline_index + 1)) {
             auto x = i * line_spacing;
-            painter->setPen((i % 5) ? blue_pen : dark_blue_pen);
+            painter->setPen((i % 5) ? pen : dark_pen);
             painter->drawLine(x, y1, x, y2);
         }
 
@@ -60,7 +78,7 @@ namespace {
         int bottom_gridline_index = static_cast<int>(std::floor(y2 / line_spacing));
         for (auto i : rv::iota(top_gridline_index, bottom_gridline_index + 1)) {
             auto y = i * line_spacing;
-            painter->setPen((i % 5) ? blue_pen : dark_blue_pen);
+            painter->setPen((i % 5) ? pen : dark_pen);
             painter->drawLine(x1, y, x2, y);
         }
     }
@@ -143,7 +161,7 @@ void ui::canvas::set_scale(double scale, std::optional<QPointF> center) {
     sync_to_model();
 }
 
-double ui::canvas::scale() {
+double ui::canvas::scale() const {
     auto& view = this->view();
     return view.transform().m11();
 }
@@ -155,21 +173,16 @@ void ui::canvas::sync_to_model() {
     }
 }
 
-ui::canvas_view& ui::canvas::view() {
+ui::canvas_view& ui::canvas::view() const {
     return *static_cast<ui::canvas_view*>(this->views()[0]);
 }
 
 ui::joint_item* ui::canvas::top_joint(const QPointF& pt) const {
-    auto itms = items(pt);
-    auto joints_at_pt = itms |
-        rv::transform(
-            [](auto itm)->ui::joint_item* {return dynamic_cast<ui::joint_item*>(itm); }
-        );
-    auto first = r::find_if( joints_at_pt, [](auto ptr) { return ptr != nullptr; } );
-    if (first == joints_at_pt.end()) {
-        return nullptr;
-    }
-    return *first;
+    return top_item_of_type<ui::joint_item>(*this, pt);
+}
+
+ui::abstract_stick_man_item* ui::canvas::top_item(const QPointF& pt) const {
+    return top_item_of_type<ui::abstract_stick_man_item>(*this, pt);
 }
 
 std::vector<ui::joint_item*> ui::canvas::root_joint_items() const {
@@ -246,8 +259,8 @@ void ui::abstract_stick_man_item::sync_to_model() {
     }
 }
 
-ui::canvas* ui::abstract_stick_man_item::canvas() {
-    auto* ptr = dynamic_cast<QGraphicsItem*>(this);
+ui::canvas* ui::abstract_stick_man_item::canvas() const {
+    auto* ptr = dynamic_cast<const QGraphicsItem*>(this);
     return static_cast<ui::canvas*>(ptr->scene());
 }
 
@@ -259,6 +272,7 @@ void ui::abstract_stick_man_item::set_selected(bool selected) {
     if (selected) {
         if (!selection_frame_) {
             selection_frame_ = create_selection_frame();
+            selection_frame_->setParentItem(dynamic_cast<QGraphicsItem*>(this));
         }
         selection_frame_->show();
     } else {
@@ -305,11 +319,20 @@ void ui::joint_item::sync_item_to_model() {
 }
 
 void ui::joint_item::sync_sel_frame_to_model() {
-    auto& canv = *canvas();
+    auto* sf = static_cast<QGraphicsEllipseItem*>(selection_frame_);
+    auto inv_scale = 1.0 / canvas()->scale();
+    set_circle( sf, { 0,0}, k_joint_radius + k_sel_frame_distance, inv_scale);
+    sf->setPen(QPen(k_sel_color, k_sel_thickness * inv_scale, Qt::DotLine));
 }
 
 QGraphicsItem* ui::joint_item::create_selection_frame() const {
-    return nullptr;
+    auto& canv = *canvas();
+    auto inv_scale = 1.0 / canvas()->scale();
+    auto sf = new QGraphicsEllipseItem();
+    set_circle( sf, { 0.0,0.0 }, k_joint_radius + k_sel_frame_distance, inv_scale );
+    sf->setPen(QPen(k_sel_color, k_sel_thickness * inv_scale, Qt::DotLine));
+    sf->setBrush(Qt::NoBrush);
+    return sf;
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -355,9 +378,17 @@ void ui::bone_item::sync_item_to_model() {
 }
 
 void ui::bone_item::sync_sel_frame_to_model() {
-    auto& canv = *canvas();
+    auto* sf = static_cast<QGraphicsLineItem*>(selection_frame_);
+    auto inv_scale = 1.0 / canvas()->scale();
+    sf->setLine(0, 0, model_.length(), 0);
+    sf->setPen(QPen(k_sel_color, k_sel_thickness * inv_scale, Qt::DotLine));
 }
 
 QGraphicsItem* ui::bone_item::create_selection_frame() const {
-    return nullptr;
+    auto& canv = *canvas();
+    auto inv_scale = 1.0 / canvas()->scale();
+    auto sf = new QGraphicsLineItem();
+    sf->setLine(0, 0, model_.length(), 0);
+    sf->setPen(QPen(k_sel_color, k_sel_thickness * inv_scale, Qt::DotLine));
+    return sf;
 }

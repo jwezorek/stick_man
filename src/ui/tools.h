@@ -97,6 +97,7 @@ namespace ui {
     private:
     public:
         arrow_tool();
+        void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
     };
 
     class stick_man;

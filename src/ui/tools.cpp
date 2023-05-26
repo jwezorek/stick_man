@@ -177,6 +177,14 @@ ui::arrow_tool::arrow_tool() :
         abstract_tool("arrow", "arrow_icon.png", ui::tool_id::arrow) {
 
 }
+
+void ui::arrow_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
+    auto j = canv.top_item(event->scenePos());
+    if (j) {
+        j->set_selected(true);
+    }
+}
+
 /*------------------------------------------------------------------------------------------------*/
 
 ui::tool_manager::tool_manager(stick_man* sm) :

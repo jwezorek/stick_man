@@ -21,6 +21,7 @@ namespace ui {
     class tool_manager;
     class joint_item;
     class bone_item;
+    class abstract_stick_man_item;
 
     class canvas : public QGraphicsScene {
 
@@ -37,13 +38,14 @@ namespace ui {
 
         canvas();
         void drawBackground(QPainter* painter, const QRectF& rect) override;
-        canvas_view& view();
+        canvas_view& view() const;
         joint_item* top_joint(const QPointF& pt) const;
+        abstract_stick_man_item* top_item(const QPointF& pt) const;
         std::vector<joint_item*> root_joint_items() const;
         std::vector<joint_item*> joint_items() const;
         std::vector<bone_item*> bone_items() const;
         void set_scale(double scale, std::optional<QPointF> pt = {});
-        double scale();
+        double scale() const;
         void sync_to_model();
 
     protected:
@@ -79,7 +81,7 @@ namespace ui {
     public:
         abstract_stick_man_item();
         void sync_to_model();
-        canvas* canvas();
+        canvas* canvas() const;
         bool is_selected() const;
         void set_selected(bool selected);
     };
