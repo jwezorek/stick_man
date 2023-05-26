@@ -70,30 +70,34 @@ namespace ui {
 
     class abstract_stick_man_item {
     public:
-        virtual void sync_to_model(canvas& canv) = 0;
+        virtual void sync_to_model() = 0;
         canvas* canvas();
     };
 
-    class joint_item : public abstract_stick_man_item, public QGraphicsEllipseItem {
+    template<typename T>
+    class has_stick_man_model : public abstract_stick_man_item {
+    protected:
+        T& model_;
+    public:
+        has_stick_man_model(T& model) : model_(model) {}
+        T& model() { return model_; }
+    };
+
+    class joint_item : public has_stick_man_model<sm::joint&>, public QGraphicsEllipseItem {
     private:
-        sm::joint& joint_;
         QGraphicsEllipseItem* pin_;
     public:
         joint_item(sm::joint& joint, double scale);
-        sm::joint& joint() const;
         void set_pinned(bool pinned);
-        void sync_to_model(ui::canvas& canv) override;
+        void sync_to_model() override;
     };
 
-    class bone_item : public abstract_stick_man_item, public QGraphicsPolygonItem {
-    private:
-        sm::bone& bone_;
+    class bone_item : public has_stick_man_model<sm::bone&>, public QGraphicsPolygonItem {
     public:
         bone_item(sm::bone& bone, double scale);
         joint_item& parent_joint_item() const;
         joint_item& child_joint_item() const;
-        sm::bone& bone() const;
-        void sync_to_model(ui::canvas& canv) override;
+        void sync_to_model() override;
     };
 
     template<typename T, typename U>

@@ -28,6 +28,10 @@ namespace {
         ) | r::to<std::vector<T*>>();
     }
 
+    ui::abstract_stick_man_item* to_stick_man(QGraphicsItem* itm) {
+        return dynamic_cast<ui::abstract_stick_man_item*>(itm);
+    }
+
     double radians_to_degrees(double radians) {
         return radians * (180.0 / std::numbers::pi_v<double>);
     }
@@ -77,7 +81,7 @@ namespace {
     }
 
     auto child_bones(ui::joint_item* joint) {
-        auto bones = joint->joint().child_bones();
+        auto bones = joint->model().child_bones();
         return bones |
             rv::transform(
                 [](sm::const_bone_ref bone)->ui::bone_item& {
@@ -145,10 +149,9 @@ double ui::canvas::scale() {
 }
 
 void ui::canvas::sync_to_model() {
-    for (auto* child : items()) {
-        if (auto* item = dynamic_cast<abstract_stick_man_item*>(child)) {
-            item->sync_to_model(*this);
-        }
+    auto is_non_null = [](auto* p) {return p; };
+    for (auto* child : items() | rv::transform(to_stick_man) | rv::filter(is_non_null)) {
+        child->sync_to_model();
     }
 }
 
@@ -222,14 +225,6 @@ ui::canvas_view::canvas_view() {
     setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
     setScene(new ui::canvas()); 
     scale(1, -1);
-    
-    /*
-    connect(view_, &QGraphicsView::rubberBandChanged,
-        [](QRect rubberBandRect, QPointF fromScenePoint, QPointF toScenePoint) {
-            qDebug() << "rubber band";
-        }
-    );
-    */
 }
 
 ui::canvas& ui::canvas_view::canvas() {
@@ -250,13 +245,13 @@ ui::canvas* ui::abstract_stick_man_item::canvas() {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::joint_item::joint_item(sm::joint& joint, double scale) :
-    joint_(joint),
+    has_stick_man_model<sm::joint&>(joint),
     pin_(nullptr)
 {
     setBrush(Qt::white);
     setPen(QPen(Qt::black, 2));
-    joint_.set_user_data(std::ref(*this));
-    set_circle(this, to_qt_pt(joint_.world_pos()), k_joint_radius, scale);
+    model_.set_user_data(std::ref(*this));
+    set_circle(this, to_qt_pt(model_.world_pos()), k_joint_radius, scale);
     setZValue(k_joint_zorder);
 }
 
@@ -273,19 +268,14 @@ void ui::joint_item::set_pinned(bool pinned) {
         }
         pin_ = nullptr;
     }
-    joint_.set_pinned(pinned);
+    model_.set_pinned(pinned);
 }
 
-sm::joint& ui::joint_item::joint() const {
-
-    return joint_;
-
-}
-
-void ui::joint_item::sync_to_model(ui::canvas & canv) {
+void ui::joint_item::sync_to_model() {
+    auto& canv = *canvas();
     double inv_scale = 1.0 / canv.scale();
     setPen(QPen(Qt::black, 2.0 * inv_scale));
-    set_circle(this, to_qt_pt(joint_.world_pos()), k_joint_radius, inv_scale);
+    set_circle(this, to_qt_pt(model_.world_pos()), k_joint_radius, inv_scale);
     if (pin_) {
         set_circle(pin_, { 0,0 }, k_pin_radius, inv_scale);
     }
@@ -293,7 +283,8 @@ void ui::joint_item::sync_to_model(ui::canvas & canv) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::bone_item::bone_item(sm::bone& bone, double scale) : bone_(bone) {
+ui::bone_item::bone_item(sm::bone& bone, double scale) : 
+        has_stick_man_model<sm::bone&>(bone) {
     setBrush(Qt::black);
     setPen(QPen(Qt::black, 1.0/scale));
     setTransformOriginPoint({ 0,0 });
@@ -304,36 +295,32 @@ ui::bone_item::bone_item(sm::bone& bone, double scale) : bone_(bone) {
         bone.world_rotation(),
         1.0 / scale
     );
-    bone_.set_user_data(std::ref(*this));
+    model_.set_user_data(std::ref(*this));
     setZValue(k_bone_zorder);
 }
 
 ui::joint_item&  ui::bone_item::parent_joint_item() const {
     auto& parent_joint = std::any_cast<std::reference_wrapper<ui::joint_item>>(
-        bone_.parent_joint().get_user_data()
+        model_.parent_joint().get_user_data()
     ).get();
     return parent_joint;
 }
 
 ui::joint_item& ui::bone_item::child_joint_item() const {
     auto& child_joint = std::any_cast<std::reference_wrapper<ui::joint_item>>(
-        bone_.child_joint().get_user_data()
+        model_.child_joint().get_user_data()
     ).get();
     return child_joint;
 }
 
-
-sm::bone& ui::bone_item::bone() const {
-    return bone_;
-}
-
-void ui::bone_item::sync_to_model(ui::canvas& canv) {
+void ui::bone_item::sync_to_model() {
+    auto& canv = *canvas();
     setPen(QPen(Qt::black, 1.0 / canv.scale()));
     set_bone_item_pos(
         this,
-        bone_.scaled_length(),
-        bone_.parent_joint().world_pos(),
-        bone_.world_rotation(),
+        model_.scaled_length(),
+        model_.parent_joint().world_pos(),
+        model_.world_rotation(),
         1.0 / canv.scale()
     );
 }

@@ -162,7 +162,7 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
 
     if (parent_joint && child_joint && parent_joint != child_joint) {
         auto& sandbox = canv.view().main_window().sandbox();
-        auto bone = sandbox.create_bone({}, parent_joint->joint(), child_joint->joint());
+        auto bone = sandbox.create_bone({}, parent_joint->model(), child_joint->model());
         if (bone) {
             canv.addItem(new ui::bone_item(bone->get(), canv.scale()));
         } else {

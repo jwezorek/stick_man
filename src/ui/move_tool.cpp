@@ -37,7 +37,7 @@ namespace {
     };
 
     ui::bone_item* parent_bone(ui::joint_item* j) {
-        auto maybe_parent_bone = j->joint().parent_bone();
+        auto maybe_parent_bone = j->model().parent_bone();
         if (!maybe_parent_bone) {
             return nullptr;
         }
@@ -45,7 +45,7 @@ namespace {
     }
 
     ui::joint_item* parent_joint(ui::joint_item* j) {
-        auto maybe_parent_bone= j->joint().parent_bone();
+        auto maybe_parent_bone= j->model().parent_bone();
         if (!maybe_parent_bone) {
             return nullptr;
         }
@@ -101,9 +101,9 @@ namespace {
 
         void mouseMoveEvent(move_state& ms) override {
             auto theta = angle_through_points(ms.anchor_->scenePos(), ms.event_->scenePos()) -
-                ms.bone_->bone().world_rotation();
+                ms.bone_->model().world_rotation();
 
-            ms.bone_->bone().rotate(theta);
+            ms.bone_->model().rotate(theta);
             ms.canvas_->sync_to_model();
         };
 
@@ -137,12 +137,10 @@ namespace {
             }
 
             ms.anchor_ = joint;
-            //ms.bone_ = parent_bone(joint);
         };
 
         void mouseMoveEvent(move_state& ms) override {
-            //debug_reach(ms.anchor_->joint(), from_qt_pt( ms.event_->scenePos()));
-            sm::perform_fabrik(ms.anchor_->joint(), from_qt_pt(ms.event_->scenePos()));
+            sm::perform_fabrik(ms.anchor_->model(), from_qt_pt(ms.event_->scenePos()));
             ms.canvas_->sync_to_model();
         };
 
