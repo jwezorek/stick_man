@@ -236,10 +236,34 @@ ui::stick_man& ui::canvas_view::main_window() {
 }
 
 /*------------------------------------------------------------------------------------------------*/
+ui::abstract_stick_man_item::abstract_stick_man_item() : selection_frame_(nullptr)
+{}
+
+void ui::abstract_stick_man_item::sync_to_model() {
+    sync_item_to_model();
+    if (selection_frame_) {
+        sync_sel_frame_to_model();
+    }
+}
 
 ui::canvas* ui::abstract_stick_man_item::canvas() {
     auto* ptr = dynamic_cast<QGraphicsItem*>(this);
     return static_cast<ui::canvas*>(ptr->scene());
+}
+
+bool ui::abstract_stick_man_item::is_selected() const {
+    return selection_frame_ && selection_frame_->isVisible();
+}
+
+void ui::abstract_stick_man_item::set_selected(bool selected) {
+    if (selected) {
+        if (!selection_frame_) {
+            selection_frame_ = create_selection_frame();
+        }
+        selection_frame_->show();
+    } else {
+        selection_frame_->hide();
+    }
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -270,7 +294,7 @@ void ui::joint_item::set_pinned(bool pinned) {
     model_.set_pinned(pinned);
 }
 
-void ui::joint_item::sync_to_model() {
+void ui::joint_item::sync_item_to_model() {
     auto& canv = *canvas();
     double inv_scale = 1.0 / canv.scale();
     setPen(QPen(Qt::black, 2.0 * inv_scale));
@@ -278,6 +302,14 @@ void ui::joint_item::sync_to_model() {
     if (pin_) {
         set_circle(pin_, { 0,0 }, k_pin_radius, inv_scale);
     }
+}
+
+void ui::joint_item::sync_sel_frame_to_model() {
+    auto& canv = *canvas();
+}
+
+QGraphicsItem* ui::joint_item::create_selection_frame() const {
+    return nullptr;
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -310,7 +342,7 @@ ui::joint_item& ui::bone_item::child_joint_item() const {
     return child_joint;
 }
 
-void ui::bone_item::sync_to_model() {
+void ui::bone_item::sync_item_to_model() {
     auto& canv = *canvas();
     setPen(QPen(Qt::black, 1.0 / canv.scale()));
     set_bone_item_pos(
@@ -320,4 +352,12 @@ void ui::bone_item::sync_to_model() {
         model_.world_rotation(),
         1.0 / canv.scale()
     );
+}
+
+void ui::bone_item::sync_sel_frame_to_model() {
+    auto& canv = *canvas();
+}
+
+QGraphicsItem* ui::bone_item::create_selection_frame() const {
+    return nullptr;
 }

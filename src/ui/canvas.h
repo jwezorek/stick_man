@@ -69,9 +69,19 @@ namespace ui {
     };
 
     class abstract_stick_man_item {
+    protected:
+        QGraphicsItem* selection_frame_;
+
+        virtual QGraphicsItem* create_selection_frame() const = 0;
+        virtual void sync_item_to_model() = 0;
+        virtual void sync_sel_frame_to_model() = 0;
+
     public:
-        virtual void sync_to_model() = 0;
+        abstract_stick_man_item();
+        void sync_to_model();
         canvas* canvas();
+        bool is_selected() const;
+        void set_selected(bool selected);
     };
 
     template<typename T, typename U>
@@ -86,21 +96,28 @@ namespace ui {
         U& model() { return model_; }
     };
 
-    class joint_item : public has_stick_man_model<joint_item, sm::joint&>, public QGraphicsEllipseItem {
+    class joint_item : 
+        public has_stick_man_model<joint_item, sm::joint&>, public QGraphicsEllipseItem {
     private:
         QGraphicsEllipseItem* pin_;
+        void sync_item_to_model() override;
+        void sync_sel_frame_to_model() override;
+        QGraphicsItem* create_selection_frame() const override;
     public:
         joint_item(sm::joint& joint, double scale);
         void set_pinned(bool pinned);
-        void sync_to_model() override;
     };
 
-    class bone_item : public has_stick_man_model<bone_item, sm::bone&>, public QGraphicsPolygonItem {
+    class bone_item : 
+        public has_stick_man_model<bone_item, sm::bone&>, public QGraphicsPolygonItem {
+    private:
+        void sync_item_to_model() override;
+        void sync_sel_frame_to_model() override;
+        QGraphicsItem* create_selection_frame() const override;
     public:
         bone_item(sm::bone& bone, double scale);
         joint_item& parent_joint_item() const;
         joint_item& child_joint_item() const;
-        void sync_to_model() override;
     };
 
     template<typename T, typename U>
