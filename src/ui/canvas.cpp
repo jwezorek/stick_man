@@ -245,12 +245,10 @@ ui::canvas* ui::abstract_stick_man_item::canvas() {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::joint_item::joint_item(sm::joint& joint, double scale) :
-    has_stick_man_model<sm::joint&>(joint),
-    pin_(nullptr)
-{
+        has_stick_man_model<ui::joint_item, sm::joint&>(joint),
+        pin_(nullptr) {
     setBrush(Qt::white);
     setPen(QPen(Qt::black, 2));
-    model_.set_user_data(std::ref(*this));
     set_circle(this, to_qt_pt(model_.world_pos()), k_joint_radius, scale);
     setZValue(k_joint_zorder);
 }
@@ -284,10 +282,9 @@ void ui::joint_item::sync_to_model() {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::bone_item::bone_item(sm::bone& bone, double scale) : 
-        has_stick_man_model<sm::bone&>(bone) {
+        has_stick_man_model<ui::bone_item, sm::bone&>(bone) {
     setBrush(Qt::black);
     setPen(QPen(Qt::black, 1.0/scale));
-    setTransformOriginPoint({ 0,0 });
     set_bone_item_pos(
         this,
         bone.scaled_length(),
@@ -295,7 +292,6 @@ ui::bone_item::bone_item(sm::bone& bone, double scale) :
         bone.world_rotation(),
         1.0 / scale
     );
-    model_.set_user_data(std::ref(*this));
     setZValue(k_bone_zorder);
 }
 

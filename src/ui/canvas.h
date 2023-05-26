@@ -74,16 +74,19 @@ namespace ui {
         canvas* canvas();
     };
 
-    template<typename T>
+    template<typename T, typename U>
     class has_stick_man_model : public abstract_stick_man_item {
     protected:
-        T& model_;
+        U& model_;
     public:
-        has_stick_man_model(T& model) : model_(model) {}
-        T& model() { return model_; }
+        has_stick_man_model(U& model) : model_(model) {
+            auto* derived = static_cast<T*>(this);
+            model.set_user_data(std::ref(*derived));
+        }
+        U& model() { return model_; }
     };
 
-    class joint_item : public has_stick_man_model<sm::joint&>, public QGraphicsEllipseItem {
+    class joint_item : public has_stick_man_model<joint_item, sm::joint&>, public QGraphicsEllipseItem {
     private:
         QGraphicsEllipseItem* pin_;
     public:
@@ -92,7 +95,7 @@ namespace ui {
         void sync_to_model() override;
     };
 
-    class bone_item : public has_stick_man_model<sm::bone&>, public QGraphicsPolygonItem {
+    class bone_item : public has_stick_man_model<bone_item, sm::bone&>, public QGraphicsPolygonItem {
     public:
         bone_item(sm::bone& bone, double scale);
         joint_item& parent_joint_item() const;
