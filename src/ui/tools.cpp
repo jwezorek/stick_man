@@ -23,6 +23,22 @@ namespace {
         std::make_unique<ui::add_joint_tool>(),
         std::make_unique<ui::add_bone_tool>()
     });
+
+    std::optional<QRectF> points_to_rect(QPointF pt1, QPointF pt2) {
+        auto width = std::abs(pt1.x() - pt2.x());
+        auto height = std::abs(pt1.y() - pt2.y());
+
+        if (width == 0.0f && height == 0.0f) {
+            return {};
+        }
+
+        auto left = std::min(pt1.x(), pt2.x());
+        auto bottom = std::min(pt1.y(), pt2.y());
+        return QRectF(
+            QPointF(left, bottom),
+            QSizeF(width, height)
+        );
+    }
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -184,7 +200,13 @@ void ui::arrow_tool::activate(canvas& canv) {
     rubber_band_ = {};
     conn_ = view.connect(
         &view, &QGraphicsView::rubberBandChanged, 
-        [&](QRect rbr, QPointF from, QPointF to) {rubber_band_ = rbr; }
+        [&](QRect rbr, QPointF from, QPointF to) {
+            if (from != QPointF{0, 0}) {
+                rubber_band_ = points_to_rect(from, to);
+                
+            }
+            //qDebug() << *rubber_band_;
+        }
     );
 }
 
@@ -202,12 +224,44 @@ void ui::arrow_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* e
     }
 }
 
-void ui::arrow_tool::handle_click(canvas& c, QPointF pt, bool shift_down, bool alt_down) {
-    qDebug() << "click";
+void ui::arrow_tool::handle_click(canvas& canv, QPointF pt, bool shift_down, bool alt_down) {
+    auto clicked_item = canv.top_item(pt);
+    if (!clicked_item) {
+        canv.clear_selection();
+        return;
+    }
+
+    if (shift_down && !alt_down) {
+        canv.add_to_selection({ &clicked_item, 1 });
+        return;
+    }
+
+    if (alt_down && !shift_down) {
+        canv.subtract_from_selection({ &clicked_item, 1 });
+        return;
+    }
+
+    canv.set_selection({ &clicked_item, 1 });
 }
 
-void ui::arrow_tool::handle_drag(canvas& c, QRectF rect, bool shift_down, bool alt_down) {
-    qDebug() << "drag";
+void ui::arrow_tool::handle_drag(canvas& canv, QRectF rect, bool shift_down, bool alt_down) {
+    auto clicked_items = canv.items_in_rect(rect);
+    if (clicked_items.empty()) {
+        canv.clear_selection();
+        return;
+    }
+
+    if (shift_down && !alt_down) {
+        canv.add_to_selection(clicked_items);
+        return;
+    }
+
+    if (alt_down && !shift_down) {
+        canv.subtract_from_selection(clicked_items);
+        return;
+    }
+
+    canv.set_selection(clicked_items);
 }
 
 void ui::arrow_tool::deactivate(canvas& canv) {

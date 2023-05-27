@@ -5,6 +5,8 @@
 #include <QGraphicsScene>
 #include <vector>
 #include <any>
+#include <unordered_set>
+#include <span>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -31,8 +33,10 @@ namespace ui {
 
         constexpr static auto k_grid_line_spacing = 10;
         double scale_ = 1.0;
+        std::unordered_set<ui::abstract_stick_man_item*> selection_;
 
         tool_manager& tool_mgr();
+        void sync_selection();
 
     public:
 
@@ -41,12 +45,18 @@ namespace ui {
         canvas_view& view() const;
         joint_item* top_joint(const QPointF& pt) const;
         abstract_stick_man_item* top_item(const QPointF& pt) const;
+        std::vector<abstract_stick_man_item*> items_in_rect(const QRectF& pt) const;
         std::vector<joint_item*> root_joint_items() const;
         std::vector<joint_item*> joint_items() const;
         std::vector<bone_item*> bone_items() const;
         void set_scale(double scale, std::optional<QPointF> pt = {});
         double scale() const;
         void sync_to_model();
+        std::vector<ui::abstract_stick_man_item*> selection() const;
+        void add_to_selection(std::span<ui::abstract_stick_man_item*> itms);
+        void subtract_from_selection(std::span<ui::abstract_stick_man_item*> itms);
+        void set_selection(std::span<ui::abstract_stick_man_item*> itms);
+        void clear_selection();
 
     protected:
 

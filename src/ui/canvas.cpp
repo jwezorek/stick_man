@@ -23,6 +23,26 @@ namespace {
     constexpr int k_joint_zorder = 10;
     constexpr int k_bone_zorder = 5;
 
+    template<typename T, typename U>
+    auto as_range_view_of_type(const U& collection) {
+        return collection |
+            rv::transform(
+                [](auto itm)->T* {  return dynamic_cast<T*>(itm); }
+            ) | rv::filter(
+                [](T* ptr)->bool { return ptr;  }
+        );
+    }
+
+    template<typename T, typename U> 
+    std::vector<T*> to_vector_of_type(const U& collection) {
+        return as_range_view_of_type<T>(collection) | r::to<std::vector<T*>>();
+    }
+
+    template<typename T>
+    std::vector<ui::abstract_stick_man_item*> to_stick_man_items(const T& collection) {
+        return to_vector_of_type< ui::abstract_stick_man_item*>(collection);
+    }
+
     template<typename T>
     T* top_item_of_type(const QGraphicsScene& scene, QPointF pt) {
         auto itms = scene.items(pt);
@@ -35,16 +55,6 @@ namespace {
             return nullptr;
         }
         return *first;
-    }
-
-    template<typename T>
-    std::vector<T*> child_items_of_type(const QList<QGraphicsItem*>& items) {
-        return items |
-            rv::transform(
-                [](auto itm)->T* {  return dynamic_cast<T*>(itm); }
-            ) | rv::filter(
-                [](T* ptr)->bool { return ptr;  }
-        ) | r::to<std::vector<T*>>();
     }
 
     ui::abstract_stick_man_item* to_stick_man(QGraphicsItem* itm) {
@@ -117,7 +127,9 @@ namespace {
         ei->setPos(pos);
     }
 
-    void set_bone_item_pos(ui::bone_item* itm, double len, const sm::point& pos, double rot, double scale) {
+    void set_bone_item_pos(
+            ui::bone_item* itm, double len, const 
+            sm::point& pos, double rot, double scale) {
         itm->setPos(0, 0);
         itm->setRotation(0);
         itm->setPolygon(bone_polygon(len, k_joint_radius, scale));
@@ -169,6 +181,42 @@ void ui::canvas::sync_to_model() {
     }
 }
 
+std::vector<ui::abstract_stick_man_item*> ui::canvas::selection() const {
+    return selection_ | r::to<std::vector<ui::abstract_stick_man_item*>>();
+}
+
+void ui::canvas::add_to_selection(std::span<ui::abstract_stick_man_item*> itms) {
+    selection_.insert(itms.begin(), itms.end());
+    sync_selection();
+}
+
+void ui::canvas::subtract_from_selection(std::span<ui::abstract_stick_man_item*> itms) {
+    for (auto itm : itms) {
+        selection_.erase(itm);
+    }
+    sync_selection();
+}
+
+void ui::canvas::set_selection(std::span<ui::abstract_stick_man_item*> itms) {
+    selection_.clear();
+    add_to_selection(itms);
+}
+
+void ui::canvas::clear_selection() {
+    selection_.clear();
+    sync_selection();
+}
+
+void ui::canvas::sync_selection() {
+    auto itms = items();
+    for (auto* itm : as_range_view_of_type<ui::abstract_stick_man_item>(itms)) {
+        bool selected = selection_.contains(itm);
+        itm->set_selected(selected);
+    }
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
 ui::canvas_view& ui::canvas::view() const {
     return *static_cast<ui::canvas_view*>(this->views()[0]);
 }
@@ -179,6 +227,10 @@ ui::joint_item* ui::canvas::top_joint(const QPointF& pt) const {
 
 ui::abstract_stick_man_item* ui::canvas::top_item(const QPointF& pt) const {
     return top_item_of_type<ui::abstract_stick_man_item>(*this, pt);
+}
+
+std::vector<ui::abstract_stick_man_item*> ui::canvas::items_in_rect(const QRectF& r) const {
+    return to_vector_of_type<ui::abstract_stick_man_item>(items(r));
 }
 
 std::vector<ui::joint_item*> ui::canvas::root_joint_items() const {
@@ -192,11 +244,11 @@ std::vector<ui::joint_item*> ui::canvas::root_joint_items() const {
 }
 
 std::vector<ui::joint_item*> ui::canvas::joint_items() const {
-    return child_items_of_type<joint_item>(items());
+    return to_vector_of_type<joint_item>(items());
 }
 
 std::vector<ui::bone_item*> ui::canvas::bone_items() const {
-    return child_items_of_type<bone_item>(items());
+    return to_vector_of_type<bone_item>(items());
 }
 
 void ui::canvas::keyPressEvent(QKeyEvent* event) {
@@ -272,7 +324,9 @@ void ui::abstract_stick_man_item::set_selected(bool selected) {
         }
         selection_frame_->show();
     } else {
-        selection_frame_->hide();
+        if (selection_frame_) {
+            selection_frame_->hide();
+        }
     }
 }
 
