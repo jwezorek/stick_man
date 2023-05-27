@@ -95,9 +95,18 @@ namespace ui {
 
     class arrow_tool : public abstract_tool {
     private:
+        std::optional<QRect> rubber_band_;
+        QMetaObject::Connection conn_;
+
+        void handle_click(canvas& c, QPointF pt, bool shift_down, bool alt_down);
+        void handle_drag(canvas& c, QRectF rect, bool shift_down, bool alt_down);
+
     public:
         arrow_tool();
+        void activate(canvas& c) override;
+        void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void deactivate(canvas& c) override;
     };
 
     class stick_man;

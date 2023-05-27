@@ -178,11 +178,42 @@ ui::arrow_tool::arrow_tool() :
 
 }
 
+void ui::arrow_tool::activate(canvas& canv) {
+    auto& view = canv.view();
+    view.setDragMode(QGraphicsView::RubberBandDrag);
+    rubber_band_ = {};
+    conn_ = view.connect(
+        &view, &QGraphicsView::rubberBandChanged, 
+        [&](QRect rbr, QPointF from, QPointF to) {rubber_band_ = rbr; }
+    );
+}
+
+void ui::arrow_tool::mousePressEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
+    rubber_band_ = {};
+}
+
 void ui::arrow_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
-    auto j = canv.top_item(event->scenePos());
-    if (j) {
-        j->set_selected(true);
+    bool shift_down = event->modifiers().testFlag(Qt::ShiftModifier);
+    bool alt_down = event->modifiers().testFlag(Qt::AltModifier);
+    if (rubber_band_) {
+        handle_drag(canv, *rubber_band_, shift_down, alt_down);
+    } else {
+        handle_click(canv, event->scenePos(), shift_down, alt_down);
     }
+}
+
+void ui::arrow_tool::handle_click(canvas& c, QPointF pt, bool shift_down, bool alt_down) {
+    qDebug() << "click";
+}
+
+void ui::arrow_tool::handle_drag(canvas& c, QRectF rect, bool shift_down, bool alt_down) {
+    qDebug() << "drag";
+}
+
+void ui::arrow_tool::deactivate(canvas& canv) {
+    auto& view = canv.view();
+    view.setDragMode(QGraphicsView::NoDrag);
+    view.disconnect(conn_);
 }
 
 /*------------------------------------------------------------------------------------------------*/
