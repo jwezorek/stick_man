@@ -23,6 +23,7 @@ add_executable(stick_man
     src/ui/tool_palette.cpp
     src/ui/tools.cpp
     src/ui/move_tool.cpp
+    src/ui/selection_tool.cpp
     src/ui/properties_pane.cpp
     src/ui/tool_settings_pane.cpp
     src/ui/animation_pane.cpp
@@ -30,7 +31,7 @@ add_executable(stick_man
     src/core/ik_sandbox.cpp
     src/main.cpp
     src/core/ik_types.cpp
-)
+ "src/ui/selection_tool.cpp" "src/ui/selection_tool.h")
 
 target_link_libraries(stick_man PRIVATE Qt6::Widgets  Eigen3::Eigen)
 
