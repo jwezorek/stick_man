@@ -25,12 +25,9 @@ namespace ui {
         sm::ik_sandbox& sandbox();
         tool_settings_pane& tool_pane();
     private:
-        void showEvent(QShowEvent* event) override;
-        void resizeEvent(QResizeEvent* event) override;
 
         void createMainMenu();
 
-        bool was_shown_;
         tool_manager tool_mgr_;
         tool_palette* tool_pal_;
         animation_pane* anim_pane_;

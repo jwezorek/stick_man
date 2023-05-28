@@ -28,7 +28,6 @@ namespace {
 
 ui::stick_man::stick_man(QWidget* parent) :
         QMainWindow(parent), 
-        was_shown_(false),
         tool_mgr_(this),
         tool_pal_(new tool_palette(this)),
         skel_pane_(new skeleton_pane(this)),
@@ -44,18 +43,6 @@ ui::stick_man::stick_man(QWidget* parent) :
 
     setCentralWidget(view_ = new canvas_view());
     createMainMenu();
-}
-
-void ui::stick_man::showEvent(QShowEvent* event) {
-    QMainWindow::showEvent(event);
-    was_shown_ = true;
-}
-
-void ui::stick_man::resizeEvent(QResizeEvent* event) {
-    QMainWindow::resizeEvent(event);
-    
-    if (was_shown_ ) {
-    }
 }
 
 void ui::stick_man::open()

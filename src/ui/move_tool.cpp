@@ -164,9 +164,20 @@ namespace {
         };
 
         void mousePressEvent(move_state& ms) override {
+            auto node = ms.canvas_->top_node(ms.event_->scenePos());
+            if (!node) {
+                return;
+            }
+            ms.anchor_ = node;
         };
 
         void mouseMoveEvent(move_state& ms) override {
+            if (ms.anchor_) {
+                ms.anchor_->model().set_world_pos(
+                    from_qt_pt(ms.event_->scenePos())
+                );
+                ms.canvas_->sync_to_model();
+            }
         };
 
         void mouseReleaseEvent(move_state& ms) override {
