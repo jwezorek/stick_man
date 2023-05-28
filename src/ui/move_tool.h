@@ -10,7 +10,7 @@ namespace ui {
         struct move_state {
 
             canvas* canvas_;
-            ui::joint_item* anchor_;
+            ui::node_item* anchor_;
             ui::bone_item* bone_;
             QGraphicsSceneMouseEvent* event_;
             QKeyEvent* key_event_;

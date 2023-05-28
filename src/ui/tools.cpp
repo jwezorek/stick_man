@@ -21,7 +21,7 @@ namespace {
         std::make_unique<ui::zoom_tool>(),
         std::make_unique<ui::selection_tool>(),
         std::make_unique<ui::move_tool>(),
-        std::make_unique<ui::add_joint_tool>(),
+        std::make_unique<ui::add_node_tool>(),
         std::make_unique<ui::add_bone_tool>()
     });
 }
@@ -122,15 +122,15 @@ void ui::pan_tool::activate(canvas& c) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::add_joint_tool::add_joint_tool() : 
-    abstract_tool("add joint", "add_joint_icon.png", ui::tool_id::add_joint) {}
+ui::add_node_tool::add_node_tool() : 
+    abstract_tool("add node", "add_node_icon.png", ui::tool_id::add_node) {}
 
-void ui::add_joint_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
+void ui::add_node_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     auto pt = event->scenePos();
     auto& sandbox = canv.view().main_window().sandbox();
-    auto j = sandbox.create_joint({}, pt.x(), pt.y());
+    auto j = sandbox.create_node({}, pt.x(), pt.y());
 
-    auto item = new ui::joint_item(j->get(), canv.scale());
+    auto item = new ui::node_item(j->get(), canv.scale());
     canv.addItem(item);
 }
 
@@ -158,12 +158,12 @@ void ui::add_bone_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* even
 void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     rubber_band_->hide();
     auto pt = event->scenePos();
-    auto parent_joint = canv.top_joint(origin_);
-    auto child_joint = canv.top_joint(event->scenePos());
+    auto parent_node = canv.top_node(origin_);
+    auto child_node = canv.top_node(event->scenePos());
 
-    if (parent_joint && child_joint && parent_joint != child_joint) {
+    if (parent_node && child_node && parent_node != child_node) {
         auto& sandbox = canv.view().main_window().sandbox();
-        auto bone = sandbox.create_bone({}, parent_joint->model(), child_joint->model());
+        auto bone = sandbox.create_bone({}, parent_node->model(), child_node->model());
         if (bone) {
             canv.addItem(new ui::bone_item(bone->get(), canv.scale()));
         } else {

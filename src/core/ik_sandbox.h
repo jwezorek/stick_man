@@ -32,23 +32,23 @@ namespace sm {
     }
 
     class bone;
-    class joint;
+    class node;
 
     enum class result {
         no_error,
-        multi_parent_joint,
+        multi_parent_node,
         cyclic_bones,
         non_unique_name
     };
 
     using const_bone_ref = const std::reference_wrapper<bone>;
-    using const_joint_ref = const std::reference_wrapper<joint>;
+    using const_node_ref = const std::reference_wrapper<node>;
     using bone_ref = std::reference_wrapper<bone>;
     using maybe_bone_ref = std::optional<std::reference_wrapper<bone>>;
     using expected_bone = std::expected<const_bone_ref, result>;
-    using expected_joint = std::expected<const_joint_ref, result>;
+    using expected_node = std::expected<const_node_ref, result>;
 
-    class joint : public detail::enable_protected_make_unique<joint> {
+    class node : public detail::enable_protected_make_unique<node> {
         friend class ik_sandbox;
         friend class bone;
     private:
@@ -62,7 +62,7 @@ namespace sm {
 
     protected:
 
-        joint(const std::string& name, double x, double y);
+        node(const std::string& name, double x, double y);
         void set_parent(bone& b);
         void add_child(bone& b);
 
@@ -86,20 +86,20 @@ namespace sm {
         friend class ik_sandbox;
     private:
         std::string name_;
-        joint& u_;
-        joint& v_;
+        node& u_;
+        node& v_;
         double length_;
         std::any user_data_;
 
     protected:
 
-        bone(std::string name, joint& u, joint& v);
+        bone(std::string name, node& u, node& v);
 
     public:
         std::string name() const;
-        joint& parent_joint() const;
-        joint& child_joint() const;
-        joint& opposite_joint(const joint& j) const;
+        node& parent_node() const;
+        node& child_node() const;
+        node& opposite_node(const node& j) const;
 
         std::tuple<point, point> line_segment() const;
         double length() const;
@@ -115,30 +115,30 @@ namespace sm {
         void rotate(double theta);
     };
 
-    using joint_visitor = std::function<bool(joint&)>;
+    using node_visitor = std::function<bool(node&)>;
     using bone_visitor = std::function<bool(bone&)>;
 
     class ik_sandbox {
     private:
-        int joint_id_;
+        int node_id_;
         int bone_id_;
-        std::unordered_map<std::string, std::unique_ptr<joint>> joints_;
+        std::unordered_map<std::string, std::unique_ptr<node>> nodes_;
         std::unordered_map<std::string, std::unique_ptr<bone>> bones_;
 
     public:
         ik_sandbox();
-        expected_joint create_joint(const std::string& name, double x, double y);
-        bool set_joint_name(joint& j, const std::string& name);
-        expected_bone create_bone(const std::string& name, joint& u, joint& v);
+        expected_node create_node(const std::string& name, double x, double y);
+        bool set_node_name(node& j, const std::string& name);
+        expected_bone create_bone(const std::string& name, node& u, node& v);
         bool set_bone_name(bone& b, const std::string& name);
-        bool is_reachable(joint& j1, joint& j2);
+        bool is_reachable(node& j1, node& j2);
     };
 
-    void dfs(joint& j1, joint_visitor visit_joint = {}, bone_visitor visit_bone = {},
+    void dfs(node& j1, node_visitor visit_node = {}, bone_visitor visit_bone = {},
         bool just_downstream = false);
 
-    void visit_joints(joint& j, joint_visitor visit_joint);
+    void visit_nodes(node& j, node_visitor visit_node);
 
-    void debug_reach(joint& j, sm::point pt);
-    void perform_fabrik(joint& j, const sm::point& pt, double tolerance = 0.005, int max_iter = 100);
+    void debug_reach(node& j, sm::point pt);
+    void perform_fabrik(node& j, const sm::point& pt, double tolerance = 0.005, int max_iter = 100);
 }

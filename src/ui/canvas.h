@@ -11,7 +11,7 @@
 /*------------------------------------------------------------------------------------------------*/
 
 namespace sm {
-    class joint;
+    class node;
     class bone;
     class ik_sandbox;
 }
@@ -21,7 +21,7 @@ namespace ui {
     class canvas_view; 
     class stick_man;
     class tool_manager;
-    class joint_item;
+    class node_item;
     class bone_item;
     class abstract_stick_man_item;
 
@@ -43,11 +43,11 @@ namespace ui {
         canvas();
         void drawBackground(QPainter* painter, const QRectF& rect) override;
         canvas_view& view() const;
-        joint_item* top_joint(const QPointF& pt) const;
+        node_item* top_node(const QPointF& pt) const;
         abstract_stick_man_item* top_item(const QPointF& pt) const;
         std::vector<abstract_stick_man_item*> items_in_rect(const QRectF& pt) const;
-        std::vector<joint_item*> root_joint_items() const;
-        std::vector<joint_item*> joint_items() const;
+        std::vector<node_item*> root_node_items() const;
+        std::vector<node_item*> node_items() const;
         std::vector<bone_item*> bone_items() const;
         void set_scale(double scale, std::optional<QPointF> pt = {});
         double scale() const;
@@ -108,15 +108,15 @@ namespace ui {
         U& model() { return model_; }
     };
 
-    class joint_item : 
-        public has_stick_man_model<joint_item, sm::joint&>, public QGraphicsEllipseItem {
+    class node_item : 
+        public has_stick_man_model<node_item, sm::node&>, public QGraphicsEllipseItem {
     private:
         QGraphicsEllipseItem* pin_;
         void sync_item_to_model() override;
         void sync_sel_frame_to_model() override;
         QGraphicsItem* create_selection_frame() const override;
     public:
-        joint_item(sm::joint& joint, double scale);
+        node_item(sm::node& node, double scale);
         void set_pinned(bool pinned);
     };
 
@@ -128,8 +128,8 @@ namespace ui {
         QGraphicsItem* create_selection_frame() const override;
     public:
         bone_item(sm::bone& bone, double scale);
-        joint_item& parent_joint_item() const;
-        joint_item& child_joint_item() const;
+        node_item& parent_node_item() const;
+        node_item& child_node_item() const;
     };
 
     template<typename T, typename U>

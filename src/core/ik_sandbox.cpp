@@ -16,20 +16,20 @@ namespace rv = std::ranges::views;
 
 namespace {
 
-    using joint_or_bone = std::variant<sm::const_bone_ref, sm::const_joint_ref>;
+    using node_or_bone = std::variant<sm::const_bone_ref, sm::const_node_ref>;
 
-    class joint_or_bone_visitor {
-        sm::joint_visitor joint_visit_;
+    class node_or_bone_visitor {
+        sm::node_visitor node_visit_;
         sm::bone_visitor bone_visit_;
 
     public:
-        joint_or_bone_visitor(const sm::joint_visitor& j, sm::bone_visitor& b) :
-                joint_visit_(j),
+        node_or_bone_visitor(const sm::node_visitor& j, sm::bone_visitor& b) :
+                node_visit_(j),
                 bone_visit_(b) {
         }
 
-        bool operator()(sm::const_joint_ref j_ref) {
-            return (joint_visit_) ? joint_visit_(j_ref.get()) : true;
+        bool operator()(sm::const_node_ref j_ref) {
+            return (node_visit_) ? node_visit_(j_ref.get()) : true;
         }
 
         bool operator()(sm::const_bone_ref b_ref) {
@@ -37,41 +37,41 @@ namespace {
         }
     };
 
-    class joint_or_bone_neighbors_visitor {
+    class node_or_bone_neighbors_visitor {
         bool downstream_;
     public:
-        joint_or_bone_neighbors_visitor(bool downstream) : 
+        node_or_bone_neighbors_visitor(bool downstream) : 
             downstream_(downstream)
         {}
 
-        std::vector<joint_or_bone> operator()(sm::const_joint_ref j_ref) {
-            auto& joint = j_ref.get();
-            auto neighbors = joint.child_bones() |
+        std::vector<node_or_bone> operator()(sm::const_node_ref j_ref) {
+            auto& node = j_ref.get();
+            auto neighbors = node.child_bones() |
                 rv::transform(
-                    [](sm::bone_ref child)->joint_or_bone {
+                    [](sm::bone_ref child)->node_or_bone {
                         return child;
                     }
-                ) | r::to<std::vector<joint_or_bone>>();
+                ) | r::to<std::vector<node_or_bone>>();
             if (!downstream_) {
-                if (joint.parent_bone().has_value()) {
-                    neighbors.push_back(joint.parent_bone().value());
+                if (node.parent_bone().has_value()) {
+                    neighbors.push_back(node.parent_bone().value());
                 }
             }
             return neighbors;
         }
 
-        std::vector<joint_or_bone> operator()(sm::const_bone_ref b_ref) {
+        std::vector<node_or_bone> operator()(sm::const_bone_ref b_ref) {
             auto& bone = b_ref.get();
-            std::vector<joint_or_bone> neighbors;
+            std::vector<node_or_bone> neighbors;
             if (!downstream_) {
-                neighbors.push_back(std::ref(bone.parent_joint()));
+                neighbors.push_back(std::ref(bone.parent_node()));
             }
-            neighbors.push_back(std::ref(bone.child_joint()));
+            neighbors.push_back(std::ref(bone.child_node()));
             return neighbors;
         }
     };
 
-    uint64_t get_id(const joint_or_bone& var) {
+    uint64_t get_id(const node_or_bone& var) {
         auto ptr = std::visit(
             [](auto val_ref)->void* {
                 auto& val = val_ref.get();
@@ -86,11 +86,11 @@ namespace {
         return reinterpret_cast<uint64_t>(&var);
     }
 
-    uint64_t get_id(const sm::joint& var) {
+    uint64_t get_id(const sm::node& var) {
         return reinterpret_cast<uint64_t>(&var);
     }
 
-    std::unordered_map<uint64_t, double> build_bone_length_table(sm::joint& j) {
+    std::unordered_map<uint64_t, double> build_bone_length_table(sm::node& j) {
         std::unordered_map<uint64_t, double> length_tbl;
         auto visit_bone = [&length_tbl](sm::bone& b)->bool {
             length_tbl[get_id(b)] = b.scaled_length();
@@ -100,36 +100,36 @@ namespace {
         return length_tbl;
     }
 
-    struct targeted_joint {
-        sm::joint& joint;
+    struct targeted_node {
+        sm::node& node;
         sm::point target_pos;
         std::optional<sm::point> prev_pos;
 
-        targeted_joint(sm::joint& j, const sm::point& pt) :
-            joint(j), target_pos(pt), prev_pos()
+        targeted_node(sm::node& j, const sm::point& pt) :
+            node(j), target_pos(pt), prev_pos()
         {}
     };
 
-    std::vector<targeted_joint> find_pinned_joints(sm::joint& joint) {
-        std::vector<targeted_joint> pinned_joints;
-        auto visit_joint = [&pinned_joints](sm::joint& j)->bool {
+    std::vector<targeted_node> find_pinned_nodes(sm::node& node) {
+        std::vector<targeted_node> pinned_nodes;
+        auto visit_node = [&pinned_nodes](sm::node& j)->bool {
             if (j.is_pinned()) {
-                pinned_joints.emplace_back(j, j.world_pos());
+                pinned_nodes.emplace_back(j, j.world_pos());
             }
             return true;
         };
-        sm::dfs(joint, visit_joint, {}, false);
-        return pinned_joints;
+        sm::dfs(node, visit_node, {}, false);
+        return pinned_nodes;
     }
 
-    double max_pinned_joint_dist(const std::vector<targeted_joint>& pinned_joints) {
-        if (pinned_joints.empty()) {
+    double max_pinned_node_dist(const std::vector<targeted_node>& pinned_nodes) {
+        if (pinned_nodes.empty()) {
             return 0;
         }
         return r::max(
-            pinned_joints | rv::transform(
+            pinned_nodes | rv::transform(
                 [](const auto& pj)->double {
-                    return sm::distance(pj.joint.world_pos(), pj.target_pos);
+                    return sm::distance(pj.node.world_pos(), pj.target_pos);
                 }
             )
         );
@@ -151,85 +151,85 @@ namespace {
         return sm::transform(pt, rotate_about_point(u, angle_from_u_to_v(u, v)));
     }
 
-    void reach(sm::bone& bone, double length, sm::joint& leader, sm::point target) {
+    void reach(sm::bone& bone, double length, sm::node& leader, sm::point target) {
         leader.set_world_pos(target);
-        sm::joint& follower = bone.opposite_joint(leader);
+        sm::node& follower = bone.opposite_node(leader);
         auto new_follower_pos = point_on_line_at_distance(
             leader.world_pos(), follower.world_pos(), length
         );
         follower.set_world_pos(new_follower_pos);
     }
 
-    void perform_one_fabrik_pass(sm::joint& j, const sm::point& pt, 
+    void perform_one_fabrik_pass(sm::node& j, const sm::point& pt, 
             const std::unordered_map<uint64_t, double>& bone_lengths) {
-        std::unordered_set<uint64_t> moved_joints;
+        std::unordered_set<uint64_t> moved_nodes;
 
         auto perform_fabrik_on_bone = [&](sm::bone& b) {
-            sm::joint& moved_joint = moved_joints.contains(get_id(b.parent_joint())) ?
-                b.parent_joint() :
-                b.child_joint();
-            if (moved_joints.contains(get_id(b.opposite_joint(moved_joint)))) {
+            sm::node& moved_node = moved_nodes.contains(get_id(b.parent_node())) ?
+                b.parent_node() :
+                b.child_node();
+            if (moved_nodes.contains(get_id(b.opposite_node(moved_node)))) {
                 return true;
             }
-            reach(b, bone_lengths.at(get_id(b)), moved_joint, moved_joint.world_pos());
-            moved_joints.insert(get_id(b.opposite_joint(moved_joint)));
+            reach(b, bone_lengths.at(get_id(b)), moved_node, moved_node.world_pos());
+            moved_nodes.insert(get_id(b.opposite_node(moved_node)));
             return true;
         };
 
         j.set_world_pos(pt);
-        moved_joints.insert(get_id(j));
+        moved_nodes.insert(get_id(j));
         dfs(j, {}, perform_fabrik_on_bone, false);
     }
 
-    bool is_satisfied(const targeted_joint& tj, double tolerance) {
+    bool is_satisfied(const targeted_node& tj, double tolerance) {
         if (!tj.prev_pos) {
             // ensure that at least one pass of FABRIK happens...
             return false;
         }
 
         // has it reached the target?
-        if (sm::distance(tj.joint.world_pos(), tj.target_pos) < tolerance) {
+        if (sm::distance(tj.node.world_pos(), tj.target_pos) < tolerance) {
             return true;
         }
 
         // has it moved since the last iteration?
-        if (sm::distance(tj.joint.world_pos(), tj.prev_pos.value()) < tolerance) {
+        if (sm::distance(tj.node.world_pos(), tj.prev_pos.value()) < tolerance) {
             return true;
         }
 
         return false;
     }
 
-    bool found_ik_solution( std::span<targeted_joint> targeted_joints, double tolerance) {
-        auto unsatisfied = r::find_if(targeted_joints,
+    bool found_ik_solution( std::span<targeted_node> targeted_nodes, double tolerance) {
+        auto unsatisfied = r::find_if(targeted_nodes,
             [tolerance](const auto& tj)->bool {
                 return !is_satisfied(tj, tolerance);
             }
         );
-        return (unsatisfied == targeted_joints.end());
+        return (unsatisfied == targeted_nodes.end());
     }
 
-    void  update_prev_positions(std::vector<targeted_joint>& targeted_joints) {
-        for (auto& tj : targeted_joints) {
-            tj.prev_pos = tj.joint.world_pos();
+    void  update_prev_positions(std::vector<targeted_node>& targeted_nodes) {
+        for (auto& tj : targeted_nodes) {
+            tj.prev_pos = tj.node.world_pos();
         }
     }
 
-    void solve_for_multiple_targets(std::span<targeted_joint> targeted_joints, 
+    void solve_for_multiple_targets(std::span<targeted_node> targeted_nodes, 
             double tolerance, const std::unordered_map<uint64_t, double>& bone_lengths,
             int max_iter) {
         int j = 0;
-        while (!found_ik_solution(targeted_joints, tolerance)) {
+        while (!found_ik_solution(targeted_nodes, tolerance)) {
             if (++j > max_iter) {
                 return;
             }
             if (j % 2 == 0) {
-                for (auto& pinned_joint : targeted_joints) {
-                    perform_one_fabrik_pass(pinned_joint.joint, pinned_joint.target_pos, bone_lengths);
+                for (auto& pinned_node : targeted_nodes) {
+                    perform_one_fabrik_pass(pinned_node.node, pinned_node.target_pos, bone_lengths);
                 }
             } else {
-                for (auto& pinned_joint : targeted_joints | rv::reverse) {
-                    perform_one_fabrik_pass(pinned_joint.joint, pinned_joint.target_pos, bone_lengths);
+                for (auto& pinned_node : targeted_nodes | rv::reverse) {
+                    perform_one_fabrik_pass(pinned_node.node, pinned_node.target_pos, bone_lengths);
                 }
             }
         }
@@ -238,72 +238,72 @@ namespace {
 
 /*------------------------------------------------------------------------------------------------*/
 
-sm::joint::joint(const std::string& name, double x, double y) :
+sm::node::node(const std::string& name, double x, double y) :
     name_(name),
     x_(x),
     y_(y),
     is_pinned_(false)
 {}
 
-void sm::joint::set_parent(bone& b) {
+void sm::node::set_parent(bone& b) {
     parent_ = std::ref(b);
 }
 
-void sm::joint::add_child(bone& b) {
+void sm::node::add_child(bone& b) {
     children_.push_back(std::ref(b));
 }
 
-std::string sm::joint::name() const {
+std::string sm::node::name() const {
     return name_;
 }
 
-sm::maybe_bone_ref sm::joint::parent_bone() const {
+sm::maybe_bone_ref sm::node::parent_bone() const {
     return parent_;
 }
 
-std::span<sm::const_bone_ref> sm::joint::child_bones() const {
+std::span<sm::const_bone_ref> sm::node::child_bones() const {
     return children_;
 }
 
-double sm::joint::world_x() const {
+double sm::node::world_x() const {
     return x_;
 }
 
-double sm::joint::world_y() const {
+double sm::node::world_y() const {
     return y_;
 }
 
-void sm::joint::set_world_pos(const point& pt) {
+void sm::node::set_world_pos(const point& pt) {
     x_ = pt.x;
     y_ = pt.y;
 }
 
-sm::point sm::joint::world_pos() const {
+sm::point sm::node::world_pos() const {
     return { x_, y_ };
 }
 
-std::any sm::joint::get_user_data() const {
+std::any sm::node::get_user_data() const {
     return user_data_;
 }
 
-void sm::joint::set_user_data(std::any data) {
+void sm::node::set_user_data(std::any data) {
     user_data_ = data;
 }
 
-bool sm::joint::is_root() const {
+bool sm::node::is_root() const {
     return !parent_.has_value();
 }
 
-bool sm::joint::is_pinned() const {
+bool sm::node::is_pinned() const {
     return  is_pinned_;
 }
 
-void sm::joint::set_pinned(bool pinned) {
+void sm::node::set_pinned(bool pinned) {
     is_pinned_ = pinned;
 }
 /*------------------------------------------------------------------------------------------------*/
 
-sm::bone::bone(std::string name, sm::joint& u, sm::joint& v) :
+sm::bone::bone(std::string name, sm::node& u, sm::node& v) :
        name_(name), u_(u), v_(v) {
     v.set_parent(*this);
     u.add_child(*this);
@@ -314,15 +314,15 @@ std::string sm::bone::name() const {
     return name_;
 }
 
-sm::joint& sm::bone::parent_joint() const {
+sm::node& sm::bone::parent_node() const {
     return u_;
 }
 
-sm::joint& sm::bone::child_joint() const {
+sm::node& sm::bone::child_node() const {
     return v_;
 }
 
-sm::joint& sm::bone::opposite_joint(const joint& j) const {
+sm::node& sm::bone::opposite_node(const node& j) const {
     if (&j == &u_) {
         return v_;
     } else {
@@ -384,41 +384,41 @@ void sm::bone::set_user_data(std::any data) {
 
 void sm::bone::rotate(double theta) {
     auto rotate_mat = rotate_about_point(u_.world_pos(), theta);
-    auto rotate_about_u = [&rotate_mat](joint& j)->bool {
+    auto rotate_about_u = [&rotate_mat](node& j)->bool {
         j.set_world_pos(transform(j.world_pos(), rotate_mat));
         return true;
     };
-    visit_joints(v_, rotate_about_u);
+    visit_nodes(v_, rotate_about_u);
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
-sm::ik_sandbox::ik_sandbox() : joint_id_(0), bone_id_(0) {};
+sm::ik_sandbox::ik_sandbox() : node_id_(0), bone_id_(0) {};
 
-std::expected<sm::const_joint_ref, sm::result> sm::ik_sandbox::create_joint(
-        const std::string& joint_name, double x, double y) {
-    auto name = (joint_name.empty()) ? "joint-" + std::to_string(++joint_id_) : joint_name;
-    if (joints_.contains(name)) {
+std::expected<sm::const_node_ref, sm::result> sm::ik_sandbox::create_node(
+        const std::string& node_name, double x, double y) {
+    auto name = (node_name.empty()) ? "node-" + std::to_string(++node_id_) : node_name;
+    if (nodes_.contains(name)) {
         return std::unexpected{ sm::result::non_unique_name };
     }
-    joints_[name] = joint::make_unique(name, x, y);
-    return std::ref( *joints_[name] );
+    nodes_[name] = node::make_unique(name, x, y);
+    return std::ref( *nodes_[name] );
 }
 
-bool sm::ik_sandbox::set_joint_name(joint& j, const std::string& name) {
-    if (joints_.contains(name)) {
+bool sm::ik_sandbox::set_node_name(node& j, const std::string& name) {
+    if (nodes_.contains(name)) {
         return false;
     }
-    joints_[name] = std::move(joints_[j.name()]);
-    joints_.erase(j.name());
+    nodes_[name] = std::move(nodes_[j.name()]);
+    nodes_.erase(j.name());
     return true;
 }
 
 std::expected<sm::const_bone_ref, sm::result> sm::ik_sandbox::create_bone(
-        const std::string& bone_name, joint& u, joint& v) {
+        const std::string& bone_name, node& u, node& v) {
 
     if (!v.is_root()) {
-        return std::unexpected(sm::result::multi_parent_joint);
+        return std::unexpected(sm::result::multi_parent_node);
     }
 
     if (is_reachable(u, v)) {
@@ -443,25 +443,25 @@ bool sm::ik_sandbox::set_bone_name(sm::bone& b, const std::string& name) {
     return false;
 }
 
-bool sm::ik_sandbox::is_reachable(joint& j1, joint& j2) {
+bool sm::ik_sandbox::is_reachable(node& j1, node& j2) {
     auto found = false;
-    auto visit_joint = [&found, &j2](joint& j) {
+    auto visit_node = [&found, &j2](node& j) {
         if (&j == &j2) {
             found = true;
             return false;
         }
         return true;
     };
-    dfs(j1, visit_joint);
+    dfs(j1, visit_node);
     return found;
 }
 
-void sm::dfs(joint& j1, joint_visitor visit_joint, bone_visitor visit_bone,
+void sm::dfs(node& j1, node_visitor visit_node, bone_visitor visit_bone,
         bool just_downstream) {
-    std::stack<joint_or_bone> stack;
+    std::stack<node_or_bone> stack;
     std::unordered_set<uint64_t> visited;
-    joint_or_bone_visitor visitor(visit_joint, visit_bone);
-    joint_or_bone_neighbors_visitor neighbors_visitor(just_downstream);
+    node_or_bone_visitor visitor(visit_node, visit_bone);
+    node_or_bone_neighbors_visitor neighbors_visitor(just_downstream);
     stack.push(std::ref(j1));
 
     while (!stack.empty()) {
@@ -483,37 +483,37 @@ void sm::dfs(joint& j1, joint_visitor visit_joint, bone_visitor visit_bone,
     }
 }
 
-void sm::visit_joints(joint& j, joint_visitor visit_joint) {
-    dfs(j, visit_joint, {}, true);
+void sm::visit_nodes(node& j, node_visitor visit_node) {
+    dfs(j, visit_node, {}, true);
 }
 
-void sm::debug_reach(joint& j, sm::point pt) {
+void sm::debug_reach(node& j, sm::point pt) {
     auto maybe_bone_ref = j.parent_bone();
     auto& bone = maybe_bone_ref->get();
     reach(bone, bone.scaled_length(), j, pt);
 }
 
-void sm::perform_fabrik(sm::joint& effector, const sm::point& target_pt, 
+void sm::perform_fabrik(sm::node& effector, const sm::point& target_pt, 
         double tolerance, int max_iter) {
 
     auto bone_lengths = build_bone_length_table(effector);
-    auto targeted_joints = find_pinned_joints(effector);
-    targeted_joints.emplace_back(effector, target_pt);
-    auto& target = targeted_joints.back();
-    auto pinned_joints = std::span{ targeted_joints.begin(), std::prev(targeted_joints.end())};
+    auto targeted_nodes = find_pinned_nodes(effector);
+    targeted_nodes.emplace_back(effector, target_pt);
+    auto& target = targeted_nodes.back();
+    auto pinned_nodes = std::span{ targeted_nodes.begin(), std::prev(targeted_nodes.end())};
     
     int iter = 0;
-    while (! found_ik_solution(targeted_joints, tolerance)) {
+    while (! found_ik_solution(targeted_nodes, tolerance)) {
         if (++iter >= max_iter) {
             break;
         }
-        update_prev_positions(targeted_joints);
+        update_prev_positions(targeted_nodes);
 
         // reach for target from effector...
-        perform_one_fabrik_pass(target.joint, target.target_pos, bone_lengths);
+        perform_one_fabrik_pass(target.node, target.target_pos, bone_lengths);
 
-        // reach for pinned locations from pinned joints
-        solve_for_multiple_targets(pinned_joints, tolerance, bone_lengths, max_iter);
+        // reach for pinned locations from pinned nodes
+        solve_for_multiple_targets(pinned_nodes, tolerance, bone_lengths, max_iter);
     }
 }
 

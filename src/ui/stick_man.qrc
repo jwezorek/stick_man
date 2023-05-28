@@ -2,7 +2,7 @@
     <qresource>
         <file>images/pan_icon.png</file>
         <file>images/zoom_icon.png</file>
-        <file>images/add_joint_icon.png</file>
+        <file>images/add_node_icon.png</file>
         <file>images/add_bone_icon.png</file>
         <file>images/tool_palette_thumb.png</file>
         <file>images/arrow_icon.png</file>

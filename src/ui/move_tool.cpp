@@ -36,7 +36,7 @@ namespace {
         virtual void mouseReleaseEvent(move_state& ms) = 0;
     };
 
-    ui::bone_item* parent_bone(ui::joint_item* j) {
+    ui::bone_item* parent_bone(ui::node_item* j) {
         auto maybe_parent_bone = j->model().parent_bone();
         if (!maybe_parent_bone) {
             return nullptr;
@@ -44,16 +44,16 @@ namespace {
         return &ui::item_from_model<ui::bone_item>(maybe_parent_bone->get());
     }
 
-    ui::joint_item* parent_joint(ui::joint_item* j) {
+    ui::node_item* parent_node(ui::node_item* j) {
         auto maybe_parent_bone= j->model().parent_bone();
         if (!maybe_parent_bone) {
             return nullptr;
         }
         auto& parent_bone = maybe_parent_bone->get();
-        auto& parent_joint = ui::item_from_model<ui::joint_item>
-            (parent_bone.parent_joint()
+        auto& parent_node = ui::item_from_model<ui::node_item>
+            (parent_bone.parent_node()
         );
-        return &parent_joint;
+        return &parent_node;
     }
 
     QRectF rect_from_circle(QPointF center, double radius) {
@@ -86,17 +86,17 @@ namespace {
         };
 
         void mousePressEvent(move_state& ms) override {
-            auto joint = ms.canvas_->top_joint(ms.event_->scenePos());
-            if (!joint) {
+            auto node = ms.canvas_->top_node(ms.event_->scenePos());
+            if (!node) {
                 return;
             }
 
-            ms.anchor_ = parent_joint(joint);
+            ms.anchor_ = parent_node(node);
             if (!ms.anchor_) {
                 return;
             }
 
-            ms.bone_ = parent_bone(joint);
+            ms.bone_ = parent_bone(node);
         };
 
         void mouseMoveEvent(move_state& ms) override {
@@ -124,22 +124,22 @@ namespace {
                 pos = view.mapFromGlobal(pos);
                 QPointF pos_scene = view.mapToScene(pos);
 
-                auto joint = ms.canvas_->top_joint(pos_scene);
-                if (!joint) {
+                auto node = ms.canvas_->top_node(pos_scene);
+                if (!node) {
                     return;
                 }
-                bool current_state = joint->model().is_pinned();
-                joint->set_pinned(!current_state);
+                bool current_state = node->model().is_pinned();
+                node->set_pinned(!current_state);
             }
         }
 
         void mousePressEvent(move_state& ms) override {
-            auto joint = ms.canvas_->top_joint(ms.event_->scenePos());
-            if (!joint) {
+            auto node = ms.canvas_->top_node(ms.event_->scenePos());
+            if (!node) {
                 return;
             }
 
-            ms.anchor_ = joint;
+            ms.anchor_ = node;
         };
 
         void mouseMoveEvent(move_state& ms) override {

@@ -18,7 +18,7 @@ namespace ui {
         move,
         pan,
         zoom,
-        add_joint,
+        add_node,
         add_bone
     };
 
@@ -76,9 +76,9 @@ namespace ui {
         void deactivate(canvas& c) override;
     };
 
-    class add_joint_tool : public abstract_tool {
+    class add_node_tool : public abstract_tool {
     public:
-        add_joint_tool();
+        add_node_tool();
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
     };
 
