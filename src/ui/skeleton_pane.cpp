@@ -1,4 +1,4 @@
-#include "properties_pane.h"
+#include "skeleton_pane.h"
 #include "util.h"
 
 /*------------------------------------------------------------------------------------------------*/
@@ -7,10 +7,10 @@ namespace{
 
 }
 
-ui::properties_pane::properties_pane(QMainWindow* wnd) :
+ui::skeleton_pane::skeleton_pane(QMainWindow* wnd) :
     QDockWidget(tr(""), wnd) {
 
-    setTitleBarWidget( custom_title_bar("properties") );
+    setTitleBarWidget( custom_title_bar("skeleton") );
 
     auto placeholder = new QWidget();
     placeholder->setMinimumWidth(200);

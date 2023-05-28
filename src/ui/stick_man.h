@@ -9,7 +9,7 @@ namespace ui {
 
     class tool_palette;
     class animation_pane;
-    class properties_pane;
+    class skeleton_pane;
     class tool_settings_pane;
 
     class stick_man : public QMainWindow
@@ -35,7 +35,7 @@ namespace ui {
         tool_palette* tool_pal_;
         animation_pane* anim_pane_;
         tool_settings_pane* tool_pane_;
-        properties_pane* prop_pane_;
+        skeleton_pane* skel_pane_;
         canvas_view* view_;
         sm::ik_sandbox sandbox_;
     };

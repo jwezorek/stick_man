@@ -1,7 +1,7 @@
 #include "stick_man.h"
 #include "animation_pane.h"
 #include "tool_palette.h"
-#include "properties_pane.h"
+#include "skeleton_pane.h"
 #include "tool_settings_pane.h"
 #include <QtWidgets>
 
@@ -31,7 +31,7 @@ ui::stick_man::stick_man(QWidget* parent) :
         was_shown_(false),
         tool_mgr_(this),
         tool_pal_(new tool_palette(this)),
-        prop_pane_(new properties_pane(this)),
+        skel_pane_(new skeleton_pane(this)),
         anim_pane_(new animation_pane(this)),
         tool_pane_(new tool_settings_pane(this)) {
     setDarkTitleBar(winId());
@@ -39,7 +39,7 @@ ui::stick_man::stick_man(QWidget* parent) :
     setDockNestingEnabled(true);
     addDockWidget(Qt::LeftDockWidgetArea, tool_pal_);
     addDockWidget(Qt::RightDockWidgetArea, tool_pane_);
-    addDockWidget(Qt::RightDockWidgetArea, prop_pane_);
+    addDockWidget(Qt::RightDockWidgetArea, skel_pane_);
     addDockWidget(Qt::BottomDockWidgetArea, anim_pane_);
 
     setCentralWidget(view_ = new canvas_view());

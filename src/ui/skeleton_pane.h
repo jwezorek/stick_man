@@ -7,9 +7,9 @@
 
 namespace ui {
 
-    class properties_pane : public QDockWidget {
+    class skeleton_pane : public QDockWidget {
     public:
-        properties_pane(QMainWindow* wnd);
+        skeleton_pane(QMainWindow* wnd);
     };
 
 }
