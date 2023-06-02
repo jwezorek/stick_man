@@ -10,11 +10,16 @@ namespace ui {
 
     class selection_tool : public abstract_tool {
     private:
+        bool intitialized_;
         std::optional<QRectF> rubber_band_;
         QMetaObject::Connection conn_;
 
         void handle_click(canvas& c, QPointF pt, bool shift_down, bool alt_down);
         void handle_drag(canvas& c, QRectF rect, bool shift_down, bool alt_down);
+
+        void handle_sel_changed(
+            const std::unordered_set<ui::abstract_stick_man_item*>& sel
+        );
 
     public:
         selection_tool();

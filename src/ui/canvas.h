@@ -25,6 +25,8 @@ namespace ui {
     class bone_item;
     class abstract_stick_man_item;
 
+    using selection_set = std::unordered_set<ui::abstract_stick_man_item*>;
+
     class canvas : public QGraphicsScene {
 
         Q_OBJECT
@@ -37,6 +39,16 @@ namespace ui {
 
         tool_manager& tool_mgr();
         void sync_selection();
+
+    protected:
+
+        void keyPressEvent(QKeyEvent* event) override;
+        void keyReleaseEvent(QKeyEvent* event) override;
+        void mousePressEvent(QGraphicsSceneMouseEvent* event) override;
+        void mouseMoveEvent(QGraphicsSceneMouseEvent* event) override;
+        void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override;
+        void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override;
+        void wheelEvent(QGraphicsSceneWheelEvent* event) override;
 
     public:
 
@@ -53,21 +65,22 @@ namespace ui {
         double scale() const;
         void sync_to_model();
         std::vector<ui::abstract_stick_man_item*> selection() const;
-        void add_to_selection(std::span<ui::abstract_stick_man_item*> itms);
-        void subtract_from_selection(std::span<ui::abstract_stick_man_item*> itms);
-        void set_selection(std::span<ui::abstract_stick_man_item*> itms);
+
+        void add_to_selection(std::span<abstract_stick_man_item*> itms);
+        void add_to_selection(abstract_stick_man_item* itm);
+
+        void subtract_from_selection(std::span<abstract_stick_man_item*> itms);
+        void subtract_from_selection(abstract_stick_man_item* itm);
+
+        void set_selection(std::span<abstract_stick_man_item*> itms);
+        void set_selection(abstract_stick_man_item* itm);
+
         void clear_selection();
 
-    protected:
-
-        void keyPressEvent(QKeyEvent* event) override;
-        void keyReleaseEvent(QKeyEvent* event) override;
-        void mousePressEvent(QGraphicsSceneMouseEvent* event) override;
-        void mouseMoveEvent(QGraphicsSceneMouseEvent* event) override;
-        void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override;
-        void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override;
-        void wheelEvent(QGraphicsSceneWheelEvent* event) override;
-
+    signals:
+        void selection_changed(
+            const std::unordered_set<ui::abstract_stick_man_item*>& sel
+        );
     };
 
     class canvas_view : public QGraphicsView {
@@ -116,6 +129,8 @@ namespace ui {
         void sync_sel_frame_to_model() override;
         QGraphicsItem* create_selection_frame() const override;
     public:
+        using model_type = sm::node;
+
         node_item(sm::node& node, double scale);
         void set_pinned(bool pinned);
     };
@@ -127,6 +142,8 @@ namespace ui {
         void sync_sel_frame_to_model() override;
         QGraphicsItem* create_selection_frame() const override;
     public:
+        using model_type = sm::bone;
+
         bone_item(sm::bone& bone, double scale);
         node_item& parent_node_item() const;
         node_item& child_node_item() const;

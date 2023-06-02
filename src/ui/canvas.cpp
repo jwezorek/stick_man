@@ -190,6 +190,10 @@ void ui::canvas::add_to_selection(std::span<ui::abstract_stick_man_item*> itms) 
     sync_selection();
 }
 
+void ui::canvas::add_to_selection(ui::abstract_stick_man_item* itm) {
+    add_to_selection({ &itm,1 });
+}
+
 void ui::canvas::subtract_from_selection(std::span<ui::abstract_stick_man_item*> itms) {
     for (auto itm : itms) {
         selection_.erase(itm);
@@ -197,9 +201,17 @@ void ui::canvas::subtract_from_selection(std::span<ui::abstract_stick_man_item*>
     sync_selection();
 }
 
+void ui::canvas::subtract_from_selection(ui::abstract_stick_man_item* itm) {
+    subtract_from_selection({ &itm,1 });
+}
+
 void ui::canvas::set_selection(std::span<ui::abstract_stick_man_item*> itms) {
     selection_.clear();
     add_to_selection(itms);
+}
+
+void ui::canvas::set_selection(ui::abstract_stick_man_item* itm) {
+    set_selection({ &itm,1 });
 }
 
 void ui::canvas::clear_selection() {
@@ -213,6 +225,7 @@ void ui::canvas::sync_selection() {
         bool selected = selection_.contains(itm);
         itm->set_selected(selected);
     }
+    emit selection_changed(selection_);
 }
 
 /*------------------------------------------------------------------------------------------------*/
