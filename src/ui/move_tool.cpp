@@ -225,14 +225,14 @@ void  ui::move_tool::move_state::set(canvas& c, QKeyEvent* evnt) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::move_tool::move_tool() : 
+ui::move_tool::move_tool(tool_manager* mgr) :
         settings_(nullptr), 
-        abstract_tool("move", "move_icon.png", ui::tool_id::move) {
+        abstract_tool(mgr, "move", "move_icon.png", ui::tool_id::move) {
 
 }
 
 void ui::move_tool::keyPressEvent(canvas& c, QKeyEvent* event) {
-    auto mode = static_cast<move_mode>(btns_.checkedId());
+    auto mode = static_cast<move_mode>(btns_->checkedId());
     if (mode == move_mode::none) {
         return;
     }
@@ -241,7 +241,7 @@ void ui::move_tool::keyPressEvent(canvas& c, QKeyEvent* event) {
 }
 
 void ui::move_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
-    auto mode = static_cast<move_mode>(btns_.checkedId());
+    auto mode = static_cast<move_mode>(btns_->checkedId());
     if (mode == move_mode::none) {
         return;
     }
@@ -250,7 +250,7 @@ void ui::move_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) 
 }
 
 void ui::move_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
-    auto mode = static_cast<move_mode>(btns_.checkedId());
+    auto mode = static_cast<move_mode>(btns_->checkedId());
     if (mode == move_mode::none) {
         return;
     }
@@ -259,7 +259,7 @@ void ui::move_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
 }
 
 void ui::move_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
-    auto mode = static_cast<move_mode>(btns_.checkedId());
+    auto mode = static_cast<move_mode>(btns_->checkedId());
     if (mode == move_mode::none) {
         return;
     }
@@ -270,10 +270,11 @@ void ui::move_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event
 QWidget* ui::move_tool::settings_widget() {
     if (!settings_) {
         settings_ = new QWidget();
+        btns_ = new QButtonGroup(settings_);
         auto* flow = new ui::FlowLayout(settings_);
         for (const auto& mm : k_move_mode_subtools) {
             auto* btn = new QRadioButton(mm->name());
-            btns_.addButton(btn, static_cast<int>(mm->mode()));
+            btns_->addButton(btn, static_cast<int>(mm->mode()));
             flow->addWidget(btn);
         }
     }

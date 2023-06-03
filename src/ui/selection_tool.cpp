@@ -1,7 +1,9 @@
 #include "selection_tool.h"
+#include "util.h"
 #include "../core/ik_sandbox.h"
 #include <array>
 #include <ranges>
+#include <unordered_map>
 
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
@@ -26,11 +28,62 @@ namespace {
     }
 
     enum class sel_type {
-        none,
+        none = 0,
         node,
         bone,
         joint,
         mixed
+    };
+
+    class abstract_properties_widget : public QWidget {
+    protected:
+        QLayout* layout_;
+        QLabel* title_;
+    public:
+        abstract_properties_widget(QWidget* parent, QString title) :
+                QWidget(parent) {
+            layout_ = new ui::FlowLayout(this);
+            layout_->addWidget(title_ = new QLabel(title));
+            hide();
+        }
+        virtual void set_selection(const ui::selection_set& sel) {}
+    };
+
+    class node_properties : public abstract_properties_widget {
+        ui::labeled_numeric_val* x_;
+        ui::labeled_numeric_val* y_;
+    public:
+        node_properties(QWidget* parent) : 
+                abstract_properties_widget(parent, "selected node properties"){
+            layout_->addWidget(
+                x_ = new ui::labeled_numeric_val("x", 0.0, -1500.0, 1500.0)
+            );
+            layout_->addWidget(
+                y_ = new ui::labeled_numeric_val("y", 0.0, -1500.0, 1500.0)
+            );
+        }
+    };
+
+    class bone_properties : public abstract_properties_widget {
+        ui::labeled_numeric_val* length_;
+        ui::labeled_numeric_val* rotation_;
+    public:
+        bone_properties(QWidget* parent) : 
+                abstract_properties_widget(parent, "selected bone properties") {
+            layout_->addWidget(
+                length_ = new ui::labeled_numeric_val("length", 0.0, 0.0, 1500.0)
+            );
+            layout_->addWidget(
+                rotation_ = new ui::labeled_numeric_val("rotation", 0.0, -1500.0, 1500.0)
+            );
+        }
+    };
+
+    class joint_properties : public abstract_properties_widget {
+    public:
+        joint_properties(QWidget* parent) : 
+            abstract_properties_widget(parent, "selected joint properties") {
+        }
     };
 
     template<typename T>
@@ -114,11 +167,33 @@ namespace {
         return has_node ? sel_type::node : sel_type::bone;
     }
 
+    class selection_properties : public QStackedWidget {
+    public:
+        selection_properties() { 
+            addWidget(new abstract_properties_widget(this, "no selection"));
+            addWidget(new node_properties(this));
+            addWidget(new bone_properties(this));
+            addWidget(new joint_properties(this));
+            addWidget(new abstract_properties_widget(this, "mixed selection"));
+
+            set(sel_type::none, {});
+        }
+
+        abstract_properties_widget* current_props() const {
+            return static_cast<abstract_properties_widget*>(currentWidget());
+        }
+
+        void set(sel_type typ, const std::unordered_set<ui::abstract_stick_man_item*>& sel) {
+            setCurrentIndex(static_cast<int>(typ));
+            current_props()->set_selection(sel);
+        }
+    };
 }
 
-ui::selection_tool::selection_tool() :
+ui::selection_tool::selection_tool(tool_manager* mgr) :
     intitialized_(false),
-    abstract_tool("selection", "arrow_icon.png", ui::tool_id::selection) {
+    properties_(nullptr),
+    abstract_tool(mgr, "selection", "arrow_icon.png", ui::tool_id::selection) {
 
 }
 
@@ -200,28 +275,9 @@ void ui::selection_tool::handle_drag(canvas& canv, QRectF rect, bool shift_down,
 
 void ui::selection_tool::handle_sel_changed(
         const std::unordered_set<ui::abstract_stick_man_item*>& sel) {
-    auto type = selection_type(sel);
-    switch (type) {
-        case sel_type::none:
-            qDebug() << "none";
-            break;
-
-        case sel_type::bone:
-            qDebug() << "bone";
-            break;
-
-        case sel_type::node:
-            qDebug() << "node";
-            break;
-
-        case sel_type::mixed:
-            qDebug() << "mixed";
-            break;
-
-        case sel_type::joint:
-            qDebug() << "joint";
-            break;
-    }
+    auto type_of_sel = selection_type(sel);
+    auto props = static_cast<selection_properties*>(properties_);
+    props->set(type_of_sel, sel);
 }
 
 
@@ -229,4 +285,11 @@ void ui::selection_tool::deactivate(canvas& canv) {
     auto& view = canv.view();
     view.setDragMode(QGraphicsView::NoDrag);
     view.disconnect(conn_);
+}
+
+QWidget* ui::selection_tool::settings_widget() {
+    if (!properties_) {
+        properties_ = new selection_properties();
+    }
+    return properties_;
 }

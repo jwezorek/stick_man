@@ -36,6 +36,17 @@ namespace ui {
         int m_vSpace;
     };
 
+    class labeled_numeric_val : public QWidget {
+        QLineEdit* num_;
+    public:
+        labeled_numeric_val(QString txt, double val, 
+                double min = 0.0, double max = 1.0, int decimals = 2, 
+                bool horz = true);
+        double value() const;
+    signals:
+        void value_changed(double new_val);
+    };
+
     QWidget* custom_title_bar(const QString& lbl);
     void set_custom_title_bar_txt(QDockWidget* pane, const QString& txt);
     void clear_layout(QLayout* layout, bool deleteWidgets = true);

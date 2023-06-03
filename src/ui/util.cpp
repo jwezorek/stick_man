@@ -195,6 +195,23 @@ int ui::FlowLayout::smartSpacing(QStyle::PixelMetric pm) const
 
 /*------------------------------------------------------------------------------------------------*/
 
+ui::labeled_numeric_val::labeled_numeric_val(QString txt, double val, double min,
+        double max, int decimals, bool horz) {
+    auto layout = (horz) ?
+        static_cast<QLayout*>(new QHBoxLayout(this)) : 
+        static_cast<QLayout*>(new QVBoxLayout(this));
+    layout->addWidget(new QLabel(txt));
+    layout->addWidget(num_ = new QLineEdit(QString::number(val)));
+    num_->setValidator(new QDoubleValidator(min, max, decimals, this));
+    num_->setText(QString::number(val));
+}
+
+double ui::labeled_numeric_val::value() const {
+    return num_->text().toDouble();
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
 QWidget* ui::custom_title_bar(const QString& lbl) {
     return new title_bar(lbl);
 }

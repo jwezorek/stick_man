@@ -4,6 +4,7 @@
 #include "stick_man.h"
 #include "tool_settings_pane.h"
 #include "util.h"
+#include "stick_man.h"
 #include <QGraphicsScene>
 #include <array>
 #include <functional>
@@ -15,20 +16,15 @@ namespace rv = std::ranges::views;
 /*------------------------------------------------------------------------------------------------*/
 
 namespace {
-
-    auto k_tool_registry = std::to_array<std::unique_ptr<ui::abstract_tool>>({
-        std::make_unique<ui::pan_tool>(),
-        std::make_unique<ui::zoom_tool>(),
-        std::make_unique<ui::selection_tool>(),
-        std::make_unique<ui::move_tool>(),
-        std::make_unique<ui::add_node_tool>(),
-        std::make_unique<ui::add_bone_tool>()
-    });
+    /*
+    auto k_tool_registry = std::to_array<std::unique_ptr<ui::abstract_tool>>();
+    */
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::abstract_tool::abstract_tool(QString name, QString rsrc, tool_id id) : 
+ui::abstract_tool::abstract_tool(tool_manager* mgr, QString name, QString rsrc, tool_id id) :
+    mgr_(mgr),
     name_(name),
     rsrc_(rsrc),
     id_(id) {
@@ -64,8 +60,8 @@ QWidget* ui::abstract_tool::settings_widget() { return nullptr; }
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::zoom_tool::zoom_tool() : 
-        abstract_tool("zoom", "zoom_icon.png", ui::tool_id::zoom),
+ui::zoom_tool::zoom_tool(tool_manager* mgr) :
+        abstract_tool(mgr, "zoom", "zoom_icon.png", ui::tool_id::zoom),
         zoom_level_(0),
         settings_(nullptr) {
 }
@@ -110,7 +106,9 @@ QWidget* ui::zoom_tool::settings_widget() {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::pan_tool::pan_tool() : abstract_tool("pan", "pan_icon.png", ui::tool_id::pan) {}
+ui::pan_tool::pan_tool(tool_manager* mgr) : 
+    abstract_tool(mgr, "pan", "pan_icon.png", ui::tool_id::pan) 
+{}
 
 void ui::pan_tool::deactivate(canvas& c) {
     c.view().setDragMode(QGraphicsView::NoDrag);
@@ -122,8 +120,9 @@ void ui::pan_tool::activate(canvas& c) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::add_node_tool::add_node_tool() : 
-    abstract_tool("add node", "add_node_icon.png", ui::tool_id::add_node) {}
+ui::add_node_tool::add_node_tool(tool_manager* mgr) :
+    abstract_tool(mgr, "add node", "add_node_icon.png", ui::tool_id::add_node) 
+{}
 
 void ui::add_node_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     auto pt = event->scenePos();
@@ -136,9 +135,9 @@ void ui::add_node_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::add_bone_tool::add_bone_tool() :
+ui::add_bone_tool::add_bone_tool(tool_manager* mgr) :
     rubber_band_(nullptr),
-    abstract_tool("add bone", "add_bone_icon.png", ui::tool_id::add_bone) {
+    abstract_tool(mgr, "add bone", "add_bone_icon.png", ui::tool_id::add_bone) {
 }
 
 void ui::add_bone_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
@@ -177,6 +176,12 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
 ui::tool_manager::tool_manager(stick_man* sm) :
         main_window_(*sm),
         curr_item_index_(-1){
+    tool_registry_.emplace_back(std::make_unique<ui::pan_tool>(this));
+    tool_registry_.emplace_back(std::make_unique<ui::zoom_tool>(this));
+    tool_registry_.emplace_back(std::make_unique<ui::selection_tool>(this));
+    tool_registry_.emplace_back(std::make_unique<ui::move_tool>(this));
+    tool_registry_.emplace_back(std::make_unique<ui::add_node_tool>(this));
+    tool_registry_.emplace_back(std::make_unique<ui::add_bone_tool>(this));
 }
 
 void ui::tool_manager::keyPressEvent(canvas& c, QKeyEvent* event) {
@@ -224,7 +229,7 @@ void ui::tool_manager::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {
 std::span<const ui::tool_info> ui::tool_manager::tool_info() const {
     static std::vector<ui::tool_info> tool_records;
     if (tool_records.empty()) {
-        tool_records = k_tool_registry |
+        tool_records = tool_registry_ |
             rv::transform(
                 [](const auto& t)->ui::tool_info {
                     return ui::tool_info{
@@ -241,7 +246,7 @@ bool ui::tool_manager::has_current_tool() const {
 }
 
 ui::abstract_tool& ui::tool_manager::current_tool() const {
-    return *k_tool_registry.at(curr_item_index_);
+    return *tool_registry_.at(curr_item_index_);
 }
 
 void ui::tool_manager::set_current_tool(tool_id id) {
@@ -261,6 +266,6 @@ void ui::tool_manager::set_current_tool(tool_id id) {
 }
 
 int ui::tool_manager::index_from_id(tool_id id) const {
-    auto iter = r::find_if(k_tool_registry, [id](const auto& t) {return id == t->id(); });
-    return std::distance(k_tool_registry.begin(), iter);
+    auto iter = r::find_if(tool_registry_, [id](const auto& t) {return id == t->id(); });
+    return std::distance(tool_registry_.begin(), iter);
 }

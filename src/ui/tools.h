@@ -29,13 +29,17 @@ namespace ui {
     };
 
     class tool_settings_pane;
+    class stick_man;
+    class tool_manager;
 
     class abstract_tool {
     public:
-        abstract_tool(QString name, QString rsrc, tool_id id);
+        abstract_tool(tool_manager* mgr, QString name, QString rsrc, tool_id id);
         tool_id id() const;
         QString name() const;
         QString icon_rsrc() const;
+        tool_manager* manager() const;
+        void set_manager(tool_manager* mgr);
         void populate_settings(tool_settings_pane* pane);
         virtual void activate(canvas& c);
         virtual void keyPressEvent(canvas& c, QKeyEvent* event);
@@ -48,11 +52,11 @@ namespace ui {
         virtual void deactivate(canvas& c);
         virtual QWidget* settings_widget();
 
-
     private:
         tool_id id_;
         QString name_;
         QString rsrc_;
+        tool_manager* mgr_;
     };
 
     class zoom_tool : public abstract_tool {
@@ -64,21 +68,21 @@ namespace ui {
 
 
     public:
-        zoom_tool();
+        zoom_tool(tool_manager* mgr);
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         virtual QWidget* settings_widget() override;
     };
 
     class pan_tool : public abstract_tool {
     public:
-        pan_tool();
+        pan_tool(tool_manager* mgr);
         void activate(canvas& c) override;
         void deactivate(canvas& c) override;
     };
 
     class add_node_tool : public abstract_tool {
     public:
-        add_node_tool();
+        add_node_tool(tool_manager* mgr);
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
     };
 
@@ -87,16 +91,15 @@ namespace ui {
         QPointF origin_;
         QGraphicsLineItem* rubber_band_;
     public:
-        add_bone_tool();
+        add_bone_tool(tool_manager* mgr);
         void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
     };
 
-    class stick_man;
-
     class tool_manager {
     private:
+        std::vector<std::unique_ptr<ui::abstract_tool>> tool_registry_;
         stick_man& main_window_;
         int curr_item_index_;
 

@@ -20,7 +20,7 @@ namespace ui {
             void set(canvas& canvas, QKeyEvent* event);
         };
 
-        move_tool();
+        move_tool(tool_manager* mgr);
         void keyPressEvent(canvas& c, QKeyEvent* event) override;
         void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
@@ -29,7 +29,7 @@ namespace ui {
 
     private: 
         QWidget* settings_;
-        QButtonGroup btns_;
+        QButtonGroup* btns_;
         move_state state_;
     };
 
