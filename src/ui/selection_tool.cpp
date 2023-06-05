@@ -4,6 +4,7 @@
 #include <array>
 #include <ranges>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
@@ -30,7 +31,9 @@ namespace {
     enum class sel_type {
         none = 0,
         node,
+        nodes,
         bone,
+        bones,
         joint,
         mixed
     };
@@ -52,9 +55,14 @@ namespace {
     class node_properties : public abstract_properties_widget {
         ui::labeled_numeric_val* x_;
         ui::labeled_numeric_val* y_;
+        bool multi_;
     public:
-        node_properties(QWidget* parent) : 
-                abstract_properties_widget(parent, "selected node properties"){
+        node_properties(QWidget* parent, bool multi) : 
+                abstract_properties_widget(
+                    parent, 
+                    (multi) ? "selected nodes" : "selected node"
+                ),
+                multi_(multi) {
             layout_->addWidget(
                 x_ = new ui::labeled_numeric_val("x", 0.0, -1500.0, 1500.0)
             );
@@ -67,9 +75,14 @@ namespace {
     class bone_properties : public abstract_properties_widget {
         ui::labeled_numeric_val* length_;
         ui::labeled_numeric_val* rotation_;
+        bool multi_;
     public:
-        bone_properties(QWidget* parent) : 
-                abstract_properties_widget(parent, "selected bone properties") {
+        bone_properties(QWidget* parent, bool multi) : 
+                abstract_properties_widget(
+                    parent, 
+                    (multi) ? "selected bones" : "selected bone"
+                ),
+                multi_(multi) {
             layout_->addWidget(
                 length_ = new ui::labeled_numeric_val("length", 0.0, 0.0, 1500.0)
             );
@@ -82,7 +95,7 @@ namespace {
     class joint_properties : public abstract_properties_widget {
     public:
         joint_properties(QWidget* parent) : 
-            abstract_properties_widget(parent, "selected joint properties") {
+            abstract_properties_widget(parent, "selected joint") {
         }
     };
 
@@ -104,48 +117,35 @@ namespace {
         ) | r::to<std::vector<out_type*>>();
     }
 
-    sm::bone* find_child(sm::bone* b1, sm::bone* b2) {
-        auto b1_par = b1->parent_bone().has_value() ? &b1->parent_bone().value().get() : nullptr;
-        auto b2_par = b2->parent_bone().has_value() ? &b2->parent_bone().value().get() : nullptr;
-        if (!b1_par && !b2_par) {
-            return nullptr;
-        }
-        if (b1_par == b2) {
-            return b1;
-        }
-        if (b2_par == b1) {
-            return b2;
-        }
-        return nullptr;
-    }
-
-    sm::bone* find_child_of_joint(const auto& sel) {
-        auto bones = to_models_of_item_type<ui::bone_item>(sel);
-        if (bones.size() != 2) {
-            return nullptr;
-        }
-        return find_child(bones.front(), bones.back());
+    sm::node* find_shared_node(sm::bone* b1, sm::bone* b2) {
+        std::array< sm::node*, 4> nodes = { {
+            &(b1->parent_node()),
+            &(b1->child_node()),
+            &(b2->parent_node()),
+            &(b2->child_node()),
+        } };
+        r::sort(nodes);
+        auto adj_dup = r::adjacent_find(nodes, [](auto n1, auto n2) {return n1 == n2; });
+        return (adj_dup != nodes.end()) ? *adj_dup: nullptr;
     }
 
     bool is_joint_selection(const auto& sel) {
-        if (sel.size() != 2 && sel.size() != 3) {
+        if (sel.size() != 3) {
             return false;
         }
-        
-        auto child_bone = find_child_of_joint(sel);
-        if (!child_bone) {
+        auto bones = to_models_of_item_type<ui::bone_item>(sel);
+        if (bones.size() != 2) {
             return false;
         }
-
-        if (sel.size() == 2) {
-            return true;
+        auto shared_node = find_shared_node(bones[0],bones[1]);
+        if (!shared_node) {
+            return false;
         }
-
         auto nodes = to_models_of_item_type<ui::node_item>(sel);
         if (nodes.size() != 1) {
             return false;
         }
-        return &child_bone->parent_node() == nodes.front();
+        return shared_node == nodes.front();
     }
 
     sel_type selection_type(const auto& sel) {
@@ -164,15 +164,22 @@ namespace {
                 return sel_type::mixed;
             }
         }
-        return has_node ? sel_type::node : sel_type::bone;
+        bool multi = sel.size() > 1;
+        if (has_node) {
+            return multi ? sel_type::nodes : sel_type::node;
+        } else {
+            return multi ? sel_type::bones : sel_type::bone;
+        }
     }
 
     class selection_properties : public QStackedWidget {
     public:
         selection_properties() { 
             addWidget(new abstract_properties_widget(this, "no selection"));
-            addWidget(new node_properties(this));
-            addWidget(new bone_properties(this));
+            addWidget(new node_properties(this, false));
+            addWidget(new node_properties(this, true));
+            addWidget(new bone_properties(this, false));
+            addWidget(new bone_properties(this, true));
             addWidget(new joint_properties(this));
             addWidget(new abstract_properties_widget(this, "mixed selection"));
 
@@ -217,6 +224,14 @@ void ui::selection_tool::activate(canvas& canv) {
             }
         }
     );
+}
+
+void ui::selection_tool::keyReleaseEvent(canvas & c, QKeyEvent * event) {
+    auto props = static_cast<selection_properties*>(properties_);
+    auto node_props = static_cast<node_properties*>(props->current_props());
+    for (auto* child : node_props->children()) {
+
+    }
 }
 
 void ui::selection_tool::mousePressEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {

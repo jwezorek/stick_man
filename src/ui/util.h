@@ -36,15 +36,36 @@ namespace ui {
         int m_vSpace;
     };
 
+    class num_line_edit : public QLineEdit {
+
+        Q_OBJECT
+
+        void keyPressEvent(QKeyEvent* e) override;
+        void focusOutEvent(QFocusEvent* event) override;
+        void handle_done_editing();;
+
+        double default_val_;
+
+    public:
+        num_line_edit(double val, double default_val, double min, double max, int decimals);
+        bool is_indeterminate() const;
+        void set_indeterminate();
+        void set_value(double v);
+        std::optional<double> value() const;
+
+    signals:
+        void value_changed(double val);
+    };
+
     class labeled_numeric_val : public QWidget {
-        QLineEdit* num_;
+
+        num_line_edit* num_edit_;
+
     public:
         labeled_numeric_val(QString txt, double val, 
                 double min = 0.0, double max = 1.0, int decimals = 2, 
                 bool horz = true);
-        double value() const;
-    signals:
-        void value_changed(double new_val);
+        num_line_edit* num_edit() const;
     };
 
     QWidget* custom_title_bar(const QString& lbl);

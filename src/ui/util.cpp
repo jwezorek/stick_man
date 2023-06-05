@@ -195,19 +195,81 @@ int ui::FlowLayout::smartSpacing(QStyle::PixelMetric pm) const
 
 /*------------------------------------------------------------------------------------------------*/
 
+void ui::num_line_edit::handle_done_editing() {
+    auto validr = static_cast<const QDoubleValidator*>(validator());
+    if (!hasAcceptableInput()) {
+        auto val = value();
+        if (!val) {
+            setText(QString::number(default_val_));
+        } else if (*val < validr->bottom()) {
+            set_value(validr->bottom());
+        } else {
+            set_value(validr->top());
+        }
+    }
+    value_changed( *value() );
+}
+
+void ui::num_line_edit::keyPressEvent(QKeyEvent* e) {
+    QLineEdit::keyPressEvent(e);
+    if (e->key() == Qt::Key_Return) {
+        handle_done_editing();
+    } 
+}
+
+void ui::num_line_edit::focusOutEvent(QFocusEvent* event)
+{
+    handle_done_editing();
+}
+
+ui::num_line_edit::num_line_edit(double val, double default_val, double min, double max, int decimals) :
+        default_val_(default_val) {
+    auto validator = new QDoubleValidator(min, max, decimals, this);
+    validator->setNotation(QDoubleValidator::StandardNotation);
+    setValidator(validator);
+    set_value(val);
+}
+
+bool ui::num_line_edit::is_indeterminate() const {
+    return text() == "";
+}
+
+void ui::num_line_edit::set_indeterminate() {
+    setText("");
+}
+
+void ui::num_line_edit::set_value(double v) {
+    setText(QString::number(v));
+}
+
+std::optional<double> ui::num_line_edit::value() const {
+    if (is_indeterminate()) {
+        return {};
+    }
+    return text().toDouble();
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
 ui::labeled_numeric_val::labeled_numeric_val(QString txt, double val, double min,
         double max, int decimals, bool horz) {
     auto layout = (horz) ?
         static_cast<QLayout*>(new QHBoxLayout(this)) : 
         static_cast<QLayout*>(new QVBoxLayout(this));
     layout->addWidget(new QLabel(txt));
-    layout->addWidget(num_ = new QLineEdit(QString::number(val)));
-    num_->setValidator(new QDoubleValidator(min, max, decimals, this));
-    num_->setText(QString::number(val));
+    layout->addWidget(num_edit_ = new num_line_edit(val, 0, min, max, decimals));
+
+    /*
+    connect(num_edit_, &num_line_edit::value_changed,
+        [](double new_val) {
+            qDebug() << new_val;
+        }
+    );
+    */
 }
 
-double ui::labeled_numeric_val::value() const {
-    return num_->text().toDouble();
+ui::num_line_edit* ui::labeled_numeric_val::num_edit() const {
+    return num_edit_;
 }
 
 /*------------------------------------------------------------------------------------------------*/

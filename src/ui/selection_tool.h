@@ -27,6 +27,8 @@ namespace ui {
     public:
         selection_tool(tool_manager* mgr);
         void activate(canvas& c) override;
+
+        void keyReleaseEvent(canvas& c, QKeyEvent* event) override;
         void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void deactivate(canvas& c) override;
