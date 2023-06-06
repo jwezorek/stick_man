@@ -36,21 +36,28 @@ namespace ui {
         int m_vSpace;
     };
 
-    class num_line_edit : public QLineEdit {
+    class number_edit : public QLineEdit {
 
         Q_OBJECT
 
         void keyPressEvent(QKeyEvent* e) override;
+        void focusInEvent(QFocusEvent* event) override;
         void focusOutEvent(QFocusEvent* event) override;
-        void handle_done_editing();;
+        void handle_done_editing();
+        double to_acceptable_value(double v) const;
+        void make_acceptable_value();
+        static std::string format_string(int decimals);
 
         double default_val_;
+        int  decimals_;
+        std::optional<double> old_val_;
 
     public:
-        num_line_edit(double val, double default_val, double min, double max, int decimals);
+        number_edit(double val, double default_val, double min, double max, int decimals);
         bool is_indeterminate() const;
         void set_indeterminate();
         void set_value(double v);
+        void set_value(std::optional<double> v);
         std::optional<double> value() const;
 
     signals:
@@ -59,13 +66,13 @@ namespace ui {
 
     class labeled_numeric_val : public QWidget {
 
-        num_line_edit* num_edit_;
+        number_edit* num_edit_;
 
     public:
         labeled_numeric_val(QString txt, double val, 
                 double min = 0.0, double max = 1.0, int decimals = 2, 
                 bool horz = true);
-        num_line_edit* num_edit() const;
+        number_edit* num_edit() const;
     };
 
     QWidget* custom_title_bar(const QString& lbl);

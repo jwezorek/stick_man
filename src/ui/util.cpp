@@ -1,5 +1,6 @@
 #include "util.h"
 #include <QtWidgets>
+#include <sstream>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -195,54 +196,87 @@ int ui::FlowLayout::smartSpacing(QStyle::PixelMetric pm) const
 
 /*------------------------------------------------------------------------------------------------*/
 
-void ui::num_line_edit::handle_done_editing() {
+double ui::number_edit::to_acceptable_value(double v) const {
     auto validr = static_cast<const QDoubleValidator*>(validator());
-    if (!hasAcceptableInput()) {
-        auto val = value();
-        if (!val) {
-            setText(QString::number(default_val_));
-        } else if (*val < validr->bottom()) {
-            set_value(validr->bottom());
-        } else {
-            set_value(validr->top());
-        }
+    if (v < validr->bottom()) {
+        return validr->bottom();
+    } else if (v > validr->top()) {
+        return validr->top();
     }
-    value_changed( *value() );
+    return v;
 }
 
-void ui::num_line_edit::keyPressEvent(QKeyEvent* e) {
+void ui::number_edit::make_acceptable_value() {
+    auto old_val = value();
+    auto new_val = old_val;
+    if (!hasAcceptableInput()) {
+        new_val = (old_val) ? to_acceptable_value(*old_val) : default_val_;
+    }
+    set_value(new_val);
+}
+
+void ui::number_edit::handle_done_editing() {
+    make_acceptable_value();
+    if (value() != old_val_) {
+        emit value_changed(*value());
+    }
+    old_val_ = {};
+}
+
+void ui::number_edit::keyPressEvent(QKeyEvent* e) {
     QLineEdit::keyPressEvent(e);
     if (e->key() == Qt::Key_Return) {
         handle_done_editing();
     } 
 }
 
-void ui::num_line_edit::focusOutEvent(QFocusEvent* event)
+void ui::number_edit::focusInEvent(QFocusEvent* event)
 {
+    QLineEdit::focusInEvent(event);
+    old_val_ = value();
+}
+
+void ui::number_edit::focusOutEvent(QFocusEvent* event)
+{
+    QLineEdit::focusOutEvent(event);
     handle_done_editing();
 }
 
-ui::num_line_edit::num_line_edit(double val, double default_val, double min, double max, int decimals) :
-        default_val_(default_val) {
+ui::number_edit::number_edit(double val, double default_val, double min, double max, int decimals) :
+        default_val_(default_val),
+        decimals_(decimals) {
     auto validator = new QDoubleValidator(min, max, decimals, this);
     validator->setNotation(QDoubleValidator::StandardNotation);
     setValidator(validator);
     set_value(val);
+    make_acceptable_value();
 }
 
-bool ui::num_line_edit::is_indeterminate() const {
+bool ui::number_edit::is_indeterminate() const {
     return text() == "";
 }
 
-void ui::num_line_edit::set_indeterminate() {
+void ui::number_edit::set_indeterminate() {
     setText("");
 }
 
-void ui::num_line_edit::set_value(double v) {
-    setText(QString::number(v));
+void ui::number_edit::set_value(double value) {
+    value = to_acceptable_value(value);
+
+    std::stringstream ss;
+    ss << std::fixed << std::setprecision(decimals_) << value;
+    setText(ss.str().c_str());
 }
 
-std::optional<double> ui::num_line_edit::value() const {
+void ui::number_edit::set_value(std::optional<double> v) {
+    if (!v) {
+        set_indeterminate();
+    } else {
+        set_value(*v);
+    }
+}
+
+std::optional<double> ui::number_edit::value() const {
     if (is_indeterminate()) {
         return {};
     }
@@ -257,18 +291,16 @@ ui::labeled_numeric_val::labeled_numeric_val(QString txt, double val, double min
         static_cast<QLayout*>(new QHBoxLayout(this)) : 
         static_cast<QLayout*>(new QVBoxLayout(this));
     layout->addWidget(new QLabel(txt));
-    layout->addWidget(num_edit_ = new num_line_edit(val, 0, min, max, decimals));
+    layout->addWidget(num_edit_ = new number_edit(val, 0, min, max, decimals));
 
-    /*
-    connect(num_edit_, &num_line_edit::value_changed,
+    connect(num_edit_, &number_edit::value_changed,
         [](double new_val) {
             qDebug() << new_val;
         }
     );
-    */
 }
 
-ui::num_line_edit* ui::labeled_numeric_val::num_edit() const {
+ui::number_edit* ui::labeled_numeric_val::num_edit() const {
     return num_edit_;
 }
 
