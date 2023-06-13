@@ -2,6 +2,7 @@
 
 #include <QWidget>
 #include <QtWidgets>
+#include <ranges>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -75,9 +76,38 @@ namespace ui {
         number_edit* num_edit() const;
     };
 
+    class TabWidget : public QTabWidget
+    {
+        class TabBar : public QTabBar
+        {
+            QSize _size;
+        public:
+            TabBar(QWidget* a_parent);
+            QSize tabSizeHint(int index) const;
+            void setWidth(int a_width);
+        };
+        TabBar* _tabBar;
+    public:
+        TabWidget(QWidget* a_parent);
+        void resizeEvent(QResizeEvent* e) override;
+    };
+
     QWidget* custom_title_bar(const QString& lbl);
     void set_custom_title_bar_txt(QDockWidget* pane, const QString& txt);
     void clear_layout(QLayout* layout, bool deleteWidgets = true);
 
+    template<typename T, typename U>
+    auto as_range_view_of_type(const U& collection) {
+        return collection |
+            std::ranges::views::transform(
+                [](auto itm)->T* {  return dynamic_cast<T*>(itm); }
+            ) | std::ranges::views::filter(
+                [](T* ptr)->bool { return ptr;  }
+            );
+    }
 
+    template<typename T, typename U>
+    std::vector<T*> to_vector_of_type(const U& collection) {
+        return as_range_view_of_type<T>(collection) | std::ranges::to<std::vector<T*>>();
+    }
 }

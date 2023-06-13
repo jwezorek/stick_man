@@ -37,6 +37,14 @@ sm::point sm::operator-(const point& p) {
     return { -p.x, -p.y };
 }
 
+sm::point sm::operator*(double k, point& p) {
+    return { k * p.x, k * p.y };
+}
+
+sm::point sm::operator*(point& p, double k) {
+    return { k * p.x, k * p.y };
+}
+
 bool sm::operator==(const point& p1, const point& p2) {
     return p1.x == p2.x && p1.y == p2.y;
 }

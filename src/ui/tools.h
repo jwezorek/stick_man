@@ -39,7 +39,7 @@ namespace ui {
         QString name() const;
         QString icon_rsrc() const;
         tool_manager* manager() const;
-        void set_manager(tool_manager* mgr);
+        //void set_manager(tool_manager* mgr);
         void populate_settings(tool_settings_pane* pane);
         virtual void activate(canvas& c);
         virtual void keyPressEvent(canvas& c, QKeyEvent* event);
@@ -118,6 +118,7 @@ namespace ui {
         bool has_current_tool() const;
         abstract_tool& current_tool() const;
         void set_current_tool(tool_id id);
+        ui::canvas& canvas();
     };
 
 }

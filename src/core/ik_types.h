@@ -15,6 +15,9 @@ namespace sm {
     point operator+(const point& p1, const point& p2);
     point operator-(const point& p1, const point& p2);
     point operator-(const point& p);
+    point operator*(double k, point& p);
+    point operator*(point& p, double k);
+
     bool operator==(const point& p1, const point& p2);
 
     using matrix = Eigen::Matrix<double, 3, 3>;

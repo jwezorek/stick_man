@@ -1,6 +1,9 @@
 #include "selection_tool.h"
 #include "util.h"
+#include "canvas.h"
+#include "stick_man.h"
 #include "../core/ik_sandbox.h"
+#include "../core/ik_types.h"
 #include <array>
 #include <ranges>
 #include <unordered_map>
@@ -8,9 +11,78 @@
 
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
+
 /*------------------------------------------------------------------------------------------------*/
 
 namespace {
+
+    double k_tolerance = 0.00005;
+
+    auto to_model_objects(r::input_range auto&& itms) {
+        return itms |
+            rv::transform(
+                [](auto itm)->auto& {
+                    return itm->model();
+                }
+            );
+    }
+
+    struct bone_info {
+        double rotation;
+        double length;
+    };
+
+    void set_bone_length(ui::canvas& canv, double new_length) {
+        using bone_table_t = std::unordered_map<sm::bone*, bone_info>;
+        auto bone_items = canv.bone_items();
+        auto bone_tbl = to_model_objects(bone_items) |
+            rv::transform(
+                [new_length](sm::bone& bone)->bone_table_t::value_type {
+                    auto& itm = ui::item_from_model<ui::bone_item>(bone);
+                    auto length = itm.is_selected() ? new_length : bone.scaled_length();
+                    return { &bone,bone_info{bone.world_rotation(), length} };
+                }
+            ) | r::to<bone_table_t>();
+
+        auto root_node_items = canv.root_node_items();
+        for (auto& root : to_model_objects(root_node_items)) {
+            sm::dfs(
+                root, 
+                {}, 
+                [&](sm::bone& bone)->bool {
+                    auto [rot, len] = bone_tbl.at(&bone);
+                    sm::point offset = {
+                        len * std::cos(rot),
+                        len * std::sin(rot)
+                    };
+                    auto new_child_node_pos = bone.parent_node().world_pos() + offset;
+                    bone.child_node().set_world_pos(new_child_node_pos);
+                    return true;
+                },
+                true
+            );
+        }
+        canv.sync_to_model();
+    }
+
+    bool is_approximately_equal(double v1, double v2, double tolerance) {
+        return std::abs(v1 - v2) < tolerance;
+    }
+
+    std::optional<double> get_unique_val(auto vals, double tolerance = k_tolerance) {
+        if (vals.empty()) {
+            return {};
+        }
+        auto first_val = *vals.begin();
+        auto first_not_equal = r::find_if(
+            vals,
+            [=](auto val) {
+                return !is_approximately_equal(val, first_val, tolerance);
+            }
+        );
+        return  (first_not_equal == vals.end()) ? 
+            std::optional<double>{first_val} : std::optional<double>{};
+    }
 
     std::optional<QRectF> points_to_rect(QPointF pt1, QPointF pt2) {
         auto width = std::abs(pt1.x() - pt2.x());
@@ -42,43 +114,123 @@ namespace {
     protected:
         QLayout* layout_;
         QLabel* title_;
+        ui::tool_manager* mgr_;
+        ui::canvas* canv_;
     public:
-        abstract_properties_widget(QWidget* parent, QString title) :
-                QWidget(parent) {
+        abstract_properties_widget(ui::tool_manager* mgr, QWidget* parent, QString title) :
+                QWidget(parent),
+                mgr_(mgr),
+                canv_(nullptr){
             layout_ = new ui::FlowLayout(this);
             layout_->addWidget(title_ = new QLabel(title));
             hide();
         }
-        virtual void set_selection(const ui::selection_set& sel) {}
+
+        ui::canvas& canvas() {
+            if (!canv_) {
+                canv_ = &(mgr_->canvas());
+            }
+            return *canv_;
+        }
+
+        virtual void set_selection(const ui::selection_set& sel) = 0;
+    };
+
+    class no_properties : public abstract_properties_widget {
+    public:
+        no_properties(ui::tool_manager* mgr, QWidget* parent) : abstract_properties_widget(mgr, parent, "no selection") {}
+        void set_selection(const ui::selection_set& sel) override {}
+    };
+
+    class mixed_properties : public abstract_properties_widget {
+    public:
+        mixed_properties(ui::tool_manager* mgr, QWidget* parent) :
+            abstract_properties_widget(mgr, parent, "mixed selection") {}
+        void set_selection(const ui::selection_set& sel) override {}
     };
 
     class node_properties : public abstract_properties_widget {
-        ui::labeled_numeric_val* x_;
-        ui::labeled_numeric_val* y_;
+        ui::TabWidget* tab_;
+        ui::labeled_numeric_val* world_x_;
+        ui::labeled_numeric_val* world_y_;
         bool multi_;
     public:
-        node_properties(QWidget* parent, bool multi) : 
+        node_properties(ui::tool_manager* mgr, QWidget* parent, bool multi) :
                 abstract_properties_widget(
+                    mgr,
                     parent, 
                     (multi) ? "selected nodes" : "selected node"
                 ),
                 multi_(multi) {
-            layout_->addWidget(
-                x_ = new ui::labeled_numeric_val("x", 0.0, -1500.0, 1500.0)
+            layout_->addWidget(tab_ = new ui::TabWidget(this));
+            tab_->setTabPosition(QTabWidget::South);
+
+            QWidget* world_tab = new QWidget();
+            QLayout* wtl;
+            world_tab->setLayout(wtl = new QVBoxLayout());
+            wtl->addWidget(world_x_ = new ui::labeled_numeric_val("x", 0.0, -1500.0, 1500.0));
+            wtl->addWidget(world_y_ = new ui::labeled_numeric_val("y", 0.0, -1500.0, 1500.0));
+            tab_->addTab(
+                world_tab,
+                "world"
             );
-            layout_->addWidget(
-                y_ = new ui::labeled_numeric_val("y", 0.0, -1500.0, 1500.0)
+            tab_->addTab(
+                new QWidget(),
+                "model"
             );
+
+            tab_->addTab(
+                new QWidget(),
+                "parent"
+            );
+
+            auto& canv = this->canvas();
+            connect(world_x_->num_edit(), &ui::number_edit::value_changed,
+                [&canv](double v) {
+                    canv.transform_selection(
+                        [v](ui::node_item* ni) {
+                            auto y = ni->model().world_y();
+                            ni->model().set_world_pos(sm::point(v, y));
+                        }
+                    );
+                    canv.sync_to_model();
+                }
+            );
+
+            connect(world_y_->num_edit(), &ui::number_edit::value_changed,
+                [&canv](double v) {
+                    canv.transform_selection(
+                        [v](ui::node_item* ni) {
+                            auto x = ni->model().world_x();
+                            ni->model().set_world_pos(sm::point(x, v));
+                        }
+                    );
+                    canv.sync_to_model();
+                }
+            );
+        }
+
+        void set_selection(const ui::selection_set& sel) override {
+            auto nodes = to_model_objects(ui::as_range_view_of_type<ui::node_item>(sel));
+            auto x_pos = get_unique_val(nodes |
+                rv::transform([](sm::node& n) {return n.world_x(); }));
+            auto y_pos = get_unique_val(nodes |
+                rv::transform([](sm::node& n) {return n.world_y(); }));
+            world_x_->num_edit()->set_value(x_pos);
+            world_y_->num_edit()->set_value(y_pos);
         }
     };
 
     class bone_properties : public abstract_properties_widget {
         ui::labeled_numeric_val* length_;
-        ui::labeled_numeric_val* rotation_;
+        QTabWidget* rotation_tab_ctrl_;
+        ui::labeled_numeric_val* world_rotation_;
+        ui::labeled_numeric_val* parent_rotation_;
         bool multi_;
     public:
-        bone_properties(QWidget* parent, bool multi) : 
+        bone_properties(ui::tool_manager* mgr, QWidget* parent, bool multi) : 
                 abstract_properties_widget(
+                    mgr,
                     parent, 
                     (multi) ? "selected bones" : "selected bone"
                 ),
@@ -86,16 +238,45 @@ namespace {
             layout_->addWidget(
                 length_ = new ui::labeled_numeric_val("length", 0.0, 0.0, 1500.0)
             );
-            layout_->addWidget(
-                rotation_ = new ui::labeled_numeric_val("rotation", 0.0, -1500.0, 1500.0)
+            
+            layout_->addWidget(rotation_tab_ctrl_ = new ui::TabWidget(this));
+            rotation_tab_ctrl_->setTabPosition(QTabWidget::South);
+
+            rotation_tab_ctrl_->addTab(
+                world_rotation_ = new ui::labeled_numeric_val("rotation", 0.0, -180.0, 180.0),
+                "world"
             );
+            rotation_tab_ctrl_->addTab(
+                world_rotation_ = new ui::labeled_numeric_val("rotation", 0.0, -180.0, 180.0),
+                "parent"
+            );
+
+            auto& canv = this->canvas();
+            connect(length_->num_edit(), &ui::number_edit::value_changed,
+                [&canv](double v) {
+                    set_bone_length(canv, v);
+                }
+            );
+        }
+
+        void set_selection(const ui::selection_set& sel) override {
+            auto bones = to_model_objects(ui::as_range_view_of_type<ui::bone_item>(sel));
+            auto length = get_unique_val(bones |
+                rv::transform([](sm::bone& b) {return b.scaled_length(); }));
+            length_->num_edit()->set_value(length);
+            //auto rotation = get_unique_val(bones |
+            //    rv::transform([](sm::bone&& b) {return b.r }));
         }
     };
 
     class joint_properties : public abstract_properties_widget {
     public:
-        joint_properties(QWidget* parent) : 
-            abstract_properties_widget(parent, "selected joint") {
+        joint_properties(ui::tool_manager* mgr, QWidget* parent) :
+            abstract_properties_widget(mgr, parent, "selected joint") {
+        }
+
+        void set_selection(const ui::selection_set& sel) override {
+
         }
     };
 
@@ -174,15 +355,14 @@ namespace {
 
     class selection_properties : public QStackedWidget {
     public:
-        selection_properties() { 
-            addWidget(new abstract_properties_widget(this, "no selection"));
-            addWidget(new node_properties(this, false));
-            addWidget(new node_properties(this, true));
-            addWidget(new bone_properties(this, false));
-            addWidget(new bone_properties(this, true));
-            addWidget(new joint_properties(this));
-            addWidget(new abstract_properties_widget(this, "mixed selection"));
-
+        selection_properties(ui::tool_manager* mgr) { 
+            addWidget(new no_properties(mgr, this));
+            addWidget(new node_properties(mgr, this, false));
+            addWidget(new node_properties(mgr, this, true));
+            addWidget(new bone_properties(mgr, this, false));
+            addWidget(new bone_properties(mgr, this, true));
+            addWidget(new joint_properties(mgr, this));
+            addWidget(new mixed_properties(mgr, this));
             set(sel_type::none, {});
         }
 
@@ -304,7 +484,7 @@ void ui::selection_tool::deactivate(canvas& canv) {
 
 QWidget* ui::selection_tool::settings_widget() {
     if (!properties_) {
-        properties_ = new selection_properties();
+        properties_ = new selection_properties(manager());
     }
     return properties_;
 }

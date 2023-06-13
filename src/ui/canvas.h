@@ -7,6 +7,7 @@
 #include <any>
 #include <unordered_set>
 #include <span>
+#include <functional>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -26,6 +27,10 @@ namespace ui {
     class abstract_stick_man_item;
 
     using selection_set = std::unordered_set<ui::abstract_stick_man_item*>;
+
+    using item_transform = std::function<void(abstract_stick_man_item*)>;
+    using node_transform = std::function<void(node_item*)>;
+    using bone_transform = std::function<void(bone_item*)>;
 
     class canvas : public QGraphicsScene {
 
@@ -65,6 +70,12 @@ namespace ui {
         double scale() const;
         void sync_to_model();
         std::vector<ui::abstract_stick_man_item*> selection() const;
+        std::vector<ui::bone_item*> selected_bones() const;
+        std::vector<ui::node_item*> selected_nodes() const;
+
+        void transform_selection(item_transform trans);
+        void transform_selection(node_transform trans);
+        void transform_selection(bone_transform trans);
 
         void add_to_selection(std::span<abstract_stick_man_item*> itms);
         void add_to_selection(abstract_stick_man_item* itm);

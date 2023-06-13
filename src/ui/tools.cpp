@@ -15,14 +15,6 @@ namespace rv = std::ranges::views;
 
 /*------------------------------------------------------------------------------------------------*/
 
-namespace {
-    /*
-    auto k_tool_registry = std::to_array<std::unique_ptr<ui::abstract_tool>>();
-    */
-}
-
-/*------------------------------------------------------------------------------------------------*/
-
 ui::abstract_tool::abstract_tool(tool_manager* mgr, QString name, QString rsrc, tool_id id) :
     mgr_(mgr),
     name_(name),
@@ -41,6 +33,10 @@ QString ui::abstract_tool::name() const {
 
 QString ui::abstract_tool::icon_rsrc() const {
     return rsrc_;
+}
+
+ui::tool_manager* ui::abstract_tool::manager() const {
+    return mgr_;
 }
 
 void ui::abstract_tool::populate_settings(tool_settings_pane* pane) {
@@ -184,43 +180,43 @@ ui::tool_manager::tool_manager(stick_man* sm) :
     tool_registry_.emplace_back(std::make_unique<ui::add_bone_tool>(this));
 }
 
-void ui::tool_manager::keyPressEvent(canvas& c, QKeyEvent* event) {
+void ui::tool_manager::keyPressEvent(ui::canvas& c, QKeyEvent* event) {
     if (has_current_tool()) {
         current_tool().keyPressEvent(c, event);
     }
 }
 
-void ui::tool_manager::keyReleaseEvent(canvas& c, QKeyEvent* event) {
+void ui::tool_manager::keyReleaseEvent(ui::canvas& c, QKeyEvent* event) {
     if (has_current_tool()) {
         current_tool().keyReleaseEvent(c, event);
     }
 }
 
-void ui::tool_manager::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool_manager::mousePressEvent(ui::canvas& c, QGraphicsSceneMouseEvent* event) {
     if (has_current_tool()) {
         current_tool().mousePressEvent(c, event);
     }
 }
 
-void ui::tool_manager::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool_manager::mouseMoveEvent(ui::canvas& c, QGraphicsSceneMouseEvent* event) {
     if (has_current_tool()) {
         current_tool().mouseMoveEvent(c, event);
     }
 }
 
-void ui::tool_manager::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool_manager::mouseReleaseEvent(ui::canvas& c, QGraphicsSceneMouseEvent* event) {
     if (has_current_tool()) {
         current_tool().mouseReleaseEvent(c, event);
     }
 }
 
-void ui::tool_manager::mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool_manager::mouseDoubleClickEvent(ui::canvas& c, QGraphicsSceneMouseEvent* event) {
     if (has_current_tool()) {
         current_tool().mouseDoubleClickEvent(c, event);
     }
 }
 
-void ui::tool_manager::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {
+void ui::tool_manager::wheelEvent(ui::canvas& c, QGraphicsSceneWheelEvent* event) {
     if (has_current_tool()) {
         current_tool().wheelEvent(c, event);
     }
@@ -263,6 +259,10 @@ void ui::tool_manager::set_current_tool(tool_id id) {
     current_tool().activate(canvas);
     auto& tool_pane = main_window_.tool_pane();
     current_tool().populate_settings(&tool_pane);
+}
+
+ui::canvas& ui::tool_manager::canvas() {
+    return main_window_.view().canvas();
 }
 
 int ui::tool_manager::index_from_id(tool_id id) const {

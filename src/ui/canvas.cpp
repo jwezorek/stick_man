@@ -1,6 +1,7 @@
 #include "canvas.h"
 #include "stick_man.h"
 #include "tools.h"
+#include "util.h"
 #include "../core/ik_sandbox.h"
 #include <boost/geometry.hpp>
 #include <ranges>
@@ -23,24 +24,9 @@ namespace {
     constexpr int k_node_zorder = 10;
     constexpr int k_bone_zorder = 5;
 
-    template<typename T, typename U>
-    auto as_range_view_of_type(const U& collection) {
-        return collection |
-            rv::transform(
-                [](auto itm)->T* {  return dynamic_cast<T*>(itm); }
-            ) | rv::filter(
-                [](T* ptr)->bool { return ptr;  }
-        );
-    }
-
-    template<typename T, typename U> 
-    std::vector<T*> to_vector_of_type(const U& collection) {
-        return as_range_view_of_type<T>(collection) | r::to<std::vector<T*>>();
-    }
-
     template<typename T>
     std::vector<ui::abstract_stick_man_item*> to_stick_man_items(const T& collection) {
-        return to_vector_of_type< ui::abstract_stick_man_item*>(collection);
+        return ui::to_vector_of_type<ui::abstract_stick_man_item*>(collection);
     }
 
     template<typename T>
@@ -183,6 +169,26 @@ void ui::canvas::sync_to_model() {
 
 std::vector<ui::abstract_stick_man_item*> ui::canvas::selection() const {
     return selection_ | r::to<std::vector<ui::abstract_stick_man_item*>>();
+};
+
+std::vector<ui::bone_item*> ui::canvas::selected_bones() const {
+    return to_vector_of_type<ui::bone_item>(selection_);
+}
+
+std::vector<ui::node_item*> ui::canvas::selected_nodes() const {
+    return to_vector_of_type<ui::node_item>(selection_);
+}
+
+void ui::canvas::transform_selection(item_transform trans) {
+    r::for_each(selection_, trans);
+}
+
+void ui::canvas::transform_selection(node_transform trans) {
+    r::for_each(as_range_view_of_type<node_item>(selection_), trans);
+}
+
+void ui::canvas::transform_selection(bone_transform trans) {
+    r::for_each(as_range_view_of_type<bone_item>(selection_), trans);
 }
 
 void ui::canvas::add_to_selection(std::span<ui::abstract_stick_man_item*> itms) {
@@ -443,7 +449,7 @@ void ui::bone_item::sync_item_to_model() {
 void ui::bone_item::sync_sel_frame_to_model() {
     auto* sf = static_cast<QGraphicsLineItem*>(selection_frame_);
     auto inv_scale = 1.0 / canvas()->scale();
-    sf->setLine(0, 0, model_.length(), 0);
+    sf->setLine(0, 0, model_.scaled_length(), 0);
     sf->setPen(QPen(k_sel_color, k_sel_thickness * inv_scale, Qt::DotLine));
 }
 

@@ -285,6 +285,35 @@ std::optional<double> ui::number_edit::value() const {
 
 /*------------------------------------------------------------------------------------------------*/
 
+ui::TabWidget::TabBar::TabBar(QWidget* a_parent) : 
+        QTabBar(a_parent) {
+    setWidth(size().width());
+}
+
+QSize ui::TabWidget::TabBar::tabSizeHint(int index) const
+{
+    return QSize(_size.width() / (count() ? count() : 1), size().height());
+}
+
+void ui::TabWidget::TabBar::setWidth(int a_width)
+{
+    _size = QSize(a_width, size().height());
+    QTabBar::resize(_size);
+}
+
+ui::TabWidget::TabWidget(QWidget* a_parent) : 
+        _tabBar(new TabBar(this)), 
+        QTabWidget(a_parent) {
+    setTabBar(_tabBar);
+}
+
+void ui::TabWidget::resizeEvent(QResizeEvent* e)  {
+    _tabBar->setWidth(size().width());
+    QTabWidget::resizeEvent(e);
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
 ui::labeled_numeric_val::labeled_numeric_val(QString txt, double val, double min,
         double max, int decimals, bool horz) {
     auto layout = (horz) ?
@@ -292,12 +321,6 @@ ui::labeled_numeric_val::labeled_numeric_val(QString txt, double val, double min
         static_cast<QLayout*>(new QVBoxLayout(this));
     layout->addWidget(new QLabel(txt));
     layout->addWidget(num_edit_ = new number_edit(val, 0, min, max, decimals));
-
-    connect(num_edit_, &number_edit::value_changed,
-        [](double new_val) {
-            qDebug() << new_val;
-        }
-    );
 }
 
 ui::number_edit* ui::labeled_numeric_val::num_edit() const {
