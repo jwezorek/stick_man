@@ -106,24 +106,143 @@ namespace {
         nodes,
         bone,
         bones,
-        joint,
+        parent_child_joint,
+        sibling_joint,
         mixed
     };
 
-    class abstract_properties_widget : public QWidget {
+    template<typename T>
+    auto to_models_of_item_type(const auto& sel) {
+        using out_type = typename T::model_type;
+        return sel | rv::transform(
+            [](auto ptr)->out_type* {
+                auto bi = dynamic_cast<T*>(ptr);
+                if (!bi) {
+                    return nullptr;
+                }
+                return &(bi->model());
+            }
+        ) | rv::filter(
+            [](auto ptr) {
+                return ptr;
+            }
+            ) | r::to<std::vector<out_type*>>();
+    }
+
+    sm::node* find_shared_node(sm::bone* b1, sm::bone* b2) {
+        std::array< sm::node*, 4> nodes = { {
+            &(b1->parent_node()),
+            &(b1->child_node()),
+            &(b2->parent_node()),
+            &(b2->child_node()),
+        } };
+        r::sort(nodes);
+        auto adj_dup = r::adjacent_find(nodes, [](auto n1, auto n2) {return n1 == n2; });
+        return (adj_dup != nodes.end()) ? *adj_dup : nullptr;
+    }
+
+    struct joint_info {
+        sel_type joint_type;
+        sm::bone* bone_1;
+        sm::bone* bone_2;
+        sm::node* shared_node;
+
+        sm::bone* parent_bone() const {
+            if (joint_type == sel_type::sibling_joint) {
+                return nullptr;
+            }
+            return (&(bone_1->parent_node()) == shared_node) ? bone_2 : bone_1;
+        }
+
+        sm::bone* child_bone() const {
+            auto parent = parent_bone();
+            if (!parent) {
+                return nullptr;
+            }
+            return (bone_1 == parent) ? bone_2 : bone_1;
+        }
+    };
+
+    std::optional<joint_info> joint_selection_info(const auto& sel) {
+        if (sel.size() != 3) {
+            return {};
+        }
+        auto bones = to_models_of_item_type<ui::bone_item>(sel);
+        if (bones.size() != 2) {
+            return {};
+        }
+        auto shared_node = find_shared_node(bones[0], bones[1]);
+        if (!shared_node) {
+            return {};
+        }
+        auto nodes = to_models_of_item_type<ui::node_item>(sel);
+        if (nodes.size() != 1) {
+            return {};
+        }
+
+        joint_info ji;
+        ji.shared_node = shared_node;
+        ji.bone_1 = bones[0];
+        ji.bone_2 = bones[1];
+        auto* parent_1 = &(ji.bone_1->parent_node());
+        auto* parent_2 = &(ji.bone_2->parent_node());
+
+        ji.joint_type = (shared_node == parent_1 && shared_node == parent_2) ?
+            sel_type::sibling_joint :
+            sel_type::parent_child_joint;
+
+        return ji;
+    }
+
+    sel_type selection_type(const auto& sel) {
+        if (sel.empty()) {
+            return sel_type::none;
+        }
+        auto joint = joint_selection_info(sel);
+        if (joint) {
+            return joint->joint_type;
+        }
+        bool has_node = false;
+        bool has_bone = false;
+        for (auto itm_ptr : sel) {
+            has_node = dynamic_cast<ui::node_item*>(itm_ptr) || has_node;
+            has_bone = dynamic_cast<ui::bone_item*>(itm_ptr) || has_bone;
+            if (has_node && has_bone) {
+                return sel_type::mixed;
+            }
+        }
+        bool multi = sel.size() > 1;
+        if (has_node) {
+            return multi ? sel_type::nodes : sel_type::node;
+        } else {
+            return multi ? sel_type::bones : sel_type::bone;
+        }
+    }
+
+    class abstract_properties_widget : public QScrollArea {
     protected:
-        QLayout* layout_;
+        QVBoxLayout* layout_;
         QLabel* title_;
         ui::tool_manager* mgr_;
         ui::canvas* canv_;
     public:
         abstract_properties_widget(ui::tool_manager* mgr, QWidget* parent, QString title) :
-                QWidget(parent),
+                QScrollArea(parent),
                 mgr_(mgr),
-                canv_(nullptr){
-            layout_ = new ui::FlowLayout(this);
+                canv_(nullptr),
+                title_(nullptr),
+                layout_(new QVBoxLayout(this)) {
             layout_->addWidget(title_ = new QLabel(title));
             hide();
+        }
+
+        void init() {
+            populate();
+            layout_->addStretch();
+        }
+
+        virtual void populate() {
+
         }
 
         ui::canvas& canvas() {
@@ -162,14 +281,19 @@ namespace {
                     (multi) ? "selected nodes" : "selected node"
                 ),
                 multi_(multi) {
+        }
+
+        void populate() override {
+
             layout_->addWidget(tab_ = new ui::TabWidget(this));
             tab_->setTabPosition(QTabWidget::South);
 
             QWidget* world_tab = new QWidget();
-            QLayout* wtl;
+            QVBoxLayout* wtl;
             world_tab->setLayout(wtl = new QVBoxLayout());
             wtl->addWidget(world_x_ = new ui::labeled_numeric_val("x", 0.0, -1500.0, 1500.0));
             wtl->addWidget(world_y_ = new ui::labeled_numeric_val("y", 0.0, -1500.0, 1500.0));
+            wtl->addStretch();
             tab_->addTab(
                 world_tab,
                 "world"
@@ -183,7 +307,7 @@ namespace {
                 new QWidget(),
                 "parent"
             );
-
+            tab_->setFixedHeight(135); //TODO: figure out how to size a tab to its contents
             auto& canv = this->canvas();
             connect(world_x_->num_edit(), &ui::number_edit::value_changed,
                 [&canv](double v) {
@@ -235,10 +359,13 @@ namespace {
                     (multi) ? "selected bones" : "selected bone"
                 ),
                 multi_(multi) {
+        }
+
+        void populate() override {
             layout_->addWidget(
                 length_ = new ui::labeled_numeric_val("length", 0.0, 0.0, 1500.0)
             );
-            
+
             layout_->addWidget(rotation_tab_ctrl_ = new ui::TabWidget(this));
             rotation_tab_ctrl_->setTabPosition(QTabWidget::South);
 
@@ -250,6 +377,7 @@ namespace {
                 world_rotation_ = new ui::labeled_numeric_val("rotation", 0.0, -180.0, 180.0),
                 "parent"
             );
+            rotation_tab_ctrl_->setFixedHeight(70);
 
             auto& canv = this->canvas();
             connect(length_->num_edit(), &ui::number_edit::value_changed,
@@ -270,88 +398,74 @@ namespace {
     };
 
     class joint_properties : public abstract_properties_widget {
+        QLabel* bones_lbl_;
+        QPushButton* constraint_btn_;
+        QGroupBox* constraint_box_;
+
+        QGroupBox* create_constraint_box() {
+            auto box = new QGroupBox();
+
+            auto* layout = new QVBoxLayout();
+            box->setLayout(layout);
+            layout->addWidget(new ui::labeled_numeric_val("minimum angle", 0, -180, 180));
+            layout->addWidget(new ui::labeled_numeric_val("maximum angle", 0, -180, 180));
+            layout_->addWidget(box);
+            box->hide();
+
+            return box;
+        }
+        
+        QString name_of_joint(const joint_info& ji) {
+            sm::bone* bone_1;
+            sm::bone* bone_2;
+
+            if (ji.joint_type == sel_type::parent_child_joint) {
+                bone_1 = ji.parent_bone();
+                bone_2 = ji.child_bone();
+            } else {
+                bone_1 = ji.bone_1;
+                bone_2 = ji.bone_2;
+                if (ji.bone_1->name() > ji.bone_2->name()) {
+                    std::swap(bone_1, bone_2);
+                }
+            }
+            std::string name = bone_1->name() + "/" + bone_2->name();
+            return name.c_str();
+        }
+
+        void add_or_delete_constraint() {
+            if (constraint_box_->isVisible()) {
+                constraint_box_->hide();
+                constraint_btn_->setText("add constraint");
+            } else {
+                constraint_box_->show();
+                constraint_btn_->setText("delete constraint");
+            }
+        }
+
     public:
-        joint_properties(ui::tool_manager* mgr, QWidget* parent) :
-            abstract_properties_widget(mgr, parent, "selected joint") {
+        joint_properties(ui::tool_manager* mgr, QWidget* parent, bool parent_child) :
+            abstract_properties_widget(
+                mgr, 
+                parent, 
+                (parent_child) ? "selected parent-child joint" : "selected sibling joint"
+            ) {
+        }
+
+        void populate() override {
+            layout_->addWidget(bones_lbl_ = new QLabel());
+            layout_->addWidget(constraint_box_ = create_constraint_box());
+            layout_->addWidget(constraint_btn_ = new QPushButton("add constraint"));
+
+            connect(constraint_btn_, &QPushButton::clicked,
+                this, &joint_properties::add_or_delete_constraint);
         }
 
         void set_selection(const ui::selection_set& sel) override {
-
+            auto ji = joint_selection_info(sel);
+            bones_lbl_->setText(name_of_joint(*ji));
         }
     };
-
-    template<typename T>
-    auto to_models_of_item_type(const auto& sel) {
-        using out_type = typename T::model_type;
-        return sel | rv::transform(
-            [](auto ptr)->out_type* {
-                auto bi = dynamic_cast<T*>(ptr);
-                if (!bi) {
-                    return nullptr;
-                }
-                return &(bi->model());
-            }
-        ) | rv::filter(
-            [](auto ptr) {
-                return ptr;
-            }
-        ) | r::to<std::vector<out_type*>>();
-    }
-
-    sm::node* find_shared_node(sm::bone* b1, sm::bone* b2) {
-        std::array< sm::node*, 4> nodes = { {
-            &(b1->parent_node()),
-            &(b1->child_node()),
-            &(b2->parent_node()),
-            &(b2->child_node()),
-        } };
-        r::sort(nodes);
-        auto adj_dup = r::adjacent_find(nodes, [](auto n1, auto n2) {return n1 == n2; });
-        return (adj_dup != nodes.end()) ? *adj_dup: nullptr;
-    }
-
-    bool is_joint_selection(const auto& sel) {
-        if (sel.size() != 3) {
-            return false;
-        }
-        auto bones = to_models_of_item_type<ui::bone_item>(sel);
-        if (bones.size() != 2) {
-            return false;
-        }
-        auto shared_node = find_shared_node(bones[0],bones[1]);
-        if (!shared_node) {
-            return false;
-        }
-        auto nodes = to_models_of_item_type<ui::node_item>(sel);
-        if (nodes.size() != 1) {
-            return false;
-        }
-        return shared_node == nodes.front();
-    }
-
-    sel_type selection_type(const auto& sel) {
-        if (sel.empty()) {
-            return sel_type::none;
-        }
-        if (is_joint_selection(sel)) {
-            return sel_type::joint;
-        }
-        bool has_node = false;
-        bool has_bone = false;
-        for (auto itm_ptr : sel) {
-            has_node = dynamic_cast<ui::node_item*>(itm_ptr) || has_node;
-            has_bone = dynamic_cast<ui::bone_item*>(itm_ptr) || has_bone;
-            if (has_node && has_bone) {
-                return sel_type::mixed;
-            }
-        }
-        bool multi = sel.size() > 1;
-        if (has_node) {
-            return multi ? sel_type::nodes : sel_type::node;
-        } else {
-            return multi ? sel_type::bones : sel_type::bone;
-        }
-    }
 
     class selection_properties : public QStackedWidget {
     public:
@@ -361,8 +475,13 @@ namespace {
             addWidget(new node_properties(mgr, this, true));
             addWidget(new bone_properties(mgr, this, false));
             addWidget(new bone_properties(mgr, this, true));
-            addWidget(new joint_properties(mgr, this));
+            addWidget(new joint_properties(mgr, this, true));
+            addWidget(new joint_properties(mgr, this, false));
             addWidget(new mixed_properties(mgr, this));
+           
+            for (auto* child : findChildren<abstract_properties_widget*>()) {
+                child->init();
+            }
             set(sel_type::none, {});
         }
 
@@ -407,11 +526,7 @@ void ui::selection_tool::activate(canvas& canv) {
 }
 
 void ui::selection_tool::keyReleaseEvent(canvas & c, QKeyEvent * event) {
-    auto props = static_cast<selection_properties*>(properties_);
-    auto node_props = static_cast<node_properties*>(props->current_props());
-    for (auto* child : node_props->children()) {
 
-    }
 }
 
 void ui::selection_tool::mousePressEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
