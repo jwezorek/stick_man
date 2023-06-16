@@ -351,3 +351,22 @@ void ui::clear_layout(QLayout* layout, bool deleteWidgets)
         delete item;
     }
 }
+
+QColor ui::lerp_colors(const QColor& color1, const QColor& color2, double factor) {
+    auto r1 = color1.red();
+    auto g1 = color1.green();
+    auto b1 = color1.blue();
+    auto a1 = color1.alpha();
+
+    auto r2 = color2.red();
+    auto g2 = color2.green();
+    auto b2 = color2.blue();
+    auto a2 = color2.alpha();
+
+    int red = std::round(r1 + (r2 - r1) * factor);
+    int green = std::round(g1 + (g2 - g1) * factor);
+    int blue = std::round(b1 + (b2 - b1) * factor);
+    int alpha = std::round(a1 + (a2 - a1) * factor);
+
+    return QColor(red, green, blue, alpha);
+}

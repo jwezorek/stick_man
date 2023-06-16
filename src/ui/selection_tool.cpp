@@ -220,11 +220,12 @@ namespace {
     }
 
     class abstract_properties_widget : public QScrollArea {
+    private:
+        ui::canvas* canv_;
     protected:
         QVBoxLayout* layout_;
         QLabel* title_;
         ui::tool_manager* mgr_;
-        ui::canvas* canv_;
     public:
         abstract_properties_widget(ui::tool_manager* mgr, QWidget* parent, QString title) :
                 QScrollArea(parent),
@@ -378,6 +379,7 @@ namespace {
                 "parent"
             );
             rotation_tab_ctrl_->setFixedHeight(70);
+            //TODO: figure out how to size a tab to its contents
 
             auto& canv = this->canvas();
             connect(length_->num_edit(), &ui::number_edit::value_changed,
@@ -401,6 +403,10 @@ namespace {
         QLabel* bones_lbl_;
         QPushButton* constraint_btn_;
         QGroupBox* constraint_box_;
+
+        ui::selection_tool* sel_tool() const {
+            return static_cast<ui::selection_tool*>(&mgr_->current_tool());
+        }
 
         QGroupBox* create_constraint_box() {
             auto box = new QGroupBox();
@@ -435,11 +441,15 @@ namespace {
 
         void add_or_delete_constraint() {
             if (constraint_box_->isVisible()) {
-                constraint_box_->hide();
-                constraint_btn_->setText("add constraint");
+                //constraint_box_->hide();
+                //constraint_btn_->setText("add constraint");
             } else {
-                constraint_box_->show();
-                constraint_btn_->setText("delete constraint");
+                sel_tool()->set_modal(
+                    ui::selection_tool::modal_state::defining_joint_constraint,
+                    canvas()
+                );
+                //constraint_box_->show();
+                //constraint_btn_->setText("delete constraint");
             }
         }
 
@@ -499,6 +509,7 @@ namespace {
 ui::selection_tool::selection_tool(tool_manager* mgr) :
     intitialized_(false),
     properties_(nullptr),
+    state_(modal_state::none),
     abstract_tool(mgr, "selection", "arrow_icon.png", ui::tool_id::selection) {
 
 }
@@ -523,6 +534,7 @@ void ui::selection_tool::activate(canvas& canv) {
             }
         }
     );
+    state_ = modal_state::none;
 }
 
 void ui::selection_tool::keyReleaseEvent(canvas & c, QKeyEvent * event) {
@@ -590,6 +602,19 @@ void ui::selection_tool::handle_sel_changed(
     props->set(type_of_sel, sel);
 }
 
+void ui::selection_tool::set_modal(modal_state state, canvas& c) {
+    static auto text = std::to_array<QString>({
+        "",
+        "Select angle of joint constraint",
+        "Select anchor bone for joint constraint"
+    });
+    state_ = state;
+    if (state == modal_state::none) {
+        c.hide_status_line();
+        return;
+    }
+    c.show_status_line(text[static_cast<int>(state_)]);
+}
 
 void ui::selection_tool::deactivate(canvas& canv) {
     auto& view = canv.view();

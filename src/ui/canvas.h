@@ -40,6 +40,7 @@ namespace ui {
 
         constexpr static auto k_grid_line_spacing = 10;
         double scale_ = 1.0;
+        QString status_line_;
         std::unordered_set<ui::abstract_stick_man_item*> selection_;
 
         tool_manager& tool_mgr();
@@ -54,11 +55,13 @@ namespace ui {
         void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override;
         void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override;
         void wheelEvent(QGraphicsSceneWheelEvent* event) override;
+        void drawBackground(QPainter* painter, const QRectF& rect) override;
+        void drawForeground(QPainter* painter, const QRectF& rect) override;
+        void focusOutEvent(QFocusEvent* focusEvent) override;
 
     public:
 
         canvas();
-        void drawBackground(QPainter* painter, const QRectF& rect) override;
         canvas_view& view() const;
         node_item* top_node(const QPointF& pt) const;
         abstract_stick_man_item* top_item(const QPointF& pt) const;
@@ -72,21 +75,21 @@ namespace ui {
         std::vector<ui::abstract_stick_man_item*> selection() const;
         std::vector<ui::bone_item*> selected_bones() const;
         std::vector<ui::node_item*> selected_nodes() const;
+        bool is_status_line_visible() const;
 
         void transform_selection(item_transform trans);
         void transform_selection(node_transform trans);
         void transform_selection(bone_transform trans);
-
         void add_to_selection(std::span<abstract_stick_man_item*> itms);
         void add_to_selection(abstract_stick_man_item* itm);
-
         void subtract_from_selection(std::span<abstract_stick_man_item*> itms);
         void subtract_from_selection(abstract_stick_man_item* itm);
-
         void set_selection(std::span<abstract_stick_man_item*> itms);
         void set_selection(abstract_stick_man_item* itm);
-
         void clear_selection();
+
+        void show_status_line(const QString& txt);
+        void hide_status_line();
 
     signals:
         void selection_changed(

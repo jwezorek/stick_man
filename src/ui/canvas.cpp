@@ -23,6 +23,8 @@ namespace {
     constexpr double k_sel_frame_distance = 4.0;
     constexpr int k_node_zorder = 10;
     constexpr int k_bone_zorder = 5;
+    constexpr int k_ribbon_height = 35;
+    const auto k_ribbon_base_color = Qt::yellow;
 
     template<typename T>
     std::vector<ui::abstract_stick_man_item*> to_stick_man_items(const T& collection) {
@@ -41,6 +43,33 @@ namespace {
             return nullptr;
         }
         return *first;
+    }
+
+    void draw_ribbon(QPainter* painter, QRect rr, QString txt) {
+        QRect ribbon_rect = rr;
+
+        // cosmetic slop, ... idk.
+        ribbon_rect.setLeft(rr.left() - 1);
+        ribbon_rect.setWidth(rr.width() + 2);
+
+        QColor base_color = ui::lerp_colors(QColor(k_ribbon_base_color), QColor(Qt::white), 0.2);
+        QColor mid_color = ui::lerp_colors( base_color, QColor(Qt::white), 0.1 );
+        QColor shaded_color = ui::lerp_colors( base_color, QColor(Qt::black), 0.05 );
+        QLinearGradient gradient(ribbon_rect.topLeft(), ribbon_rect.bottomLeft());
+
+        gradient.setColorAt(0.0, shaded_color);
+        gradient.setColorAt(0.15, base_color);     
+        gradient.setColorAt(0.5, mid_color);
+        gradient.setColorAt(0.85, base_color);     
+        gradient.setColorAt(1.0, shaded_color);
+
+        painter->fillRect(ribbon_rect, gradient);
+
+        painter->setPen(Qt::black);
+        auto text_rect = ribbon_rect;
+        text_rect.setRight(ribbon_rect.right() - 15);
+        painter->drawText(text_rect, Qt::AlignRight | Qt::AlignVCenter, txt);
+        painter->drawLine(ribbon_rect.topLeft(), ribbon_rect.topRight());
     }
 
     ui::abstract_stick_man_item* to_stick_man(QGraphicsItem* itm) {
@@ -140,6 +169,48 @@ void ui::canvas::drawBackground(QPainter* painter, const QRectF& dirty_rect) {
     draw_grid_lines(painter, rect, k_grid_line_spacing);
 }
 
+QRect client_rectangle(const QGraphicsView* view) {
+    auto view_rect = view->contentsRect();
+    if (view->verticalScrollBar()->isVisible()) {
+        auto wd = view_rect.width();
+        view_rect.setWidth(wd - view->verticalScrollBar()->width());
+    }
+    if (view->horizontalScrollBar()->isVisible()) {
+        auto hgt = view_rect.height();
+        view_rect.setHeight(hgt - view->horizontalScrollBar()->height());
+    }
+    return view_rect;
+}
+
+void ui::canvas::drawForeground(QPainter* painter, const QRectF& rect) {
+    QGraphicsScene::drawForeground(painter, rect);
+
+    if (is_status_line_visible()) {
+        QGraphicsView* view = views().first();
+        if (!view) {
+            return;
+        }
+
+        painter->setTransform(QTransform());
+
+        auto view_rect = client_rectangle(view);
+        QRect ribbon_rect = {
+            view_rect.bottomLeft() - QPoint(0, 35),
+            QSize(view_rect.width(), 35)
+        };
+        
+        draw_ribbon(painter, ribbon_rect, status_line_);
+
+        painter->resetTransform();
+    }
+}
+
+void ui::canvas::focusOutEvent(QFocusEvent* focusEvent) {
+    if (is_status_line_visible()) {
+        hide_status_line();
+    }
+}
+
 ui::tool_manager& ui::canvas::tool_mgr() {
     return view().main_window().tool_mgr();
 }
@@ -177,6 +248,10 @@ std::vector<ui::bone_item*> ui::canvas::selected_bones() const {
 
 std::vector<ui::node_item*> ui::canvas::selected_nodes() const {
     return to_vector_of_type<ui::node_item>(selection_);
+}
+
+bool ui::canvas::is_status_line_visible() const {
+    return !status_line_.isEmpty();
 }
 
 void ui::canvas::transform_selection(item_transform trans) {
@@ -234,6 +309,17 @@ void ui::canvas::sync_selection() {
     emit selection_changed(selection_);
 }
 
+void ui::canvas::show_status_line(const QString& txt) {
+    status_line_ = txt;
+    update();
+    setFocus();
+}
+
+void ui::canvas::hide_status_line() {
+    status_line_.clear();
+    update();
+}
+
 /*------------------------------------------------------------------------------------------------*/
 
 ui::canvas_view& ui::canvas::view() const {
@@ -271,6 +357,7 @@ std::vector<ui::bone_item*> ui::canvas::bone_items() const {
 }
 
 void ui::canvas::keyPressEvent(QKeyEvent* event) {
+    show_status_line("Hello there, blah blah blah");
     tool_mgr().keyPressEvent(*this, event);
 }
 

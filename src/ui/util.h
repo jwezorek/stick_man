@@ -110,4 +110,6 @@ namespace ui {
     std::vector<T*> to_vector_of_type(const U& collection) {
         return as_range_view_of_type<T>(collection) | std::ranges::to<std::vector<T*>>();
     }
+
+    QColor lerp_colors(const QColor& color1, const QColor& color2, qreal factor);
 }
