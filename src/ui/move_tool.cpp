@@ -56,26 +56,6 @@ namespace {
         return &parent_node;
     }
 
-    QRectF rect_from_circle(QPointF center, double radius) {
-        auto topleft = center - QPointF(radius, radius);
-        return { topleft, QSizeF(2.0 * radius, 2.0 * radius) };
-    }
-
-    int to_sixteenth_of_deg(double theta) {
-        return static_cast<int>(
-            theta * ((180.0 * 16.0) / std::numbers::pi)
-        );
-    }
-
-    sm::point from_qt_pt(QPointF pt) {
-        return { pt.x(), pt.y()};
-    }
-
-    double angle_through_points(QPointF origin, QPointF pt) {
-        auto diff = pt - origin;
-        return std::atan2(diff.y(), diff.x());
-    }
-
     class fk_rotate_tool : public abstract_move_tool {
     public:
         fk_rotate_tool() :
@@ -100,7 +80,7 @@ namespace {
         };
 
         void mouseMoveEvent(move_state& ms) override {
-            auto theta = angle_through_points(ms.anchor_->scenePos(), ms.event_->scenePos()) -
+            auto theta = ui::angle_through_points(ms.anchor_->scenePos(), ms.event_->scenePos()) -
                 ms.bone_->model().world_rotation();
 
             ms.bone_->model().rotate(theta);
@@ -144,7 +124,7 @@ namespace {
 
         void mouseMoveEvent(move_state& ms) override {
             if (ms.anchor_) {
-                sm::perform_fabrik(ms.anchor_->model(), from_qt_pt(ms.event_->scenePos()));
+                sm::perform_fabrik(ms.anchor_->model(), ui::from_qt_pt(ms.event_->scenePos()));
                 ms.canvas_->sync_to_model();
             }
         };
@@ -174,7 +154,7 @@ namespace {
         void mouseMoveEvent(move_state& ms) override {
             if (ms.anchor_) {
                 ms.anchor_->model().set_world_pos(
-                    from_qt_pt(ms.event_->scenePos())
+                    ui::from_qt_pt(ms.event_->scenePos())
                 );
                 ms.canvas_->sync_to_model();
             }

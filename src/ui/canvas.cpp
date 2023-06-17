@@ -76,14 +76,6 @@ namespace {
         return dynamic_cast<ui::abstract_stick_man_item*>(itm);
     }
 
-    double radians_to_degrees(double radians) {
-        return radians * (180.0 / std::numbers::pi_v<double>);
-    }
-
-    QPointF to_qt_pt(const sm::point& pt) {
-        return { pt.x, pt.y };
-    }
-
     void draw_grid_lines(QPainter* painter, const QRectF& r, double line_spacing) {
         painter->fillRect(r, Qt::white);
         QPen dark_pen(k_dark_gridline_color, 0);
@@ -148,8 +140,8 @@ namespace {
         itm->setPos(0, 0);
         itm->setRotation(0);
         itm->setPolygon(bone_polygon(len, k_node_radius, scale));
-        itm->setRotation(radians_to_degrees(rot));
-        itm->setPos(to_qt_pt(pos));
+        itm->setRotation(ui::radians_to_degrees(rot));
+        itm->setPos(ui::to_qt_pt(pos));
     }
 
 }

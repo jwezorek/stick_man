@@ -1,10 +1,17 @@
 #include "util.h"
 #include <QtWidgets>
 #include <sstream>
+#include <numbers>
 
 /*------------------------------------------------------------------------------------------------*/
 
 namespace {
+
+    int to_sixteenth_of_deg(double theta) {
+        return static_cast<int>(
+            theta * ((180.0 * 16.0) / std::numbers::pi)
+            );
+    }
 
     class title_bar : public QWidget {
         QLabel* label_;
@@ -369,4 +376,57 @@ QColor ui::lerp_colors(const QColor& color1, const QColor& color2, double factor
     int alpha = std::round(a1 + (a2 - a1) * factor);
 
     return QColor(red, green, blue, alpha);
+}
+
+QRectF ui::rect_from_circle(QPointF center, double radius) {
+    auto topleft = center - QPointF(radius, radius);
+    return { topleft, QSizeF(2.0 * radius, 2.0 * radius) };
+}
+
+void ui::set_arc(
+    QGraphicsEllipseItem* gei, QPointF center, double radius,
+    double start_theta, double span_theta) {
+    gei->setRect(rect_from_circle(center, radius));
+    gei->setStartAngle(to_sixteenth_of_deg(-start_theta));
+    gei->setSpanAngle(to_sixteenth_of_deg(-span_theta));
+}
+
+double ui::radians_to_degrees(double radians) {
+	return radians * (180.0 / std::numbers::pi_v<double>);
+}
+
+QPointF ui::to_qt_pt(const sm::point& pt) {
+	return { pt.x, pt.y };
+}
+
+sm::point ui::from_qt_pt(QPointF pt) {
+	return { pt.x(), pt.y() };
+}
+
+double ui::angle_through_points(QPointF origin, QPointF pt) {
+	auto diff = pt - origin;
+	return std::atan2(diff.y(), diff.x());
+}
+
+double ui::distance(QPointF p1, QPointF p2) {
+	return sm::distance(from_qt_pt(p1), from_qt_pt(p2));
+}
+
+double ui::normalize_angle(double theta) {
+	auto cosine = std::cos(theta);
+	auto sine = std::sin(theta);
+	return std::atan2(sine, cosine);
+}
+
+double ui::clamp_above(double v, double floor) {
+	return (v > floor) ? v : floor;
+}
+
+double ui::clamp_below(double v, double ceiling) {
+	return (v < ceiling) ? v : ceiling;
+}
+
+double ui::clamp(double v, double floor, double ceiling) {
+	return clamp_below(clamp_above(v, floor), ceiling);
+
 }

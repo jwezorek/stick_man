@@ -161,6 +161,10 @@ namespace {
             }
             return (bone_1 == parent) ? bone_2 : bone_1;
         }
+
+		QPointF center() const {
+			return ui::to_qt_pt( shared_node->world_pos() );
+		}
     };
 
     std::optional<joint_info> joint_selection_info(const auto& sel) {
@@ -403,6 +407,10 @@ namespace {
         QLabel* bones_lbl_;
         QPushButton* constraint_btn_;
         QGroupBox* constraint_box_;
+        joint_info joint_info_;
+		QGraphicsEllipseItem* arc_rubber_band_;
+		double constraint_start_theta_;
+		double constraint_drag_radius_;
 
         ui::selection_tool* sel_tool() const {
             return static_cast<ui::selection_tool*>(&mgr_->current_tool());
@@ -421,11 +429,12 @@ namespace {
             return box;
         }
         
-        QString name_of_joint(const joint_info& ji) {
+        QString name_of_joint() {
+            const auto& ji = joint_info_;
             sm::bone* bone_1;
             sm::bone* bone_2;
 
-            if (ji.joint_type == sel_type::parent_child_joint) {
+            if (joint_info_.joint_type == sel_type::parent_child_joint) {
                 bone_1 = ji.parent_bone();
                 bone_2 = ji.child_bone();
             } else {
@@ -455,6 +464,7 @@ namespace {
 
     public:
         joint_properties(ui::tool_manager* mgr, QWidget* parent, bool parent_child) :
+			arc_rubber_band_(nullptr),
             abstract_properties_widget(
                 mgr, 
                 parent, 
@@ -472,8 +482,57 @@ namespace {
         }
 
         void set_selection(const ui::selection_set& sel) override {
-            auto ji = joint_selection_info(sel);
-            bones_lbl_->setText(name_of_joint(*ji));
+            joint_info_ = joint_selection_info(sel).value();
+            bones_lbl_->setText(name_of_joint());
+        }
+
+        joint_info joint_info() const {
+            return joint_info_;
+        }
+
+        void start_dragging_joint_constraint(ui::canvas& canv, QGraphicsSceneMouseEvent* event) {
+			if (!arc_rubber_band_) {
+				arc_rubber_band_ = new QGraphicsEllipseItem();
+				arc_rubber_band_->setPen(QPen(Qt::black, 2.0, Qt::DotLine));
+				canv.addItem(arc_rubber_band_);
+			}
+			arc_rubber_band_->show();
+			auto center = joint_info().center();
+			ui::set_arc(
+				arc_rubber_band_,
+				center,
+				constraint_drag_radius_ = ui::distance(center, event->scenePos()),
+				constraint_start_theta_ = ui::angle_through_points(center, event->scenePos()),
+				0.0
+			);
+        }
+
+        void drag_joint_constraint(ui::canvas& canv, QGraphicsSceneMouseEvent* event) {
+			auto ji = joint_info();
+			auto center = ji.center();
+			auto anchor_rot = ji.parent_bone()->world_rotation();
+			auto start_theta = constraint_start_theta_;
+			auto end_theta = ui::angle_through_points(center, event->scenePos());
+
+			auto start_relative = ui::normalize_angle(start_theta  - anchor_rot);
+			auto end_relative = ui::normalize_angle(end_theta - anchor_rot);
+			auto span_angle = ui::clamp_above(end_relative - start_relative, 0);
+
+			ui::set_arc(
+				arc_rubber_band_,
+				center,
+				constraint_drag_radius_,
+				constraint_start_theta_,
+				span_angle
+			);
+        }
+
+        bool is_dragging_joint_constraint() const {
+			return arc_rubber_band_->isVisible();
+        }
+
+        void stop_dragging_joint_constraint(ui::canvas& canv, QGraphicsSceneMouseEvent* event) {
+			arc_rubber_band_->hide();
         }
     };
 
@@ -538,14 +597,41 @@ void ui::selection_tool::activate(canvas& canv) {
 }
 
 void ui::selection_tool::keyReleaseEvent(canvas & c, QKeyEvent * event) {
-
+    if (is_in_modal_state() && event->key() == Qt::Key_Escape) {
+        set_modal(modal_state::none, c);
+    }
 }
 
 void ui::selection_tool::mousePressEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     rubber_band_ = {};
+
+    if (is_in_modal_state()) {
+        auto props = static_cast<selection_properties*>(settings_widget());
+        auto joint_props = static_cast<joint_properties*>(props->current_props());
+        joint_props->start_dragging_joint_constraint(canv, event);
+    }
+}
+
+
+void ui::selection_tool::mouseMoveEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
+    if (is_in_modal_state()) {
+        auto props = static_cast<selection_properties*>(settings_widget());
+        auto joint_props = static_cast<joint_properties*>(props->current_props());
+        if (joint_props->is_dragging_joint_constraint()) {
+            joint_props->drag_joint_constraint(canv, event);
+        }
+    }
 }
 
 void ui::selection_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
+    if (is_in_modal_state()) {
+        auto props = static_cast<selection_properties*>(settings_widget());
+        auto joint_props = static_cast<joint_properties*>(props->current_props());
+        if (joint_props->is_dragging_joint_constraint()) {
+            joint_props->stop_dragging_joint_constraint(canv, event);
+        }
+        return;
+    }
     bool shift_down = event->modifiers().testFlag(Qt::ShiftModifier);
     bool alt_down = event->modifiers().testFlag(Qt::AltModifier);
     if (rubber_band_) {
@@ -610,13 +696,20 @@ void ui::selection_tool::set_modal(modal_state state, canvas& c) {
     });
     state_ = state;
     if (state == modal_state::none) {
+        c.view().setDragMode(QGraphicsView::RubberBandDrag);
         c.hide_status_line();
         return;
     }
+    c.view().setDragMode(QGraphicsView::NoDrag);
     c.show_status_line(text[static_cast<int>(state_)]);
 }
 
+bool ui::selection_tool::is_in_modal_state() const {
+    return state_ != modal_state::none;
+}
+
 void ui::selection_tool::deactivate(canvas& canv) {
+    canv.hide_status_line();
     auto& view = canv.view();
     view.setDragMode(QGraphicsView::NoDrag);
     view.disconnect(conn_);

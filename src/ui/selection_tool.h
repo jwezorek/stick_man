@@ -36,10 +36,12 @@ namespace ui {
 
         void keyReleaseEvent(canvas& c, QKeyEvent* event) override;
         void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void deactivate(canvas& c) override;
         QWidget* settings_widget() override;
         void set_modal(modal_state state, canvas& c);
+        bool is_in_modal_state() const;
     };
 
 }

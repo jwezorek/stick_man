@@ -3,6 +3,7 @@
 #include <QWidget>
 #include <QtWidgets>
 #include <ranges>
+#include "../core/ik_types.h"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -112,4 +113,18 @@ namespace ui {
     }
 
     QColor lerp_colors(const QColor& color1, const QColor& color2, qreal factor);
+    QRectF rect_from_circle(QPointF center, double radius);
+    void set_arc(
+        QGraphicsEllipseItem* gei, QPointF center, double radius,
+        double start_theta, double span_theta
+    );
+	double radians_to_degrees(double radians);
+	QPointF to_qt_pt(const sm::point& pt);
+	sm::point from_qt_pt(QPointF pt);
+	double angle_through_points(QPointF origin, QPointF pt);
+	double distance(QPointF p1, QPointF p2);
+	double normalize_angle(double theta);
+	double clamp_above(double v, double floor);
+	double clamp_below(double v, double ceiling);
+	double clamp(double v, double floor, double ceiling);
 }
