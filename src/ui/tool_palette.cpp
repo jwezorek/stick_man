@@ -74,18 +74,6 @@ ui::tool_palette::tool_palette(QMainWindow* wnd) :
     );
 }
 
-/*
-QSize ui::tool_palette::sizeHint() const {
-    auto children = findChildren<tool_btn*>();
-    auto bounds = QRect(0,0,0,0);
-    for (auto btn : children) {
-        auto rect = btn->geometry();
-        bounds = bounds.united(rect);
-    }
-    return bounds.size();
-}
-*/
-
 ui::tool_btn* ui::tool_palette::tool_from_id(tool_id id)
 {
     if (id == tool_id::none) {

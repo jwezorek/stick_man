@@ -143,29 +143,18 @@ namespace {
 
     struct joint_info {
         sel_type joint_type;
-        sm::bone* bone_1;
-        sm::bone* bone_2;
+        sm::bone* anchor_bone;
+        sm::bone* free_bone;
         sm::node* shared_node;
-
-        sm::bone* parent_bone() const {
-            if (joint_type == sel_type::sibling_joint) {
-                return nullptr;
-            }
-            return (&(bone_1->parent_node()) == shared_node) ? bone_2 : bone_1;
-        }
-
-        sm::bone* child_bone() const {
-            auto parent = parent_bone();
-            if (!parent) {
-                return nullptr;
-            }
-            return (bone_1 == parent) ? bone_2 : bone_1;
-        }
-
-		QPointF center() const {
-			return ui::to_qt_pt( shared_node->world_pos() );
-		}
     };
+
+	QPointF joint_axis(const joint_info& ji) {
+		return ui::to_qt_pt(ji.shared_node->world_pos());
+	}
+
+	sm::bone* parent_bone(sm::bone* bone_1, sm::bone* bone_2) {
+		return (&(bone_1->parent_node()) == find_shared_node(bone_1, bone_2)) ? bone_2 : bone_1;
+	}
 
     std::optional<joint_info> joint_selection_info(const auto& sel) {
         if (sel.size() != 3) {
@@ -186,10 +175,10 @@ namespace {
 
         joint_info ji;
         ji.shared_node = shared_node;
-        ji.bone_1 = bones[0];
-        ji.bone_2 = bones[1];
-        auto* parent_1 = &(ji.bone_1->parent_node());
-        auto* parent_2 = &(ji.bone_2->parent_node());
+		ji.anchor_bone = parent_bone(bones[0], bones[1]);
+		ji.free_bone = (ji.anchor_bone == bones[0]) ? bones[1] : bones[0];
+        auto* parent_1 = &(ji.anchor_bone->parent_node());
+        auto* parent_2 = &(ji.free_bone->parent_node());
 
         ji.joint_type = (shared_node == parent_1 && shared_node == parent_2) ?
             sel_type::sibling_joint :
@@ -431,20 +420,7 @@ namespace {
         
         QString name_of_joint() {
             const auto& ji = joint_info_;
-            sm::bone* bone_1;
-            sm::bone* bone_2;
-
-            if (joint_info_.joint_type == sel_type::parent_child_joint) {
-                bone_1 = ji.parent_bone();
-                bone_2 = ji.child_bone();
-            } else {
-                bone_1 = ji.bone_1;
-                bone_2 = ji.bone_2;
-                if (ji.bone_1->name() > ji.bone_2->name()) {
-                    std::swap(bone_1, bone_2);
-                }
-            }
-            std::string name = bone_1->name() + "/" + bone_2->name();
+            std::string name = ji.anchor_bone->name() + "/" + ji.free_bone->name();
             return name.c_str();
         }
 
@@ -496,8 +472,8 @@ namespace {
 				arc_rubber_band_->setPen(QPen(Qt::black, 2.0, Qt::DotLine));
 				canv.addItem(arc_rubber_band_);
 			}
-			arc_rubber_band_->show();
-			auto center = joint_info().center();
+			arc_rubber_band_->show(); 
+			auto center = joint_axis(joint_info());
 			ui::set_arc(
 				arc_rubber_band_,
 				center,
@@ -509,8 +485,8 @@ namespace {
 
         void drag_joint_constraint(ui::canvas& canv, QGraphicsSceneMouseEvent* event) {
 			auto ji = joint_info();
-			auto center = ji.center();
-			auto anchor_rot = ji.parent_bone()->world_rotation();
+			auto center = joint_axis(ji);
+			auto anchor_rot = ji.anchor_bone->world_rotation();
 			auto start_theta = constraint_start_theta_;
 			auto end_theta = ui::angle_through_points(center, event->scenePos());
 
