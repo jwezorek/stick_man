@@ -27,11 +27,11 @@ namespace ui {
         }
 
         void deactivate() {
-            setStyleSheet(QString("background-color: ") + bkgd_color_str_);
+            setStyleSheet("background-color: " + bkgd_color_str_);
         }
 
         void activate() {
-            setStyleSheet("background-color: blue");
+			setStyleSheet("background-color: " + k_accent_color.name());
         }
 
         tool_id id() const {

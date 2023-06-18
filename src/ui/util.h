@@ -9,6 +9,8 @@
 
 namespace ui {
 
+	const QColor k_accent_color = QColor::fromRgb(64, 53, 130);
+
     class FlowLayout : public QLayout
     {
     public:

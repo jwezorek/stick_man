@@ -24,7 +24,6 @@ namespace {
     constexpr int k_node_zorder = 10;
     constexpr int k_bone_zorder = 5;
     constexpr int k_ribbon_height = 35;
-    const auto k_ribbon_base_color = Qt::yellow;
 
     template<typename T>
     std::vector<ui::abstract_stick_man_item*> to_stick_man_items(const T& collection) {
@@ -52,23 +51,14 @@ namespace {
         ribbon_rect.setLeft(rr.left() - 1);
         ribbon_rect.setWidth(rr.width() + 2);
 
-        QColor base_color = ui::lerp_colors(QColor(k_ribbon_base_color), QColor(Qt::white), 0.2);
-        QColor mid_color = ui::lerp_colors( base_color, QColor(Qt::white), 0.1 );
-        QColor shaded_color = ui::lerp_colors( base_color, QColor(Qt::black), 0.05 );
-        QLinearGradient gradient(ribbon_rect.topLeft(), ribbon_rect.bottomLeft());
+        painter->fillRect(ribbon_rect, ui::k_accent_color);
 
-        gradient.setColorAt(0.0, shaded_color);
-        gradient.setColorAt(0.15, base_color);     
-        gradient.setColorAt(0.5, mid_color);
-        gradient.setColorAt(0.85, base_color);     
-        gradient.setColorAt(1.0, shaded_color);
-
-        painter->fillRect(ribbon_rect, gradient);
-
-        painter->setPen(Qt::black);
+        painter->setPen(Qt::white);
         auto text_rect = ribbon_rect;
         text_rect.setRight(ribbon_rect.right() - 15);
         painter->drawText(text_rect, Qt::AlignRight | Qt::AlignVCenter, txt);
+
+		painter->setPen(Qt::black);
         painter->drawLine(ribbon_rect.topLeft(), ribbon_rect.topRight());
     }
 
