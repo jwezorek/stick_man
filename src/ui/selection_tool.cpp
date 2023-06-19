@@ -392,14 +392,21 @@ namespace {
         }
     };
 
+	struct constraint_dragging_info {
+		double start_angle;
+		double span_angle;
+		double radius;
+	};
+
     class joint_properties : public abstract_properties_widget {
         QLabel* bones_lbl_;
         QPushButton* constraint_btn_;
         QGroupBox* constraint_box_;
         joint_info joint_info_;
 		QGraphicsEllipseItem* arc_rubber_band_;
-		double constraint_start_theta_;
-		double constraint_drag_radius_;
+		ui::labeled_numeric_val* min_angle_;
+		ui::labeled_numeric_val* max_angle_;
+		std::optional<constraint_dragging_info> dragging_;
 
         ui::selection_tool* sel_tool() const {
             return static_cast<ui::selection_tool*>(&mgr_->current_tool());
@@ -410,8 +417,8 @@ namespace {
 
             auto* layout = new QVBoxLayout();
             box->setLayout(layout);
-            layout->addWidget(new ui::labeled_numeric_val("minimum angle", 0, -180, 180));
-            layout->addWidget(new ui::labeled_numeric_val("maximum angle", 0, -180, 180));
+            layout->addWidget(min_angle_ = new ui::labeled_numeric_val("minimum angle", 0, -180, 180));
+            layout->addWidget(max_angle_ = new ui::labeled_numeric_val("maximum angle", 0, -180, 180));
             layout_->addWidget(box);
             box->hide();
 
@@ -426,15 +433,12 @@ namespace {
 
         void add_or_delete_constraint() {
             if (constraint_box_->isVisible()) {
-                //constraint_box_->hide();
-                //constraint_btn_->setText("add constraint");
+				//TODO: delete constraint
             } else {
                 sel_tool()->set_modal(
                     ui::selection_tool::modal_state::defining_joint_constraint,
                     canvas()
                 );
-                //constraint_box_->show();
-                //constraint_btn_->setText("delete constraint");
             }
         }
 
@@ -467,6 +471,9 @@ namespace {
         }
 
         void start_dragging_joint_constraint(ui::canvas& canv, QGraphicsSceneMouseEvent* event) {
+			if (is_dragging_joint_constraint()) {
+				return;
+			}
 			if (!arc_rubber_band_) {
 				arc_rubber_band_ = new QGraphicsEllipseItem();
 				arc_rubber_band_->setPen(QPen(Qt::black, 2.0, Qt::DotLine));
@@ -474,11 +481,16 @@ namespace {
 			}
 			arc_rubber_band_->show(); 
 			auto center = joint_axis(joint_info());
+			dragging_ = {
+				.start_angle = ui::angle_through_points(center, event->scenePos()),
+				.span_angle = 0.0,
+				.radius = ui::distance(center, event->scenePos())
+			};
 			ui::set_arc(
 				arc_rubber_band_,
 				center,
-				constraint_drag_radius_ = ui::distance(center, event->scenePos()),
-				constraint_start_theta_ = ui::angle_through_points(center, event->scenePos()),
+				dragging_->radius,
+				dragging_->start_angle,
 				0.0
 			);
         }
@@ -487,28 +499,36 @@ namespace {
 			auto ji = joint_info();
 			auto center = joint_axis(ji);
 			auto anchor_rot = ji.anchor_bone->world_rotation();
-			auto start_theta = constraint_start_theta_;
 			auto end_theta = ui::angle_through_points(center, event->scenePos());
 
-			auto start_relative = ui::normalize_angle(start_theta  - anchor_rot);
+			auto start_relative = ui::normalize_angle(dragging_->start_angle - anchor_rot);
 			auto end_relative = ui::normalize_angle(end_theta - anchor_rot);
-			auto span_angle = ui::clamp_above(end_relative - start_relative, 0);
+			dragging_->span_angle = ui::clamp_above(end_relative - start_relative, 0);
 
 			ui::set_arc(
 				arc_rubber_band_,
 				center,
-				constraint_drag_radius_,
-				constraint_start_theta_,
-				span_angle
+				dragging_->radius,
+				dragging_->start_angle,
+				dragging_->span_angle
 			);
         }
 
         bool is_dragging_joint_constraint() const {
-			return arc_rubber_band_->isVisible();
+			return dragging_.has_value();
         }
 
         void stop_dragging_joint_constraint(ui::canvas& canv, QGraphicsSceneMouseEvent* event) {
 			arc_rubber_band_->hide();
+			min_angle_->num_edit()->set_value(0.0);
+			max_angle_->num_edit()->set_value(0.0);
+			constraint_box_->show();
+			constraint_btn_->setText("delete constraint");
+
+			sel_tool()->set_modal(
+				ui::selection_tool::modal_state::none,
+				canvas()
+			);
         }
     };
 

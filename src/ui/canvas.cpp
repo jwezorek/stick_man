@@ -342,7 +342,6 @@ std::vector<ui::bone_item*> ui::canvas::bone_items() const {
 }
 
 void ui::canvas::keyPressEvent(QKeyEvent* event) {
-    show_status_line("Hello there, blah blah blah");
     tool_mgr().keyPressEvent(*this, event);
 }
 
