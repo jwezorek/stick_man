@@ -393,6 +393,8 @@ namespace {
     };
 
 	struct constraint_dragging_info {
+		QPointF axis;
+		double anchor_rot;
 		double start_angle;
 		double span_angle;
 		double radius;
@@ -480,34 +482,38 @@ namespace {
 				canv.addItem(arc_rubber_band_);
 			}
 			arc_rubber_band_->show(); 
-			auto center = joint_axis(joint_info());
+
+			auto ji = joint_info();
+			auto center = joint_axis(ji);
 			dragging_ = {
+				.axis = center,
+				.anchor_rot = ji.anchor_bone->world_rotation(),
 				.start_angle = ui::angle_through_points(center, event->scenePos()),
 				.span_angle = 0.0,
 				.radius = ui::distance(center, event->scenePos())
 			};
 			ui::set_arc(
 				arc_rubber_band_,
-				center,
+				dragging_->axis,
 				dragging_->radius,
 				dragging_->start_angle,
-				0.0
+				dragging_->span_angle
 			);
         }
 
         void drag_joint_constraint(ui::canvas& canv, QGraphicsSceneMouseEvent* event) {
-			auto ji = joint_info();
-			auto center = joint_axis(ji);
-			auto anchor_rot = ji.anchor_bone->world_rotation();
-			auto end_theta = ui::angle_through_points(center, event->scenePos());
-
-			auto start_relative = ui::normalize_angle(dragging_->start_angle - anchor_rot);
-			auto end_relative = ui::normalize_angle(end_theta - anchor_rot);
+			auto end_theta = ui::angle_through_points(dragging_->axis, event->scenePos());
+			auto start_relative = ui::normalize_angle(
+				dragging_->start_angle - dragging_->anchor_rot
+			);
+			auto end_relative = ui::normalize_angle(
+				end_theta - dragging_->anchor_rot
+			);
 			dragging_->span_angle = ui::clamp_above(end_relative - start_relative, 0);
 
 			ui::set_arc(
 				arc_rubber_band_,
-				center,
+				dragging_->axis,
 				dragging_->radius,
 				dragging_->start_angle,
 				dragging_->span_angle
@@ -520,8 +526,14 @@ namespace {
 
         void stop_dragging_joint_constraint(ui::canvas& canv, QGraphicsSceneMouseEvent* event) {
 			arc_rubber_band_->hide();
-			min_angle_->num_edit()->set_value(0.0);
-			max_angle_->num_edit()->set_value(0.0);
+
+			auto min_angle_radians = ui::normalize_angle(
+				dragging_->start_angle - dragging_->anchor_rot
+			);
+			auto max_angle_radians = min_angle_radians + dragging_->span_angle;
+
+			min_angle_->num_edit()->set_value(ui::radians_to_degrees(min_angle_radians));
+			max_angle_->num_edit()->set_value(ui::radians_to_degrees(max_angle_radians));
 			constraint_box_->show();
 			constraint_btn_->setText("delete constraint");
 
