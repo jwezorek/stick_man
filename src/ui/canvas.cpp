@@ -54,6 +54,9 @@ namespace {
         painter->fillRect(ribbon_rect, ui::k_accent_color);
 
         painter->setPen(Qt::white);
+		auto fnt = painter->font();
+		fnt.setWeight(QFont::Bold);
+		painter->setFont(fnt);
         auto text_rect = ribbon_rect;
         text_rect.setRight(ribbon_rect.right() - 15);
         painter->drawText(text_rect, Qt::AlignRight | Qt::AlignVCenter, txt);

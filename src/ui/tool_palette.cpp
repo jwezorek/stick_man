@@ -85,18 +85,6 @@ ui::tool_btn* ui::tool_palette::tool_from_id(tool_id id)
     );
 }
 
-/*
-if (btn->id() == curr_tool_id_) {
-        return;
-    }
-    if (curr_tool_id_ != tool_id::none) {
-        tool_from_id(curr_tool_id_)->deactivate();
-    }
-    btn->activate();
-    curr_tool_id_ = btn->id();
-    emit selected_tool_changed(curr_tool_id_);
-*/
-
 void ui::tool_palette::handle_tool_click(tool_btn* btn) {
 
     tool_id current_tool_id = (tools_.has_current_tool()) ? 
