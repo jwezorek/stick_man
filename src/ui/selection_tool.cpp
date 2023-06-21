@@ -144,7 +144,7 @@ namespace {
     struct joint_info {
         sel_type joint_type;
         sm::bone* anchor_bone;
-        sm::bone* free_bone;
+        sm::bone* dependent_bone;
         sm::node* shared_node;
     };
 
@@ -176,9 +176,9 @@ namespace {
         joint_info ji;
         ji.shared_node = shared_node;
 		ji.anchor_bone = parent_bone(bones[0], bones[1]);
-		ji.free_bone = (ji.anchor_bone == bones[0]) ? bones[1] : bones[0];
+		ji.dependent_bone = (ji.anchor_bone == bones[0]) ? bones[1] : bones[0];
         auto* parent_1 = &(ji.anchor_bone->parent_node());
-        auto* parent_2 = &(ji.free_bone->parent_node());
+        auto* parent_2 = &(ji.dependent_bone->parent_node());
 
         ji.joint_type = (shared_node == parent_1 && shared_node == parent_2) ?
             sel_type::sibling_joint :
@@ -247,6 +247,7 @@ namespace {
         }
 
         virtual void set_selection(const ui::selection_set& sel) = 0;
+		virtual void lose_selection() {}
     };
 
     class no_properties : public abstract_properties_widget {
@@ -429,7 +430,7 @@ namespace {
         
         QString name_of_joint() {
             const auto& ji = joint_info_;
-            std::string name = ji.anchor_bone->name() + "/" + ji.free_bone->name();
+            std::string name = ji.anchor_bone->name() + "/" + ji.dependent_bone->name();
             return name.c_str();
         }
 
@@ -443,6 +444,16 @@ namespace {
                 );
             }
         }
+
+		void show_constraint_box(bool should_show) {
+			if (should_show) {
+				constraint_box_->show();
+				constraint_btn_->setText("delete constraint");
+			} else {
+				constraint_box_->hide();
+				constraint_btn_->setText("add constraint");
+			}
+		}
 
     public:
         joint_properties(ui::tool_manager* mgr, QWidget* parent, bool parent_child) :
@@ -467,6 +478,10 @@ namespace {
             joint_info_ = joint_selection_info(sel).value();
             bones_lbl_->setText(name_of_joint());
         }
+
+		void lose_selection() override {
+			show_constraint_box(false);
+		}
 
         joint_info joint_info() const {
             return joint_info_;
@@ -534,8 +549,7 @@ namespace {
 
 			min_angle_->num_edit()->set_value(ui::radians_to_degrees(min_angle_radians));
 			max_angle_->num_edit()->set_value(ui::radians_to_degrees(max_angle_radians));
-			constraint_box_->show();
-			constraint_btn_->setText("delete constraint");
+			show_constraint_box(true);
 
 			sel_tool()->set_modal(
 				ui::selection_tool::modal_state::none,
@@ -568,7 +582,9 @@ namespace {
 
         void set(sel_type typ, const std::unordered_set<ui::abstract_stick_man_item*>& sel) {
             setCurrentIndex(static_cast<int>(typ));
+			auto* old_props = current_props();
             current_props()->set_selection(sel);
+			old_props->lose_selection();
         }
     };
 }
@@ -619,7 +635,6 @@ void ui::selection_tool::mousePressEvent(canvas& canv, QGraphicsSceneMouseEvent*
         joint_props->start_dragging_joint_constraint(canv, event);
     }
 }
-
 
 void ui::selection_tool::mouseMoveEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     if (is_in_modal_state()) {

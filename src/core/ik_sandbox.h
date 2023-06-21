@@ -38,15 +38,31 @@ namespace sm {
         no_error,
         multi_parent_node,
         cyclic_bones,
-        non_unique_name
+        non_unique_name,
+		bone_not_found,
+		node_not_found,
+		constraint_not_found,
+		unknown_error
     };
 
-    using const_bone_ref = const std::reference_wrapper<bone>;
-    using const_node_ref = const std::reference_wrapper<node>;
+    using const_bone_ref =  std::reference_wrapper<const bone>;
+    using const_node_ref =  std::reference_wrapper<const node>;
     using bone_ref = std::reference_wrapper<bone>;
+	using node_ref = std::reference_wrapper<node>;
     using maybe_bone_ref = std::optional<std::reference_wrapper<bone>>;
-    using expected_bone = std::expected<const_bone_ref, result>;
-    using expected_node = std::expected<const_node_ref, result>;
+    using expected_bone = std::expected<bone_ref, result>;
+    using expected_node = std::expected<node_ref, result>;
+
+	struct angle_range {
+		double min;
+		double max;
+	};
+
+	struct joint_constraint {
+		const_bone_ref anchor_bone;
+		const_bone_ref dependent_bone;
+		angle_range angles;
+	};
 
     class node : public detail::enable_protected_make_unique<node> {
         friend class ik_sandbox;
@@ -59,6 +75,7 @@ namespace sm {
         std::vector<bone_ref> children_;
         std::any user_data_;
         bool is_pinned_;
+		std::vector<joint_constraint> constraints_;
 
     protected:
 
@@ -68,8 +85,8 @@ namespace sm {
 
     public:
         std::string name() const;
-        maybe_bone_ref parent_bone() const;
-        std::span<const_bone_ref> child_bones() const;
+        maybe_bone_ref parent_bone();
+        std::span<bone_ref> child_bones();
         double world_x() const;
         double world_y() const;
         void set_world_pos(const point& pt);
@@ -77,9 +94,12 @@ namespace sm {
         std::any get_user_data() const;
         bool is_root() const;
         bool is_pinned() const;
-
-        void set_user_data(std::any data);
+		std::optional<angle_range> constraint_angles(const bone& parent, const bone& dependent) const;
+        
+		void set_user_data(std::any data);
         void set_pinned(bool pinned);
+		result set_constraint(const bone& parent, const bone& dependent, double min, double max);
+		result remove_constraint(const bone& parent, const bone& dependent);
     };
 
     class bone : public detail::enable_protected_make_unique<bone> {

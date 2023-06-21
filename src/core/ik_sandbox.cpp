@@ -16,7 +16,7 @@ namespace rv = std::ranges::views;
 
 namespace {
 
-    using node_or_bone = std::variant<sm::const_bone_ref, sm::const_node_ref>;
+    using node_or_bone = std::variant<sm::bone_ref, sm::node_ref>;
 
     class node_or_bone_visitor {
         sm::node_visitor node_visit_;
@@ -28,11 +28,11 @@ namespace {
                 bone_visit_(b) {
         }
 
-        bool operator()(sm::const_node_ref j_ref) {
+        bool operator()(sm::node_ref j_ref) {
             return (node_visit_) ? node_visit_(j_ref.get()) : true;
         }
 
-        bool operator()(sm::const_bone_ref b_ref) {
+        bool operator()(sm::bone_ref b_ref) {
             return (bone_visit_) ? bone_visit_(b_ref.get()) : true;
         }
     };
@@ -44,7 +44,7 @@ namespace {
             downstream_(downstream)
         {}
 
-        std::vector<node_or_bone> operator()(sm::const_node_ref j_ref) {
+        std::vector<node_or_bone> operator()(sm::node_ref j_ref) {
             auto& node = j_ref.get();
             auto neighbors = node.child_bones() |
                 rv::transform(
@@ -257,11 +257,11 @@ std::string sm::node::name() const {
     return name_;
 }
 
-sm::maybe_bone_ref sm::node::parent_bone() const {
+sm::maybe_bone_ref sm::node::parent_bone() {
     return parent_;
 }
 
-std::span<sm::const_bone_ref> sm::node::child_bones() const {
+std::span<sm::bone_ref> sm::node::child_bones() {
     return children_;
 }
 
@@ -301,6 +301,50 @@ bool sm::node::is_pinned() const {
 void sm::node::set_pinned(bool pinned) {
     is_pinned_ = pinned;
 }
+
+sm::result sm::node::set_constraint(const bone& parent, const bone& dependent, double min, double max) {
+	auto constraint = r::find_if(constraints_,
+		[&parent, &dependent](const auto& jc) {
+			return &jc.anchor_bone.get() == &parent && &jc.dependent_bone.get() == &dependent;
+		}
+	);
+	if (constraint == constraints_.end()) {
+		joint_constraint c{ std::cref(parent), std::cref(dependent), 0.0, 0.0 };
+		constraints_.emplace_back(c);
+		constraint = std::prev(constraints_.end());
+	} 
+	constraint->angles.min = min;
+	constraint->angles.max = max;
+
+	return result::no_error;
+}
+
+std::optional<sm::angle_range> sm::node::constraint_angles(
+		const bone& parent, const bone& dependent) const {
+	auto constraint = r::find_if(constraints_,
+		[&parent, &dependent](const auto& jc) {
+			return &jc.anchor_bone.get() == &parent && &jc.dependent_bone.get() == &dependent;
+		}
+	);
+	if (constraint == constraints_.end()) {
+		return {};
+	}
+	return constraint->angles;
+}
+
+sm::result sm::node::remove_constraint(const bone& parent, const bone& dependent) {
+	auto constraint = r::find_if(constraints_,
+		[&parent, &dependent](const auto& jc) {
+			return &jc.anchor_bone.get() == &parent && &jc.dependent_bone.get() == &dependent;
+		}
+	);
+	if (constraint == constraints_.end()) {
+		return result::constraint_not_found;
+	}
+	constraints_.erase(constraint);
+	return result::no_error;
+}
+
 /*------------------------------------------------------------------------------------------------*/
 
 sm::bone::bone(std::string name, sm::node& u, sm::node& v) :
@@ -395,7 +439,7 @@ void sm::bone::rotate(double theta) {
 
 sm::ik_sandbox::ik_sandbox() : node_id_(0), bone_id_(0) {};
 
-std::expected<sm::const_node_ref, sm::result> sm::ik_sandbox::create_node(
+std::expected<sm::node_ref, sm::result> sm::ik_sandbox::create_node(
         const std::string& node_name, double x, double y) {
     auto name = (node_name.empty()) ? "node-" + std::to_string(++node_id_) : node_name;
     if (nodes_.contains(name)) {
@@ -414,7 +458,7 @@ bool sm::ik_sandbox::set_node_name(node& j, const std::string& name) {
     return true;
 }
 
-std::expected<sm::const_bone_ref, sm::result> sm::ik_sandbox::create_bone(
+std::expected<sm::bone_ref, sm::result> sm::ik_sandbox::create_bone(
         const std::string& bone_name, node& u, node& v) {
 
     if (!v.is_root()) {
