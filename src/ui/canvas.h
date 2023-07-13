@@ -41,7 +41,7 @@ namespace ui {
         constexpr static auto k_grid_line_spacing = 10;
         double scale_ = 1.0;
         QString status_line_;
-        std::unordered_set<ui::abstract_canvas_item*> selection_;
+        selection_set selection_;
 
         tool_manager& tool_mgr();
         void sync_selection();
@@ -72,7 +72,7 @@ namespace ui {
         void set_scale(double scale, std::optional<QPointF> pt = {});
         double scale() const;
         void sync_to_model();
-        std::vector<ui::abstract_canvas_item*> selection() const;
+        const selection_set& selection() const;
         std::vector<ui::bone_item*> selected_bones() const;
         std::vector<ui::node_item*> selected_nodes() const;
         bool is_status_line_visible() const;
@@ -92,9 +92,7 @@ namespace ui {
         void hide_status_line();
 
     signals:
-        void selection_changed(
-            const std::unordered_set<ui::abstract_canvas_item*>& sel
-        );
+        void selection_changed( );
     };
 
     class canvas_view : public QGraphicsView {

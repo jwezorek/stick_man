@@ -184,8 +184,8 @@ void ui::canvas::sync_to_model() {
     }
 }
 
-std::vector<ui::abstract_canvas_item*> ui::canvas::selection() const {
-    return selection_ | r::to<std::vector<ui::abstract_canvas_item*>>();
+const ui::selection_set&  ui::canvas::selection() const {
+	return selection_;
 };
 
 std::vector<ui::bone_item*> ui::canvas::selected_bones() const {
@@ -252,7 +252,7 @@ void ui::canvas::sync_selection() {
         bool selected = selection_.contains(itm);
         itm->set_selected(selected);
     }
-    emit selection_changed(selection_);
+    emit selection_changed();
 }
 
 void ui::canvas::show_status_line(const QString& txt) {

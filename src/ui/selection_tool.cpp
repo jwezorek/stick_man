@@ -601,7 +601,8 @@ ui::selection_tool::selection_tool(tool_manager* mgr) :
 void ui::selection_tool::activate(canvas& canv) {
     if (!intitialized_) {
         canv.connect(&canv, &canvas::selection_changed, 
-            [this](const std::unordered_set<ui::abstract_canvas_item*>& sel) {
+            [this, &canv]() {
+				const auto& sel = canv.selection();
                 this->handle_sel_changed(sel);
             }
         );

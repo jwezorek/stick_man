@@ -21,7 +21,6 @@ ui::abstract_tool::abstract_tool(tool_manager* mgr, QString name, QString rsrc, 
     name_(name),
     rsrc_(rsrc),
     id_(id) {
-
 }
 
 ui::tool_id ui::abstract_tool::id() const {
