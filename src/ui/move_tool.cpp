@@ -1,4 +1,5 @@
 #include "move_tool.h"
+#include "canvas_item.h"
 #include "tool_settings_pane.h"
 #include "util.h"
 #include "../core/ik_sandbox.h"

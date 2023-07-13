@@ -1,6 +1,7 @@
 #include "selection_tool.h"
 #include "util.h"
 #include "canvas.h"
+#include "canvas_item.h"
 #include "stick_man.h"
 #include "../core/ik_sandbox.h"
 #include "../core/ik_types.h"

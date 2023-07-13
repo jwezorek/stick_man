@@ -31,7 +31,7 @@ add_executable(stick_man
     src/core/ik_sandbox.cpp
     src/main.cpp
     src/core/ik_types.cpp
-)
+ "src/ui/canvas_item.h" "src/ui/canvas_item.cpp")
 
 target_link_libraries(stick_man PRIVATE Qt6::Widgets  Eigen3::Eigen)
 

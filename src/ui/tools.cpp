@@ -5,6 +5,7 @@
 #include "tool_settings_pane.h"
 #include "util.h"
 #include "stick_man.h"
+#include "canvas_item.h"
 #include <QGraphicsScene>
 #include <array>
 #include <functional>
