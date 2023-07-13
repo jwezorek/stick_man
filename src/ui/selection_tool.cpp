@@ -19,6 +19,10 @@ namespace {
 
     double k_tolerance = 0.00005;
 
+	QPointF joint_axis(const ui::joint_info& ji) {
+		return ui::to_qt_pt(ji.shared_node->world_pos());
+	}
+
     auto to_model_objects(r::input_range auto&& itms) {
         return itms |
             rv::transform(
@@ -101,118 +105,6 @@ namespace {
         );
     }
 
-    enum class sel_type {
-        none = 0,
-        node,
-        nodes,
-        bone,
-        bones,
-        parent_child_joint,
-        sibling_joint,
-        mixed
-    };
-
-    template<typename T>
-    auto to_models_of_item_type(const auto& sel) {
-        using out_type = typename T::model_type;
-        return sel | rv::transform(
-            [](auto ptr)->out_type* {
-                auto bi = dynamic_cast<T*>(ptr);
-                if (!bi) {
-                    return nullptr;
-                }
-                return &(bi->model());
-            }
-        ) | rv::filter(
-            [](auto ptr) {
-                return ptr;
-            }
-            ) | r::to<std::vector<out_type*>>();
-    }
-
-    sm::node* find_shared_node(sm::bone* b1, sm::bone* b2) {
-        std::array< sm::node*, 4> nodes = { {
-            &(b1->parent_node()),
-            &(b1->child_node()),
-            &(b2->parent_node()),
-            &(b2->child_node()),
-        } };
-        r::sort(nodes);
-        auto adj_dup = r::adjacent_find(nodes, [](auto n1, auto n2) {return n1 == n2; });
-        return (adj_dup != nodes.end()) ? *adj_dup : nullptr;
-    }
-
-    struct joint_info {
-        sel_type joint_type;
-        sm::bone* anchor_bone;
-        sm::bone* dependent_bone;
-        sm::node* shared_node;
-    };
-
-	QPointF joint_axis(const joint_info& ji) {
-		return ui::to_qt_pt(ji.shared_node->world_pos());
-	}
-
-	sm::bone* parent_bone(sm::bone* bone_1, sm::bone* bone_2) {
-		return (&(bone_1->parent_node()) == find_shared_node(bone_1, bone_2)) ? bone_2 : bone_1;
-	}
-
-    std::optional<joint_info> joint_selection_info(const auto& sel) {
-        if (sel.size() != 3) {
-            return {};
-        }
-        auto bones = to_models_of_item_type<ui::bone_item>(sel);
-        if (bones.size() != 2) {
-            return {};
-        }
-        auto shared_node = find_shared_node(bones[0], bones[1]);
-        if (!shared_node) {
-            return {};
-        }
-        auto nodes = to_models_of_item_type<ui::node_item>(sel);
-        if (nodes.size() != 1) {
-            return {};
-        }
-
-        joint_info ji;
-        ji.shared_node = shared_node;
-		ji.anchor_bone = parent_bone(bones[0], bones[1]);
-		ji.dependent_bone = (ji.anchor_bone == bones[0]) ? bones[1] : bones[0];
-        auto* parent_1 = &(ji.anchor_bone->parent_node());
-        auto* parent_2 = &(ji.dependent_bone->parent_node());
-
-        ji.joint_type = (shared_node == parent_1 && shared_node == parent_2) ?
-            sel_type::sibling_joint :
-            sel_type::parent_child_joint;
-
-        return ji;
-    }
-
-    sel_type selection_type(const auto& sel) {
-        if (sel.empty()) {
-            return sel_type::none;
-        }
-        auto joint = joint_selection_info(sel);
-        if (joint) {
-            return joint->joint_type;
-        }
-        bool has_node = false;
-        bool has_bone = false;
-        for (auto itm_ptr : sel) {
-            has_node = dynamic_cast<ui::node_item*>(itm_ptr) || has_node;
-            has_bone = dynamic_cast<ui::bone_item*>(itm_ptr) || has_bone;
-            if (has_node && has_bone) {
-                return sel_type::mixed;
-            }
-        }
-        bool multi = sel.size() > 1;
-        if (has_node) {
-            return multi ? sel_type::nodes : sel_type::node;
-        } else {
-            return multi ? sel_type::bones : sel_type::bone;
-        }
-    }
-
     class abstract_properties_widget : public QScrollArea {
     private:
         ui::canvas* canv_;
@@ -247,21 +139,21 @@ namespace {
             return *canv_;
         }
 
-        virtual void set_selection(const ui::selection_set& sel) = 0;
+        virtual void set_selection(const ui::canvas& canv) = 0;
 		virtual void lose_selection() {}
     };
 
     class no_properties : public abstract_properties_widget {
     public:
         no_properties(ui::tool_manager* mgr, QWidget* parent) : abstract_properties_widget(mgr, parent, "no selection") {}
-        void set_selection(const ui::selection_set& sel) override {}
+        void set_selection(const ui::canvas& canv) override {}
     };
 
     class mixed_properties : public abstract_properties_widget {
     public:
         mixed_properties(ui::tool_manager* mgr, QWidget* parent) :
             abstract_properties_widget(mgr, parent, "mixed selection") {}
-        void set_selection(const ui::selection_set& sel) override {}
+        void set_selection(const ui::canvas& canv) override {}
     };
 
     class node_properties : public abstract_properties_widget {
@@ -330,7 +222,8 @@ namespace {
             );
         }
 
-        void set_selection(const ui::selection_set& sel) override {
+        void set_selection(const ui::canvas& canv) override {
+			const auto& sel = canv.selection();
             auto nodes = to_model_objects(ui::as_range_view_of_type<ui::node_item>(sel));
             auto x_pos = get_unique_val(nodes |
                 rv::transform([](sm::node& n) {return n.world_x(); }));
@@ -384,7 +277,8 @@ namespace {
             );
         }
 
-        void set_selection(const ui::selection_set& sel) override {
+        void set_selection(const ui::canvas& canv) override {
+			const auto& sel = canv.selection();
             auto bones = to_model_objects(ui::as_range_view_of_type<ui::bone_item>(sel));
             auto length = get_unique_val(bones |
                 rv::transform([](sm::bone& b) {return b.scaled_length(); }));
@@ -406,7 +300,7 @@ namespace {
         QLabel* bones_lbl_;
         QPushButton* constraint_btn_;
         QGroupBox* constraint_box_;
-        joint_info joint_info_;
+        ui::joint_info joint_info_;
 		QGraphicsEllipseItem* arc_rubber_band_;
 		ui::labeled_numeric_val* min_angle_;
 		ui::labeled_numeric_val* max_angle_;
@@ -475,8 +369,8 @@ namespace {
                 this, &joint_properties::add_or_delete_constraint);
         }
 
-        void set_selection(const ui::selection_set& sel) override {
-            joint_info_ = joint_selection_info(sel).value();
+        void set_selection(const ui::canvas& canv) override {
+            joint_info_ = canv.selected_joint().value();
             bones_lbl_->setText(name_of_joint());
         }
 
@@ -484,7 +378,7 @@ namespace {
 			show_constraint_box(false);
 		}
 
-        joint_info joint_info() const {
+        ui::joint_info joint_info() const {
             return joint_info_;
         }
 
@@ -574,17 +468,17 @@ namespace {
             for (auto* child : findChildren<abstract_properties_widget*>()) {
                 child->init();
             }
-            set(sel_type::none, {});
+            set(ui::sel_type::none, {});
         }
 
         abstract_properties_widget* current_props() const {
             return static_cast<abstract_properties_widget*>(currentWidget());
         }
 
-        void set(sel_type typ, const std::unordered_set<ui::abstract_canvas_item*>& sel) {
+        void set(ui::sel_type typ, const ui::canvas& canv) {
             setCurrentIndex(static_cast<int>(typ));
 			auto* old_props = current_props();
-            current_props()->set_selection(sel);
+            current_props()->set_selection(canv);
 			old_props->lose_selection();
         }
     };
@@ -603,7 +497,7 @@ void ui::selection_tool::activate(canvas& canv) {
         canv.connect(&canv, &canvas::selection_changed, 
             [this, &canv]() {
 				const auto& sel = canv.selection();
-                this->handle_sel_changed(sel);
+                this->handle_sel_changed(canv);
             }
         );
         intitialized_ = true;
@@ -706,11 +600,10 @@ void ui::selection_tool::handle_drag(canvas& canv, QRectF rect, bool shift_down,
     canv.set_selection( clicked_items);
 }
 
-void ui::selection_tool::handle_sel_changed(
-        const std::unordered_set<ui::abstract_canvas_item*>& sel) {
-    auto type_of_sel = selection_type(sel);
+void ui::selection_tool::handle_sel_changed( const ui::canvas& canv) {
+    auto type_of_sel = canv.selection_type();
     auto props = static_cast<selection_properties*>(properties_);
-    props->set(type_of_sel, sel);
+    props->set(type_of_sel, canv);
 }
 
 void ui::selection_tool::set_modal(modal_state state, canvas& c) {

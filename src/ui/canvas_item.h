@@ -4,6 +4,7 @@
 #include <QtWidgets>
 #include <QGraphicsScene>
 #include <any>
+#include <ranges>
 
 namespace sm {
 	class node;
@@ -74,5 +75,25 @@ namespace ui {
 	template<typename T, typename U>
 	T& item_from_model(U& model_obj) {
 		return std::any_cast<std::reference_wrapper<T>>(model_obj.get_user_data()).get();
+	}
+
+	template<typename T>
+	auto to_models_of_item_type(const auto& sel) {
+		namespace r = std::ranges;
+		namespace rv = std::ranges::views;
+		using out_type = typename T::model_type;
+		return sel | rv::transform(
+			[](auto ptr)->out_type* {
+				auto bi = dynamic_cast<T*>(ptr);
+				if (!bi) {
+					return nullptr;
+				}
+				return &(bi->model());
+			}
+		) | rv::filter(
+			[](auto ptr) {
+				return ptr;
+			}
+		) | r::to<std::vector<out_type*>>();
 	}
 }

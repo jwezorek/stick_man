@@ -27,10 +27,27 @@ namespace ui {
     class abstract_canvas_item;
 
     using selection_set = std::unordered_set<ui::abstract_canvas_item*>;
+	enum class sel_type {
+		none = 0,
+		node,
+		nodes,
+		bone,
+		bones,
+		parent_child_joint,
+		sibling_joint,
+		mixed
+	};
 
-    using item_transform = std::function<void(abstract_canvas_item*)>;
-    using node_transform = std::function<void(node_item*)>;
-    using bone_transform = std::function<void(bone_item*)>;
+	struct joint_info {
+		sel_type joint_type;
+		sm::bone* anchor_bone;
+		sm::bone* dependent_bone;
+		sm::node* shared_node;
+	};
+
+	using item_transform = std::function<void(abstract_canvas_item*)>;
+	using node_transform = std::function<void(node_item*)>;
+	using bone_transform = std::function<void(bone_item*)>;
 
     class canvas : public QGraphicsScene {
 
@@ -72,7 +89,11 @@ namespace ui {
         void set_scale(double scale, std::optional<QPointF> pt = {});
         double scale() const;
         void sync_to_model();
+
         const selection_set& selection() const;
+		sel_type selection_type() const;
+		std::optional<joint_info> selected_joint() const;
+
         std::vector<ui::bone_item*> selected_bones() const;
         std::vector<ui::node_item*> selected_nodes() const;
         bool is_status_line_visible() const;

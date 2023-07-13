@@ -27,7 +27,7 @@ namespace ui {
 
         void handle_click(canvas& c, QPointF pt, bool shift_down, bool alt_down);
         void handle_drag(canvas& c, QRectF rect, bool shift_down, bool alt_down);
-        void handle_sel_changed(const selection_set& sel);
+        void handle_sel_changed(const canvas& canv);
 
     public:
 

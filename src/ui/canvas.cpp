@@ -98,6 +98,22 @@ namespace {
                 }
         );
     }
+
+	sm::node* find_shared_node(sm::bone* b1, sm::bone* b2) {
+		std::array< sm::node*, 4> nodes = { {
+			&(b1->parent_node()),
+			&(b1->child_node()),
+			&(b2->parent_node()),
+			&(b2->child_node()),
+		} };
+		r::sort(nodes);
+		auto adj_dup = r::adjacent_find(nodes, [](auto n1, auto n2) {return n1 == n2; });
+		return (adj_dup != nodes.end()) ? *adj_dup : nullptr;
+	}
+
+	sm::bone* parent_bone(sm::bone* bone_1, sm::bone* bone_2) {
+		return (&(bone_1->parent_node()) == find_shared_node(bone_1, bone_2)) ? bone_2 : bone_1;
+	}
 }
 /*------------------------------------------------------------------------------------------------*/
 
@@ -186,7 +202,67 @@ void ui::canvas::sync_to_model() {
 
 const ui::selection_set&  ui::canvas::selection() const {
 	return selection_;
-};
+}
+
+ui::sel_type ui::canvas::selection_type() const {
+	const auto& sel = selection_;
+
+	if (sel.empty()) {
+		return sel_type::none;
+	}
+	auto joint = selected_joint();
+	if (joint) {
+		return joint->joint_type;
+	}
+	bool has_node = false;
+	bool has_bone = false;
+	for (auto itm_ptr : sel) {
+		has_node = dynamic_cast<ui::node_item*>(itm_ptr) || has_node;
+		has_bone = dynamic_cast<ui::bone_item*>(itm_ptr) || has_bone;
+		if (has_node && has_bone) {
+			return sel_type::mixed;
+		}
+	}
+	bool multi = sel.size() > 1;
+	if (has_node) {
+		return multi ? sel_type::nodes : sel_type::node;
+	}
+	else {
+		return multi ? sel_type::bones : sel_type::bone;
+	}
+}
+
+std::optional<ui::joint_info> ui::canvas::selected_joint() const {
+	const auto& sel = selection_;
+	if (sel.size() != 3) {
+		return {};
+	}
+	auto bones = to_models_of_item_type<ui::bone_item>(sel);
+	if (bones.size() != 2) {
+		return {};
+	}
+	auto shared_node = find_shared_node(bones[0], bones[1]);
+	if (!shared_node) {
+		return {};
+	}
+	auto nodes = to_models_of_item_type<ui::node_item>(sel);
+	if (nodes.size() != 1) {
+		return {};
+	}
+
+	joint_info ji;
+	ji.shared_node = shared_node;
+	ji.anchor_bone = parent_bone(bones[0], bones[1]);
+	ji.dependent_bone = (ji.anchor_bone == bones[0]) ? bones[1] : bones[0];
+	auto* parent_1 = &(ji.anchor_bone->parent_node());
+	auto* parent_2 = &(ji.dependent_bone->parent_node());
+
+	ji.joint_type = (shared_node == parent_1 && shared_node == parent_2) ?
+		sel_type::sibling_joint :
+		sel_type::parent_child_joint;
+
+	return ji;
+}
 
 std::vector<ui::bone_item*> ui::canvas::selected_bones() const {
     return to_vector_of_type<ui::bone_item>(selection_);
