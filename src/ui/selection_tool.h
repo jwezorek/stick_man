@@ -8,7 +8,7 @@
 
 namespace ui {
 
-    using selection_set = std::unordered_set<ui::abstract_stick_man_item*>;
+    using selection_set = std::unordered_set<ui::abstract_canvas_item*>;
 
     class selection_tool : public abstract_tool {
     public: 

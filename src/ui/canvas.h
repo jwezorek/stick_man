@@ -24,11 +24,11 @@ namespace ui {
     class tool_manager;
     class node_item;
     class bone_item;
-    class abstract_stick_man_item;
+    class abstract_canvas_item;
 
-    using selection_set = std::unordered_set<ui::abstract_stick_man_item*>;
+    using selection_set = std::unordered_set<ui::abstract_canvas_item*>;
 
-    using item_transform = std::function<void(abstract_stick_man_item*)>;
+    using item_transform = std::function<void(abstract_canvas_item*)>;
     using node_transform = std::function<void(node_item*)>;
     using bone_transform = std::function<void(bone_item*)>;
 
@@ -41,7 +41,7 @@ namespace ui {
         constexpr static auto k_grid_line_spacing = 10;
         double scale_ = 1.0;
         QString status_line_;
-        std::unordered_set<ui::abstract_stick_man_item*> selection_;
+        std::unordered_set<ui::abstract_canvas_item*> selection_;
 
         tool_manager& tool_mgr();
         void sync_selection();
@@ -64,15 +64,15 @@ namespace ui {
         canvas();
         canvas_view& view() const;
         node_item* top_node(const QPointF& pt) const;
-        abstract_stick_man_item* top_item(const QPointF& pt) const;
-        std::vector<abstract_stick_man_item*> items_in_rect(const QRectF& pt) const;
+        abstract_canvas_item* top_item(const QPointF& pt) const;
+        std::vector<abstract_canvas_item*> items_in_rect(const QRectF& pt) const;
         std::vector<node_item*> root_node_items() const;
         std::vector<node_item*> node_items() const;
         std::vector<bone_item*> bone_items() const;
         void set_scale(double scale, std::optional<QPointF> pt = {});
         double scale() const;
         void sync_to_model();
-        std::vector<ui::abstract_stick_man_item*> selection() const;
+        std::vector<ui::abstract_canvas_item*> selection() const;
         std::vector<ui::bone_item*> selected_bones() const;
         std::vector<ui::node_item*> selected_nodes() const;
         bool is_status_line_visible() const;
@@ -80,12 +80,12 @@ namespace ui {
         void transform_selection(item_transform trans);
         void transform_selection(node_transform trans);
         void transform_selection(bone_transform trans);
-        void add_to_selection(std::span<abstract_stick_man_item*> itms);
-        void add_to_selection(abstract_stick_man_item* itm);
-        void subtract_from_selection(std::span<abstract_stick_man_item*> itms);
-        void subtract_from_selection(abstract_stick_man_item* itm);
-        void set_selection(std::span<abstract_stick_man_item*> itms);
-        void set_selection(abstract_stick_man_item* itm);
+        void add_to_selection(std::span<abstract_canvas_item*> itms);
+        void add_to_selection(abstract_canvas_item* itm);
+        void subtract_from_selection(std::span<abstract_canvas_item*> itms);
+        void subtract_from_selection(abstract_canvas_item* itm);
+        void set_selection(std::span<abstract_canvas_item*> itms);
+        void set_selection(abstract_canvas_item* itm);
         void clear_selection();
 
         void show_status_line(const QString& txt);
@@ -93,7 +93,7 @@ namespace ui {
 
     signals:
         void selection_changed(
-            const std::unordered_set<ui::abstract_stick_man_item*>& sel
+            const std::unordered_set<ui::abstract_canvas_item*>& sel
         );
     };
 
@@ -107,7 +107,7 @@ namespace ui {
         stick_man& main_window();
     };
 
-    class abstract_stick_man_item {
+    class abstract_canvas_item {
     protected:
         QGraphicsItem* selection_frame_;
 
@@ -116,7 +116,7 @@ namespace ui {
         virtual void sync_sel_frame_to_model() = 0;
 
     public:
-        abstract_stick_man_item();
+        abstract_canvas_item();
         void sync_to_model();
         canvas* canvas() const;
         bool is_selected() const;
@@ -124,7 +124,7 @@ namespace ui {
     };
 
     template<typename T, typename U>
-    class has_stick_man_model : public abstract_stick_man_item {
+    class has_stick_man_model : public abstract_canvas_item {
     protected:
         U& model_;
     public:

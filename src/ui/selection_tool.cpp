@@ -580,7 +580,7 @@ namespace {
             return static_cast<abstract_properties_widget*>(currentWidget());
         }
 
-        void set(sel_type typ, const std::unordered_set<ui::abstract_stick_man_item*>& sel) {
+        void set(sel_type typ, const std::unordered_set<ui::abstract_canvas_item*>& sel) {
             setCurrentIndex(static_cast<int>(typ));
 			auto* old_props = current_props();
             current_props()->set_selection(sel);
@@ -600,7 +600,7 @@ ui::selection_tool::selection_tool(tool_manager* mgr) :
 void ui::selection_tool::activate(canvas& canv) {
     if (!intitialized_) {
         canv.connect(&canv, &canvas::selection_changed, 
-            [this](const std::unordered_set<ui::abstract_stick_man_item*>& sel) {
+            [this](const std::unordered_set<ui::abstract_canvas_item*>& sel) {
                 this->handle_sel_changed(sel);
             }
         );
@@ -705,7 +705,7 @@ void ui::selection_tool::handle_drag(canvas& canv, QRectF rect, bool shift_down,
 }
 
 void ui::selection_tool::handle_sel_changed(
-        const std::unordered_set<ui::abstract_stick_man_item*>& sel) {
+        const std::unordered_set<ui::abstract_canvas_item*>& sel) {
     auto type_of_sel = selection_type(sel);
     auto props = static_cast<selection_properties*>(properties_);
     props->set(type_of_sel, sel);

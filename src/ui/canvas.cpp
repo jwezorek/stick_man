@@ -26,8 +26,8 @@ namespace {
     constexpr int k_ribbon_height = 35;
 
     template<typename T>
-    std::vector<ui::abstract_stick_man_item*> to_stick_man_items(const T& collection) {
-        return ui::to_vector_of_type<ui::abstract_stick_man_item*>(collection);
+    std::vector<ui::abstract_canvas_item*> to_stick_man_items(const T& collection) {
+        return ui::to_vector_of_type<ui::abstract_canvas_item*>(collection);
     }
 
     template<typename T>
@@ -65,8 +65,8 @@ namespace {
         painter->drawLine(ribbon_rect.topLeft(), ribbon_rect.topRight());
     }
 
-    ui::abstract_stick_man_item* to_stick_man(QGraphicsItem* itm) {
-        return dynamic_cast<ui::abstract_stick_man_item*>(itm);
+    ui::abstract_canvas_item* to_stick_man(QGraphicsItem* itm) {
+        return dynamic_cast<ui::abstract_canvas_item*>(itm);
     }
 
     void draw_grid_lines(QPainter* painter, const QRectF& r, double line_spacing) {
@@ -223,8 +223,8 @@ void ui::canvas::sync_to_model() {
     }
 }
 
-std::vector<ui::abstract_stick_man_item*> ui::canvas::selection() const {
-    return selection_ | r::to<std::vector<ui::abstract_stick_man_item*>>();
+std::vector<ui::abstract_canvas_item*> ui::canvas::selection() const {
+    return selection_ | r::to<std::vector<ui::abstract_canvas_item*>>();
 };
 
 std::vector<ui::bone_item*> ui::canvas::selected_bones() const {
@@ -251,32 +251,32 @@ void ui::canvas::transform_selection(bone_transform trans) {
     r::for_each(as_range_view_of_type<bone_item>(selection_), trans);
 }
 
-void ui::canvas::add_to_selection(std::span<ui::abstract_stick_man_item*> itms) {
+void ui::canvas::add_to_selection(std::span<ui::abstract_canvas_item*> itms) {
     selection_.insert(itms.begin(), itms.end());
     sync_selection();
 }
 
-void ui::canvas::add_to_selection(ui::abstract_stick_man_item* itm) {
+void ui::canvas::add_to_selection(ui::abstract_canvas_item* itm) {
     add_to_selection({ &itm,1 });
 }
 
-void ui::canvas::subtract_from_selection(std::span<ui::abstract_stick_man_item*> itms) {
+void ui::canvas::subtract_from_selection(std::span<ui::abstract_canvas_item*> itms) {
     for (auto itm : itms) {
         selection_.erase(itm);
     }
     sync_selection();
 }
 
-void ui::canvas::subtract_from_selection(ui::abstract_stick_man_item* itm) {
+void ui::canvas::subtract_from_selection(ui::abstract_canvas_item* itm) {
     subtract_from_selection({ &itm,1 });
 }
 
-void ui::canvas::set_selection(std::span<ui::abstract_stick_man_item*> itms) {
+void ui::canvas::set_selection(std::span<ui::abstract_canvas_item*> itms) {
     selection_.clear();
     add_to_selection(itms);
 }
 
-void ui::canvas::set_selection(ui::abstract_stick_man_item* itm) {
+void ui::canvas::set_selection(ui::abstract_canvas_item* itm) {
     set_selection({ &itm,1 });
 }
 
@@ -287,7 +287,7 @@ void ui::canvas::clear_selection() {
 
 void ui::canvas::sync_selection() {
     auto itms = items();
-    for (auto* itm : as_range_view_of_type<ui::abstract_stick_man_item>(itms)) {
+    for (auto* itm : as_range_view_of_type<ui::abstract_canvas_item>(itms)) {
         bool selected = selection_.contains(itm);
         itm->set_selected(selected);
     }
@@ -315,12 +315,12 @@ ui::node_item* ui::canvas::top_node(const QPointF& pt) const {
     return top_item_of_type<ui::node_item>(*this, pt);
 }
 
-ui::abstract_stick_man_item* ui::canvas::top_item(const QPointF& pt) const {
-    return top_item_of_type<ui::abstract_stick_man_item>(*this, pt);
+ui::abstract_canvas_item* ui::canvas::top_item(const QPointF& pt) const {
+    return top_item_of_type<ui::abstract_canvas_item>(*this, pt);
 }
 
-std::vector<ui::abstract_stick_man_item*> ui::canvas::items_in_rect(const QRectF& r) const {
-    return to_vector_of_type<ui::abstract_stick_man_item>(items(r));
+std::vector<ui::abstract_canvas_item*> ui::canvas::items_in_rect(const QRectF& r) const {
+    return to_vector_of_type<ui::abstract_canvas_item>(items(r));
 }
 
 std::vector<ui::node_item*> ui::canvas::root_node_items() const {
@@ -387,26 +387,26 @@ ui::stick_man& ui::canvas_view::main_window() {
 }
 
 /*------------------------------------------------------------------------------------------------*/
-ui::abstract_stick_man_item::abstract_stick_man_item() : selection_frame_(nullptr)
+ui::abstract_canvas_item::abstract_canvas_item() : selection_frame_(nullptr)
 {}
 
-void ui::abstract_stick_man_item::sync_to_model() {
+void ui::abstract_canvas_item::sync_to_model() {
     sync_item_to_model();
     if (selection_frame_) {
         sync_sel_frame_to_model();
     }
 }
 
-ui::canvas* ui::abstract_stick_man_item::canvas() const {
+ui::canvas* ui::abstract_canvas_item::canvas() const {
     auto* ptr = dynamic_cast<const QGraphicsItem*>(this);
     return static_cast<ui::canvas*>(ptr->scene());
 }
 
-bool ui::abstract_stick_man_item::is_selected() const {
+bool ui::abstract_canvas_item::is_selected() const {
     return selection_frame_ && selection_frame_->isVisible();
 }
 
-void ui::abstract_stick_man_item::set_selected(bool selected) {
+void ui::abstract_canvas_item::set_selected(bool selected) {
     if (selected) {
         if (!selection_frame_) {
             selection_frame_ = create_selection_frame();
