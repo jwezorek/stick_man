@@ -24,6 +24,7 @@ namespace ui {
     class tool_manager;
     class node_item;
     class bone_item;
+	class joint_constraint_item;
     class abstract_canvas_item;
 
     using selection_set = std::unordered_set<ui::abstract_canvas_item*>;
@@ -62,6 +63,7 @@ namespace ui {
 
         tool_manager& tool_mgr();
         void sync_selection();
+		void sync_joint_constraint_to_model();
 
     protected:
 

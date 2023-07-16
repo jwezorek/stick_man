@@ -9,6 +9,7 @@ namespace {
 	constexpr int k_node_zorder = 10;
 	constexpr double k_pin_radius = k_node_radius - 3.0;
 	constexpr double k_sel_frame_distance = 4.0;
+	constexpr double k_joint_constraint_radius = 50.0;
 	const auto k_sel_color = QColorConstants::Svg::turquoise;
 	constexpr double k_sel_thickness = 3.0;
 	constexpr int k_bone_zorder = 5;
@@ -195,4 +196,43 @@ QGraphicsItem* ui::bone_item::create_selection_frame() const {
 	sf->setLine(0, 0, model_.length(), 0);
 	sf->setPen(QPen(k_sel_color, k_sel_thickness * inv_scale, Qt::DotLine));
 	return sf;
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
+void ui::joint_constraint_item::sync_item_to_model() {
+
+}
+
+void ui::joint_constraint_item::sync_sel_frame_to_model() {
+
+}
+
+QGraphicsItem* ui::joint_constraint_item::create_selection_frame() const {
+	return nullptr;
+}
+
+ui::joint_constraint_item::joint_constraint_item(const sm::node* node, double min,
+			double max, double scale) :
+		node_(node),
+		min_angle_(min),
+		max_angle_(max) {
+	setBrush(QBrush(k_sel_color));
+	setPen(Qt::NoPen);
+	if (node) {
+		set(node, min, max, scale);
+	}
+}
+
+void ui::joint_constraint_item::set( const sm::node* node, double min, double max, double scale) {
+	node_ = node;
+	min_angle_ = min;
+	max_angle_ = max;
+
+	ui::set_arc(this,
+		ui::to_qt_pt(node_->world_pos()),
+		k_joint_constraint_radius * (1.0/scale),
+		min_angle_,
+		max_angle_ - min_angle_
+	);
 }

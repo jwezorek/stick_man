@@ -72,6 +72,31 @@ namespace ui {
 		node_item& child_node_item() const;
 	};
 
+	class joint_constraint_item : public abstract_canvas_item,
+		public QGraphicsEllipseItem {
+	private:
+		void sync_item_to_model() override;
+		void sync_sel_frame_to_model() override;
+		QGraphicsItem* create_selection_frame() const override;
+
+		const sm::node* node_;
+		double min_angle_;
+		double max_angle_;
+	public:
+		joint_constraint_item(
+			const sm::node* node = nullptr,
+			double min_angle = 0,
+			double max_angle = 0,
+			double scale = 0.0
+		);
+		void set(
+			const sm::node* node_,
+			double min_angle,
+			double max_angle,
+			double scale
+		);
+	};
+
 	template<typename T, typename U>
 	T& item_from_model(U& model_obj) {
 		return std::any_cast<std::reference_wrapper<T>>(model_obj.get_user_data()).get();

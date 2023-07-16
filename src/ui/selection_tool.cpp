@@ -168,7 +168,10 @@ namespace {
                     parent, 
                     (multi) ? "selected nodes" : "selected node"
                 ),
-                multi_(multi) {
+                multi_(multi),
+				tab_{},
+				world_x_{},
+				world_y_{} {
         }
 
         void populate() override {
@@ -247,7 +250,11 @@ namespace {
                     parent, 
                     (multi) ? "selected bones" : "selected bone"
                 ),
-                multi_(multi) {
+                multi_(multi),
+				length_(nullptr),
+				rotation_tab_ctrl_(nullptr),
+				world_rotation_(nullptr),
+				parent_rotation_(nullptr) {
         }
 
         void populate() override {
@@ -352,12 +359,18 @@ namespace {
 
     public:
         joint_properties(ui::tool_manager* mgr, QWidget* parent, bool parent_child) :
-			arc_rubber_band_(nullptr),
-            abstract_properties_widget(
-                mgr, 
-                parent, 
-                (parent_child) ? "selected parent-child joint" : "selected sibling joint"
-            ) {
+				abstract_properties_widget(
+					mgr, 
+					parent, 
+					(parent_child) ? "selected parent-child joint" : "selected sibling joint"
+				),
+				arc_rubber_band_(nullptr),
+				bones_lbl_(nullptr),
+				constraint_btn_(nullptr),
+				constraint_box_(nullptr),
+				min_angle_(nullptr),
+				max_angle_(nullptr),
+				joint_info_{} {
         }
 
         void populate() override {
@@ -450,6 +463,15 @@ namespace {
 				ui::selection_tool::modal_state::none,
 				canvas()
 			);
+
+			auto sel_joint = canv.selected_joint();
+			sel_joint->shared_node->set_constraint(
+				*sel_joint->anchor_bone,
+				*sel_joint->dependent_bone,
+				min_angle_radians,
+				max_angle_radians
+			);
+			canv.sync_to_model();
         }
     };
 

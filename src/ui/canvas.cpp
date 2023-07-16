@@ -193,11 +193,39 @@ double ui::canvas::scale() const {
     return view.transform().m11();
 }
 
+void ui::canvas::sync_joint_constraint_to_model() {
+	auto sel_joint = selected_joint();
+	if (!sel_joint) {
+		return;
+	}
+	auto sel_constraint = sel_joint->shared_node->constraint_angles(
+			*sel_joint->anchor_bone, *sel_joint->dependent_bone
+	);
+	if (!sel_constraint) {
+		return;
+	}
+	auto existing_jcis = to_vector_of_type<joint_constraint_item>(items());
+	joint_constraint_item* jci = existing_jcis.empty() ?
+		new joint_constraint_item() :
+		existing_jcis.front();
+
+	auto parent_rot = sel_joint->anchor_bone->world_rotation();
+	auto span = sel_constraint->max - sel_constraint->min;
+	auto min_angle = normalize_angle(parent_rot + sel_constraint->min);
+	auto max_angle = min_angle + span;
+
+	jci->set(sel_joint->shared_node, min_angle, max_angle, scale_ );
+	if (existing_jcis.empty()) {
+		addItem(jci);
+	}
+}
+
 void ui::canvas::sync_to_model() {
     auto is_non_null = [](auto* p) {return p; };
     for (auto* child : items() | rv::transform(to_stick_man) | rv::filter(is_non_null)) {
         child->sync_to_model();
     }
+	sync_joint_constraint_to_model();
 }
 
 const ui::selection_set&  ui::canvas::selection() const {
