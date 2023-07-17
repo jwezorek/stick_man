@@ -383,8 +383,24 @@ namespace {
         }
 
         void set_selection(const ui::canvas& canv) override {
-            joint_info_ = canv.selected_joint().value();
-            bones_lbl_->setText(name_of_joint());
+
+			auto sel_joint = canv.selected_joint();
+			if (!sel_joint) {
+				throw std::runtime_error("joint properties populated with a non-joint selection");
+			}
+			auto sel_constraint = sel_joint->shared_node->constraint_angles(
+				*sel_joint->anchor_bone, *sel_joint->dependent_bone);
+
+			if (!sel_constraint) {
+				joint_info_ = canv.selected_joint().value();
+				bones_lbl_->setText(name_of_joint());
+				show_constraint_box(false);
+			} else {
+				auto [min_angle_radians, max_angle_radians] = sel_constraint.value();
+				min_angle_->num_edit()->set_value(ui::radians_to_degrees(min_angle_radians));
+				max_angle_->num_edit()->set_value(ui::radians_to_degrees(max_angle_radians));
+				show_constraint_box(true);
+			}
         }
 
 		void lose_selection() override {
@@ -498,8 +514,8 @@ namespace {
         }
 
         void set(ui::sel_type typ, const ui::canvas& canv) {
-            setCurrentIndex(static_cast<int>(typ));
 			auto* old_props = current_props();
+            setCurrentIndex(static_cast<int>(typ));
             current_props()->set_selection(canv);
 			old_props->lose_selection();
         }
@@ -580,6 +596,7 @@ void ui::selection_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEven
     } else {
         handle_click(canv, event->scenePos(), shift_down, alt_down);
     }
+	canv.sync_to_model();
 }
 
 void ui::selection_tool::handle_click(canvas& canv, QPointF pt, bool shift_down, bool alt_down) {

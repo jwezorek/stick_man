@@ -69,6 +69,7 @@ namespace {
         void mousePressEvent(move_state& ms) override {
             auto node = ms.canvas_->top_node(ms.event_->scenePos());
             if (!node) {
+				ms.anchor_ = nullptr;
                 return;
             }
 
@@ -81,6 +82,9 @@ namespace {
         };
 
         void mouseMoveEvent(move_state& ms) override {
+			if (!ms.anchor_) {
+				return;
+			}
             auto theta = ui::angle_through_points(ms.anchor_->scenePos(), ms.event_->scenePos()) -
                 ms.bone_->model().world_rotation();
 
