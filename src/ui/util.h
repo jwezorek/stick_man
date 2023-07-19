@@ -121,6 +121,7 @@ namespace ui {
         double start_theta, double span_theta
     );
 	double radians_to_degrees(double radians);
+	double degrees_to_radians(double degrees);
 	QPointF to_qt_pt(const sm::point& pt);
 	sm::point from_qt_pt(QPointF pt);
 	double angle_through_points(QPointF origin, QPointF pt);

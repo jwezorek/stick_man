@@ -395,6 +395,10 @@ double ui::radians_to_degrees(double radians) {
 	return radians * (180.0 / std::numbers::pi_v<double>);
 }
 
+double ui::degrees_to_radians(double degrees) {
+	return degrees * (std::numbers::pi_v<double> / 180.0);
+}
+
 QPointF ui::to_qt_pt(const sm::point& pt) {
 	return { pt.x, pt.y };
 }

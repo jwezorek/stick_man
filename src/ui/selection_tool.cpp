@@ -317,6 +317,19 @@ namespace {
             return static_cast<ui::selection_tool*>(&mgr_->current_tool());
         }
 
+		void set_constraint_angle(ui::canvas& canv, double val, bool is_min_angle) {
+			auto theta = ui::degrees_to_radians(val);
+			auto& node = *joint_info_.shared_node;
+			auto& anchor = *joint_info_.anchor_bone;
+			auto& dependent = *joint_info_.dependent_bone;
+			auto [min, max] = *node.constraint_angles(anchor, dependent);
+			min = is_min_angle ? theta : min;
+			max = is_min_angle ? max : theta;
+
+			node.set_constraint(anchor, dependent, min, max);
+			canv.sync_to_model();
+		}
+
         QGroupBox* create_constraint_box() {
             auto box = new QGroupBox();
 
@@ -326,6 +339,19 @@ namespace {
             layout->addWidget(max_angle_ = new ui::labeled_numeric_val("maximum angle", 0, -180, 180));
             layout_->addWidget(box);
             box->hide();
+
+			auto& canv = this->canvas();
+			connect(min_angle_->num_edit(), &ui::number_edit::value_changed,
+				[this,&canv](double v) {
+					set_constraint_angle(canv, v, true);
+				}
+			);
+
+			connect(max_angle_->num_edit(), &ui::number_edit::value_changed,
+				[this, &canv](double v) {
+					set_constraint_angle(canv, v, false);
+				}
+			);
 
             return box;
         }
