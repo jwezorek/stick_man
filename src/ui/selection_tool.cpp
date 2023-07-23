@@ -10,6 +10,10 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include <fstream> // TODO: remove
+#include <sstream> // TODO: remove
+#include <format> // TODO: remove
+
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
 
@@ -18,6 +22,57 @@ namespace rv = std::ranges::views;
 namespace {
 
     double k_tolerance = 0.00005;
+
+	class svg_debug {
+		std::stringstream ss;
+	public:
+		svg_debug() {
+			ss << "<svg height='500' width='500' xmlns='http://www.w3.org/2000/svg' version='1.1'>>\n";
+			ss << "<g transform = 'matrix(1 0 0 -1 0 500)'>\n";
+		}
+		void add_line(sm::point u, sm::point v, std::string color) {
+			ss << std::format(
+				"<line x1 ='{0}' y1 ='{1}' x2='{2}' y2='{3}' style='stroke:{4};stroke-width:2' />\n",
+				u.x, u.y, v.x, v.y, color);
+		}
+
+		std::string to_string() {
+			ss << "</g>\n</svg>";
+			return ss.str();
+		}
+	};
+
+
+	sm::point pt_rel_to_line(sm::point u, sm::point v, double angle) {
+		auto diff = v-u;
+		auto rot = std::atan2(diff.y, diff.x);
+		//auto canonicalize = sm::rotation_matrix(-rot) * sm::translation_matrix(-v);
+		auto decanonicalize = sm::translation_matrix(v) * sm::rotation_matrix(rot);
+		sm::point pt = { 30.0 * std::cos(angle), 30.0 * std::sin(angle) };
+		return sm::transform(pt, decanonicalize);
+	}
+
+	void debug() {
+		std::ofstream svg_file;
+		svg_debug svg;
+
+		sm::point u = { 20, 20 };
+		sm::point v = { 60, 50 };
+		sm::point target = { 60, 110 };
+		auto max_angle = ui::degrees_to_radians(10.0);
+		auto min_angle = ui::degrees_to_radians(-20.0);
+
+		target = sm::apply_angle_constraint(u, v, target, min_angle, max_angle, true);
+
+		svg.add_line(u, v, "green");
+		svg.add_line(v, target, "red");
+		svg.add_line(v, pt_rel_to_line(u, v, max_angle), "black");
+		svg.add_line(v, pt_rel_to_line(u, v, min_angle), "black");
+
+		svg_file.open("C:\\test\\debug.svg");
+		svg_file << svg.to_string();
+		svg_file.close();
+	}
 
 	QPointF joint_axis(const ui::joint_info& ji) {
 		return ui::to_qt_pt(ji.shared_node->world_pos());
@@ -588,7 +643,7 @@ void ui::selection_tool::keyReleaseEvent(canvas & c, QKeyEvent * event) {
 
 void ui::selection_tool::mousePressEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     rubber_band_ = {};
-
+	debug();
     if (is_in_modal_state()) {
         auto props = static_cast<selection_properties*>(settings_widget());
         auto joint_props = static_cast<joint_properties*>(props->current_props());

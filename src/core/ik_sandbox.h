@@ -161,4 +161,7 @@ namespace sm {
 
     void debug_reach(node& j, sm::point pt);
     void perform_fabrik(node& j, const sm::point& pt, double tolerance = 0.005, int max_iter = 100);
+
+	point apply_angle_constraint(const point& fixed_pt1, const point& fixed_pt2, const point& free_pt,
+		double min_angle, double max_angle, bool fixed_bool_is_anchor);
 }

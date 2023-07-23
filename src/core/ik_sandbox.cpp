@@ -234,6 +234,17 @@ namespace {
             }
         }
     }
+
+	sm::point constrain_angle_from_origin(double min_angle, double max_angle, const sm::point& pt) {
+		auto theta = std::atan2(pt.y, pt.x);
+		auto length = sm::distance({ 0.0 }, pt);
+		theta = (theta < min_angle) ? min_angle : theta;
+		theta = (theta > max_angle) ? max_angle : theta;
+		return {
+			length * std::cos(theta),
+			length * std::sin(theta)
+		};
+	}
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -559,5 +570,16 @@ void sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
         // reach for pinned locations from pinned nodes
         solve_for_multiple_targets(pinned_nodes, tolerance, bone_lengths, max_iter);
     }
+}
+
+sm::point sm::apply_angle_constraint(const point& fixed_pt1, const point& fixed_pt2, const point& free_pt,
+		double min_angle, double max_angle, bool fixed_bool_is_anchor) {
+	auto fixed_rotation = angle_from_u_to_v(fixed_pt1, fixed_pt2);
+	auto canonicalize = rotation_matrix(-fixed_rotation) * translation_matrix(-fixed_pt2);
+	auto decanonicalize = translation_matrix(fixed_pt2) * rotation_matrix(fixed_rotation);
+
+	auto v = sm::transform(free_pt, canonicalize);
+	v = constrain_angle_from_origin(min_angle, max_angle, v);
+	return sm::transform(v, decanonicalize);
 }
 
