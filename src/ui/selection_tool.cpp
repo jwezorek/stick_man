@@ -60,7 +60,7 @@ namespace {
 
 		sm::point u = { 20, 20 };
 		sm::point v = { 60, 50 };
-		sm::point target = { 120, 50 };
+		sm::point target = { 60, 110 };
 		auto max_angle = ui::degrees_to_radians(10.0);
 		auto min_angle = ui::degrees_to_radians(-20.0);
 

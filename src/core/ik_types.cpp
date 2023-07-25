@@ -109,3 +109,9 @@ double sm::distance(const point& u, const point& v) {
     auto y_diff = u.y - v.y;
     return std::sqrt(x_diff * x_diff + y_diff * y_diff);
 }
+
+double sm::normalize_angle(double theta) {
+	auto cosine = std::cos(theta);
+	auto sine = std::sin(theta);
+	return std::atan2(sine, cosine);
+}
