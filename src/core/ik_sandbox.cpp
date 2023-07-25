@@ -245,6 +245,15 @@ namespace {
 			length * std::sin(theta)
 		};
 	}
+
+	std::optional<sm::angle_range> parent_constraint_on_bone(const sm::bone& bone) {
+		if (!bone.parent_bone()) {
+			return {};
+		}
+		const auto& parent_node = bone.parent_node();
+		const auto& parent_bone = bone.parent_bone()->get();
+		return parent_node.constraint_angles(parent_bone, bone);
+	}
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -438,11 +447,23 @@ void sm::bone::set_user_data(std::any data) {
 }
 
 void sm::bone::rotate(double theta) {
+
+	auto maybe_constraint = parent_constraint_on_bone(*this);
+	if (maybe_constraint) {
+		theta = apply_parent_child_constraint(
+			parent_bone()->get(),
+			theta + world_rotation(),
+			maybe_constraint->min,
+			maybe_constraint->max
+		) - world_rotation();
+	}
     auto rotate_mat = rotate_about_point(u_.world_pos(), theta);
+
     auto rotate_about_u = [&rotate_mat](node& j)->bool {
         j.set_world_pos(transform(j.world_pos(), rotate_mat));
         return true;
     };
+	
     visit_nodes(v_, rotate_about_u);
 }
 
@@ -572,14 +593,37 @@ void sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
     }
 }
 
-sm::point sm::apply_angle_constraint(const point& fixed_pt1, const point& fixed_pt2, const point& free_pt,
-		double min_angle, double max_angle, bool fixed_bool_is_anchor) {
+sm::point sm::apply_angle_constraint(const point& fixed_pt1, const point& fixed_pt2, 
+		const point& free_pt, double min_angle, double max_angle, bool fixed_bone_is_anchor) {
+
 	auto fixed_rotation = angle_from_u_to_v(fixed_pt1, fixed_pt2);
 	auto canonicalize = rotation_matrix(-fixed_rotation) * translation_matrix(-fixed_pt2);
 	auto decanonicalize = translation_matrix(fixed_pt2) * rotation_matrix(fixed_rotation);
 
+	max_angle = fixed_bone_is_anchor ? max_angle : -min_angle;
+	min_angle = fixed_bone_is_anchor ? min_angle : -max_angle;
+
 	auto v = sm::transform(free_pt, canonicalize);
 	v = constrain_angle_from_origin(min_angle, max_angle, v);
 	return sm::transform(v, decanonicalize);
+}
+
+double sm::apply_parent_child_constraint(const sm::bone& parent, double rotation,
+		double min_angle, double max_angle) {
+	auto axis = parent.child_node().world_pos();
+	sm::point test_pt = {
+		axis.x + std::cos(rotation),
+		axis.y + std::sin(rotation)
+	};
+	auto constrained_pt = apply_angle_constraint(
+		parent.parent_node().world_pos(),
+		axis,
+		test_pt,
+		min_angle,
+		max_angle,
+		true
+	);
+	constrained_pt -= axis;
+	return std::atan2(constrained_pt.y, constrained_pt.x);
 }
 

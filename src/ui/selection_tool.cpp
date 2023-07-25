@@ -23,6 +23,7 @@ namespace {
 
     double k_tolerance = 0.00005;
 
+	// TODO: remove debug code
 	class svg_debug {
 		std::stringstream ss;
 	public:
@@ -42,7 +43,7 @@ namespace {
 		}
 	};
 
-
+	// TODO: remove debug code
 	sm::point pt_rel_to_line(sm::point u, sm::point v, double angle) {
 		auto diff = v-u;
 		auto rot = std::atan2(diff.y, diff.x);
@@ -52,13 +53,14 @@ namespace {
 		return sm::transform(pt, decanonicalize);
 	}
 
+	// TODO: remove debug code
 	void debug() {
 		std::ofstream svg_file;
 		svg_debug svg;
 
 		sm::point u = { 20, 20 };
 		sm::point v = { 60, 50 };
-		sm::point target = { 60, 110 };
+		sm::point target = { 120, 50 };
 		auto max_angle = ui::degrees_to_radians(10.0);
 		auto min_angle = ui::degrees_to_radians(-20.0);
 
