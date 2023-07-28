@@ -20,6 +20,64 @@ namespace {
 
     using node_or_bone = std::variant<sm::bone_ref, sm::node_ref>;
 
+
+	struct bone_pair {
+		node_or_bone prev;
+		sm::bone_ref current;
+
+		bone_pair(sm::node& n, sm::bone& b) : prev{ n }, current{ b } {
+		}
+
+		bone_pair(sm::bone_ref p, sm::bone_ref b) : prev{ p }, current{ b } {
+		}
+	};
+
+	using bone_pair_visitor = std::function<bool(bone_pair&)>;
+
+	auto to_bone_pairs(auto prev, const std::vector<sm::bone_ref>& bones) {
+		return bones | rv::transform([prev](auto&& b) {return bone_pair{ prev, b }; });
+	}
+
+	sm::node& current_node(const bone_pair& bones) {
+		if (std::holds_alternative<sm::node_ref>(bones.prev)) {
+			return std::get<sm::node_ref>(bones.prev).get();
+		}
+		else {
+			sm::bone& prev_bone = std::get<sm::bone_ref>(bones.prev).get();
+			auto shared = bones.current.get().shared_node(prev_bone);
+			if (!shared) {
+				throw std::runtime_error("bad call to dfs_bones_with_prev");
+			}
+			return shared->get();
+		}
+	}
+
+	std::vector<sm::bone_ref> neighbor_bones(const bone_pair& pair) {
+		sm::node& curr_node = current_node(pair);
+		sm::node& next_node = pair.current.get().opposite_node(curr_node);
+		return next_node.adjacent_bones() |
+			rv::filter(
+				[&pair](sm::bone_ref b) { return &(b.get()) != &pair.current.get(); }
+		) | r::to<std::vector<sm::bone_ref>>();
+	}
+
+	void dfs_bones_with_prev(sm::node& start, bone_pair_visitor visitor) {
+		std::stack<bone_pair> stack;
+		stack.push_range(to_bone_pairs(sm::node_ref(start), start.adjacent_bones()));
+		while (!stack.empty()) {
+			auto item = stack.top();
+			stack.pop();
+
+			auto result = visitor(item);
+			if (!result) {
+				return;
+			}
+			stack.push_range(
+				to_bone_pairs(item.current, neighbor_bones(item))
+			);
+		}
+	}
+
     class node_or_bone_visitor {
         sm::node_visitor node_visit_;
         sm::bone_visitor bone_visit_;
@@ -166,7 +224,8 @@ namespace {
             const std::unordered_map<uint64_t, double>& bone_lengths) {
         std::unordered_set<uint64_t> moved_nodes;
 
-        auto perform_fabrik_on_bone = [&](sm::bone& b) {
+        auto perform_fabrik_on_bone = [&](bone_pair& pair) {
+			auto& b = pair.current.get();
             sm::node& moved_node = moved_nodes.contains(get_id(b.parent_node())) ?
                 b.parent_node() :
                 b.child_node();
@@ -180,7 +239,7 @@ namespace {
 
         j.set_world_pos(pt);
         moved_nodes.insert(get_id(j));
-        dfs(j, {}, perform_fabrik_on_bone, false);
+        dfs_bones_with_prev(j, perform_fabrik_on_bone);
     }
 
     bool is_satisfied(const targeted_node& tj, double tolerance) {
@@ -547,64 +606,6 @@ bool sm::ik_sandbox::is_reachable(node& j1, node& j2) {
     };
     dfs(j1, visit_node);
     return found;
-}
-
-struct bone_pair {
-	node_or_bone prev;
-	sm::bone_ref current;
-
-	bone_pair(sm::node& n, sm::bone& b) : prev{n}, current{ b } {
-	}
-
-	bone_pair(sm::bone_ref p, sm::bone_ref b) : prev{p}, current{ b } {
-	}
-
-
-};
-
-using bone_pair_visitor = std::function<bool(bone_pair&)>;
-
-auto to_bone_pairs(auto prev, const std::vector<sm::bone_ref>& bones) {
-	return bones | rv::transform([prev](auto&& b) {return bone_pair{ prev, b }; });
-}
-
-sm::node& current_node(const bone_pair& bones) {
-	if (std::holds_alternative<sm::node_ref>(bones.prev)) {
-		return std::get<sm::node_ref>(bones.prev).get();
-	} else {
-		sm::bone& prev_bone = std::get<sm::bone_ref>(bones.prev).get();
-		auto shared = bones.current.get().shared_node(prev_bone);
-		if (!shared) {
-			throw std::runtime_error("bad call to dfs_bones_with_prev");
-		}
-		return shared->get();
-	}
-}
-
-std::vector<sm::bone_ref> neighbor_bones(const bone_pair& pair) {
-	sm::node& curr_node = current_node(pair);
-	sm::node& next_node = pair.current.get().opposite_node(curr_node);
-	return next_node.adjacent_bones() | 
-		rv::filter(
-			[&pair](sm::bone_ref b) { return &(b.get()) != &pair.current.get(); }
-	) | r::to<std::vector<sm::bone_ref>>();
-}
-
-void dfs_bones_with_prev(sm::node& start, bone_pair_visitor visitor) {
-	std::stack<bone_pair> stack;
-	stack.push_range(to_bone_pairs(sm::node_ref(start), start.adjacent_bones()));
-	while (!stack.empty()) {
-		auto item = stack.top();
-		stack.pop();
-
-		auto result = visitor(item);
-		if (!result) {
-			return;
-		}
-		stack.push_range(
-			to_bone_pairs(item.current, neighbor_bones(item))
-		);
-	}
 }
 
 std::string sm::debug(sm::node& node) {
