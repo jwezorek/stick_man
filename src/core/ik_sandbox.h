@@ -85,8 +85,9 @@ namespace sm {
 
     public:
         std::string name() const;
-        maybe_bone_ref parent_bone();
-        std::span<bone_ref> child_bones();
+        maybe_bone_ref parent_bone() const;
+        std::span<const bone_ref> child_bones() const;
+		std::vector<bone_ref> adjacent_bones() const;
         double world_x() const;
         double world_y() const;
         void set_world_pos(const point& pt);
@@ -120,6 +121,7 @@ namespace sm {
         node& parent_node() const;
         node& child_node() const;
         node& opposite_node(const node& j) const;
+		std::optional<node_ref> shared_node(const bone& b) const;
 
         std::tuple<point, point> line_segment() const;
         double length() const;
@@ -169,4 +171,6 @@ namespace sm {
 		const point& free_pt, double min_angle, double max_angle, bool fixed_bone_is_anchor);
 
 	double apply_parent_child_constraint(const bone& parent, double rotation, double min_angle, double max_angle);
+
+	std::string debug(sm::node& node);
 }

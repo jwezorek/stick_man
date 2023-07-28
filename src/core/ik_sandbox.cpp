@@ -9,6 +9,8 @@
 #include <numbers>
 #include <qdebug.h>
 
+#include <sstream> // TODO: remove debug code
+
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
 
@@ -266,12 +268,23 @@ std::string sm::node::name() const {
     return name_;
 }
 
-sm::maybe_bone_ref sm::node::parent_bone() {
+sm::maybe_bone_ref sm::node::parent_bone() const {
     return parent_;
 }
 
-std::span<sm::bone_ref> sm::node::child_bones() {
+std::span<const sm::bone_ref> sm::node::child_bones() const {
     return children_;
+}
+
+std::vector<sm::bone_ref> sm::node::adjacent_bones() const {
+	std::vector<sm::bone_ref> bones;
+	bones.reserve(children_.size() + 1);
+	if (!is_root()) {
+		bones.push_back(*parent_);
+	}
+	r::copy(children_, std::back_inserter(bones));
+	bones.shrink_to_fit();
+	return bones;
 }
 
 double sm::node::world_x() const {
@@ -381,6 +394,21 @@ sm::node& sm::bone::opposite_node(const node& j) const {
     } else {
         return u_;
     }
+}
+
+std::optional<sm::node_ref> sm::bone::shared_node(const bone& b) const {
+	auto* b_u = &b.parent_node();
+	auto* b_v = &b.child_node();
+	if (&u_ == b_u) {
+		return sm::node_ref(*b_u);
+	} else if (&u_ == b_v) {
+		return sm::node_ref(*b_v);
+	} else if (&v_ == b_u) {
+		return sm::node_ref(*b_u);
+	} else if (&v_ == b_v) {
+		return sm::node_ref(*b_v);
+	}
+	return {};
 }
 
 std::tuple<sm::point, sm::point> sm::bone::line_segment() const {
@@ -521,6 +549,81 @@ bool sm::ik_sandbox::is_reachable(node& j1, node& j2) {
     return found;
 }
 
+struct bone_pair {
+	node_or_bone prev;
+	sm::bone_ref current;
+
+	bone_pair(sm::node& n, sm::bone& b) : prev{n}, current{ b } {
+	}
+
+	bone_pair(sm::bone_ref p, sm::bone_ref b) : prev{p}, current{ b } {
+	}
+
+
+};
+
+using bone_pair_visitor = std::function<bool(bone_pair&)>;
+
+auto to_bone_pairs(auto prev, const std::vector<sm::bone_ref>& bones) {
+	return bones | rv::transform([prev](auto&& b) {return bone_pair{ prev, b }; });
+}
+
+sm::node& current_node(const bone_pair& bones) {
+	if (std::holds_alternative<sm::node_ref>(bones.prev)) {
+		return std::get<sm::node_ref>(bones.prev).get();
+	} else {
+		sm::bone& prev_bone = std::get<sm::bone_ref>(bones.prev).get();
+		auto shared = bones.current.get().shared_node(prev_bone);
+		if (!shared) {
+			throw std::runtime_error("bad call to dfs_bones_with_prev");
+		}
+		return shared->get();
+	}
+}
+
+std::vector<sm::bone_ref> neighbor_bones(const bone_pair& pair) {
+	sm::node& curr_node = current_node(pair);
+	sm::node& next_node = pair.current.get().opposite_node(curr_node);
+	return next_node.adjacent_bones() | 
+		rv::filter(
+			[&pair](sm::bone_ref b) { return &(b.get()) != &pair.current.get(); }
+	) | r::to<std::vector<sm::bone_ref>>();
+}
+
+void dfs_bones_with_prev(sm::node& start, bone_pair_visitor visitor) {
+	std::stack<bone_pair> stack;
+	stack.push_range(to_bone_pairs(sm::node_ref(start), start.adjacent_bones()));
+	while (!stack.empty()) {
+		auto item = stack.top();
+		stack.pop();
+
+		auto result = visitor(item);
+		if (!result) {
+			return;
+		}
+		stack.push_range(
+			to_bone_pairs(item.current, neighbor_bones(item))
+		);
+	}
+}
+
+std::string sm::debug(sm::node& node) {
+	std::stringstream ss;
+
+	dfs_bones_with_prev(
+		node,
+		[&ss](bone_pair& bones)->bool {
+			std::string prev_name = std::visit(
+				[](auto n_or_b)->std::string { return n_or_b.get().name(); },
+				bones.prev
+			);
+			ss << "[ "  << prev_name << " , " << bones.current.get().name() << " ]\n";
+			return true;
+		}
+	);
+	return ss.str();
+}
+
 void sm::dfs(node& j1, node_visitor visit_node, bone_visitor visit_bone,
         bool just_downstream) {
     std::stack<node_or_bone> stack;
@@ -530,18 +633,18 @@ void sm::dfs(node& j1, node_visitor visit_node, bone_visitor visit_bone,
     stack.push(std::ref(j1));
 
     while (!stack.empty()) {
-        auto node = stack.top();
+        auto item = stack.top();
         stack.pop();
-        auto id = get_id(node);
+        auto id = get_id(item);
         if (visited.contains(id)) {
             continue;
         }
-        auto result = std::visit(visitor, node);
+        auto result = std::visit(visitor, item);
         visited.insert(id);
         if (!result) {
             return;
         }
-        auto neighbors = std::visit(neighbors_visitor, node);
+        auto neighbors = std::visit(neighbors_visitor, item);
         for (const auto& neighbor : neighbors) {
             stack.push(neighbor);
         }
@@ -593,10 +696,6 @@ double sm::apply_angle_constraint(double fixed_rotation, double free_rotation,
 	theta = (theta > max_angle) ? max_angle : theta;
 
 	return normalize_angle(theta + fixed_rotation);
-}
-
-double radians_to_degrees(double radians) {
-	return radians * (180.0 / std::numbers::pi_v<double>);
 }
 
 sm::point sm::apply_angle_constraint(const point& fixed_pt1, const point& fixed_pt2, 

@@ -76,6 +76,16 @@ namespace {
 		svg_file.close();
 	}
 
+	// TODO: remove debug code
+	void debug2(std::vector<ui::node_item*> v) {
+		if (v.empty()) {
+			return;
+		}
+		auto& node = v.front()->model();
+		auto dbg_str = sm::debug(node);
+		qDebug() << dbg_str.c_str();
+	}
+
 	QPointF joint_axis(const ui::joint_info& ji) {
 		return ui::to_qt_pt(ji.shared_node->world_pos());
 	}
@@ -645,7 +655,7 @@ void ui::selection_tool::keyReleaseEvent(canvas & c, QKeyEvent * event) {
 
 void ui::selection_tool::mousePressEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     rubber_band_ = {};
-	debug();
+	debug2(canv.selected_nodes());
     if (is_in_modal_state()) {
         auto props = static_cast<selection_properties*>(settings_widget());
         auto joint_props = static_cast<joint_properties*>(props->current_props());
