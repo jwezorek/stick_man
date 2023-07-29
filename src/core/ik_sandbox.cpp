@@ -58,7 +58,7 @@ namespace {
 		return next_node.adjacent_bones() |
 			rv::filter(
 				[&pair](sm::bone_ref b) { return &(b.get()) != &pair.current.get(); }
-		) | r::to<std::vector<sm::bone_ref>>();
+			) | r::to<std::vector<sm::bone_ref>>();
 	}
 
 	void dfs_bones_with_prev(sm::node& start, bone_pair_visitor visitor) {
@@ -67,9 +67,7 @@ namespace {
 		while (!stack.empty()) {
 			auto item = stack.top();
 			stack.pop();
-
-			auto result = visitor(item);
-			if (!result) {
+			if (!visitor(item)) {
 				return;
 			}
 			stack.push_range(
