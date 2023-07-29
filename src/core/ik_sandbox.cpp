@@ -148,10 +148,10 @@ namespace {
         return reinterpret_cast<uint64_t>(&var);
     }
 
-    std::unordered_map<uint64_t, double> build_bone_length_table(sm::node& j) {
-        std::unordered_map<uint64_t, double> length_tbl;
+    std::unordered_map<sm::bone*, double> build_bone_length_table(sm::node& j) {
+        std::unordered_map<sm::bone*, double> length_tbl;
         auto visit_bone = [&length_tbl](sm::bone& b)->bool {
-            length_tbl[get_id(b)] = b.scaled_length();
+            length_tbl[&b] = b.scaled_length();
             return true;
         };
         sm::dfs(j, {}, visit_bone);
@@ -209,36 +209,28 @@ namespace {
         return sm::transform(pt, rotate_about_point(u, angle_from_u_to_v(u, v)));
     }
 
-    void reach(sm::bone& bone, double length, sm::node& leader, sm::point target) {
-        leader.set_world_pos(target);
-        sm::node& follower = bone.opposite_node(leader);
-        auto new_follower_pos = point_on_line_at_distance(
-            leader.world_pos(), follower.world_pos(), length
-        );
-        follower.set_world_pos(new_follower_pos);
-    }
+	void perform_one_fabrik_pass(sm::node& start_node, const sm::point& target_pt,
+		const std::unordered_map<sm::bone*, double>& bone_lengths) {
 
-    void perform_one_fabrik_pass(sm::node& j, const sm::point& pt, 
-            const std::unordered_map<uint64_t, double>& bone_lengths) {
-        std::unordered_set<uint64_t> moved_nodes;
+		auto perform_fabrik_on_bone = [&bone_lengths](bone_pair& pair) {
 
-        auto perform_fabrik_on_bone = [&](bone_pair& pair) {
-			auto& b = pair.current.get();
-            sm::node& moved_node = moved_nodes.contains(get_id(b.parent_node())) ?
-                b.parent_node() :
-                b.child_node();
-            if (moved_nodes.contains(get_id(b.opposite_node(moved_node)))) {
-                return true;
-            }
-            reach(b, bone_lengths.at(get_id(b)), moved_node, moved_node.world_pos());
-            moved_nodes.insert(get_id(b.opposite_node(moved_node)));
-            return true;
-        };
+			auto& current_bone = pair.current.get();
+			auto& leader_node = current_node(pair);
+			auto& follower_node = current_bone.opposite_node(leader_node);
 
-        j.set_world_pos(pt);
-        moved_nodes.insert(get_id(j));
-        dfs_bones_with_prev(j, perform_fabrik_on_bone);
-    }
+			auto new_follower_pos = point_on_line_at_distance(
+				leader_node.world_pos(), 
+				follower_node.world_pos(), 
+				bone_lengths.at(&current_bone)
+			);
+
+			follower_node.set_world_pos(new_follower_pos);
+			return true;
+		};
+
+		start_node.set_world_pos(target_pt);
+		dfs_bones_with_prev(start_node, perform_fabrik_on_bone);
+	}
 
     bool is_satisfied(const targeted_node& tj, double tolerance) {
         if (!tj.prev_pos) {
@@ -275,7 +267,7 @@ namespace {
     }
 
     void solve_for_multiple_targets(std::span<targeted_node> targeted_nodes, 
-            double tolerance, const std::unordered_map<uint64_t, double>& bone_lengths,
+            double tolerance, const std::unordered_map<sm::bone*, double>& bone_lengths,
             int max_iter) {
         int j = 0;
         while (!found_ik_solution(targeted_nodes, tolerance)) {
@@ -652,12 +644,6 @@ void sm::dfs(node& j1, node_visitor visit_node, bone_visitor visit_bone,
 
 void sm::visit_nodes(node& j, node_visitor visit_node) {
     dfs(j, visit_node, {}, true);
-}
-
-void sm::debug_reach(node& j, sm::point pt) {
-    auto maybe_bone_ref = j.parent_bone();
-    auto& bone = maybe_bone_ref->get();
-    reach(bone, bone.scaled_length(), j, pt);
 }
 
 void sm::perform_fabrik(sm::node& effector, const sm::point& target_pt, 

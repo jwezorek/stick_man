@@ -161,7 +161,6 @@ namespace sm {
 
     void visit_nodes(node& j, node_visitor visit_node);
 
-    void debug_reach(node& j, sm::point pt);
     void perform_fabrik(node& j, const sm::point& pt, double tolerance = 0.005, int max_iter = 100);
 
 	double apply_angle_constraint(double fixed_rotation, double free_rotation,
