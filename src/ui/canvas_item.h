@@ -72,18 +72,15 @@ namespace ui {
 		node_item& child_node_item() const;
 	};
 
-	class joint_constraint_item : public abstract_canvas_item,
+	class joint_constraint_adornment : 
 		public QGraphicsEllipseItem {
 	private:
-		void sync_item_to_model() override;
-		void sync_sel_frame_to_model() override;
-		QGraphicsItem* create_selection_frame() const override;
 
 		const sm::node* node_;
 		double min_angle_;
 		double max_angle_;
 	public:
-		joint_constraint_item(
+		joint_constraint_adornment(
 			const sm::node* node = nullptr,
 			double min_angle = 0,
 			double max_angle = 0,

@@ -194,8 +194,8 @@ double ui::canvas::scale() const {
 }
 
 void ui::canvas::sync_joint_constraint_to_model() {
-	auto existing_jcis = to_vector_of_type<joint_constraint_item>(items());
-	joint_constraint_item* jci = !existing_jcis.empty() ?
+	auto existing_jcis = to_vector_of_type<joint_constraint_adornment>(items());
+	joint_constraint_adornment* jci = !existing_jcis.empty() ?
 		existing_jcis.front() :
 		nullptr;
 
@@ -216,7 +216,7 @@ void ui::canvas::sync_joint_constraint_to_model() {
 		return;
 	}
 	
-	jci = (!jci) ? new joint_constraint_item() : jci;
+	jci = (!jci) ? new joint_constraint_adornment() : jci;
 	auto parent_rot = sel_joint->anchor_bone->world_rotation();
 	auto span = sel_constraint->max - sel_constraint->min;
 	auto min_angle = normalize_angle(parent_rot + sel_constraint->min);

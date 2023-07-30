@@ -199,19 +199,8 @@ QGraphicsItem* ui::bone_item::create_selection_frame() const {
 
 /*------------------------------------------------------------------------------------------------*/
 
-void ui::joint_constraint_item::sync_item_to_model() {
 
-}
-
-void ui::joint_constraint_item::sync_sel_frame_to_model() {
-
-}
-
-QGraphicsItem* ui::joint_constraint_item::create_selection_frame() const {
-	return nullptr;
-}
-
-ui::joint_constraint_item::joint_constraint_item(const sm::node* node, double min,
+ui::joint_constraint_adornment::joint_constraint_adornment(const sm::node* node, double min,
 			double max, double scale) :
 		node_(node),
 		min_angle_(min),
@@ -223,7 +212,7 @@ ui::joint_constraint_item::joint_constraint_item(const sm::node* node, double mi
 	}
 }
 
-void ui::joint_constraint_item::set( const sm::node* node, double min, double max, double scale) {
+void ui::joint_constraint_adornment::set( const sm::node* node, double min, double max, double scale) {
 	node_ = node;
 	min_angle_ = min;
 	max_angle_ = max;
