@@ -581,6 +581,7 @@ namespace {
 				max_angle_radians
 			);
 			canv.sync_to_model();
+			dragging_ = {};
         }
     };
 
@@ -609,8 +610,9 @@ namespace {
         void set(ui::sel_type typ, const ui::canvas& canv) {
 			auto* old_props = current_props();
             setCurrentIndex(static_cast<int>(typ));
-            current_props()->set_selection(canv);
+
 			old_props->lose_selection();
+            current_props()->set_selection(canv);
         }
     };
 }
