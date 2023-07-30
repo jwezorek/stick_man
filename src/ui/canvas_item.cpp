@@ -76,8 +76,7 @@ void ui::abstract_canvas_item::set_selected(bool selected) {
 			selection_frame_->setParentItem(dynamic_cast<QGraphicsItem*>(this));
 		}
 		selection_frame_->show();
-	}
-	else {
+	} else {
 		if (selection_frame_) {
 			selection_frame_->hide();
 		}

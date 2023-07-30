@@ -21,6 +21,7 @@ namespace {
     using node_or_bone = std::variant<sm::bone_ref, sm::node_ref>;
 
 
+
 	struct bone_with_prev {
 		node_or_bone prev;
 		sm::bone_ref current;
@@ -227,7 +228,46 @@ namespace {
         return sm::transform(pt, rotate_about_point(u, angle_from_u_to_v(u, v)));
     }
 
+	double apply_angle_constraint(double fixed_rotation, double free_rotation,
+		double min_angle, double max_angle, bool fixed_bone_is_anchor) {
 
+		if (!fixed_bone_is_anchor) {
+			double old_min = min_angle;
+			double old_max = max_angle;
+			min_angle = -old_max;
+			max_angle = -old_min;
+		}
+
+		auto theta = sm::normalize_angle(free_rotation - fixed_rotation);
+		theta = (theta < min_angle) ? min_angle : theta;
+		theta = (theta > max_angle) ? max_angle : theta;
+
+		return sm::normalize_angle(theta + fixed_rotation);
+	}
+
+	sm::point apply_angle_constraint(const sm::point& fixed_pt1, const sm::point& fixed_pt2,
+		const sm::point& free_pt, double min_angle, double max_angle, bool fixed_bone_is_anchor) {
+
+		auto fixed_rotation = angle_from_u_to_v(fixed_pt1, fixed_pt2);
+		auto free_rotation = angle_from_u_to_v(fixed_pt2, free_pt);
+		auto new_free_rotation = apply_angle_constraint(
+			fixed_rotation, free_rotation,
+			min_angle,
+			max_angle,
+			fixed_bone_is_anchor
+		);
+		return sm::transform(
+			sm::point{ sm::distance(fixed_pt2, free_pt), 0.0 },
+			translation_matrix(fixed_pt2)* sm::rotation_matrix(new_free_rotation)
+		);
+	}
+
+	double apply_parent_child_constraint(const sm::bone& parent, double rotation,
+		double min_angle, double max_angle) {
+		return apply_angle_constraint(
+			parent.world_rotation(), rotation, min_angle, max_angle, true
+		);
+	}
 
 	void perform_one_fabrik_pass(sm::node& start_node, const sm::point& target_pt,
 		const std::unordered_map<sm::bone*, double>& bone_lengths) {
@@ -252,7 +292,7 @@ namespace {
 				if (constraint) {
 					auto& fixed_bone = pred_bone->get();
 					auto& pred_node = fixed_bone.opposite_node(leader_node);
-					new_follower_pos = sm::apply_angle_constraint(
+					new_follower_pos = apply_angle_constraint(
 						pred_node.world_pos(), leader_node.world_pos(),
 						new_follower_pos, constraint->min, constraint->max,
 						constraint->forward
@@ -646,23 +686,6 @@ bool sm::ik_sandbox::is_reachable(node& j1, node& j2) {
     return found;
 }
 
-std::string sm::debug(sm::node& node) {
-	std::stringstream ss;
-
-	dfs_bones_with_prev(
-		node,
-		[&ss](bone_with_prev& bones)->bool {
-			std::string prev_name = std::visit(
-				[](auto n_or_b)->std::string { return n_or_b.get().name(); },
-				bones.prev
-			);
-			ss << "[ "  << prev_name << " , " << bones.current.get().name() << " ]\n";
-			return true;
-		}
-	);
-	return ss.str();
-}
-
 void sm::dfs(node& j1, node_visitor visit_node, bone_visitor visit_bone,
         bool just_downstream) {
     std::stack<node_or_bone> stack;
@@ -718,42 +741,5 @@ void sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
     }
 }
 
-double sm::apply_angle_constraint(double fixed_rotation, double free_rotation,
-		double min_angle, double max_angle, bool fixed_bone_is_anchor) {
 
-	if (!fixed_bone_is_anchor) {
-		double old_min = min_angle;
-		double old_max = max_angle;
-		min_angle = -old_max;
-		max_angle = -old_min;
-	}
-
-	auto theta = normalize_angle(free_rotation - fixed_rotation);
-	theta = (theta < min_angle) ? min_angle : theta;
-	theta = (theta > max_angle) ? max_angle : theta;
-
-	return normalize_angle(theta + fixed_rotation);
-}
-
-sm::point sm::apply_angle_constraint(const point& fixed_pt1, const point& fixed_pt2, 
-		const point& free_pt, double min_angle, double max_angle, bool fixed_bone_is_anchor) {
-
-	auto fixed_rotation = angle_from_u_to_v(fixed_pt1, fixed_pt2);
-	auto free_rotation = angle_from_u_to_v(fixed_pt2, free_pt);
-	auto new_free_rotation = apply_angle_constraint(
-		fixed_rotation, free_rotation,
-		min_angle,
-		max_angle,
-		fixed_bone_is_anchor
-	);
-	return sm::transform(
-		sm::point{ sm::distance(fixed_pt2, free_pt), 0.0 }, 
-		translation_matrix(fixed_pt2) * rotation_matrix(new_free_rotation)
-	);
-}
-
-double sm::apply_parent_child_constraint(const sm::bone& parent, double rotation,
-		double min_angle, double max_angle) {
-	return apply_angle_constraint(parent.world_rotation(), rotation, min_angle, max_angle, true);
-}
 

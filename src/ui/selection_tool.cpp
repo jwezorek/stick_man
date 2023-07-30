@@ -10,9 +10,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <fstream> // TODO: remove
-#include <sstream> // TODO: remove
-#include <format> // TODO: remove
+//#include <fstream> // TODO: remove
+//#include <sstream> // TODO: remove
+//#include <format> // TODO: remove
 
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
@@ -22,7 +22,7 @@ namespace rv = std::ranges::views;
 namespace {
 
     double k_tolerance = 0.00005;
-
+/*
 	// TODO: remove debug code
 	class svg_debug {
 		std::stringstream ss;
@@ -85,7 +85,7 @@ namespace {
 		auto dbg_str = sm::debug(node);
 		qDebug() << dbg_str.c_str();
 	}
-
+*/
 	QPointF joint_axis(const ui::joint_info& ji) {
 		return ui::to_qt_pt(ji.shared_node->world_pos());
 	}
@@ -655,7 +655,6 @@ void ui::selection_tool::keyReleaseEvent(canvas & c, QKeyEvent * event) {
 
 void ui::selection_tool::mousePressEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     rubber_band_ = {};
-	debug2(canv.selected_nodes());
     if (is_in_modal_state()) {
         auto props = static_cast<selection_properties*>(settings_widget());
         auto joint_props = static_cast<joint_properties*>(props->current_props());
