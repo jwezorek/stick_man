@@ -56,12 +56,14 @@ namespace sm {
 	struct angle_range {
 		double min;
 		double max;
+		bool forward;
 	};
 
 	struct joint_constraint {
 		const_bone_ref anchor_bone;
 		const_bone_ref dependent_bone;
-		angle_range angles;
+		double min_angle;
+		double max_angle;
 	};
 
     class node : public detail::enable_protected_make_unique<node> {
@@ -95,7 +97,8 @@ namespace sm {
         std::any get_user_data() const;
         bool is_root() const;
         bool is_pinned() const;
-		std::optional<angle_range> constraint_angles(const bone& parent, const bone& dependent) const;
+		std::optional<angle_range> constraint_angles(
+			const bone& parent, const bone& dependent, bool just_forward = true) const;
         
 		void set_user_data(std::any data);
         void set_pinned(bool pinned);

@@ -389,7 +389,7 @@ namespace {
 			auto& node = *joint_info_.shared_node;
 			auto& anchor = *joint_info_.anchor_bone;
 			auto& dependent = *joint_info_.dependent_bone;
-			auto [min, max] = *node.constraint_angles(anchor, dependent);
+			auto [min, max, _] = *node.constraint_angles(anchor, dependent);
 			min = is_min_angle ? theta : min;
 			max = is_min_angle ? max : theta;
 
@@ -489,7 +489,7 @@ namespace {
 				bones_lbl_->setText(name_of_joint());
 				show_constraint_box(false);
 			} else {
-				auto [min_angle_radians, max_angle_radians] = sel_constraint.value();
+				auto [min_angle_radians, max_angle_radians, _] = sel_constraint.value();
 				min_angle_->num_edit()->set_value(ui::radians_to_degrees(min_angle_radians));
 				max_angle_->num_edit()->set_value(ui::radians_to_degrees(max_angle_radians));
 				show_constraint_box(true);

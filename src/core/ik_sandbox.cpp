@@ -21,30 +21,35 @@ namespace {
     using node_or_bone = std::variant<sm::bone_ref, sm::node_ref>;
 
 
-	struct bone_pair {
+	struct bone_with_prev {
 		node_or_bone prev;
 		sm::bone_ref current;
 
-		bone_pair(sm::node& n, sm::bone& b) : prev{ n }, current{ b } {
+		bone_with_prev(sm::node& n, sm::bone& b) : prev{ n }, current{ b } {
 		}
 
-		bone_pair(sm::bone_ref p, sm::bone_ref b) : prev{ p }, current{ b } {
+		bone_with_prev(sm::bone_ref p, sm::bone_ref b) : prev{ p }, current{ b } {
 		}
 	};
 
-	using bone_pair_visitor = std::function<bool(bone_pair&)>;
+	using bone_pair_visitor = std::function<bool(bone_with_prev&)>;
 
-	auto to_bone_pairs(auto prev, const std::vector<sm::bone_ref>& bones) {
-		return bones | rv::transform([prev](auto&& b) {return bone_pair{ prev, b }; });
+
+	auto append_predecessor(auto prev, std::span<const sm::bone_ref> bones) {
+		return bones | rv::transform([prev](auto&& b) {return bone_with_prev{ prev, b }; });
 	}
 
-	sm::node& current_node(const bone_pair& bones) {
-		if (std::holds_alternative<sm::node_ref>(bones.prev)) {
-			return std::get<sm::node_ref>(bones.prev).get();
+	// if bwp has a node as the bone's predecessor, return that node.
+	// otherwise, return the node that is shared between the current
+	// bone and its preceding bone.
+
+	sm::node& current_node(const bone_with_prev& bwp) {
+		if (std::holds_alternative<sm::node_ref>(bwp.prev)) {
+			return std::get<sm::node_ref>(bwp.prev).get();
 		}
 		else {
-			sm::bone& prev_bone = std::get<sm::bone_ref>(bones.prev).get();
-			auto shared = bones.current.get().shared_node(prev_bone);
+			sm::bone& prev_bone = std::get<sm::bone_ref>(bwp.prev).get();
+			auto shared = bwp.current.get().shared_node(prev_bone);
 			if (!shared) {
 				throw std::runtime_error("bad call to dfs_bones_with_prev");
 			}
@@ -52,18 +57,31 @@ namespace {
 		}
 	}
 
-	std::vector<sm::bone_ref> neighbor_bones(const bone_pair& pair) {
-		sm::node& curr_node = current_node(pair);
-		sm::node& next_node = pair.current.get().opposite_node(curr_node);
+	std::optional<sm::bone_ref> predecessor_bone(const bone_with_prev& bwp) {
+		if (std::holds_alternative<sm::node_ref>(bwp.prev)) {
+			return {};
+		}
+		return std::get<sm::bone_ref>(bwp.prev);
+	}
+
+	// given a bone B and its predecessor, return the bones that are adjacent
+	// to the node that is not shared by B and its predecessor and that
+	// are not B.
+
+	std::vector<sm::bone_ref> neighbor_bones(const bone_with_prev& bwp) {
+		sm::node& curr_node = current_node(bwp);
+		sm::node& next_node = bwp.current.get().opposite_node(curr_node);
 		return next_node.adjacent_bones() |
 			rv::filter(
-				[&pair](sm::bone_ref b) { return &(b.get()) != &pair.current.get(); }
+				[&bwp](sm::bone_ref b) { return &(b.get()) != &bwp.current.get(); }
 			) | r::to<std::vector<sm::bone_ref>>();
 	}
 
 	void dfs_bones_with_prev(sm::node& start, bone_pair_visitor visitor) {
-		std::stack<bone_pair> stack;
-		stack.push_range(to_bone_pairs(sm::node_ref(start), start.adjacent_bones()));
+		std::stack<bone_with_prev> stack;
+		stack.push_range(
+			append_predecessor(sm::node_ref(start), start.adjacent_bones())
+		);
 		while (!stack.empty()) {
 			auto item = stack.top();
 			stack.pop();
@@ -71,7 +89,7 @@ namespace {
 				return;
 			}
 			stack.push_range(
-				to_bone_pairs(item.current, neighbor_bones(item))
+				append_predecessor(item.current, neighbor_bones(item))
 			);
 		}
 	}
@@ -209,13 +227,16 @@ namespace {
         return sm::transform(pt, rotate_about_point(u, angle_from_u_to_v(u, v)));
     }
 
+
+
 	void perform_one_fabrik_pass(sm::node& start_node, const sm::point& target_pt,
 		const std::unordered_map<sm::bone*, double>& bone_lengths) {
 
-		auto perform_fabrik_on_bone = [&bone_lengths](bone_pair& pair) {
+		auto perform_fabrik_on_bone = [&bone_lengths](bone_with_prev& bwp) {
 
-			auto& current_bone = pair.current.get();
-			auto& leader_node = current_node(pair);
+			auto& current_bone = bwp.current.get();
+			auto pred_bone = predecessor_bone(bwp);
+			auto& leader_node = current_node(bwp);
 			auto& follower_node = current_bone.opposite_node(leader_node);
 
 			auto new_follower_pos = point_on_line_at_distance(
@@ -223,6 +244,21 @@ namespace {
 				follower_node.world_pos(), 
 				bone_lengths.at(&current_bone)
 			);
+
+			if (pred_bone) {
+				auto constraint = leader_node.constraint_angles(
+					pred_bone->get(), current_bone, false
+				);
+				if (constraint) {
+					auto& fixed_bone = pred_bone->get();
+					auto& pred_node = fixed_bone.opposite_node(leader_node);
+					new_follower_pos = sm::apply_angle_constraint(
+						pred_node.world_pos(), leader_node.world_pos(),
+						new_follower_pos, constraint->min, constraint->max,
+						constraint->forward
+					);
+				}
+			}
 
 			follower_node.set_world_pos(new_follower_pos);
 			return true;
@@ -384,23 +420,35 @@ sm::result sm::node::set_constraint(const bone& parent, const bone& dependent, d
 		constraints_.emplace_back(c);
 		constraint = std::prev(constraints_.end());
 	} 
-	constraint->angles.min = min;
-	constraint->angles.max = max;
+	constraint->min_angle = min;
+	constraint->max_angle = max;
 
 	return result::no_error;
 }
 
 std::optional<sm::angle_range> sm::node::constraint_angles(
-		const bone& parent, const bone& dependent) const {
+		const bone& parent, const bone& dependent, bool just_forward) const {
 	auto constraint = r::find_if(constraints_,
 		[&parent, &dependent](const auto& jc) {
 			return &jc.anchor_bone.get() == &parent && &jc.dependent_bone.get() == &dependent;
 		}
 	);
 	if (constraint == constraints_.end()) {
-		return {};
+		if (just_forward) {
+			return {};
+		}
+		auto backward = constraint_angles(dependent, parent, true);
+		if (!backward) {
+			return {};
+		}
+		backward->forward = false;
+		return backward;
 	}
-	return constraint->angles;
+	return sm::angle_range{
+		constraint->min_angle,
+		constraint->max_angle,
+		true
+	};
 }
 
 sm::result sm::node::remove_constraint(const bone& parent, const bone& dependent) {
@@ -603,7 +651,7 @@ std::string sm::debug(sm::node& node) {
 
 	dfs_bones_with_prev(
 		node,
-		[&ss](bone_pair& bones)->bool {
+		[&ss](bone_with_prev& bones)->bool {
 			std::string prev_name = std::visit(
 				[](auto n_or_b)->std::string { return n_or_b.get().name(); },
 				bones.prev
@@ -673,8 +721,12 @@ void sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
 double sm::apply_angle_constraint(double fixed_rotation, double free_rotation,
 		double min_angle, double max_angle, bool fixed_bone_is_anchor) {
 
-	max_angle = fixed_bone_is_anchor ? max_angle : -min_angle;
-	min_angle = fixed_bone_is_anchor ? min_angle : -max_angle;
+	if (!fixed_bone_is_anchor) {
+		double old_min = min_angle;
+		double old_max = max_angle;
+		min_angle = -old_max;
+		max_angle = -old_min;
+	}
 
 	auto theta = normalize_angle(free_rotation - fixed_rotation);
 	theta = (theta < min_angle) ? min_angle : theta;
