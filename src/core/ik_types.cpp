@@ -115,3 +115,8 @@ double sm::normalize_angle(double theta) {
 	auto sine = std::sin(theta);
 	return std::atan2(sine, cosine);
 }
+
+double sm::angular_distance(double from, double to) {
+	auto diff = to - from;
+	return std::atan2(std::sin(diff), std::cos(diff));
+}

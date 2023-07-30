@@ -239,8 +239,12 @@ namespace {
 		}
 
 		auto theta = sm::normalize_angle(free_rotation - fixed_rotation);
-		theta = (theta < min_angle) ? min_angle : theta;
-		theta = (theta > max_angle) ? max_angle : theta;
+
+		if (theta < min_angle || theta > max_angle) {
+			auto dist_to_min = std::abs(sm::angular_distance(theta, min_angle));
+			auto dist_to_max = std::abs(sm::angular_distance(theta, max_angle));
+			theta = (dist_to_min < dist_to_max) ? min_angle : max_angle;
+		}
 
 		return sm::normalize_angle(theta + fixed_rotation);
 	}

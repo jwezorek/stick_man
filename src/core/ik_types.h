@@ -32,5 +32,5 @@ namespace sm {
     matrix identity_matrix();
     double distance(const point& u, const point& v);
 	double normalize_angle(double theta);
-
+	double angular_distance(double theta1, double theta2);
 }
