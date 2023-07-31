@@ -164,7 +164,14 @@ namespace sm {
 
     void visit_nodes(node& j, node_visitor visit_node);
 
-    void perform_fabrik(node& j, const sm::point& pt, double tolerance = 0.005, int max_iter = 100);
+	enum class fabrik_result {
+		target_reached,
+		converged,
+		mixed,
+		no_solution_found
+	};
+
+	fabrik_result perform_fabrik(node& j, const sm::point& pt, double tolerance = 0.005, int max_iter = 100);
 
 	
 

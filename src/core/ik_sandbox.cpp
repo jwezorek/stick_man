@@ -9,8 +9,6 @@
 #include <numbers>
 #include <qdebug.h>
 
-#include <sstream> // TODO: remove debug code
-
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
 
@@ -312,24 +310,30 @@ namespace {
 		dfs_bones_with_prev(start_node, perform_fabrik_on_bone);
 	}
 
-    bool is_satisfied(const targeted_node& tj, double tolerance) {
+    sm::fabrik_result target_satisfaction_state(const targeted_node& tj, double tolerance) {
         if (!tj.prev_pos) {
             // ensure that at least one pass of FABRIK happens...
-            return false;
+            return sm::fabrik_result::no_solution_found;
         }
 
         // has it reached the target?
         if (sm::distance(tj.node.world_pos(), tj.target_pos) < tolerance) {
-            return true;
+            return sm::fabrik_result::target_reached;
         }
 
         // has it moved since the last iteration?
         if (sm::distance(tj.node.world_pos(), tj.prev_pos.value()) < tolerance) {
-            return true;
+            return sm::fabrik_result::converged;
         }
 
-        return false;
+        return sm::fabrik_result::no_solution_found;
     }
+
+	bool is_satisfied(const targeted_node& tj, double tolerance) {
+		auto result = target_satisfaction_state(tj, tolerance);
+		return result == sm::fabrik_result::target_reached || 
+			result == sm::fabrik_result::converged;
+	}
 
     bool found_ik_solution( std::span<targeted_node> targeted_nodes, double tolerance) {
         auto unsatisfied = r::find_if(targeted_nodes,
@@ -721,7 +725,7 @@ void sm::visit_nodes(node& j, node_visitor visit_node) {
     dfs(j, visit_node, {}, true);
 }
 
-void sm::perform_fabrik(sm::node& effector, const sm::point& target_pt, 
+sm::fabrik_result sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
         double tolerance, int max_iter) {
 
     auto bone_lengths = build_bone_length_table(effector);
@@ -733,7 +737,7 @@ void sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
     int iter = 0;
     while (! found_ik_solution(targeted_nodes, tolerance)) {
         if (++iter >= max_iter) {
-            break;
+			return fabrik_result::no_solution_found;
         }
         update_prev_positions(targeted_nodes);
 
@@ -743,6 +747,9 @@ void sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
         // reach for pinned locations from pinned nodes
         solve_for_multiple_targets(pinned_nodes, tolerance, bone_lengths, max_iter);
     }
+	return (target_satisfaction_state(target, tolerance) == fabrik_result::target_reached) ?
+		fabrik_result::target_reached :
+		fabrik_result::converged;
 }
 
 

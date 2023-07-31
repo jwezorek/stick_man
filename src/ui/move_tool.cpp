@@ -20,6 +20,22 @@ namespace {
         fk_rotate
     };
 
+	std::string fabrik_result_to_string(sm::fabrik_result result) {
+		switch (result) {
+			case sm::fabrik_result::target_reached:
+				return "target reached";
+
+			case sm::fabrik_result::converged:
+				return "converged";
+
+			case sm::fabrik_result::mixed:
+				return "mixed";
+
+			case sm::fabrik_result::no_solution_found:
+				return "no solution found";
+		}
+	}
+
     class abstract_move_tool {
         move_mode mode_;
         QString name_;
@@ -129,8 +145,9 @@ namespace {
 
         void mouseMoveEvent(move_state& ms) override {
             if (ms.anchor_) {
-                sm::perform_fabrik(ms.anchor_->model(), ui::from_qt_pt(ms.event_->scenePos()));
+                auto result = sm::perform_fabrik(ms.anchor_->model(), ui::from_qt_pt(ms.event_->scenePos()));
                 ms.canvas_->sync_to_model();
+				qDebug() << fabrik_result_to_string(result).c_str();
             }
         };
 
