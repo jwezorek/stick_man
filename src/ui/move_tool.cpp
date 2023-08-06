@@ -147,7 +147,7 @@ namespace {
             if (ms.anchor_) {
                 auto result = sm::perform_fabrik(ms.anchor_->model(), ui::from_qt_pt(ms.event_->scenePos()));
                 ms.canvas_->sync_to_model();
-				qDebug() << fabrik_result_to_string(result).c_str();
+				//qDebug() << fabrik_result_to_string(result).c_str();
             }
         };
 

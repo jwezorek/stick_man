@@ -16,9 +16,13 @@ namespace rv = std::ranges::views;
 
 namespace {
 
+	//TODO: remove debug code
+	double radians_to_degrees(double radians) {
+		return radians * (180.0 / std::numbers::pi_v<double>);
+	}
+	//
+
     using node_or_bone = std::variant<sm::bone_ref, sm::node_ref>;
-
-
 
 	struct bone_with_prev {
 		node_or_bone prev;
@@ -237,7 +241,6 @@ namespace {
 		}
 
 		auto theta = sm::normalize_angle(free_rotation - fixed_rotation);
-
 		if (theta < min_angle || theta > max_angle) {
 			auto dist_to_min = std::abs(sm::angular_distance(theta, min_angle));
 			auto dist_to_max = std::abs(sm::angular_distance(theta, max_angle));
@@ -272,9 +275,9 @@ namespace {
 	}
 
 	void perform_one_fabrik_pass(sm::node& start_node, const sm::point& target_pt,
-		const std::unordered_map<sm::bone*, double>& bone_lengths) {
+		const std::unordered_map<sm::bone*, double>& bone_lengths, bool ignore_constraints) {
 
-		auto perform_fabrik_on_bone = [&bone_lengths](bone_with_prev& bwp) {
+		auto perform_fabrik_on_bone = [&](bone_with_prev& bwp) {
 
 			auto& current_bone = bwp.current.get();
 			auto pred_bone = predecessor_bone(bwp);
@@ -287,7 +290,7 @@ namespace {
 				bone_lengths.at(&current_bone)
 			);
 
-			if (pred_bone) {
+			if (pred_bone && !ignore_constraints) {
 				auto constraint = leader_node.constraint_angles(
 					pred_bone->get(), current_bone, false
 				);
@@ -311,11 +314,6 @@ namespace {
 	}
 
     sm::fabrik_result target_satisfaction_state(const targeted_node& tj, double tolerance) {
-        if (!tj.prev_pos) {
-            // ensure that at least one pass of FABRIK happens...
-            return sm::fabrik_result::no_solution_found;
-        }
-
         // has it reached the target?
         if (sm::distance(tj.node.world_pos(), tj.target_pos) < tolerance) {
             return sm::fabrik_result::target_reached;
@@ -352,22 +350,26 @@ namespace {
 
     void solve_for_multiple_targets(std::span<targeted_node> targeted_nodes, 
             double tolerance, const std::unordered_map<sm::bone*, double>& bone_lengths,
-            int max_iter) {
+            int max_iter, bool ignore_constraints) {
         int j = 0;
-        while (!found_ik_solution(targeted_nodes, tolerance)) {
+        do {
             if (++j > max_iter) {
                 return;
             }
             if (j % 2 == 0) {
                 for (auto& pinned_node : targeted_nodes) {
-                    perform_one_fabrik_pass(pinned_node.node, pinned_node.target_pos, bone_lengths);
+                    perform_one_fabrik_pass(
+						pinned_node.node, pinned_node.target_pos, bone_lengths, ignore_constraints
+					);
                 }
             } else {
                 for (auto& pinned_node : targeted_nodes | rv::reverse) {
-                    perform_one_fabrik_pass(pinned_node.node, pinned_node.target_pos, bone_lengths);
+                    perform_one_fabrik_pass(
+						pinned_node.node, pinned_node.target_pos, bone_lengths, ignore_constraints
+					);
                 }
             }
-        }
+		} while (!found_ik_solution(targeted_nodes, tolerance));
     }
 
 	std::optional<sm::angle_range> parent_constraint_on_bone(const sm::bone& bone) {
@@ -735,18 +737,19 @@ sm::fabrik_result sm::perform_fabrik(sm::node& effector, const sm::point& target
     auto pinned_nodes = std::span{ targeted_nodes.begin(), std::prev(targeted_nodes.end())};
     
     int iter = 0;
-    while (! found_ik_solution(targeted_nodes, tolerance)) {
+    do {
         if (++iter >= max_iter) {
 			return fabrik_result::no_solution_found;
         }
         update_prev_positions(targeted_nodes);
 
         // reach for target from effector...
-        perform_one_fabrik_pass(target.node, target.target_pos, bone_lengths);
+        perform_one_fabrik_pass(target.node, target.target_pos, bone_lengths, true);
 
         // reach for pinned locations from pinned nodes
-        solve_for_multiple_targets(pinned_nodes, tolerance, bone_lengths, max_iter);
-    }
+        solve_for_multiple_targets(pinned_nodes, tolerance, bone_lengths, max_iter, false);
+	} while (!found_ik_solution(targeted_nodes, tolerance));
+
 	return (target_satisfaction_state(target, tolerance) == fabrik_result::target_reached) ?
 		fabrik_result::target_reached :
 		fabrik_result::converged;
