@@ -41,7 +41,7 @@ namespace sm {
         non_unique_name,
 		bone_not_found,
 		node_not_found,
-		constraint_not_found,
+		no_parent_bone,
 		unknown_error
     };
 
@@ -53,15 +53,8 @@ namespace sm {
     using expected_bone = std::expected<bone_ref, result>;
     using expected_node = std::expected<node_ref, result>;
 
-	struct angle_range {
-		double min;
-		double max;
-		bool forward;
-	};
-
-	struct joint_constraint {
-		const_bone_ref anchor_bone;
-		const_bone_ref dependent_bone;
+	struct rot_constraint {
+		bool relative_to_parent;
 		double min_angle;
 		double max_angle;
 	};
@@ -77,7 +70,6 @@ namespace sm {
         std::vector<bone_ref> children_;
         std::any user_data_;
         bool is_pinned_;
-		std::vector<joint_constraint> constraints_;
 
     protected:
 
@@ -97,23 +89,21 @@ namespace sm {
         std::any get_user_data() const;
         bool is_root() const;
         bool is_pinned() const;
-		std::optional<angle_range> constraint_angles(
-			const bone& parent, const bone& dependent, bool just_forward = true) const;
         
 		void set_user_data(std::any data);
         void set_pinned(bool pinned);
-		result set_constraint(const bone& parent, const bone& dependent, double min, double max);
-		result remove_constraint(const bone& parent, const bone& dependent);
     };
 
     class bone : public detail::enable_protected_make_unique<bone> {
         friend class ik_sandbox;
     private:
+
         std::string name_;
         node& u_;
         node& v_;
         double length_;
         std::any user_data_;
+		std::optional<rot_constraint> rot_constraint_;
 
     protected:
 
@@ -125,6 +115,9 @@ namespace sm {
         node& child_node() const;
         node& opposite_node(const node& j) const;
 		std::optional<node_ref> shared_node(const bone& b) const;
+		std::optional<rot_constraint> rotation_constraint() const;
+		result set_rotation_constraint(double min, double max, bool relative_to_parent);
+		void remove_rotation_constraint();
 
         std::tuple<point, point> line_segment() const;
         double length() const;

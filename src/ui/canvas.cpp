@@ -193,11 +193,13 @@ double ui::canvas::scale() const {
     return view.transform().m11();
 }
 
-void ui::canvas::sync_joint_constraint_to_model() {
+void ui::canvas::sync_rotation_constraint_to_model() {
+	/*
 	auto existing_jcis = to_vector_of_type<joint_constraint_adornment>(items());
 	joint_constraint_adornment* jci = !existing_jcis.empty() ?
 		existing_jcis.front() :
 		nullptr;
+
 
 	auto sel_joint = selected_joint();
 	if (!sel_joint) {
@@ -227,6 +229,7 @@ void ui::canvas::sync_joint_constraint_to_model() {
 		addItem(jci);
 	}
 	jci->setVisible(true);
+	*/
 }
 
 void ui::canvas::sync_to_model() {
@@ -234,7 +237,7 @@ void ui::canvas::sync_to_model() {
     for (auto* child : items() | rv::transform(to_stick_man) | rv::filter(is_non_null)) {
         child->sync_to_model();
     }
-	sync_joint_constraint_to_model();
+	sync_rotation_constraint_to_model();
 }
 
 const ui::selection_set&  ui::canvas::selection() const {
@@ -246,10 +249,6 @@ ui::sel_type ui::canvas::selection_type() const {
 
 	if (sel.empty()) {
 		return sel_type::none;
-	}
-	auto joint = selected_joint();
-	if (joint) {
-		return joint->joint_type;
 	}
 	bool has_node = false;
 	bool has_bone = false;
@@ -269,7 +268,7 @@ ui::sel_type ui::canvas::selection_type() const {
 	}
 }
 
-std::optional<ui::joint_info> ui::canvas::selected_joint() const {
+std::optional<ui::joint_info> ui::canvas::selected_joint() const { /*
 	const auto& sel = selection_;
 	if (sel.size() != 3) {
 		return {};
@@ -299,6 +298,8 @@ std::optional<ui::joint_info> ui::canvas::selected_joint() const {
 		sel_type::parent_child_joint;
 
 	return ji;
+	*/
+	return {};
 }
 
 std::vector<ui::bone_item*> ui::canvas::selected_bones() const {

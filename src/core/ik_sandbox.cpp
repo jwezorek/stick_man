@@ -290,6 +290,8 @@ namespace {
 				bone_lengths.at(&current_bone)
 			);
 
+			//TODO
+			/*
 			if (pred_bone && !ignore_constraints) {
 				auto constraint = leader_node.constraint_angles(
 					pred_bone->get(), current_bone, false
@@ -304,7 +306,7 @@ namespace {
 					);
 				}
 			}
-
+			*/
 			follower_node.set_world_pos(new_follower_pos);
 			return true;
 		};
@@ -372,6 +374,7 @@ namespace {
 		} while (!found_ik_solution(targeted_nodes, tolerance));
     }
 
+	/*
 	std::optional<sm::angle_range> parent_constraint_on_bone(const sm::bone& bone) {
 		if (!bone.parent_bone()) {
 			return {};
@@ -380,6 +383,7 @@ namespace {
 		const auto& parent_bone = bone.parent_bone()->get();
 		return parent_node.constraint_angles(parent_bone, bone);
 	}
+	*/
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -459,61 +463,6 @@ void sm::node::set_pinned(bool pinned) {
     is_pinned_ = pinned;
 }
 
-sm::result sm::node::set_constraint(const bone& parent, const bone& dependent, double min, double max) {
-	auto constraint = r::find_if(constraints_,
-		[&parent, &dependent](const auto& jc) {
-			return &jc.anchor_bone.get() == &parent && &jc.dependent_bone.get() == &dependent;
-		}
-	);
-	if (constraint == constraints_.end()) {
-		joint_constraint c{ std::cref(parent), std::cref(dependent), 0.0, 0.0 };
-		constraints_.emplace_back(c);
-		constraint = std::prev(constraints_.end());
-	} 
-	constraint->min_angle = min;
-	constraint->max_angle = max;
-
-	return result::no_error;
-}
-
-std::optional<sm::angle_range> sm::node::constraint_angles(
-		const bone& parent, const bone& dependent, bool just_forward) const {
-	auto constraint = r::find_if(constraints_,
-		[&parent, &dependent](const auto& jc) {
-			return &jc.anchor_bone.get() == &parent && &jc.dependent_bone.get() == &dependent;
-		}
-	);
-	if (constraint == constraints_.end()) {
-		if (just_forward) {
-			return {};
-		}
-		auto backward = constraint_angles(dependent, parent, true);
-		if (!backward) {
-			return {};
-		}
-		backward->forward = false;
-		return backward;
-	}
-	return sm::angle_range{
-		constraint->min_angle,
-		constraint->max_angle,
-		true
-	};
-}
-
-sm::result sm::node::remove_constraint(const bone& parent, const bone& dependent) {
-	auto constraint = r::find_if(constraints_,
-		[&parent, &dependent](const auto& jc) {
-			return &jc.anchor_bone.get() == &parent && &jc.dependent_bone.get() == &dependent;
-		}
-	);
-	if (constraint == constraints_.end()) {
-		return result::constraint_not_found;
-	}
-	constraints_.erase(constraint);
-	return result::no_error;
-}
-
 /*------------------------------------------------------------------------------------------------*/
 
 sm::bone::bone(std::string name, sm::node& u, sm::node& v) :
@@ -521,6 +470,22 @@ sm::bone::bone(std::string name, sm::node& u, sm::node& v) :
     v.set_parent(*this);
     u.add_child(*this);
     length_ = scaled_length();
+}
+
+sm::result sm::bone::set_rotation_constraint(double min, double max, bool relative_to_parent) { 
+	if (relative_to_parent && !parent_bone()) {
+		return result::no_parent_bone;
+	}
+	rot_constraint_ = rot_constraint{ relative_to_parent, min, max };
+	return result::no_error;
+}
+
+std::optional<sm::rot_constraint> sm::bone::rotation_constraint() const {
+	return rot_constraint_;
+}
+
+void sm::bone::remove_rotation_constraint() { 
+	rot_constraint_ = {};
 }
 
 std::string sm::bone::name() const {
@@ -611,7 +576,8 @@ void sm::bone::set_user_data(std::any data) {
 }
 
 void sm::bone::rotate(double theta) {
-
+	//TODO
+	/*
 	auto maybe_constraint = parent_constraint_on_bone(*this);
 	if (maybe_constraint) {
 		theta = apply_parent_child_constraint(
@@ -621,6 +587,7 @@ void sm::bone::rotate(double theta) {
 			maybe_constraint->max
 		) - world_rotation();
 	}
+	*/
     auto rotate_mat = rotate_about_point(u_.world_pos(), theta);
 
     auto rotate_about_u = [&rotate_mat](node& j)->bool {

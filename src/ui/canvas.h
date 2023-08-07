@@ -34,13 +34,10 @@ namespace ui {
 		nodes,
 		bone,
 		bones,
-		parent_child_joint,
-		sibling_joint,
 		mixed
 	};
 
 	struct joint_info {
-		sel_type joint_type;
 		sm::bone* anchor_bone;
 		sm::bone* dependent_bone;
 		sm::node* shared_node;
@@ -63,7 +60,7 @@ namespace ui {
 
         tool_manager& tool_mgr();
         void sync_selection();
-		void sync_joint_constraint_to_model();
+		void sync_rotation_constraint_to_model();
 
     protected:
 
