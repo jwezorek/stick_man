@@ -274,6 +274,53 @@ namespace {
 		);
 	}
 
+	struct rot_constraint_info {
+		bool is_parent_child;
+		bool forward;
+		double min;
+		double max;
+	};
+
+	std::optional<rot_constraint_info>  get_rot_constraint(const sm::bone& pred, const sm::bone& curr) {
+		auto curr_constraint = curr.rotation_constraint();
+		if (curr_constraint) {
+			if (!curr_constraint->relative_to_parent) {
+				// there is an absolute constraint...
+				return rot_constraint_info{
+					false,
+					true, //TODO
+					curr_constraint->min_angle,
+					curr_constraint->max_angle
+				};
+			}
+			if (&curr.parent_bone()->get() != &pred) {
+				return {};
+			}
+			// there is a forward parent child constraint...
+			return rot_constraint_info{
+				true,
+				true, 
+				curr_constraint->min_angle,
+				curr_constraint->max_angle
+			};
+		}
+
+		// now we need to look for backwards parent/child constraints...
+		auto pred_constraint = pred.rotation_constraint();
+		if (!pred_constraint || pred_constraint->relative_to_parent == false) {
+			return {};
+		}
+		if (&pred.parent_bone()->get() != &curr) {
+			return {};
+		}
+		return rot_constraint_info{
+			true,
+			false,
+			pred_constraint->min_angle,
+			pred_constraint->max_angle
+		};
+	}
+
 	void perform_one_fabrik_pass(sm::node& start_node, const sm::point& target_pt,
 		const std::unordered_map<sm::bone*, double>& bone_lengths, bool ignore_constraints) {
 
@@ -290,23 +337,19 @@ namespace {
 				bone_lengths.at(&current_bone)
 			);
 
-			//TODO
-			/*
 			if (pred_bone && !ignore_constraints) {
-				auto constraint = leader_node.constraint_angles(
-					pred_bone->get(), current_bone, false
-				);
-				if (constraint) {
+				auto& pred = pred_bone->get();
+				auto rci = get_rot_constraint(pred, current_bone);
+				if (rci) {
 					auto& fixed_bone = pred_bone->get();
 					auto& pred_node = fixed_bone.opposite_node(leader_node);
 					new_follower_pos = apply_angle_constraint(
 						pred_node.world_pos(), leader_node.world_pos(),
-						new_follower_pos, constraint->min, constraint->max,
-						constraint->forward
+						new_follower_pos, rci->min, rci->max,
+						rci->forward
 					);
 				}
 			}
-			*/
 			follower_node.set_world_pos(new_follower_pos);
 			return true;
 		};
@@ -373,17 +416,6 @@ namespace {
             }
 		} while (!found_ik_solution(targeted_nodes, tolerance));
     }
-
-	/*
-	std::optional<sm::angle_range> parent_constraint_on_bone(const sm::bone& bone) {
-		if (!bone.parent_bone()) {
-			return {};
-		}
-		const auto& parent_node = bone.parent_node();
-		const auto& parent_bone = bone.parent_bone()->get();
-		return parent_node.constraint_angles(parent_bone, bone);
-	}
-	*/
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -702,8 +734,9 @@ sm::fabrik_result sm::perform_fabrik(sm::node& effector, const sm::point& target
     targeted_nodes.emplace_back(effector, target_pt);
     auto& target = targeted_nodes.back();
     auto pinned_nodes = std::span{ targeted_nodes.begin(), std::prev(targeted_nodes.end())};
-    
+	auto has_pinned_nodes = !pinned_nodes.empty();
     int iter = 0;
+
     do {
         if (++iter >= max_iter) {
 			return fabrik_result::no_solution_found;
@@ -711,10 +744,12 @@ sm::fabrik_result sm::perform_fabrik(sm::node& effector, const sm::point& target
         update_prev_positions(targeted_nodes);
 
         // reach for target from effector...
-        perform_one_fabrik_pass(target.node, target.target_pos, bone_lengths, true);
+        perform_one_fabrik_pass(target.node, target.target_pos, bone_lengths, has_pinned_nodes); 
 
         // reach for pinned locations from pinned nodes
-        solve_for_multiple_targets(pinned_nodes, tolerance, bone_lengths, max_iter, false);
+		if (has_pinned_nodes) {
+			solve_for_multiple_targets(pinned_nodes, tolerance, bone_lengths, max_iter, false);
+		}
 	} while (!found_ik_solution(targeted_nodes, tolerance));
 
 	return (target_satisfaction_state(target, tolerance) == fabrik_result::target_reached) ?
