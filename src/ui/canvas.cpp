@@ -194,42 +194,31 @@ double ui::canvas::scale() const {
 }
 
 void ui::canvas::sync_rotation_constraint_to_model() {
-	/*
-	auto existing_jcis = to_vector_of_type<joint_constraint_adornment>(items());
-	joint_constraint_adornment* jci = !existing_jcis.empty() ?
-		existing_jcis.front() :
+	auto existing_rcis = to_vector_of_type<rot_constraint_adornment>(items());
+	rot_constraint_adornment* rci = !existing_rcis.empty() ?
+		existing_rcis.front() :
 		nullptr;
 
-
-	auto sel_joint = selected_joint();
-	if (!sel_joint) {
-		if (jci) {
-			jci->setVisible(false);
+	auto bones = selected_bones();
+	if (bones.size() != 1) {
+		if (rci) {
+			rci->hide();
 		}
 		return;
 	}
-	auto sel_constraint = sel_joint->shared_node->constraint_angles(
-			*sel_joint->anchor_bone, *sel_joint->dependent_bone
-	);
-	if (!sel_constraint) {
-		if (jci) {
-			jci->setVisible(false);
+	auto& bone = bones.front()->model();
+	auto constraint = bone.rotation_constraint();
+	if (!constraint) {
+		if (rci) {
+			rci->hide();
 		}
 		return;
 	}
-	
-	jci = (!jci) ? new joint_constraint_adornment() : jci;
-	auto parent_rot = sel_joint->anchor_bone->world_rotation();
-	auto span = sel_constraint->max - sel_constraint->min;
-	auto min_angle = normalize_angle(parent_rot + sel_constraint->min);
-	auto max_angle = min_angle + span;
 
-	jci->set(sel_joint->shared_node, min_angle, max_angle, scale_ );
-	if (existing_jcis.empty()) {
-		addItem(jci);
+	if (!rci) {
+		addItem(rci = new rot_constraint_adornment());
 	}
-	jci->setVisible(true);
-	*/
+	rci->set(bone, *constraint, scale_);
 }
 
 void ui::canvas::sync_to_model() {

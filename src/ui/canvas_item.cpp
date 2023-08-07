@@ -200,20 +200,38 @@ QGraphicsItem* ui::bone_item::create_selection_frame() const {
 /*------------------------------------------------------------------------------------------------*/
 
 
-ui::joint_constraint_adornment::joint_constraint_adornment(const sm::node* node, double min,
-			double max, double scale) :
-		node_(node),
-		min_angle_(min),
-		max_angle_(max) {
+ui::rot_constraint_adornment::rot_constraint_adornment() {
 	setBrush(QBrush(k_sel_color));
 	setPen(Qt::NoPen);
-	if (node) {
-		set(node, min, max, scale);
-	}
 }
 
-void ui::joint_constraint_adornment::set( const sm::node* node, double min, double max, double scale) {
-	node_ = node;
+void ui::rot_constraint_adornment::set( const sm::bone& bone,
+		const sm::rot_constraint& constraint, double scale) {
+	QPointF pivot = {};
+	double start_angle = 0;
+	double span_angle = constraint.max_angle - constraint.min_angle;
+	double radius = k_joint_constraint_radius * (1.0 / scale);
+
+	if (constraint.relative_to_parent) {
+		auto& anchor_bone = bone.parent_bone()->get();
+		auto parent_rot = anchor_bone.world_rotation();
+		
+		start_angle = normalize_angle(parent_rot + constraint.min_angle);
+		pivot = ui::to_qt_pt(bone.parent_node().world_pos());
+	} else {
+		auto center_pt = 0.5 * (bone.parent_node().world_pos() + bone.child_node().world_pos());
+		start_angle = constraint.min_angle;
+		pivot = ui::to_qt_pt(center_pt);
+	}
+	ui::set_arc(this, pivot, radius, start_angle, span_angle);
+	show();
+}
+
+
+/*
+void ui::rot_constraint_adornment::set_parent_relative( 
+		const sm::node& node, double min, double max, double scale) {
+	node_ = &node;
 	min_angle_ = min;
 	max_angle_ = max;
 
@@ -223,4 +241,6 @@ void ui::joint_constraint_adornment::set( const sm::node* node, double min, doub
 		min_angle_,
 		max_angle_ - min_angle_
 	);
+	show();
 }
+*/

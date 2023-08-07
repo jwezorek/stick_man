@@ -326,6 +326,41 @@ namespace {
 		ui::labeled_numeric_val* max_angle_;
 		QComboBox* mode_;
 		ui::canvas& canv_;
+
+		bool is_constraint_relative_to_parent() const {
+			return mode_->currentIndex() == 0;
+		}
+
+		double constraint_min_angle() const {
+			if (!min_angle_->num_edit()->value()) {
+				throw std::runtime_error("attempted to get value from indeterminate value box");
+			}
+			return ui::degrees_to_radians(*min_angle_->num_edit()->value());
+		}
+
+		double constraint_max_angle() const {
+			if (!max_angle_->num_edit()->value()) {
+				throw std::runtime_error("attempted to get value from indeterminate value box");
+			}
+			return ui::degrees_to_radians(*max_angle_->num_edit()->value());
+		}
+
+		void set_constraint_angle(ui::canvas& canv, double val, bool is_min_angle) {
+			auto theta = ui::degrees_to_radians(val);
+			auto min_angle = is_min_angle ? theta : constraint_min_angle();
+			auto max_angle = is_min_angle ? constraint_max_angle() : theta;
+			set_rot_constraints(canv,
+				is_constraint_relative_to_parent(), min_angle, max_angle);
+			canv.sync_to_model();
+		}
+
+		void set_constraint_mode(ui::canvas& canv, bool relative_to_parent) {
+			set_rot_constraints(canv,
+				relative_to_parent, constraint_min_angle(), constraint_max_angle()
+			);
+			canv.sync_to_model();
+		}
+
 	public:
 		rot_constraint_box(ui::canvas& canv) :
 				min_angle_(nullptr),
@@ -342,8 +377,24 @@ namespace {
 			mode_->addItem("relative to parent");
 			mode_->addItem("relative to world");
 			this->hide();
+			
+			connect(min_angle_->num_edit(), &ui::number_edit::value_changed,
+				[this, &canv](double v) {
+					set_constraint_angle(canv, v, true);
+				}
+			);
 
-			//TODO: hook up controls
+			connect(max_angle_->num_edit(), &ui::number_edit::value_changed,
+				[this, &canv](double v) {
+					set_constraint_angle(canv, v, false);
+				}
+			);
+
+			connect(mode_, &QComboBox::currentIndexChanged,
+				[this, &canv](int new_index) {
+					set_constraint_mode(canv, new_index == 0);
+				}
+			);
 		}
 
 		void set(bool parent_relative, double min, double max) {

@@ -10,6 +10,7 @@ namespace sm {
 	class node;
 	class bone;
 	class ik_sandbox;
+	class rot_constraint;
 }
 
 namespace ui {
@@ -72,24 +73,14 @@ namespace ui {
 		node_item& child_node_item() const;
 	};
 
-	class joint_constraint_adornment : 
+	class rot_constraint_adornment : 
 		public QGraphicsEllipseItem {
-	private:
 
-		const sm::node* node_;
-		double min_angle_;
-		double max_angle_;
 	public:
-		joint_constraint_adornment(
-			const sm::node* node = nullptr,
-			double min_angle = 0,
-			double max_angle = 0,
-			double scale = 0.0
-		);
+		rot_constraint_adornment();
 		void set(
-			const sm::node* node_,
-			double min_angle,
-			double max_angle,
+			const sm::bone& node,
+			const sm::rot_constraint& constraint,
 			double scale
 		);
 	};

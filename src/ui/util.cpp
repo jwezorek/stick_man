@@ -384,8 +384,8 @@ QRectF ui::rect_from_circle(QPointF center, double radius) {
 }
 
 void ui::set_arc(
-    QGraphicsEllipseItem* gei, QPointF center, double radius,
-    double start_theta, double span_theta) {
+		QGraphicsEllipseItem* gei, QPointF center, double radius,
+		double start_theta, double span_theta) {
     gei->setRect(rect_from_circle(center, radius));
     gei->setStartAngle(to_sixteenth_of_deg(-start_theta));
     gei->setSpanAngle(to_sixteenth_of_deg(-span_theta));
