@@ -281,30 +281,26 @@ namespace {
 		double max;
 	};
 
-	std::optional<rot_constraint_info>  get_rot_constraint(const sm::bone& pred, const sm::bone& curr) {
+	std::optional<rot_constraint_info> get_forward_rot_constraint(
+			const sm::bone& pred, const sm::bone& curr) {
 		auto curr_constraint = curr.rotation_constraint();
 		if (curr_constraint) {
-			if (!curr_constraint->relative_to_parent) {
-				// there is an absolute constraint...
-				return rot_constraint_info{
-					false,
-					true, //TODO
-					curr_constraint->min_angle,
-					curr_constraint->max_angle
-				};
-			}
 			if (&curr.parent_bone()->get() != &pred) {
 				return {};
 			}
 			// there is a forward parent child constraint...
 			return rot_constraint_info{
 				true,
-				true, 
+				true,
 				curr_constraint->min_angle,
 				curr_constraint->max_angle
 			};
 		}
+		return {};
+	}
 
+	std::optional<rot_constraint_info> get_backward_rot_constraint(
+			const sm::bone& pred, const sm::bone& curr) {
 		// now we need to look for backwards parent/child constraints...
 		auto pred_constraint = pred.rotation_constraint();
 		if (!pred_constraint || pred_constraint->relative_to_parent == false) {
@@ -319,6 +315,17 @@ namespace {
 			pred_constraint->min_angle,
 			pred_constraint->max_angle
 		};
+	}
+
+	std::optional<rot_constraint_info>  get_rot_constraint(const sm::bone& pred, const sm::bone& curr) {
+		//TODO: test for absolute constraint
+		
+		auto forward = get_forward_rot_constraint(pred, curr);
+		if (forward) {
+			return forward;
+		}
+		return get_backward_rot_constraint(pred, curr);
+		
 	}
 
 	void perform_one_fabrik_pass(sm::node& start_node, const sm::point& target_pt,
