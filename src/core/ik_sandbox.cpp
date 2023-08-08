@@ -321,7 +321,6 @@ namespace {
 	}
 
 	std::optional<rot_constraint_info>  get_rot_constraint(const sm::bone& pred, const sm::bone& curr) {
-		//TODO: test for absolute constraint
 		
 		auto forward = get_forward_rot_constraint(pred, curr);
 		if (forward) {
@@ -332,7 +331,7 @@ namespace {
 	}
 
 	void perform_one_fabrik_pass(sm::node& start_node, const sm::point& target_pt,
-		const std::unordered_map<sm::bone*, double>& bone_lengths, bool ignore_constraints) {
+		const std::unordered_map<sm::bone*, double>& bone_lengths, bool use_constraints) {
 
 		auto perform_fabrik_on_bone = [&](bone_with_prev& bwp) {
 
@@ -347,7 +346,7 @@ namespace {
 				bone_lengths.at(&current_bone)
 			);
 
-			if (pred_bone && !ignore_constraints) {
+			if (pred_bone && use_constraints) {
 				auto& pred = pred_bone->get();
 				auto rci = get_rot_constraint(pred, current_bone);
 				if (rci) {
@@ -405,7 +404,7 @@ namespace {
 
     void solve_for_multiple_targets(std::span<targeted_node> targeted_nodes, 
             double tolerance, const std::unordered_map<sm::bone*, double>& bone_lengths,
-            int max_iter, bool ignore_constraints) {
+            int max_iter, bool use_constraints) {
         int j = 0;
         do {
             if (++j > max_iter) {
@@ -414,13 +413,13 @@ namespace {
             if (j % 2 == 0) {
                 for (auto& pinned_node : targeted_nodes) {
                     perform_one_fabrik_pass(
-						pinned_node.node, pinned_node.target_pos, bone_lengths, ignore_constraints
+						pinned_node.node, pinned_node.target_pos, bone_lengths, use_constraints
 					);
                 }
             } else {
                 for (auto& pinned_node : targeted_nodes | rv::reverse) {
                     perform_one_fabrik_pass(
-						pinned_node.node, pinned_node.target_pos, bone_lengths, ignore_constraints
+						pinned_node.node, pinned_node.target_pos, bone_lengths, use_constraints
 					);
                 }
             }
@@ -754,11 +753,11 @@ sm::fabrik_result sm::perform_fabrik(sm::node& effector, const sm::point& target
         update_prev_positions(targeted_nodes);
 
         // reach for target from effector...
-        perform_one_fabrik_pass(target.node, target.target_pos, bone_lengths, has_pinned_nodes); 
+        perform_one_fabrik_pass(target.node, target.target_pos, bone_lengths, !has_pinned_nodes); 
 
         // reach for pinned locations from pinned nodes
 		if (has_pinned_nodes) {
-			solve_for_multiple_targets(pinned_nodes, tolerance, bone_lengths, max_iter, false);
+			solve_for_multiple_targets(pinned_nodes, tolerance, bone_lengths, max_iter, true);
 		}
 	} while (!found_ik_solution(targeted_nodes, tolerance));
 
