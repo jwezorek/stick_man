@@ -94,7 +94,7 @@ namespace {
                 [](sm::const_bone_ref bone)->ui::bone_item& {
                     return std::any_cast<std::reference_wrapper<ui::bone_item>>(
                         bone.get().get_user_data()
-                    ).get();
+                    );
                 }
         );
     }

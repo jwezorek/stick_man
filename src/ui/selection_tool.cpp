@@ -10,6 +10,9 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <numbers>
+#include <functional>
+
+using namespace std::placeholders;
 
 //#include <fstream> // TODO: remove
 //#include <sstream> // TODO: remove
@@ -165,9 +168,7 @@ namespace {
         auto first_val = *vals.begin();
         auto first_not_equal = r::find_if(
             vals,
-            [=](auto val) {
-                return !is_approximately_equal(val, first_val, tolerance);
-            }
+			std::not_fn(std::bind(is_approximately_equal, _1, first_val, tolerance))
         );
         return  (first_not_equal == vals.end()) ? 
             std::optional<double>{first_val} : std::optional<double>{};
@@ -495,9 +496,7 @@ namespace {
 
             auto& canv = this->canvas();
             connect(length_->num_edit(), &ui::number_edit::value_changed,
-                [&canv](double v) {
-                    set_bone_length(canv, v);
-                }
+				std::bind(set_bone_length, std::ref(canv), _1 )
             );
         }
 

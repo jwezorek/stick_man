@@ -156,17 +156,15 @@ ui::bone_item::bone_item(sm::bone& bone, double scale) :
 }
 
 ui::node_item& ui::bone_item::parent_node_item() const {
-	auto& parent_node = std::any_cast<std::reference_wrapper<ui::node_item>>(
+	return std::any_cast<std::reference_wrapper<ui::node_item>>(
 		model_.parent_node().get_user_data()
-	).get();
-	return parent_node;
+	);
 }
 
 ui::node_item& ui::bone_item::child_node_item() const {
-	auto& child_node = std::any_cast<std::reference_wrapper<ui::node_item>>(
+	return std::any_cast<std::reference_wrapper<ui::node_item>>(
 		model_.child_node().get_user_data()
-	).get();
-	return child_node;
+	);
 }
 
 void ui::bone_item::sync_item_to_model() {

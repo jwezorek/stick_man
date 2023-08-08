@@ -87,7 +87,7 @@ namespace ui {
 
 	template<typename T, typename U>
 	T& item_from_model(U& model_obj) {
-		return std::any_cast<std::reference_wrapper<T>>(model_obj.get_user_data()).get();
+		return std::any_cast<std::reference_wrapper<T>>(model_obj.get_user_data());
 	}
 
 	template<typename T>

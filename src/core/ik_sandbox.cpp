@@ -48,15 +48,15 @@ namespace {
 
 	sm::node& current_node(const bone_with_prev& bwp) {
 		if (std::holds_alternative<sm::node_ref>(bwp.prev)) {
-			return std::get<sm::node_ref>(bwp.prev).get();
+			return std::get<sm::node_ref>(bwp.prev);
 		}
 		else {
-			sm::bone& prev_bone = std::get<sm::bone_ref>(bwp.prev).get();
+			sm::bone& prev_bone = std::get<sm::bone_ref>(bwp.prev);
 			auto shared = bwp.current.get().shared_node(prev_bone);
 			if (!shared) {
 				throw std::runtime_error("bad call to dfs_bones_with_prev");
 			}
-			return shared->get();
+			return *shared;
 		}
 	}
 
@@ -108,11 +108,11 @@ namespace {
         }
 
         bool operator()(sm::node_ref j_ref) {
-            return (node_visit_) ? node_visit_(j_ref.get()) : true;
+            return (node_visit_) ? node_visit_(j_ref) : true;
         }
 
         bool operator()(sm::bone_ref b_ref) {
-            return (bone_visit_) ? bone_visit_(b_ref.get()) : true;
+            return (bone_visit_) ? bone_visit_(b_ref) : true;
         }
     };
 
