@@ -301,7 +301,10 @@ namespace {
 
 	std::optional<rot_constraint_info> get_backward_rot_constraint(
 			const sm::bone& pred, const sm::bone& curr) {
-		// now we need to look for backwards parent/child constraints...
+		// a backward parent-child constraint occurs when the predecessor bone
+		// has a relative-to-parent rotation constraint and the current bone
+		// is the predecessor's parent.
+
 		auto pred_constraint = pred.rotation_constraint();
 		if (!pred_constraint || pred_constraint->relative_to_parent == false) {
 			return {};

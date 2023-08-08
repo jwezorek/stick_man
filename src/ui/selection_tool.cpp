@@ -322,6 +322,7 @@ namespace {
     };
 
 	class rot_constraint_box : public QGroupBox {
+		QPushButton* btn_;
 		ui::labeled_numeric_val* min_angle_;
 		ui::labeled_numeric_val* max_angle_;
 		QComboBox* mode_;
@@ -361,13 +362,27 @@ namespace {
 			canv.sync_to_model();
 		}
 
+		void showEvent(QShowEvent* event) override
+		{
+			QWidget::showEvent(event);
+			btn_->setText("remove rotation constraint");
+		}
+
+		void hideEvent(QHideEvent* event) override
+		{
+			QWidget::hideEvent(event);
+			btn_->setText("add rotation constraint");
+		}
+
 	public:
-		rot_constraint_box(ui::canvas& canv) :
+		rot_constraint_box(QPushButton* btn, ui::canvas& canv) :
+				btn_(btn),
 				min_angle_(nullptr),
 				max_angle_(nullptr),
 				mode_(nullptr),
 				canv_(canv) {
 			this->setTitle("rotation constraint");
+			btn_->setText("add rotation constraint");
 			auto* layout = new QVBoxLayout();
 			this->setLayout(layout);
 			layout->addWidget(min_angle_ = new ui::labeled_numeric_val("minimum angle", 0, -180, 180));
@@ -424,9 +439,6 @@ namespace {
 
 		void add_or_delete_constraint() {
 			bool is_adding = !constraint_box_->isVisible();
-			constraint_btn_->setText(
-				is_adding ? "remove rotation constraint" : "add rotation constraint"
-			);
 			if (is_adding) {
 				constraint_box_->set(
 					true, k_default_rot_constraint_min, k_default_rot_constraint_max
@@ -434,6 +446,7 @@ namespace {
 			} else {
 				constraint_box_->clear();
 			}
+			canvas().sync_to_model();
 		}
 
     public:
@@ -472,8 +485,9 @@ namespace {
             //TODO: figure out how to size a tab to its contents
 
 			if (!multi_) {
-				layout_->addWidget(constraint_box_ = new rot_constraint_box(canvas()));
-				layout_->addWidget(constraint_btn_ = new QPushButton("add rotation constraint"));
+				constraint_btn_ = new QPushButton();
+				layout_->addWidget(constraint_box_ = new rot_constraint_box(constraint_btn_, canvas()));
+				layout_->addWidget(constraint_btn_);
 
 				connect(constraint_btn_, &QPushButton::clicked,
 					this, &bone_properties::add_or_delete_constraint);
@@ -493,9 +507,27 @@ namespace {
             auto length = get_unique_val(bones |
                 rv::transform([](sm::bone& b) {return b.scaled_length(); }));
             length_->num_edit()->set_value(length);
-            //auto rotation = get_unique_val(bones |
-            //    rv::transform([](sm::bone&& b) {return b.r }));
+			if (!multi_) {
+				auto& bone = bones.front();
+				auto rot_constraint = bone.rotation_constraint();
+				if (rot_constraint) {
+					constraint_box_->show();
+					constraint_box_->set(
+						rot_constraint->relative_to_parent,
+						rot_constraint->min_angle,
+						rot_constraint->max_angle
+					);
+				} else {
+					constraint_box_->hide();
+				}
+			}
         }
+
+		void lose_selection() override {
+			if (constraint_box_) {
+				constraint_box_->hide();
+			}
+		}
     };
 
 	struct constraint_dragging_info {
