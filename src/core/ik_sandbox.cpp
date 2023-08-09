@@ -60,11 +60,16 @@ namespace {
 		}
 	}
 
-	std::optional<sm::bone_ref> predecessor_bone(const bone_with_prev& bwp) {
+	// if bwp has a node as the bone's predecessor, return nil.
+	// otherwise, return the node of the predecedssor bone that is not 
+	// the current node.
+
+	sm::maybe_node_ref pred_node(const bone_with_prev& bwp) {
 		if (std::holds_alternative<sm::node_ref>(bwp.prev)) {
 			return {};
 		}
-		return std::get<sm::bone_ref>(bwp.prev);
+		const auto& pred_bone = std::get<sm::bone_ref>(bwp.prev).get();
+		return pred_bone.opposite_node(current_node(bwp));
 	}
 
 	// given a bone B and its predecessor, return the bones that are adjacent
@@ -272,23 +277,32 @@ namespace {
 	}
 
 	struct rot_constraint_info {
-		bool is_parent_child;
 		bool forward;
-		double start;
-		double span;
+		double anchor_angle;
+		double start_angle;
+		double span_angle;
 	};
 
-	std::optional<rot_constraint_info> get_forward_rot_constraint(
-			const sm::bone& pred, const sm::bone& curr) {
+	std::optional<rot_constraint_info> get_forward_rot_constraint(const bone_with_prev& bwp) {
+		std::optional<sm::bone_ref> pred = (std::holds_alternative<sm::node_ref>(bwp.prev)) ?
+			std::optional<sm::bone_ref>{} :
+			std::get<sm::bone_ref>(bwp.prev);
+
+		if (!pred) {
+			return {};
+		}
+		const auto& curr = bwp.current.get();
 		auto curr_constraint = curr.rotation_constraint();
 		if (curr_constraint) {
-			if (&curr.parent_bone()->get() != &pred) {
+			if (&curr.parent_bone()->get() != &pred->get()) {
 				return {};
 			}
 			// there is a forward parent child constraint...
+			auto curr_pos = current_node(bwp).world_pos();
+			auto pred_pos = pred_node(bwp)->get().world_pos();
 			return rot_constraint_info{
 				true,
-				true,
+				angle_from_u_to_v(pred_pos, curr_pos),
 				curr_constraint->start_angle,
 				curr_constraint->span_angle
 			};
@@ -296,38 +310,51 @@ namespace {
 		return {};
 	}
 
-	std::optional<rot_constraint_info> get_backward_rot_constraint(
-			const sm::bone& pred, const sm::bone& curr) {
+	std::optional<rot_constraint_info> get_backward_rot_constraint(const bone_with_prev& bwp) {
 		// a backward parent-child constraint occurs when the predecessor bone
 		// has a relative-to-parent rotation constraint and the current bone
 		// is the predecessor's parent.
 
-		auto pred_constraint = pred.rotation_constraint();
+		std::optional<sm::bone_ref> pred = (std::holds_alternative<sm::node_ref>(bwp.prev)) ?
+			std::optional<sm::bone_ref>{} :
+			std::get<sm::bone_ref>(bwp.prev);
+
+		if (!pred) {
+			return {};
+		}
+
+		const auto& curr = bwp.current.get();
+		auto pred_constraint = pred->get().rotation_constraint();
 		if (!pred_constraint || pred_constraint->relative_to_parent == false) {
 			return {};
 		}
-		if (&pred.parent_bone()->get() != &curr) {
+
+		if (&pred->get().parent_bone()->get() != &curr) {
 			return {};
 		}
+		// there is a forward parent child constraint...
+		auto curr_pos = current_node(bwp).world_pos();
+		auto pred_pos = pred_node(bwp)->get().world_pos();
 		return rot_constraint_info{
-			true,
 			false,
+			angle_from_u_to_v(pred_pos, curr_pos),
 			pred_constraint->start_angle,
 			pred_constraint->span_angle
 		};
 	}
 
-	std::optional<rot_constraint_info>  get_parent_child_rot_constraint(const sm::bone& pred, const sm::bone& curr) {
-		
-		auto forward = get_forward_rot_constraint(pred, curr);
+	std::optional<rot_constraint_info>  get_parent_child_rot_constraint(const bone_with_prev& bwp) {
+
+		auto forward = get_forward_rot_constraint(bwp);
 		if (forward) {
 			return forward;
 		}
-		return get_backward_rot_constraint(pred, curr);
+		return get_backward_rot_constraint(bwp);
 		
 	}
 
-	std::optional<rot_constraint_info> get_absolute_rot_constraint(sm::maybe_bone_ref pred, const sm::bone& curr) {
+	std::optional<rot_constraint_info> get_absolute_rot_constraint(const bone_with_prev& bwp) {
+		const sm::bone& curr = bwp.current;
 		auto constraint = curr.rotation_constraint();
 		if (!constraint) {
 			return {};
@@ -335,16 +362,31 @@ namespace {
 		if (constraint->relative_to_parent) {
 			return {};
 		}
-		sm::maybe_node_ref shared_node = (pred) ? pred->get().shared_node(curr) : std::nullopt;
-		bool is_forward = (shared_node) ? (&curr.parent_node() == &shared_node->get()) : true;
+		const auto& pivot_node = current_node(bwp);
+		bool is_forward = (&pivot_node == &curr.parent_node());
 		return rot_constraint_info{
-			false,
 			is_forward,
+			0.0,
 			constraint->start_angle,
 			constraint->span_angle
 		};
 	}
+
+	std::vector<rot_constraint_info> get_applicable_rot_constraints(const bone_with_prev& bwp) {
+		std::vector<rot_constraint_info> constraints;
+		auto absolute = get_absolute_rot_constraint(bwp);
+		if (absolute) {
+			constraints.push_back(*absolute);
+		}
+		auto parent_child = get_parent_child_rot_constraint(bwp);
+		if (parent_child) {
+			constraints.push_back(*parent_child);
+		}
+
+		return constraints;
+	}
 	
+	/*
 	sm::point apply_rotation_constraints(
 			sm::maybe_bone_ref pred_bone, sm::bone& current_bone, const sm::node& leader_node,
 			const sm::point& follower_pos) {
@@ -378,6 +420,35 @@ namespace {
 
 		return new_follower_pos;
 	}
+	*/
+
+	sm::angle_range rot_constraint_to_angle_range(const rot_constraint_info& constraint) {
+		auto start_angle = (constraint.forward) ? 
+			constraint.start_angle :
+			-(constraint.start_angle + constraint.span_angle);
+		start_angle = sm::normalize_angle(start_angle + constraint.anchor_angle);
+		return { start_angle, constraint.span_angle };
+	}
+
+	std::optional<sm::angle_range> intersect_angle_ranges(const std::vector<sm::angle_range>& ranges) {
+		return {};
+	}
+
+	sm::point apply_rotation_constraints( bone_with_prev& bwp, const sm::point& free_pt ) {
+		auto constraints = get_applicable_rot_constraints(bwp);
+		if (constraints.empty()) {
+			return free_pt;
+		}
+		auto angle_ranges = constraints |
+			rv::transform(rot_constraint_to_angle_range) |
+			r::to<std::vector<sm::angle_range>>();
+
+		auto intersection_of_ranges = intersect_angle_ranges(angle_ranges);
+		auto range = intersection_of_ranges ? *intersection_of_ranges: angle_ranges.front();
+
+		return free_pt;
+
+	}
 
 	void perform_one_fabrik_pass(sm::node& start_node, const sm::point& target_pt,
 		const std::unordered_map<sm::bone*, double>& bone_lengths, bool use_constraints) {
@@ -385,7 +456,6 @@ namespace {
 		auto perform_fabrik_on_bone = [&](bone_with_prev& bwp) {
 
 			sm::bone& current_bone = bwp.current;
-			auto pred_bone = predecessor_bone(bwp);
 			auto& leader_node = current_node(bwp);
 			auto& follower_node = current_bone.opposite_node(leader_node);
 
@@ -396,9 +466,7 @@ namespace {
 			);
 			
 			if (use_constraints) {
-				new_follower_pos = apply_rotation_constraints(
-					pred_bone, current_bone, leader_node, new_follower_pos
-				);
+				new_follower_pos = apply_rotation_constraints( bwp, new_follower_pos );
 			}
 
 			follower_node.set_world_pos(new_follower_pos);

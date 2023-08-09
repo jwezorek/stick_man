@@ -54,6 +54,11 @@ namespace sm {
     using expected_bone = std::expected<bone_ref, result>;
     using expected_node = std::expected<node_ref, result>;
 
+	struct angle_range {
+		double start_angle;
+		double span_angle;
+	};
+
 	struct rot_constraint {
 		bool relative_to_parent;
 		double start_angle;
