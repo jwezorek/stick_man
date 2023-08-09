@@ -263,7 +263,7 @@ namespace {
 		);
 		return sm::transform(
 			sm::point{ sm::distance(fixed_pt2, free_pt), 0.0 },
-			translation_matrix(fixed_pt2)* sm::rotation_matrix(new_free_rotation)
+			translation_matrix(fixed_pt2) * sm::rotation_matrix(new_free_rotation)
 		);
 	}
 
@@ -320,7 +320,7 @@ namespace {
 		};
 	}
 
-	std::optional<rot_constraint_info>  get_rot_constraint(const sm::bone& pred, const sm::bone& curr) {
+	std::optional<rot_constraint_info>  get_parent_child_rot_constraint(const sm::bone& pred, const sm::bone& curr) {
 		
 		auto forward = get_forward_rot_constraint(pred, curr);
 		if (forward) {
@@ -330,12 +330,64 @@ namespace {
 		
 	}
 
+	std::optional<rot_constraint_info> get_absolute_rot_constraint(sm::maybe_bone_ref pred, const sm::bone& curr) {
+		auto constraint = curr.rotation_constraint();
+		if (!constraint) {
+			return {};
+		}
+		if (constraint->relative_to_parent) {
+			return {};
+		}
+		sm::maybe_node_ref shared_node = (pred) ? pred->get().shared_node(curr) : std::nullopt;
+		bool is_forward = (shared_node) ? (&curr.parent_node() == &shared_node->get()) : true;
+		return rot_constraint_info{
+			false,
+			is_forward,
+			constraint->min_angle,
+			constraint->max_angle
+		};
+	}
+	
+	sm::point apply_rotation_constraints(
+			sm::maybe_bone_ref pred_bone, sm::bone& current_bone, const sm::node& leader_node,
+			const sm::point& follower_pos) {
+
+		// TODO: make this function work if there is both a backwards parent-child constraint and an
+		// absolute rotation constraint.
+
+		sm::point new_follower_pos = follower_pos;
+		if (pred_bone ) {
+			auto& pred = pred_bone->get();
+			auto rci = get_parent_child_rot_constraint(pred, current_bone);
+			if (rci) {
+				auto& fixed_bone = pred_bone->get();
+				auto& pred_node = fixed_bone.opposite_node(leader_node);
+				new_follower_pos = apply_angle_constraint(
+					pred_node.world_pos(), leader_node.world_pos(),
+					new_follower_pos, rci->min, rci->max,
+					rci->forward
+				);
+			}
+		}
+		
+		auto abs_rci = get_absolute_rot_constraint(pred_bone, current_bone);
+		if (abs_rci) {
+			new_follower_pos = apply_angle_constraint(
+				leader_node.world_pos() + sm::point(-1,0), leader_node.world_pos(),
+				new_follower_pos, abs_rci->min, abs_rci->max,
+				abs_rci->forward
+			);
+		}
+
+		return new_follower_pos;
+	}
+
 	void perform_one_fabrik_pass(sm::node& start_node, const sm::point& target_pt,
 		const std::unordered_map<sm::bone*, double>& bone_lengths, bool use_constraints) {
 
 		auto perform_fabrik_on_bone = [&](bone_with_prev& bwp) {
 
-			auto& current_bone = bwp.current.get();
+			sm::bone& current_bone = bwp.current;
 			auto pred_bone = predecessor_bone(bwp);
 			auto& leader_node = current_node(bwp);
 			auto& follower_node = current_bone.opposite_node(leader_node);
@@ -345,20 +397,13 @@ namespace {
 				follower_node.world_pos(), 
 				bone_lengths.at(&current_bone)
 			);
-
-			if (pred_bone && use_constraints) {
-				auto& pred = pred_bone->get();
-				auto rci = get_rot_constraint(pred, current_bone);
-				if (rci) {
-					auto& fixed_bone = pred_bone->get();
-					auto& pred_node = fixed_bone.opposite_node(leader_node);
-					new_follower_pos = apply_angle_constraint(
-						pred_node.world_pos(), leader_node.world_pos(),
-						new_follower_pos, rci->min, rci->max,
-						rci->forward
-					);
-				}
+			
+			if (use_constraints) {
+				new_follower_pos = apply_rotation_constraints(
+					pred_bone, current_bone, leader_node, new_follower_pos
+				);
 			}
+
 			follower_node.set_world_pos(new_follower_pos);
 			return true;
 		};

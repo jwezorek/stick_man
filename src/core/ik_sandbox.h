@@ -49,7 +49,8 @@ namespace sm {
     using const_node_ref =  std::reference_wrapper<const node>;
     using bone_ref = std::reference_wrapper<bone>;
 	using node_ref = std::reference_wrapper<node>;
-    using maybe_bone_ref = std::optional<std::reference_wrapper<bone>>;
+    using maybe_bone_ref = std::optional<bone_ref>;
+	using maybe_node_ref = std::optional<node_ref>;
     using expected_bone = std::expected<bone_ref, result>;
     using expected_node = std::expected<node_ref, result>;
 
