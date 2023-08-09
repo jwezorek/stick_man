@@ -231,34 +231,31 @@ namespace {
     }
 
 	double apply_angle_constraint(double fixed_rotation, double free_rotation,
-		double min_angle, double max_angle, bool fixed_bone_is_anchor) {
+		double start_angle, double span_angle, bool fixed_bone_is_anchor) {
 
 		if (!fixed_bone_is_anchor) {
-			double old_min = min_angle;
-			double old_max = max_angle;
-			min_angle = -old_max;
-			max_angle = -old_min;
+			start_angle = -sm::normalize_angle(start_angle + span_angle);
 		}
-
+		auto max_angle = start_angle + span_angle;
 		auto theta = sm::normalize_angle(free_rotation - fixed_rotation);
-		if (theta < min_angle || theta > max_angle) {
-			auto dist_to_min = std::abs(sm::angular_distance(theta, min_angle));
+		if (theta < start_angle || theta > max_angle) {
+			auto dist_to_min = std::abs(sm::angular_distance(theta, start_angle));
 			auto dist_to_max = std::abs(sm::angular_distance(theta, max_angle));
-			theta = (dist_to_min < dist_to_max) ? min_angle : max_angle;
+			theta = (dist_to_min < dist_to_max) ? start_angle : max_angle;
 		}
 
 		return sm::normalize_angle(theta + fixed_rotation);
 	}
 
 	sm::point apply_angle_constraint(const sm::point& fixed_pt1, const sm::point& fixed_pt2,
-		const sm::point& free_pt, double min_angle, double max_angle, bool fixed_bone_is_anchor) {
+		const sm::point& free_pt, double start_angle, double span_angle, bool fixed_bone_is_anchor) {
 
 		auto fixed_rotation = angle_from_u_to_v(fixed_pt1, fixed_pt2);
 		auto free_rotation = angle_from_u_to_v(fixed_pt2, free_pt);
 		auto new_free_rotation = apply_angle_constraint(
 			fixed_rotation, free_rotation,
-			min_angle,
-			max_angle,
+			start_angle,
+			span_angle,
 			fixed_bone_is_anchor
 		);
 		return sm::transform(
@@ -268,17 +265,17 @@ namespace {
 	}
 
 	double apply_parent_child_constraint(const sm::bone& parent, double rotation,
-		double min_angle, double max_angle) {
+		double start_angle, double span_angle) {
 		return apply_angle_constraint(
-			parent.world_rotation(), rotation, min_angle, max_angle, true
+			parent.world_rotation(), rotation, start_angle, span_angle, true
 		);
 	}
 
 	struct rot_constraint_info {
 		bool is_parent_child;
 		bool forward;
-		double min;
-		double max;
+		double start;
+		double span;
 	};
 
 	std::optional<rot_constraint_info> get_forward_rot_constraint(
@@ -292,8 +289,8 @@ namespace {
 			return rot_constraint_info{
 				true,
 				true,
-				curr_constraint->min_angle,
-				curr_constraint->max_angle
+				curr_constraint->start_angle,
+				curr_constraint->span_angle
 			};
 		}
 		return {};
@@ -315,8 +312,8 @@ namespace {
 		return rot_constraint_info{
 			true,
 			false,
-			pred_constraint->min_angle,
-			pred_constraint->max_angle
+			pred_constraint->start_angle,
+			pred_constraint->span_angle
 		};
 	}
 
@@ -343,8 +340,8 @@ namespace {
 		return rot_constraint_info{
 			false,
 			is_forward,
-			constraint->min_angle,
-			constraint->max_angle
+			constraint->start_angle,
+			constraint->span_angle
 		};
 	}
 	
@@ -364,7 +361,7 @@ namespace {
 				auto& pred_node = fixed_bone.opposite_node(leader_node);
 				new_follower_pos = apply_angle_constraint(
 					pred_node.world_pos(), leader_node.world_pos(),
-					new_follower_pos, rci->min, rci->max,
+					new_follower_pos, rci->start, rci->span,
 					rci->forward
 				);
 			}
@@ -374,7 +371,7 @@ namespace {
 		if (abs_rci) {
 			new_follower_pos = apply_angle_constraint(
 				leader_node.world_pos() + sm::point(-1,0), leader_node.world_pos(),
-				new_follower_pos, abs_rci->min, abs_rci->max,
+				new_follower_pos, abs_rci->start, abs_rci->span,
 				abs_rci->forward
 			);
 		}
@@ -560,7 +557,7 @@ sm::bone::bone(std::string name, sm::node& u, sm::node& v) :
 
 sm::result sm::bone::set_rotation_constraint(double min, double max, bool relative_to_parent) { 
 	if (relative_to_parent && !parent_bone()) {
-		return result::no_parent_bone;
+		return result::no_parent;
 	}
 	rot_constraint_ = rot_constraint{ relative_to_parent, min, max };
 	return result::no_error;

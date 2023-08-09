@@ -39,9 +39,9 @@ namespace sm {
         multi_parent_node,
         cyclic_bones,
         non_unique_name,
-		bone_not_found,
-		node_not_found,
-		no_parent_bone,
+		not_found,
+		no_parent,
+		out_of_bounds,
 		unknown_error
     };
 
@@ -56,8 +56,8 @@ namespace sm {
 
 	struct rot_constraint {
 		bool relative_to_parent;
-		double min_angle;
-		double max_angle;
+		double start_angle;
+		double span_angle;
 	};
 
     class node : public detail::enable_protected_make_unique<node> {
@@ -117,7 +117,7 @@ namespace sm {
         node& opposite_node(const node& j) const;
 		std::optional<node_ref> shared_node(const bone& b) const;
 		std::optional<rot_constraint> rotation_constraint() const;
-		result set_rotation_constraint(double min, double max, bool relative_to_parent);
+		result set_rotation_constraint(double start, double span, bool relative_to_parent);
 		void remove_rotation_constraint();
 
         std::tuple<point, point> line_segment() const;

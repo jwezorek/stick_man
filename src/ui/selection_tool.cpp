@@ -27,7 +27,7 @@ namespace {
 
     constexpr double k_tolerance = 0.00005;
 	constexpr double k_default_rot_constraint_min = -std::numbers::pi / 2.0;
-	constexpr double k_default_rot_constraint_max = std::numbers::pi / 2.0; 
+	constexpr double k_default_rot_constraint_span = std::numbers::pi; 
 
 /*
 	// TODO: remove debug code
@@ -141,10 +141,10 @@ namespace {
         canv.sync_to_model();
     }
 
-	void set_rot_constraints(ui::canvas& canv, bool is_parent_relative, double min_angle, double max_angle) {
+	void set_rot_constraints(ui::canvas& canv, bool is_parent_relative, double start, double span) {
 		auto bone_items = canv.selected_bones();
 		for (auto& bone : to_model_objects(bone_items)) {
-			bone.set_rotation_constraint(min_angle, max_angle, is_parent_relative);
+			bone.set_rotation_constraint(start, span, is_parent_relative);
 		}
 		canv.sync_to_model();
 	}
@@ -324,8 +324,8 @@ namespace {
 
 	class rot_constraint_box : public QGroupBox {
 		QPushButton* btn_;
-		ui::labeled_numeric_val* min_angle_;
-		ui::labeled_numeric_val* max_angle_;
+		ui::labeled_numeric_val* start_angle_;
+		ui::labeled_numeric_val* span_angle_;
 		QComboBox* mode_;
 		ui::canvas& canv_;
 
@@ -333,32 +333,32 @@ namespace {
 			return mode_->currentIndex() == 0;
 		}
 
-		double constraint_min_angle() const {
-			if (!min_angle_->num_edit()->value()) {
+		double constraint_start_angle() const {
+			if (!start_angle_->num_edit()->value()) {
 				throw std::runtime_error("attempted to get value from indeterminate value box");
 			}
-			return ui::degrees_to_radians(*min_angle_->num_edit()->value());
+			return ui::degrees_to_radians(*start_angle_->num_edit()->value());
 		}
 
-		double constraint_max_angle() const {
-			if (!max_angle_->num_edit()->value()) {
+		double constraint_span_angle() const {
+			if (!span_angle_->num_edit()->value()) {
 				throw std::runtime_error("attempted to get value from indeterminate value box");
 			}
-			return ui::degrees_to_radians(*max_angle_->num_edit()->value());
+			return ui::degrees_to_radians(*span_angle_->num_edit()->value());
 		}
 
-		void set_constraint_angle(ui::canvas& canv, double val, bool is_min_angle) {
+		void set_constraint_angle(ui::canvas& canv, double val, bool is_start_angle) {
 			auto theta = ui::degrees_to_radians(val);
-			auto min_angle = is_min_angle ? theta : constraint_min_angle();
-			auto max_angle = is_min_angle ? constraint_max_angle() : theta;
+			auto start_angle = is_start_angle ? theta : constraint_start_angle();
+			auto span_angle = is_start_angle ? constraint_span_angle() : theta;
 			set_rot_constraints(canv,
-				is_constraint_relative_to_parent(), min_angle, max_angle);
+				is_constraint_relative_to_parent(), start_angle, span_angle);
 			canv.sync_to_model();
 		}
 
 		void set_constraint_mode(ui::canvas& canv, bool relative_to_parent) {
 			set_rot_constraints(canv,
-				relative_to_parent, constraint_min_angle(), constraint_max_angle()
+				relative_to_parent, constraint_start_angle(), constraint_span_angle()
 			);
 			canv.sync_to_model();
 		}
@@ -378,29 +378,29 @@ namespace {
 	public:
 		rot_constraint_box(QPushButton* btn, ui::canvas& canv) :
 				btn_(btn),
-				min_angle_(nullptr),
-				max_angle_(nullptr),
+				start_angle_(nullptr),
+				span_angle_ (nullptr),
 				mode_(nullptr),
 				canv_(canv) {
 			this->setTitle("rotation constraint");
 			btn_->setText("add rotation constraint");
 			auto* layout = new QVBoxLayout();
 			this->setLayout(layout);
-			layout->addWidget(min_angle_ = new ui::labeled_numeric_val("minimum angle", 0, -180, 180));
-			layout->addWidget(max_angle_ = new ui::labeled_numeric_val("maximum angle", 0, -180, 180));
+			layout->addWidget(start_angle_ = new ui::labeled_numeric_val("start angle", 0, -180, 180));
+			layout->addWidget(span_angle_ = new ui::labeled_numeric_val("span angle", 0, 0, 360));
 			layout->addWidget(new QLabel("mode"));
 			layout->addWidget(mode_ = new QComboBox());
 			mode_->addItem("relative to parent");
 			mode_->addItem("relative to world");
 			this->hide();
 			
-			connect(min_angle_->num_edit(), &ui::number_edit::value_changed,
+			connect(start_angle_->num_edit(), &ui::number_edit::value_changed,
 				[this, &canv](double v) {
 					set_constraint_angle(canv, v, true);
 				}
 			);
 
-			connect(max_angle_->num_edit(), &ui::number_edit::value_changed,
+			connect(span_angle_->num_edit(), &ui::number_edit::value_changed,
 				[this, &canv](double v) {
 					set_constraint_angle(canv, v, false);
 				}
@@ -413,12 +413,12 @@ namespace {
 			);
 		}
 
-		void set(bool parent_relative, double min, double max) {
-			min_angle_->num_edit()->set_value(ui::radians_to_degrees(min));
-			max_angle_->num_edit()->set_value(ui::radians_to_degrees(max));
+		void set(bool parent_relative, double start, double span) {
+			start_angle_->num_edit()->set_value(ui::radians_to_degrees(start));
+			span_angle_->num_edit()->set_value(ui::radians_to_degrees(span));
 			mode_->setCurrentIndex(parent_relative ? 0 : 1);
 
-			set_rot_constraints(canv_, parent_relative, min, max);
+			set_rot_constraints(canv_, parent_relative, start, span);
 
 			show();
 		}
@@ -442,7 +442,7 @@ namespace {
 			bool is_adding = !constraint_box_->isVisible();
 			if (is_adding) {
 				constraint_box_->set(
-					true, k_default_rot_constraint_min, k_default_rot_constraint_max
+					true, k_default_rot_constraint_min, k_default_rot_constraint_span
 				);
 			} else {
 				constraint_box_->clear();
@@ -513,8 +513,8 @@ namespace {
 					constraint_box_->show();
 					constraint_box_->set(
 						rot_constraint->relative_to_parent,
-						rot_constraint->min_angle,
-						rot_constraint->max_angle
+						rot_constraint->start_angle,
+						rot_constraint->span_angle
 					);
 				} else {
 					constraint_box_->hide();
@@ -608,41 +608,12 @@ void ui::selection_tool::keyReleaseEvent(canvas & c, QKeyEvent * event) {
 
 void ui::selection_tool::mousePressEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     rubber_band_ = {};
-    if (is_in_modal_state()) {
-		//TODO
-		/*
-        auto props = static_cast<selection_properties*>(settings_widget());
-        auto joint_props = static_cast<joint_properties*>(props->current_props());
-        joint_props->start_dragging_joint_constraint(canv, event);
-		*/
-    }
 }
 
 void ui::selection_tool::mouseMoveEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
-	//TODO
-	/*
-    if (is_in_modal_state()) {
-        auto props = static_cast<selection_properties*>(settings_widget());
-        auto joint_props = static_cast<joint_properties*>(props->current_props());
-        if (joint_props->is_dragging_joint_constraint()) {
-            joint_props->drag_joint_constraint(canv, event);
-        }
-    }
-	*/
 }
 
 void ui::selection_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
-    if (is_in_modal_state()) {
-		//TODO
-		/*
-        auto props = static_cast<selection_properties*>(settings_widget());
-        auto joint_props = static_cast<joint_properties*>(props->current_props());
-        if (joint_props->is_dragging_joint_constraint()) {
-            joint_props->stop_dragging_joint_constraint(canv, event);
-        }
-        return;
-		*/
-    }
     bool shift_down = event->modifiers().testFlag(Qt::ShiftModifier);
     bool alt_down = event->modifiers().testFlag(Qt::AltModifier);
     if (rubber_band_) {

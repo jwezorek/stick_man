@@ -207,21 +207,20 @@ void ui::rot_constraint_adornment::set( const sm::bone& bone,
 		const sm::rot_constraint& constraint, double scale) {
 	QPointF pivot = {};
 	double start_angle = 0;
-	double span_angle = constraint.max_angle - constraint.min_angle;
 	double radius = k_joint_constraint_radius * (1.0 / scale);
 
 	if (constraint.relative_to_parent) {
 		auto& anchor_bone = bone.parent_bone()->get();
 		auto parent_rot = anchor_bone.world_rotation();
 		
-		start_angle = normalize_angle(parent_rot + constraint.min_angle);
+		start_angle = normalize_angle(parent_rot + constraint.start_angle);
 		pivot = ui::to_qt_pt(bone.parent_node().world_pos());
 	} else {
 		auto center_pt = 0.5 * (bone.parent_node().world_pos() + bone.child_node().world_pos());
-		start_angle = constraint.min_angle;
+		start_angle = constraint.start_angle;
 		pivot = ui::to_qt_pt(center_pt);
 	}
-	ui::set_arc(this, pivot, radius, start_angle, span_angle);
+	ui::set_arc(this, pivot, radius, start_angle, constraint.span_angle);
 	show();
 }
 
