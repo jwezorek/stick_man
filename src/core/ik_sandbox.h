@@ -54,12 +54,7 @@ namespace sm {
 	using maybe_const_node_ref = std::optional<const_node_ref>;
 	using maybe_const_bone_ref = std::optional<const_bone_ref>;
     using expected_bone = std::expected<bone_ref, result>;
-    using expected_node = std::expected<node_ref, result>;
-
-	struct angle_range {
-		double start_angle;
-		double span_angle;
-	};
+    using expected_node = std::expected<node_ref, result>;;
 
 	struct rot_constraint {
 		bool relative_to_parent;

@@ -33,4 +33,16 @@ namespace sm {
     double distance(const point& u, const point& v);
 	double normalize_angle(double theta);
 	double angular_distance(double theta1, double theta2);
+	sm::matrix rotate_about_point_matrix(const sm::point& pt, double theta);
+	double angle_from_u_to_v(const sm::point& u, const sm::point& v);
+
+	struct angle_range {
+		double start_angle;
+		double span_angle;
+	};
+
+	bool angle_in_range(double theta, const angle_range& range);
+
+	std::vector<sm::angle_range> intersect_angle_ranges(
+		const angle_range& a, const angle_range& b);
 }

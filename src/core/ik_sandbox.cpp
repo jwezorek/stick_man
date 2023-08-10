@@ -250,20 +250,9 @@ namespace {
         );
     }
 
-    sm::matrix rotate_about_point(const sm::point& pt, double theta) {
-        return sm::translation_matrix(pt) *
-            sm::rotation_matrix(theta) *
-            sm::translation_matrix(-pt);
-    }
-
-    double angle_from_u_to_v(const sm::point& u, const sm::point& v) {
-        auto diff = v - u;
-        return std::atan2(diff.y, diff.x);
-    }
-
     sm::point point_on_line_at_distance(const sm::point& u, const sm::point& v, double d) {
         auto pt = sm::point{ u.x + d, u.y };
-        return sm::transform(pt, rotate_about_point(u, angle_from_u_to_v(u, v)));
+        return sm::transform(pt, rotate_about_point_matrix(u, angle_from_u_to_v(u, v)));
     }
 
 	double apply_angle_constraint(double fixed_rotation, double free_rotation,
@@ -391,7 +380,7 @@ namespace {
 		bool is_forward = (&pivot_node == &curr.parent_node());
 		return rot_constraint_info{
 			is_forward,
-			0.0,
+			is_forward ? 0.0 : std::numbers::pi,
 			constraint->start_angle,
 			constraint->span_angle
 		};
@@ -455,8 +444,38 @@ namespace {
 		return { start_angle, constraint.span_angle };
 	}
 
-	std::optional<sm::angle_range> intersect_angle_ranges(const std::vector<sm::angle_range>& ranges) {
-		return {};
+	std::vector<sm::angle_range> intersect_angle_ranges(const std::vector<sm::angle_range>& ranges) {
+		if (ranges.size() > 2) {
+			throw std::runtime_error("invalid rotational constraints");
+		}
+		if (ranges.size() == 2) {
+			return sm::intersect_angle_ranges(ranges[0], ranges[1]);
+		}
+		return { ranges.front() };
+	}
+
+	double constrain_angle_to_ranges(double theta, std::span<sm::angle_range> ranges) {
+		for (const auto& range : ranges) {
+			if (sm::angle_in_range(theta, range)) {
+				return theta;
+			}
+		}
+		std::vector<double> angles;
+		angles.reserve(2 * ranges.size());
+		for (const auto& range : ranges) {
+			angles.push_back(range.start_angle);
+			angles.push_back(sm::normalize_angle(range.start_angle + range.span_angle));
+		}
+		double closest_dist = std::numeric_limits<double>::max();
+		double closest = 0.0;
+		for (auto angle : angles) {
+			auto dist = std::abs(sm::angular_distance(theta, angle));
+			if (dist < closest_dist) {
+				closest_dist = dist;
+				closest = angle;
+			}
+		}
+		return closest;
 	}
 
 	sm::point apply_rotation_constraints( fabrik_item& fi, const sm::point& free_pt ) {
@@ -469,9 +488,19 @@ namespace {
 			r::to<std::vector<sm::angle_range>>();
 
 		auto intersection_of_ranges = intersect_angle_ranges(angle_ranges);
-		auto range = intersection_of_ranges ? *intersection_of_ranges: angle_ranges.front();
+		if (intersection_of_ranges.empty()) {
+			// if the constraints can not all be satisfied, default to the first one...
+			intersection_of_ranges = { angle_ranges.front() };
+		}
 
-		return free_pt;
+		auto pivot_pt = fi.current_node().world_pos();
+		auto theta = angle_from_u_to_v(pivot_pt, free_pt);
+		theta = constrain_angle_to_ranges(theta, intersection_of_ranges);
+
+		return sm::transform(
+			sm::point{ sm::distance(pivot_pt, free_pt), 0.0 },
+			translation_matrix(pivot_pt)* sm::rotation_matrix(theta)
+		);
 
 	}
 
@@ -764,7 +793,7 @@ void sm::bone::rotate(double theta) {
 		) - world_rotation();
 	}
 	*/
-    auto rotate_mat = rotate_about_point(u_.world_pos(), theta);
+    auto rotate_mat = rotate_about_point_matrix(u_.world_pos(), theta);
 
     auto rotate_about_u = [&rotate_mat](node& j)->bool {
         j.set_world_pos(transform(j.world_pos(), rotate_mat));
