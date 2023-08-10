@@ -24,71 +24,123 @@ namespace {
 
     using node_or_bone = std::variant<sm::bone_ref, sm::node_ref>;
 
-	struct bone_with_prev {
-		node_or_bone prev;
-		sm::bone_ref current;
+	class fabrik_item {
+		node_or_bone pred_;
+		sm::bone_ref current_;
+		sm::node* current_node_;
+		sm::node* pred_node_;
 
-		bone_with_prev(sm::node& n, sm::bone& b) : prev{ n }, current{ b } {
+	public:
+		fabrik_item(sm::node_ref n, sm::bone_ref b) :
+			pred_{ n }, 
+			current_{ b },
+			current_node_(nullptr),
+			pred_node_(nullptr) {
 		}
 
-		bone_with_prev(sm::bone_ref p, sm::bone_ref b) : prev{ p }, current{ b } {
+		fabrik_item(sm::bone_ref p, sm::bone_ref b) : 
+			pred_{ p }, 
+			current_{ b },
+			current_node_(nullptr),
+			pred_node_(nullptr) {
 		}
+
+		sm::bone& current_bone() {
+			return current_.get();
+		}
+
+		const sm::bone& current_bone() const {
+			return current_.get();
+		}
+
+		// if this has a node as the bone's predecessor, return that node.
+		// otherwise, return the node that is shared between the current
+		// bone and its preceding bone.
+
+		sm::node& current_node() {
+			if (!current_node_) {
+				if (std::holds_alternative<sm::node_ref>(pred_)) {
+					current_node_ = &std::get<sm::node_ref>(pred_).get();
+				} else {
+					sm::bone& pred_bone = std::get<sm::bone_ref>(pred_);
+					auto shared = current_.get().shared_node(pred_bone);
+					if (!shared) {
+						throw std::runtime_error("bad call to dfs_bones_with_prev");
+					}
+					current_node_ = &shared->get();
+				}
+			}
+			return *current_node_;
+		}
+
+		const sm::node& current_node() const {
+			auto* nonconst_self = const_cast<fabrik_item*>(this);
+			return nonconst_self->current_node();
+		}
+
+		// if this has a node as the bone's predecessor, return nil.
+		// otherwise, return the node of the predecedssor bone that is not 
+		// the current node.
+
+		sm::maybe_node_ref pred_node() {
+			if (!pred_node_ && std::holds_alternative<sm::bone_ref>(pred_)) {
+				const auto& pred_bone = std::get<sm::bone_ref>(pred_).get();
+				pred_node_ = &pred_bone.opposite_node(current_node());
+			}
+			if (!pred_node_) {
+				return {};
+			}
+			return *pred_node_;
+		}
+
+		sm::maybe_const_node_ref pred_node() const {
+			auto* nonconst_self = const_cast<fabrik_item*>(this);
+			auto p = nonconst_self->pred_node();
+			if (!p) {
+				return {};
+			}
+			return p->get();
+		}
+
+		sm::maybe_bone_ref pred_bone() {
+			return (std::holds_alternative<sm::node_ref>(pred_)) ?
+				std::optional<sm::bone_ref>{} :
+				std::get<sm::bone_ref>(pred_);
+		}
+
+		sm::maybe_const_bone_ref pred_bone() const {
+			return (std::holds_alternative<sm::node_ref>(pred_)) ?
+				std::optional<sm::bone_ref>{} :
+				std::get<sm::bone_ref>(pred_);
+		}
+
 	};
 
-	using bone_pair_visitor = std::function<bool(bone_with_prev&)>;
+	using fabrik_item_visitor = std::function<bool(fabrik_item&)>;
 
 
-	auto append_predecessor(auto prev, std::span<const sm::bone_ref> bones) {
-		return bones | rv::transform([prev](auto&& b) {return bone_with_prev{ prev, b }; });
-	}
-
-	// if bwp has a node as the bone's predecessor, return that node.
-	// otherwise, return the node that is shared between the current
-	// bone and its preceding bone.
-
-	sm::node& current_node(const bone_with_prev& bwp) {
-		if (std::holds_alternative<sm::node_ref>(bwp.prev)) {
-			return std::get<sm::node_ref>(bwp.prev);
-		}
-		else {
-			sm::bone& prev_bone = std::get<sm::bone_ref>(bwp.prev);
-			auto shared = bwp.current.get().shared_node(prev_bone);
-			if (!shared) {
-				throw std::runtime_error("bad call to dfs_bones_with_prev");
-			}
-			return *shared;
-		}
-	}
-
-	// if bwp has a node as the bone's predecessor, return nil.
-	// otherwise, return the node of the predecedssor bone that is not 
-	// the current node.
-
-	sm::maybe_node_ref pred_node(const bone_with_prev& bwp) {
-		if (std::holds_alternative<sm::node_ref>(bwp.prev)) {
-			return {};
-		}
-		const auto& pred_bone = std::get<sm::bone_ref>(bwp.prev).get();
-		return pred_bone.opposite_node(current_node(bwp));
+	auto to_fabrik_items(auto prev, std::span< sm::bone_ref> bones) {
+		return bones | rv::transform([prev](auto b) {return fabrik_item( prev, b ); });
 	}
 
 	// given a bone B and its predecessor, return the bones that are adjacent
 	// to the node that is not shared by B and its predecessor and that
 	// are not B.
 
-	std::vector<sm::bone_ref> neighbor_bones(const bone_with_prev& bwp) {
-		sm::node& curr_node = current_node(bwp);
-		sm::node& next_node = bwp.current.get().opposite_node(curr_node);
+	std::vector<sm::bone_ref> neighbor_bones(const fabrik_item& fi) {
+		const sm::node& curr_node = fi.current_node();
+		sm::node& next_node = fi.current_bone().opposite_node(curr_node);
 		return next_node.adjacent_bones() |
 			rv::filter(
-				[&bwp](sm::bone_ref b) { return &(b.get()) != &bwp.current.get(); }
+				[&fi](sm::bone_ref b) { return &(b.get()) != &fi.current_bone(); }
 			) | r::to<std::vector<sm::bone_ref>>();
 	}
 
-	void dfs_bones_with_prev(sm::node& start, bone_pair_visitor visitor) {
-		std::stack<bone_with_prev> stack;
+	void fabrik_traversal(sm::node& start, fabrik_item_visitor visitor) {
+		std::stack<fabrik_item> stack;
+		auto adj_bones = start.adjacent_bones();
 		stack.push_range(
-			append_predecessor(sm::node_ref(start), start.adjacent_bones())
+			to_fabrik_items(sm::node_ref(start), adj_bones)
 		);
 		while (!stack.empty()) {
 			auto item = stack.top();
@@ -96,8 +148,9 @@ namespace {
 			if (!visitor(item)) {
 				return;
 			}
+			auto neighbors = neighbor_bones(item);
 			stack.push_range(
-				append_predecessor(item.current, neighbor_bones(item))
+				to_fabrik_items(std::ref(item.current_bone()), neighbors)
 			);
 		}
 	}
@@ -283,23 +336,20 @@ namespace {
 		double span_angle;
 	};
 
-	std::optional<rot_constraint_info> get_forward_rot_constraint(const bone_with_prev& bwp) {
-		std::optional<sm::bone_ref> pred = (std::holds_alternative<sm::node_ref>(bwp.prev)) ?
-			std::optional<sm::bone_ref>{} :
-			std::get<sm::bone_ref>(bwp.prev);
-
-		if (!pred) {
+	std::optional<rot_constraint_info> get_forward_rot_constraint(const fabrik_item& fi) {
+		if (!fi.pred_bone()) {
 			return {};
 		}
-		const auto& curr = bwp.current.get();
+		const auto& pred_bone = fi.pred_bone()->get();
+		const auto& curr = fi.current_bone();
 		auto curr_constraint = curr.rotation_constraint();
 		if (curr_constraint) {
-			if (&curr.parent_bone()->get() != &pred->get()) {
+			if (&curr.parent_bone()->get() != &pred_bone) {
 				return {};
 			}
 			// there is a forward parent child constraint...
-			auto curr_pos = current_node(bwp).world_pos();
-			auto pred_pos = pred_node(bwp)->get().world_pos();
+			auto curr_pos = fi.current_node().world_pos();
+			auto pred_pos = fi.pred_node()->get().world_pos();
 			return rot_constraint_info{
 				true,
 				angle_from_u_to_v(pred_pos, curr_pos),
@@ -310,31 +360,28 @@ namespace {
 		return {};
 	}
 
-	std::optional<rot_constraint_info> get_backward_rot_constraint(const bone_with_prev& bwp) {
+	std::optional<rot_constraint_info> get_backward_rot_constraint(const fabrik_item& fi) {
 		// a backward parent-child constraint occurs when the predecessor bone
 		// has a relative-to-parent rotation constraint and the current bone
 		// is the predecessor's parent.
 
-		std::optional<sm::bone_ref> pred = (std::holds_alternative<sm::node_ref>(bwp.prev)) ?
-			std::optional<sm::bone_ref>{} :
-			std::get<sm::bone_ref>(bwp.prev);
-
-		if (!pred) {
+		if (!fi.pred_bone()) {
 			return {};
 		}
+		const auto& pred_bone = fi.pred_bone()->get();
 
-		const auto& curr = bwp.current.get();
-		auto pred_constraint = pred->get().rotation_constraint();
+		const auto& curr = fi.current_bone();
+		auto pred_constraint = pred_bone.rotation_constraint();
 		if (!pred_constraint || pred_constraint->relative_to_parent == false) {
 			return {};
 		}
 
-		if (&pred->get().parent_bone()->get() != &curr) {
+		if (&pred_bone.parent_bone()->get() != &curr) {
 			return {};
 		}
 		// there is a forward parent child constraint...
-		auto curr_pos = current_node(bwp).world_pos();
-		auto pred_pos = pred_node(bwp)->get().world_pos();
+		auto curr_pos = fi.current_node().world_pos();
+		auto pred_pos = fi.pred_node()->get().world_pos();
 		return rot_constraint_info{
 			false,
 			angle_from_u_to_v(pred_pos, curr_pos),
@@ -343,18 +390,18 @@ namespace {
 		};
 	}
 
-	std::optional<rot_constraint_info>  get_parent_child_rot_constraint(const bone_with_prev& bwp) {
+	std::optional<rot_constraint_info>  get_parent_child_rot_constraint(const fabrik_item& fi) {
 
-		auto forward = get_forward_rot_constraint(bwp);
+		auto forward = get_forward_rot_constraint(fi);
 		if (forward) {
 			return forward;
 		}
-		return get_backward_rot_constraint(bwp);
+		return get_backward_rot_constraint(fi);
 		
 	}
 
-	std::optional<rot_constraint_info> get_absolute_rot_constraint(const bone_with_prev& bwp) {
-		const sm::bone& curr = bwp.current;
+	std::optional<rot_constraint_info> get_absolute_rot_constraint(const fabrik_item& fi) {
+		const sm::bone& curr = fi.current_bone();
 		auto constraint = curr.rotation_constraint();
 		if (!constraint) {
 			return {};
@@ -362,7 +409,7 @@ namespace {
 		if (constraint->relative_to_parent) {
 			return {};
 		}
-		const auto& pivot_node = current_node(bwp);
+		const auto& pivot_node = fi.current_node();
 		bool is_forward = (&pivot_node == &curr.parent_node());
 		return rot_constraint_info{
 			is_forward,
@@ -372,13 +419,13 @@ namespace {
 		};
 	}
 
-	std::vector<rot_constraint_info> get_applicable_rot_constraints(const bone_with_prev& bwp) {
+	std::vector<rot_constraint_info> get_applicable_rot_constraints(const fabrik_item& fi) {
 		std::vector<rot_constraint_info> constraints;
-		auto absolute = get_absolute_rot_constraint(bwp);
+		auto absolute = get_absolute_rot_constraint(fi);
 		if (absolute) {
 			constraints.push_back(*absolute);
 		}
-		auto parent_child = get_parent_child_rot_constraint(bwp);
+		auto parent_child = get_parent_child_rot_constraint(fi);
 		if (parent_child) {
 			constraints.push_back(*parent_child);
 		}
@@ -434,8 +481,8 @@ namespace {
 		return {};
 	}
 
-	sm::point apply_rotation_constraints( bone_with_prev& bwp, const sm::point& free_pt ) {
-		auto constraints = get_applicable_rot_constraints(bwp);
+	sm::point apply_rotation_constraints( fabrik_item& fi, const sm::point& free_pt ) {
+		auto constraints = get_applicable_rot_constraints(fi);
 		if (constraints.empty()) {
 			return free_pt;
 		}
@@ -453,10 +500,10 @@ namespace {
 	void perform_one_fabrik_pass(sm::node& start_node, const sm::point& target_pt,
 		const std::unordered_map<sm::bone*, double>& bone_lengths, bool use_constraints) {
 
-		auto perform_fabrik_on_bone = [&](bone_with_prev& bwp) {
+		auto perform_fabrik_on_bone = [&](fabrik_item& fi) {
 
-			sm::bone& current_bone = bwp.current;
-			auto& leader_node = current_node(bwp);
+			sm::bone& current_bone = fi.current_bone();
+			auto& leader_node = fi.current_node();
 			auto& follower_node = current_bone.opposite_node(leader_node);
 
 			auto new_follower_pos = point_on_line_at_distance(
@@ -466,7 +513,7 @@ namespace {
 			);
 			
 			if (use_constraints) {
-				new_follower_pos = apply_rotation_constraints( bwp, new_follower_pos );
+				new_follower_pos = apply_rotation_constraints( fi, new_follower_pos );
 			}
 
 			follower_node.set_world_pos(new_follower_pos);
@@ -474,7 +521,7 @@ namespace {
 		};
 
 		start_node.set_world_pos(target_pt);
-		dfs_bones_with_prev(start_node, perform_fabrik_on_bone);
+		fabrik_traversal(start_node, perform_fabrik_on_bone);
 	}
 
     sm::fabrik_result target_satisfaction_state(const targeted_node& tj, double tolerance) {
