@@ -28,17 +28,11 @@ namespace {
 		node_or_bone pred_;
 		sm::bone_ref current_;
 		sm::node* current_node_;
-		sm::node* pred_node_;
+		mutable const sm::node* pred_node_;
 
 	public:
-		fabrik_item(sm::node_ref n, sm::bone_ref b) :
-			pred_{ n }, 
-			current_{ b },
-			current_node_(nullptr),
-			pred_node_(nullptr) {
-		}
 
-		fabrik_item(sm::bone_ref p, sm::bone_ref b) : 
+		fabrik_item(node_or_bone p, sm::bone_ref b) :
 			pred_{ p }, 
 			current_{ b },
 			current_node_(nullptr),
@@ -65,24 +59,24 @@ namespace {
 					sm::bone& pred_bone = std::get<sm::bone_ref>(pred_);
 					auto shared = current_.get().shared_node(pred_bone);
 					if (!shared) {
-						throw std::runtime_error("bad call to dfs_bones_with_prev");
+						throw std::runtime_error("invalid fabrik item");
 					}
 					current_node_ = &shared->get();
 				}
 			}
 			return *current_node_;
 		}
-
+		
 		const sm::node& current_node() const {
 			auto* nonconst_self = const_cast<fabrik_item*>(this);
 			return nonconst_self->current_node();
 		}
-
+		
 		// if this has a node as the bone's predecessor, return nil.
 		// otherwise, return the node of the predecedssor bone that is not 
 		// the current node.
 
-		sm::maybe_node_ref pred_node() {
+		sm::maybe_const_node_ref pred_node() const {
 			if (!pred_node_ && std::holds_alternative<sm::bone_ref>(pred_)) {
 				const auto& pred_bone = std::get<sm::bone_ref>(pred_).get();
 				pred_node_ = &pred_bone.opposite_node(current_node());
@@ -93,47 +87,31 @@ namespace {
 			return *pred_node_;
 		}
 
-		sm::maybe_const_node_ref pred_node() const {
-			auto* nonconst_self = const_cast<fabrik_item*>(this);
-			auto p = nonconst_self->pred_node();
-			if (!p) {
-				return {};
-			}
-			return p->get();
-		}
-
-		sm::maybe_bone_ref pred_bone() {
-			return (std::holds_alternative<sm::node_ref>(pred_)) ?
-				std::optional<sm::bone_ref>{} :
-				std::get<sm::bone_ref>(pred_);
-		}
-
 		sm::maybe_const_bone_ref pred_bone() const {
 			return (std::holds_alternative<sm::node_ref>(pred_)) ?
 				std::optional<sm::bone_ref>{} :
 				std::get<sm::bone_ref>(pred_);
 		}
 
+		// given a fabrik item copmposed of bone B and its predecessor, 
+		// return the bones that are adjacent to the node that is not shared by B 
+		// and its predecessor and that are not B.
+
+		std::vector<sm::bone_ref> neighbor_bones() {
+			const sm::node& curr_node = current_node();
+			sm::node& next_node = current_bone().opposite_node(curr_node);
+			return next_node.adjacent_bones() |
+				rv::filter(
+					[this](sm::bone_ref b) { return &(b.get()) != &current_bone(); }
+			) | r::to<std::vector<sm::bone_ref>>();
+		}
+
 	};
 
 	using fabrik_item_visitor = std::function<bool(fabrik_item&)>;
 
-
 	auto to_fabrik_items(auto prev, std::span< sm::bone_ref> bones) {
 		return bones | rv::transform([prev](auto b) {return fabrik_item( prev, b ); });
-	}
-
-	// given a bone B and its predecessor, return the bones that are adjacent
-	// to the node that is not shared by B and its predecessor and that
-	// are not B.
-
-	std::vector<sm::bone_ref> neighbor_bones(const fabrik_item& fi) {
-		const sm::node& curr_node = fi.current_node();
-		sm::node& next_node = fi.current_bone().opposite_node(curr_node);
-		return next_node.adjacent_bones() |
-			rv::filter(
-				[&fi](sm::bone_ref b) { return &(b.get()) != &fi.current_bone(); }
-			) | r::to<std::vector<sm::bone_ref>>();
 	}
 
 	void fabrik_traversal(sm::node& start, fabrik_item_visitor visitor) {
@@ -148,7 +126,7 @@ namespace {
 			if (!visitor(item)) {
 				return;
 			}
-			auto neighbors = neighbor_bones(item);
+			auto neighbors = item.neighbor_bones();
 			stack.push_range(
 				to_fabrik_items(std::ref(item.current_bone()), neighbors)
 			);
