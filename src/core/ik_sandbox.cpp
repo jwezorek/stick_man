@@ -296,14 +296,7 @@ namespace {
 		);
 	}
 
-	struct rot_constraint_info {
-		bool forward;
-		double anchor_angle;
-		double start_angle;
-		double span_angle;
-	};
-
-	std::optional<rot_constraint_info> get_forward_rot_constraint(const fabrik_item& fi) {
+	std::optional<sm::angle_range> get_forward_rot_constraint(const fabrik_item& fi) {
 		if (!fi.pred_bone()) {
 			return {};
 		}
@@ -317,17 +310,18 @@ namespace {
 			// there is a forward parent child constraint...
 			auto curr_pos = fi.current_node().world_pos();
 			auto pred_pos = fi.pred_node()->get().world_pos();
-			return rot_constraint_info{
-				true,
-				angle_from_u_to_v(pred_pos, curr_pos),
-				curr_constraint->start_angle,
+			auto anchor_angle = angle_from_u_to_v(pred_pos, curr_pos);
+			return sm::angle_range{
+				sm::normalize_angle(curr_constraint->start_angle + anchor_angle),
 				curr_constraint->span_angle
 			};
 		}
 		return {};
 	}
 
-	std::optional<rot_constraint_info> get_backward_rot_constraint(const fabrik_item& fi) {
+	
+
+	std::optional<sm::angle_range> get_backward_rot_constraint(const fabrik_item& fi) {
 		// a backward parent-child constraint occurs when the predecessor bone
 		// has a relative-to-parent rotation constraint and the current bone
 		// is the predecessor's parent.
@@ -349,15 +343,17 @@ namespace {
 		// there is a forward parent child constraint...
 		auto curr_pos = fi.current_node().world_pos();
 		auto pred_pos = fi.pred_node()->get().world_pos();
-		return rot_constraint_info{
-			false,
-			angle_from_u_to_v(pred_pos, curr_pos),
-			pred_constraint->start_angle,
+
+		auto anchor_angle = angle_from_u_to_v(pred_pos, curr_pos);
+		auto start_angle = -(pred_constraint->start_angle + pred_constraint->span_angle);
+
+		return sm::angle_range{
+			sm::normalize_angle(start_angle + anchor_angle),
 			pred_constraint->span_angle
 		};
 	}
 
-	std::optional<rot_constraint_info>  get_parent_child_rot_constraint(const fabrik_item& fi) {
+	std::optional<sm::angle_range>  get_parent_child_rot_constraint(const fabrik_item& fi) {
 
 		auto forward = get_forward_rot_constraint(fi);
 		if (forward) {
@@ -367,7 +363,7 @@ namespace {
 		
 	}
 
-	std::optional<rot_constraint_info> get_absolute_rot_constraint(const fabrik_item& fi) {
+	std::optional<sm::angle_range> get_absolute_rot_constraint(const fabrik_item& fi) {
 		const sm::bone& curr = fi.current_bone();
 		auto constraint = curr.rotation_constraint();
 		if (!constraint) {
@@ -378,17 +374,15 @@ namespace {
 		}
 		const auto& pivot_node = fi.current_node();
 		bool is_forward = (&pivot_node == &curr.parent_node());
-		return rot_constraint_info{
-			true,
-			0,
+		return sm::angle_range{
 			is_forward ? constraint->start_angle : 
 				sm::normalize_angle(constraint->start_angle + std::numbers::pi),
 			constraint->span_angle
 		};
 	}
 
-	std::vector<rot_constraint_info> get_applicable_rot_constraints(const fabrik_item& fi) {
-		std::vector<rot_constraint_info> constraints;
+	std::vector<sm::angle_range> get_applicable_rot_constraints(const fabrik_item& fi) {
+		std::vector<sm::angle_range> constraints;
 		auto absolute = get_absolute_rot_constraint(fi);
 		if (absolute) {
 			constraints.push_back(*absolute);
@@ -399,50 +393,6 @@ namespace {
 		}
 
 		return constraints;
-	}
-	
-	/*
-	sm::point apply_rotation_constraints(
-			sm::maybe_bone_ref pred_bone, sm::bone& current_bone, const sm::node& leader_node,
-			const sm::point& follower_pos) {
-
-		// TODO: make this function work if there is both a backwards parent-child constraint and an
-		// absolute rotation constraint.
-
-		sm::point new_follower_pos = follower_pos;
-		if (pred_bone ) {
-			auto& pred = pred_bone->get();
-			auto rci = get_parent_child_rot_constraint(pred, current_bone);
-			if (rci) {
-				auto& fixed_bone = pred_bone->get();
-				auto& pred_node = fixed_bone.opposite_node(leader_node);
-				new_follower_pos = apply_angle_constraint(
-					pred_node.world_pos(), leader_node.world_pos(),
-					new_follower_pos, rci->start, rci->span,
-					rci->forward
-				);
-			}
-		}
-		
-		auto abs_rci = get_absolute_rot_constraint(pred_bone, current_bone);
-		if (abs_rci) {
-			new_follower_pos = apply_angle_constraint(
-				leader_node.world_pos() + sm::point(-1,0), leader_node.world_pos(),
-				new_follower_pos, abs_rci->start, abs_rci->span,
-				abs_rci->forward
-			);
-		}
-
-		return new_follower_pos;
-	}
-	*/
-
-	sm::angle_range rot_constraint_to_angle_range(const rot_constraint_info& constraint) {
-		auto start_angle = (constraint.forward) ? 
-			constraint.start_angle :
-			-(constraint.start_angle + constraint.span_angle);
-		start_angle = sm::normalize_angle(start_angle + constraint.anchor_angle);
-		return { start_angle, constraint.span_angle };
 	}
 
 	std::vector<sm::angle_range> intersect_angle_ranges(const std::vector<sm::angle_range>& ranges) {
@@ -484,14 +434,11 @@ namespace {
 		if (constraints.empty()) {
 			return free_pt;
 		}
-		auto angle_ranges = constraints |
-			rv::transform(rot_constraint_to_angle_range) |
-			r::to<std::vector<sm::angle_range>>();
 
-		auto intersection_of_ranges = intersect_angle_ranges(angle_ranges);
+		auto intersection_of_ranges = intersect_angle_ranges(constraints);
 		if (intersection_of_ranges.empty()) {
 			// if the constraints can not all be satisfied, default to the first one...
-			intersection_of_ranges = { angle_ranges.front() };
+			intersection_of_ranges = { constraints.front() };
 		}
 
 		auto pivot_pt = fi.current_node().world_pos();
