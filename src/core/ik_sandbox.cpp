@@ -311,7 +311,7 @@ namespace {
 		const auto& curr = fi.current_bone();
 		auto curr_constraint = curr.rotation_constraint();
 		if (curr_constraint) {
-			if (&curr.parent_bone()->get() != &pred_bone) {
+			if (curr.parent_bone() && &curr.parent_bone()->get() != &pred_bone) {
 				return {};
 			}
 			// there is a forward parent child constraint...
@@ -379,9 +379,10 @@ namespace {
 		const auto& pivot_node = fi.current_node();
 		bool is_forward = (&pivot_node == &curr.parent_node());
 		return rot_constraint_info{
-			is_forward,
-			is_forward ? 0.0 : std::numbers::pi,
-			constraint->start_angle,
+			true,
+			0,
+			is_forward ? constraint->start_angle : 
+				sm::normalize_angle(constraint->start_angle + std::numbers::pi),
 			constraint->span_angle
 		};
 	}
