@@ -16,12 +16,6 @@ namespace rv = std::ranges::views;
 
 namespace {
 
-	//TODO: remove debug code
-	double radians_to_degrees(double radians) {
-		return radians * (180.0 / std::numbers::pi_v<double>);
-	}
-	//
-
     using node_or_bone = std::variant<sm::bone_ref, sm::node_ref>;
 
 	class fabrik_item {
@@ -237,66 +231,16 @@ namespace {
         return pinned_nodes;
     }
 
-    double max_pinned_node_dist(const std::vector<targeted_node>& pinned_nodes) {
-        if (pinned_nodes.empty()) {
-            return 0;
-        }
-        return r::max(
-            pinned_nodes | rv::transform(
-                [](const auto& pj)->double {
-                    return sm::distance(pj.node.world_pos(), pj.target_pos);
-                }
-            )
-        );
-    }
-
     sm::point point_on_line_at_distance(const sm::point& u, const sm::point& v, double d) {
         auto pt = sm::point{ u.x + d, u.y };
         return sm::transform(pt, rotate_about_point_matrix(u, angle_from_u_to_v(u, v)));
     }
 
-	double apply_angle_constraint(double fixed_rotation, double free_rotation,
-		double start_angle, double span_angle, bool fixed_bone_is_anchor) {
+	std::optional<sm::angle_range> get_forw_rel_rot_constraint(const fabrik_item& fi) {
+		// a forward relative rotation constraint is the normal case. The bone
+		// has a rotation constraint on it that is relative to its parent and the
+		// predecessor bone is its parent.
 
-		if (!fixed_bone_is_anchor) {
-			start_angle = -sm::normalize_angle(start_angle + span_angle);
-		}
-		auto max_angle = start_angle + span_angle;
-		auto theta = sm::normalize_angle(free_rotation - fixed_rotation);
-		if (theta < start_angle || theta > max_angle) {
-			auto dist_to_min = std::abs(sm::angular_distance(theta, start_angle));
-			auto dist_to_max = std::abs(sm::angular_distance(theta, max_angle));
-			theta = (dist_to_min < dist_to_max) ? start_angle : max_angle;
-		}
-
-		return sm::normalize_angle(theta + fixed_rotation);
-	}
-
-	sm::point apply_angle_constraint(const sm::point& fixed_pt1, const sm::point& fixed_pt2,
-		const sm::point& free_pt, double start_angle, double span_angle, bool fixed_bone_is_anchor) {
-
-		auto fixed_rotation = angle_from_u_to_v(fixed_pt1, fixed_pt2);
-		auto free_rotation = angle_from_u_to_v(fixed_pt2, free_pt);
-		auto new_free_rotation = apply_angle_constraint(
-			fixed_rotation, free_rotation,
-			start_angle,
-			span_angle,
-			fixed_bone_is_anchor
-		);
-		return sm::transform(
-			sm::point{ sm::distance(fixed_pt2, free_pt), 0.0 },
-			translation_matrix(fixed_pt2) * sm::rotation_matrix(new_free_rotation)
-		);
-	}
-
-	double apply_parent_child_constraint(const sm::bone& parent, double rotation,
-		double start_angle, double span_angle) {
-		return apply_angle_constraint(
-			parent.world_rotation(), rotation, start_angle, span_angle, true
-		);
-	}
-
-	std::optional<sm::angle_range> get_forward_rot_constraint(const fabrik_item& fi) {
 		if (!fi.pred_bone()) {
 			return {};
 		}
@@ -319,10 +263,8 @@ namespace {
 		return {};
 	}
 
-	
-
-	std::optional<sm::angle_range> get_backward_rot_constraint(const fabrik_item& fi) {
-		// a backward parent-child constraint occurs when the predecessor bone
+	std::optional<sm::angle_range> get_back_rel_rot_constraint(const fabrik_item& fi) {
+		// a backward relative constraint occurs when the predecessor bone
 		// has a relative-to-parent rotation constraint and the current bone
 		// is the predecessor's parent.
 
@@ -353,14 +295,14 @@ namespace {
 		};
 	}
 
-	std::optional<sm::angle_range>  get_parent_child_rot_constraint(const fabrik_item& fi) {
+	std::optional<sm::angle_range>  get_relative_rot_constraint(const fabrik_item& fi) {
 
-		auto forward = get_forward_rot_constraint(fi);
+		auto forward = get_forw_rel_rot_constraint(fi);
 		if (forward) {
 			return forward;
 		}
-		return get_backward_rot_constraint(fi);
-		
+		return get_back_rel_rot_constraint(fi);
+
 	}
 
 	std::optional<sm::angle_range> get_absolute_rot_constraint(const fabrik_item& fi) {
@@ -387,9 +329,9 @@ namespace {
 		if (absolute) {
 			constraints.push_back(*absolute);
 		}
-		auto parent_child = get_parent_child_rot_constraint(fi);
-		if (parent_child) {
-			constraints.push_back(*parent_child);
+		auto relative = get_relative_rot_constraint(fi);
+		if (relative) {
+			constraints.push_back(*relative);
 		}
 
 		return constraints;
