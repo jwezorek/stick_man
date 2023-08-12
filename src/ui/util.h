@@ -40,6 +40,16 @@ namespace ui {
         int m_vSpace;
     };
 
+	class labeled_field : public QWidget {
+		QLabel* lbl_;
+		QLineEdit* val_;
+	public:
+		labeled_field(QString lbl, QString val);
+		void set_label(QString str);
+		void set_value(QString str);
+		void set_color(QColor color);
+	};
+
     class number_edit : public QLineEdit {
 
         Q_OBJECT

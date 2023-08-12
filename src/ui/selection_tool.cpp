@@ -361,6 +361,7 @@ namespace {
 
     class bone_properties : public abstract_properties_widget {
         ui::labeled_numeric_val* length_;
+		ui::labeled_field* name_;
         QTabWidget* rotation_tab_ctrl_;
         ui::labeled_numeric_val* world_rotation_;
         ui::labeled_numeric_val* parent_rotation_;
@@ -388,6 +389,7 @@ namespace {
                     (multi) ? "selected bones" : "selected bone"
                 ),
                 multi_(multi),
+				name_(nullptr),
 				length_(nullptr),
 				rotation_tab_ctrl_(nullptr),
 				world_rotation_(nullptr),
@@ -397,6 +399,12 @@ namespace {
         }
 
         void populate() override {
+			if (!multi_) {
+				layout_->addWidget(
+					name_ = new ui::labeled_field("name", "")
+				);
+				name_->set_color(QColor("yellow"));
+			}
             layout_->addWidget(
                 length_ = new ui::labeled_numeric_val("length", 0.0, 0.0, 1500.0)
             );
@@ -438,6 +446,7 @@ namespace {
             length_->num_edit()->set_value(length);
 			if (!multi_) {
 				auto& bone = bones.front();
+				name_->set_value(bone.name().c_str());
 				auto rot_constraint = bone.rotation_constraint();
 				if (rot_constraint) {
 					constraint_box_->show();

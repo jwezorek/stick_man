@@ -203,6 +203,26 @@ int ui::FlowLayout::smartSpacing(QStyle::PixelMetric pm) const
 
 /*------------------------------------------------------------------------------------------------*/
 
+ui::labeled_field::labeled_field(QString lbl, QString val) {
+	auto* layout = new QHBoxLayout(this);
+	layout->addWidget(lbl_ = new QLabel(lbl+":"));
+	layout->addWidget(val_ = new QLineEdit(val));
+}
+void ui::labeled_field::set_label(QString str) {
+	lbl_->setText(str);
+}
+
+void ui::labeled_field::set_value(QString str) {
+	val_->setText(str);
+}
+
+void ui::labeled_field::set_color(QColor color) {
+	QString colorString = QString("color: %1;").arg(color.name());
+	val_->setStyleSheet(colorString);
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
 double ui::number_edit::to_acceptable_value(double v) const {
     auto validr = static_cast<const QDoubleValidator*>(validator());
     if (v < validr->bottom()) {
