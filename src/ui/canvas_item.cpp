@@ -142,7 +142,8 @@ QGraphicsItem* ui::node_item::create_selection_frame() const {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::bone_item::bone_item(sm::bone& bone, double scale) :
-	has_stick_man_model<ui::bone_item, sm::bone&>(bone) {
+		has_stick_man_model<ui::bone_item, sm::bone&>(bone),
+		rot_constraint_(nullptr) {
 	setBrush(Qt::black);
 	setPen(QPen(Qt::black, 1.0 / scale));
 	set_bone_item_pos(
@@ -167,6 +168,26 @@ ui::node_item& ui::bone_item::child_node_item() const {
 	);
 }
 
+void ui::bone_item::sync_rotation_constraint_to_model() {
+	auto constraint = model().rotation_constraint();
+	if (!constraint) {
+		if (rot_constraint_) {
+			rot_constraint_->hide();
+		}
+		return;
+	}
+
+	if (!rot_constraint_) {
+		canvas()->addItem(rot_constraint_ = new rot_constraint_adornment());
+	}
+	rot_constraint_->set(model(), *constraint, canvas()->scale());
+	if (is_selected()) {
+		rot_constraint_->show();
+	} else {
+		rot_constraint_->hide();
+	}
+}
+
 void ui::bone_item::sync_item_to_model() {
 	auto& canv = *canvas();
 	setPen(QPen(Qt::black, 1.0 / canv.scale()));
@@ -177,6 +198,7 @@ void ui::bone_item::sync_item_to_model() {
 		model_.world_rotation(),
 		1.0 / canv.scale()
 	);
+	sync_rotation_constraint_to_model();
 }
 
 void ui::bone_item::sync_sel_frame_to_model() {
@@ -223,21 +245,3 @@ void ui::rot_constraint_adornment::set( const sm::bone& bone,
 	ui::set_arc(this, pivot, radius, start_angle, constraint.span_angle);
 	show();
 }
-
-
-/*
-void ui::rot_constraint_adornment::set_parent_relative( 
-		const sm::node& node, double min, double max, double scale) {
-	node_ = &node;
-	min_angle_ = min;
-	max_angle_ = max;
-
-	ui::set_arc(this,
-		ui::to_qt_pt(node_->world_pos()),
-		k_joint_constraint_radius * (1.0/scale),
-		min_angle_,
-		max_angle_ - min_angle_
-	);
-	show();
-}
-*/

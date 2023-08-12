@@ -24,7 +24,6 @@ namespace ui {
     class tool_manager;
     class node_item;
     class bone_item;
-	class joint_constraint_adornment;
     class abstract_canvas_item;
 
     using selection_set = std::unordered_set<ui::abstract_canvas_item*>;

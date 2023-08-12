@@ -193,40 +193,11 @@ double ui::canvas::scale() const {
     return view.transform().m11();
 }
 
-void ui::canvas::sync_rotation_constraint_to_model() {
-	auto existing_rcis = to_vector_of_type<rot_constraint_adornment>(items());
-	rot_constraint_adornment* rci = !existing_rcis.empty() ?
-		existing_rcis.front() :
-		nullptr;
-
-	auto bones = selected_bones();
-	if (bones.size() != 1) {
-		if (rci) {
-			rci->hide();
-		}
-		return;
-	}
-	auto& bone = bones.front()->model();
-	auto constraint = bone.rotation_constraint();
-	if (!constraint) {
-		if (rci) {
-			rci->hide();
-		}
-		return;
-	}
-
-	if (!rci) {
-		addItem(rci = new rot_constraint_adornment());
-	}
-	rci->set(bone, *constraint, scale_);
-}
-
 void ui::canvas::sync_to_model() {
     auto is_non_null = [](auto* p) {return p; };
     for (auto* child : items() | rv::transform(to_stick_man) | rv::filter(is_non_null)) {
         child->sync_to_model();
     }
-	sync_rotation_constraint_to_model();
 }
 
 const ui::selection_set&  ui::canvas::selection() const {
@@ -256,41 +227,6 @@ ui::sel_type ui::canvas::selection_type() const {
 		return multi ? sel_type::bones : sel_type::bone;
 	}
 }
-
-std::optional<ui::joint_info> ui::canvas::selected_joint() const { /*
-	const auto& sel = selection_;
-	if (sel.size() != 3) {
-		return {};
-	}
-	auto bones = to_models_of_item_type<ui::bone_item>(sel);
-	if (bones.size() != 2) {
-		return {};
-	}
-	auto shared_node = find_shared_node(bones[0], bones[1]);
-	if (!shared_node) {
-		return {};
-	}
-	auto nodes = to_models_of_item_type<ui::node_item>(sel);
-	if (nodes.size() != 1) {
-		return {};
-	}
-
-	joint_info ji;
-	ji.shared_node = shared_node;
-	ji.anchor_bone = parent_bone(bones[0], bones[1]);
-	ji.dependent_bone = (ji.anchor_bone == bones[0]) ? bones[1] : bones[0];
-	auto* parent_1 = &(ji.anchor_bone->parent_node());
-	auto* parent_2 = &(ji.dependent_bone->parent_node());
-
-	ji.joint_type = (shared_node == parent_1 && shared_node == parent_2) ?
-		sel_type::sibling_joint :
-		sel_type::parent_child_joint;
-
-	return ji;
-	*/
-	return {};
-}
-
 std::vector<ui::bone_item*> ui::canvas::selected_bones() const {
     return to_vector_of_type<ui::bone_item>(selection_);
 }

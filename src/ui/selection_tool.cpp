@@ -13,11 +13,6 @@
 #include <functional>
 
 using namespace std::placeholders;
-
-//#include <fstream> // TODO: remove
-//#include <sstream> // TODO: remove
-//#include <format> // TODO: remove
-
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
 
@@ -28,71 +23,6 @@ namespace {
     constexpr double k_tolerance = 0.00005;
 	constexpr double k_default_rot_constraint_min = -std::numbers::pi / 2.0;
 	constexpr double k_default_rot_constraint_span = std::numbers::pi; 
-
-/*
-	// TODO: remove debug code
-	class svg_debug {
-		std::stringstream ss;
-	public:
-		svg_debug() {
-			ss << "<svg height='500' width='500' xmlns='http://www.w3.org/2000/svg' version='1.1'>>\n";
-			ss << "<g transform = 'matrix(1 0 0 -1 0 500)'>\n";
-		}
-		void add_line(sm::point u, sm::point v, std::string color) {
-			ss << std::format(
-				"<line x1 ='{0}' y1 ='{1}' x2='{2}' y2='{3}' style='stroke:{4};stroke-width:2' />\n",
-				u.x, u.y, v.x, v.y, color);
-		}
-
-		std::string to_string() {
-			ss << "</g>\n</svg>";
-			return ss.str();
-		}
-	};
-
-	// TODO: remove debug code
-	sm::point pt_rel_to_line(sm::point u, sm::point v, double angle) {
-		auto diff = v-u;
-		auto rot = std::atan2(diff.y, diff.x);
-		//auto canonicalize = sm::rotation_matrix(-rot) * sm::translation_matrix(-v);
-		auto decanonicalize = sm::translation_matrix(v) * sm::rotation_matrix(rot);
-		sm::point pt = { 30.0 * std::cos(angle), 30.0 * std::sin(angle) };
-		return sm::transform(pt, decanonicalize);
-	}
-
-	// TODO: remove debug code
-	void debug() {
-		std::ofstream svg_file;
-		svg_debug svg;
-
-		sm::point u = { 20, 20 };
-		sm::point v = { 60, 50 };
-		sm::point target = { 60, 110 };
-		auto max_angle = ui::degrees_to_radians(10.0);
-		auto min_angle = ui::degrees_to_radians(-20.0);
-
-		target = sm::apply_angle_constraint(u, v, target, min_angle, max_angle, true);
-
-		svg.add_line(u, v, "green");
-		svg.add_line(v, target, "red");
-		svg.add_line(v, pt_rel_to_line(u, v, max_angle), "black");
-		svg.add_line(v, pt_rel_to_line(u, v, min_angle), "black");
-
-		svg_file.open("C:\\test\\debug.svg");
-		svg_file << svg.to_string();
-		svg_file.close();
-	}
-
-	// TODO: remove debug code
-	void debug2(std::vector<ui::node_item*> v) {
-		if (v.empty()) {
-			return;
-		}
-		auto& node = v.front()->model();
-		auto dbg_str = sm::debug(node);
-		qDebug() << dbg_str.c_str();
-	}
-*/
 
     auto to_model_objects(r::input_range auto&& itms) {
         return itms |

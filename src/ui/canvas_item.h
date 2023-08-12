@@ -59,12 +59,18 @@ namespace ui {
 		void set_pinned(bool pinned);
 	};
 
+	class rot_constraint_adornment;
+
 	class bone_item :
 		public has_stick_man_model<bone_item, sm::bone&>, public QGraphicsPolygonItem {
 	private:
+		rot_constraint_adornment* rot_constraint_;
+
 		void sync_item_to_model() override;
 		void sync_sel_frame_to_model() override;
 		QGraphicsItem* create_selection_frame() const override;
+		void sync_rotation_constraint_to_model();
+
 	public:
 		using model_type = sm::bone;
 
