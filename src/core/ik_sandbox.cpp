@@ -33,6 +33,17 @@ namespace {
 			pred_node_(nullptr) {
 		}
 
+		fabrik_item(sm::bone& b) :
+			pred_{ 
+				(b.parent_bone()) ? 
+					node_or_bone{*b.parent_bone()} :
+					node_or_bone{b.parent_node()}
+			},
+			current_{ b },
+			current_node_(nullptr),
+			pred_node_(nullptr) {
+		}
+
 		sm::bone& current_bone() {
 			return current_.get();
 		}
@@ -371,10 +382,10 @@ namespace {
 		return closest;
 	}
 
-	sm::point apply_rotation_constraints( fabrik_item& fi, const sm::point& free_pt ) {
+	std::optional<double> apply_rotation_constraints(const fabrik_item& fi, double theta) {
 		auto constraints = get_applicable_rot_constraints(fi);
 		if (constraints.empty()) {
-			return free_pt;
+			return {};
 		}
 
 		auto intersection_of_ranges = intersect_angle_ranges(constraints);
@@ -383,13 +394,22 @@ namespace {
 			intersection_of_ranges = { constraints.front() };
 		}
 
+		return constrain_angle_to_ranges(theta, intersection_of_ranges);
+	}
+
+	sm::point apply_rotation_constraints( const fabrik_item& fi, const sm::point& free_pt ) {
+
 		auto pivot_pt = fi.current_node().world_pos();
-		auto theta = angle_from_u_to_v(pivot_pt, free_pt);
-		theta = constrain_angle_to_ranges(theta, intersection_of_ranges);
+		auto old_theta = angle_from_u_to_v(pivot_pt, free_pt);
+		auto new_theta = apply_rotation_constraints(fi, old_theta);
+
+		if (!new_theta) {
+			return free_pt;
+		}
 
 		return sm::transform(
 			sm::point{ sm::distance(pivot_pt, free_pt), 0.0 },
-			translation_matrix(pivot_pt)* sm::rotation_matrix(theta)
+			translation_matrix(pivot_pt)* sm::rotation_matrix(*new_theta)
 		);
 
 	}
@@ -671,18 +691,10 @@ void sm::bone::set_user_data(std::any data) {
 }
 
 void sm::bone::rotate(double theta) {
-	//TODO
-	/*
-	auto maybe_constraint = parent_constraint_on_bone(*this);
-	if (maybe_constraint) {
-		theta = apply_parent_child_constraint(
-			parent_bone()->get(),
-			theta + world_rotation(),
-			maybe_constraint->min,
-			maybe_constraint->max
-		) - world_rotation();
-	}
-	*/
+
+	auto new_theta = apply_rotation_constraints(fabrik_item(*this), theta + world_rotation());
+	theta = new_theta ? *new_theta - world_rotation() : theta;
+
     auto rotate_mat = rotate_about_point_matrix(u_.world_pos(), theta);
 
     auto rotate_about_u = [&rotate_mat](node& j)->bool {
