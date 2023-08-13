@@ -18,6 +18,11 @@ namespace {
 
     using node_or_bone = std::variant<sm::bone_ref, sm::node_ref>;
 
+	// The core of the implementation of the FABRIK ik algorithm is a DFS over the bones in the
+	// skeleton. At any step in the algorithm the current bone along with its predecessor in the
+	// dfs traversal may be the neighborhood of one or more rotational constraints. This
+	// fabrik item class models such a neighborhood.
+
 	class fabrik_item {
 		node_or_bone pred_;
 		sm::bone_ref current_;
@@ -52,8 +57,7 @@ namespace {
 			return current_.get();
 		}
 
-		// if this has a node as the bone's predecessor, return that node.
-		// otherwise, return the node that is shared between the current
+		// return the node that is shared between the current
 		// bone and its preceding bone.
 
 		sm::node& current_node() {
@@ -77,9 +81,9 @@ namespace {
 			return nonconst_self->current_node();
 		}
 		
-		// if this has a node as the bone's predecessor, return nil.
-		// otherwise, return the node of the predecedssor bone that is not 
-		// the current node.
+		// if the current bone has a node as its predecessor, return nil.
+		// otherwise, return the node of the predecessor bone that is not 
+		// the current node i.e. the node that preceded the current node.
 
 		sm::maybe_const_node_ref pred_node() const {
 			if (!pred_node_ && std::holds_alternative<sm::bone_ref>(pred_)) {
@@ -101,23 +105,18 @@ namespace {
 		// the trick here is to just return the parent and children of the current bone, 
 		// not siblings. this forces a traversal in which it is impossible
 		// for an applicable rotation constraint to be relative to a bone that is not
-		// the predecessor bone.
+		// the predecessor bone.(because we do not currently support sibling constraints)
 
 		std::vector<sm::bone_ref> neighbor_bones() {
-			std::vector<sm::bone_ref> neighbors;
-			auto children = current_bone().child_node().child_bones();
-			neighbors.reserve(children.size() + 1);
-
+			auto neighbors = current_bone().child_bones();
 			auto parent = current_bone().parent_bone();
 			if (parent) {
 				neighbors.push_back(*parent);
 			}
-			r::copy(children, std::back_inserter(neighbors));
-			auto pred = pred_bone();
 			return neighbors |
 				rv::filter(
-					[pred](auto neighbor) {
-						return !pred || (&pred->get() != &neighbor.get());
+					[this](auto neighbor) {
+						return !pred_bone() || (&pred_bone()->get() != &neighbor.get());
 					}
 				) | r::to<std::vector<sm::bone_ref>>();
 		}
@@ -265,22 +264,26 @@ namespace {
 		if (!fi.pred_bone()) {
 			return {};
 		}
+
 		const auto& pred_bone = fi.pred_bone()->get();
 		const auto& curr = fi.current_bone();
 		auto curr_constraint = curr.rotation_constraint();
+
 		if (curr_constraint) {
 			if (curr.parent_bone() && &curr.parent_bone()->get() != &pred_bone) {
 				return {};
 			}
-			// there is a forward parent child constraint...
+
 			auto curr_pos = fi.current_node().world_pos();
 			auto pred_pos = fi.pred_node()->get().world_pos();
 			auto anchor_angle = angle_from_u_to_v(pred_pos, curr_pos);
+
 			return sm::angle_range{
 				sm::normalize_angle(curr_constraint->start_angle + anchor_angle),
 				curr_constraint->span_angle
 			};
 		}
+
 		return {};
 	}
 
@@ -292,10 +295,11 @@ namespace {
 		if (!fi.pred_bone()) {
 			return {};
 		}
-		const auto& pred_bone = fi.pred_bone()->get();
 
+		const auto& pred_bone = fi.pred_bone()->get();
 		const auto& curr = fi.current_bone();
 		auto pred_constraint = pred_bone.rotation_constraint();
+
 		if (!pred_constraint || pred_constraint->relative_to_parent == false) {
 			return {};
 		}
@@ -303,10 +307,9 @@ namespace {
 		if (&pred_bone.parent_bone()->get() != &curr) {
 			return {};
 		}
-		// there is a forward parent child constraint...
+
 		auto curr_pos = fi.current_node().world_pos();
 		auto pred_pos = fi.pred_node()->get().world_pos();
-
 		auto anchor_angle = angle_from_u_to_v(pred_pos, curr_pos);
 		auto start_angle = -(pred_constraint->start_angle + pred_constraint->span_angle);
 
@@ -329,14 +332,18 @@ namespace {
 	std::optional<sm::angle_range> get_absolute_rot_constraint(const fabrik_item& fi) {
 		const sm::bone& curr = fi.current_bone();
 		auto constraint = curr.rotation_constraint();
+
 		if (!constraint) {
 			return {};
 		}
+
 		if (constraint->relative_to_parent) {
 			return {};
 		}
+
 		const auto& pivot_node = fi.current_node();
 		bool is_forward = (&pivot_node == &curr.parent_node());
+
 		return sm::angle_range{
 			is_forward ? constraint->start_angle : 
 				sm::normalize_angle(constraint->start_angle + std::numbers::pi),
@@ -347,9 +354,11 @@ namespace {
 	std::vector<sm::angle_range> get_applicable_rot_constraints(const fabrik_item& fi) {
 		std::vector<sm::angle_range> constraints;
 		auto absolute = get_absolute_rot_constraint(fi);
+
 		if (absolute) {
 			constraints.push_back(*absolute);
 		}
+
 		auto relative = get_relative_rot_constraint(fi);
 		if (relative) {
 			constraints.push_back(*relative);
@@ -359,29 +368,37 @@ namespace {
 	}
 
 	std::vector<sm::angle_range> intersect_angle_ranges(const std::vector<sm::angle_range>& ranges) {
+		
 		if (ranges.size() > 2) {
 			throw std::runtime_error("invalid rotational constraints");
 		}
 		if (ranges.size() == 2) {
 			return sm::intersect_angle_ranges(ranges[0], ranges[1]);
 		}
+
 		return { ranges.front() };
 	}
 
 	double constrain_angle_to_ranges(double theta, std::span<sm::angle_range> ranges) {
+
+		// If theta is in one of the angle ranges there is nothing to do...
 		for (const auto& range : ranges) {
 			if (sm::angle_in_range(theta, range)) {
 				return theta;
 			}
 		}
+
 		std::vector<double> angles;
 		angles.reserve(2 * ranges.size());
+
 		for (const auto& range : ranges) {
 			angles.push_back(range.start_angle);
 			angles.push_back(sm::normalize_angle(range.start_angle + range.span_angle));
 		}
+
 		double closest_dist = std::numeric_limits<double>::max();
 		double closest = 0.0;
+
 		for (auto angle : angles) {
 			auto dist = std::abs(sm::angular_distance(theta, angle));
 			if (dist < closest_dist) {
@@ -389,10 +406,12 @@ namespace {
 				closest = angle;
 			}
 		}
+
 		return closest;
 	}
 
 	std::optional<double> apply_rotation_constraints(const fabrik_item& fi, double theta) {
+
 		auto constraints = get_applicable_rot_constraints(fi);
 		if (constraints.empty()) {
 			return {};
@@ -452,6 +471,7 @@ namespace {
 	}
 
     sm::fabrik_result target_satisfaction_state(const targeted_node& tj, double tolerance) {
+
         // has it reached the target?
         if (sm::distance(tj.node.world_pos(), tj.target_pos) < tolerance) {
             return sm::fabrik_result::target_reached;
@@ -638,8 +658,18 @@ sm::node& sm::bone::parent_node() {
 	return u_;
 }
 
+const sm::node& sm::bone::parent_node() const {
+	auto* non_const_this = const_cast<sm::bone*>(this);
+	return non_const_this->parent_node();
+}
+
 sm::node& sm::bone::child_node() {
 	return v_;
+}
+
+const sm::node& sm::bone::child_node() const {
+	auto* non_const_this = const_cast<sm::bone*>(this);
+	return non_const_this->child_node();
 }
 
 sm::node& sm::bone::opposite_node( const node& j) {
@@ -650,14 +680,12 @@ sm::node& sm::bone::opposite_node( const node& j) {
 	}
 }
 
-const sm::node& sm::bone::parent_node() const {
-	auto* non_const_this = const_cast<sm::bone*>(this);
-	return non_const_this->parent_node();
+std::vector<sm::bone_ref> sm::bone::child_bones() {
+	return v_.child_bones();
 }
 
-const sm::node& sm::bone::child_node() const {
-	auto* non_const_this = const_cast<sm::bone*>(this);
-    return non_const_this->child_node();
+std::vector<sm::const_bone_ref> sm::bone::child_bones() const {
+	return const_cast<const sm::node&>(v_).child_bones();
 }
 
 const sm::node& sm::bone::opposite_node(const node& j) const {

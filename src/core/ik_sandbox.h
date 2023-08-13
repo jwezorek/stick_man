@@ -96,6 +96,7 @@ namespace sm {
         double world_y() const;
         void set_world_pos(const point& pt);
         point world_pos() const;
+
         std::any get_user_data() const;
         bool is_root() const;
         bool is_pinned() const;
@@ -124,6 +125,9 @@ namespace sm {
 
 		maybe_const_bone_ref parent_bone() const;
 		maybe_bone_ref parent_bone();
+
+		std::vector<bone_ref> child_bones();
+		std::vector<const_bone_ref> child_bones() const;
 
         const node& parent_node() const;
 		const node& child_node() const;
