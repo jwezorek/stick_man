@@ -15,6 +15,7 @@ namespace rv = std::ranges::views;
 
 namespace {
 
+	const auto k_darker_gridline_color = QColor::fromRgb(180, 180, 180);
     const auto k_dark_gridline_color = QColor::fromRgb(220, 220, 220);
     const auto k_light_gridline_color = QColor::fromRgb(240, 240, 240);
     constexpr int k_ribbon_height = 35;
@@ -66,7 +67,7 @@ namespace {
     void draw_grid_lines(QPainter* painter, const QRectF& r, double line_spacing) {
         painter->fillRect(r, Qt::white);
         QPen dark_pen(k_dark_gridline_color, 0);
-        QPen pen(k_light_gridline_color, 0);
+        QPen light_pen(k_light_gridline_color, 0);
         qreal x1, y1, x2, y2;
         r.getCoords(&x1, &y1, &x2, &y2);
 
@@ -74,7 +75,7 @@ namespace {
         int right_gridline_index = static_cast<int>(std::floor(x2 / line_spacing));
         for (auto i : rv::iota(left_gridline_index, right_gridline_index + 1)) {
             auto x = i * line_spacing;
-            painter->setPen((i % 5) ? pen : dark_pen);
+            painter->setPen((i % 5) ? light_pen : dark_pen);
             painter->drawLine(x, y1, x, y2);
         }
 
@@ -82,9 +83,14 @@ namespace {
         int bottom_gridline_index = static_cast<int>(std::floor(y2 / line_spacing));
         for (auto i : rv::iota(top_gridline_index, bottom_gridline_index + 1)) {
             auto y = i * line_spacing;
-            painter->setPen((i % 5) ? pen : dark_pen);
+            painter->setPen((i % 5) ? light_pen : dark_pen);
             painter->drawLine(x1, y, x2, y);
         }
+
+		QPen darker_pen(k_darker_gridline_color, 0);
+		painter->setPen(darker_pen);
+		painter->drawLine(0, y1, 0, y2);
+		painter->drawLine(x1, 0, x2, 0);
     }
 
     auto child_bones(ui::node_item* node) {
@@ -119,7 +125,6 @@ namespace {
 
 ui::canvas::canvas(){
     setSceneRect(QRectF(-1500, -1500, 3000, 3000));
-    
 }
 
 void ui::canvas::drawBackground(QPainter* painter, const QRectF& dirty_rect) {

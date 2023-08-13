@@ -23,11 +23,12 @@ namespace {
             &USE_DARK_MODE, sizeof(USE_DARK_MODE));
     #endif
     }
-
 }
 
 ui::stick_man::stick_man(QWidget* parent) :
         QMainWindow(parent), 
+		was_shown_( false ),
+		has_fully_layed_out_widgets_( false ),
         tool_mgr_(this),
         tool_pal_(new tool_palette(this)),
         skel_pane_(new skeleton_pane(this)),
@@ -75,4 +76,17 @@ void ui::stick_man::createMainMenu()
     auto view_menu = menuBar()->addMenu(tr("View"));
     QAction* actionNewDockTab = new QAction(tr("foo"), this);
     view_menu->addAction(actionNewDockTab);
+}
+
+void ui::stick_man::showEvent(QShowEvent* event) {
+	QMainWindow::showEvent(event);
+	was_shown_ = true;
+}
+
+void ui::stick_man::resizeEvent(QResizeEvent* event) {
+	QMainWindow::resizeEvent(event);
+	if (was_shown_ && !has_fully_layed_out_widgets_) {
+		view().centerOn(0, 0);
+		has_fully_layed_out_widgets_ = true;
+	}
 }

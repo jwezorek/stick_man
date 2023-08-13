@@ -14,7 +14,7 @@ namespace ui {
 
     class stick_man : public QMainWindow
     {
-        Q_OBJECT
+		Q_OBJECT
 
     public:
         stick_man(QWidget* parent = Q_NULLPTR);
@@ -24,9 +24,12 @@ namespace ui {
         canvas_view& view();
         sm::ik_sandbox& sandbox();
         tool_settings_pane& tool_pane();
+
     private:
 
         void createMainMenu();
+		void showEvent(QShowEvent* event) override;
+		void resizeEvent(QResizeEvent* event) override;
 
         tool_manager tool_mgr_;
         tool_palette* tool_pal_;
@@ -35,6 +38,8 @@ namespace ui {
         skeleton_pane* skel_pane_;
         canvas_view* view_;
         sm::ik_sandbox sandbox_;
+		bool was_shown_;
+		bool has_fully_layed_out_widgets_;
     };
 
 }
