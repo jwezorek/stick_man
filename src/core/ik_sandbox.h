@@ -82,9 +82,16 @@ namespace sm {
 
     public:
         std::string name() const;
-        maybe_bone_ref parent_bone() const;
-        std::span<const bone_ref> child_bones() const;
-		std::vector<bone_ref> adjacent_bones() const;
+
+		maybe_bone_ref parent_bone();
+        maybe_const_bone_ref parent_bone() const;
+
+        std::vector<const_bone_ref> child_bones() const;
+		std::vector<bone_ref> child_bones();
+
+		std::vector<const_bone_ref> adjacent_bones() const;
+		std::vector<bone_ref> adjacent_bones();
+
         double world_x() const;
         double world_y() const;
         void set_world_pos(const point& pt);
@@ -114,10 +121,21 @@ namespace sm {
 
     public:
         std::string name() const;
-        node& parent_node() const;
-        node& child_node() const;
-        node& opposite_node(const node& j) const;
-		std::optional<node_ref> shared_node(const bone& b) const;
+
+		maybe_const_bone_ref parent_bone() const;
+		maybe_bone_ref parent_bone();
+
+        const node& parent_node() const;
+		const node& child_node() const;
+		const node& opposite_node(const node& j) const;
+
+		node& parent_node();
+		node& child_node();
+		node& opposite_node(const node& j);
+
+		std::optional<const_node_ref> shared_node(const bone& b) const;
+		std::optional<node_ref> shared_node(const bone& b);
+
 		std::optional<rot_constraint> rotation_constraint() const;
 		result set_rotation_constraint(double start, double span, bool relative_to_parent);
 		void remove_rotation_constraint();
@@ -129,7 +147,6 @@ namespace sm {
         double rotation() const;
         double scale() const;
         double absolute_scale() const;
-        maybe_bone_ref parent_bone() const;
         std::any get_user_data() const;
         void set_user_data(std::any data);
 

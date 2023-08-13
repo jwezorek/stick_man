@@ -98,19 +98,29 @@ namespace {
 				std::get<sm::bone_ref>(pred_);
 		}
 
-		// given a fabrik item copmposed of bone B and its predecessor, 
-		// return the bones that are adjacent to the node that is not shared by B 
-		// and its predecessor and that are not B.
+		// the trick here is to just return the parent and children of the current bone, 
+		// not siblings. this forces a traversal in which it is impossible
+		// for an applicable rotation constraint to be relative to a bone that is not
+		// the predecessor bone.
 
 		std::vector<sm::bone_ref> neighbor_bones() {
-			const sm::node& curr_node = current_node();
-			sm::node& next_node = current_bone().opposite_node(curr_node);
-			return next_node.adjacent_bones() |
-				rv::filter(
-					[this](sm::bone_ref b) { return &(b.get()) != &current_bone(); }
-			) | r::to<std::vector<sm::bone_ref>>();
-		}
+			std::vector<sm::bone_ref> neighbors;
+			auto children = current_bone().child_node().child_bones();
+			neighbors.reserve(children.size() + 1);
 
+			auto parent = current_bone().parent_bone();
+			if (parent) {
+				neighbors.push_back(*parent);
+			}
+			r::copy(children, std::back_inserter(neighbors));
+			auto pred = pred_bone();
+			return neighbors |
+				rv::filter(
+					[pred](auto neighbor) {
+						return !pred || (&pred->get() != &neighbor.get());
+					}
+				) | r::to<std::vector<sm::bone_ref>>();
+		}
 	};
 
 	using fabrik_item_visitor = std::function<bool(fabrik_item&)>;
@@ -180,7 +190,7 @@ namespace {
             return neighbors;
         }
 
-        std::vector<node_or_bone> operator()(sm::const_bone_ref b_ref) {
+        std::vector<node_or_bone> operator()(sm::bone_ref b_ref) {
             auto& bone = b_ref.get();
             std::vector<node_or_bone> neighbors;
             if (!downstream_) {
@@ -522,15 +532,25 @@ std::string sm::node::name() const {
     return name_;
 }
 
-sm::maybe_bone_ref sm::node::parent_bone() const {
-    return parent_;
+sm::maybe_bone_ref sm::node::parent_bone() {
+	return parent_;
 }
 
-std::span<const sm::bone_ref> sm::node::child_bones() const {
-    return children_;
+sm::maybe_const_bone_ref sm::node::parent_bone() const {
+	return parent_;
 }
 
-std::vector<sm::bone_ref> sm::node::adjacent_bones() const {
+std::vector<sm::bone_ref> sm::node::child_bones() {
+	return children_;
+}
+
+std::vector<sm::const_bone_ref> sm::node::child_bones() const {
+	return children_ |
+		rv::transform([](const auto& c) {return sm::const_bone_ref(c); }) |
+		r::to< std::vector<sm::const_bone_ref>>();
+}
+
+std::vector<sm::bone_ref> sm::node::adjacent_bones() {
 	std::vector<sm::bone_ref> bones;
 	bones.reserve(children_.size() + 1);
 	if (!is_root()) {
@@ -539,6 +559,13 @@ std::vector<sm::bone_ref> sm::node::adjacent_bones() const {
 	r::copy(children_, std::back_inserter(bones));
 	bones.shrink_to_fit();
 	return bones;
+}
+
+std::vector<sm::const_bone_ref> sm::node::adjacent_bones() const {
+	auto* non_const_this = const_cast<sm::node*>(this);
+	return non_const_this->adjacent_bones() |
+		rv::transform([](const auto& c) {return sm::const_bone_ref(c); }) |
+		r::to< std::vector<sm::const_bone_ref>>();
 }
 
 double sm::node::world_x() const {
@@ -607,35 +634,51 @@ std::string sm::bone::name() const {
     return name_;
 }
 
-sm::node& sm::bone::parent_node() const {
-    return u_;
+sm::node& sm::bone::parent_node() {
+	return u_;
 }
 
-sm::node& sm::bone::child_node() const {
-    return v_;
+sm::node& sm::bone::child_node() {
+	return v_;
 }
 
-sm::node& sm::bone::opposite_node(const node& j) const {
-    if (&j == &u_) {
-        return v_;
-    } else {
-        return u_;
-    }
+sm::node& sm::bone::opposite_node( const node& j) {
+	if (&j == &u_) {
+		return v_;
+	} else {
+		return u_;
+	}
 }
 
-std::optional<sm::node_ref> sm::bone::shared_node(const bone& b) const {
+const sm::node& sm::bone::parent_node() const {
+	auto* non_const_this = const_cast<sm::bone*>(this);
+	return non_const_this->parent_node();
+}
+
+const sm::node& sm::bone::child_node() const {
+	auto* non_const_this = const_cast<sm::bone*>(this);
+    return non_const_this->child_node();
+}
+
+const sm::node& sm::bone::opposite_node(const node& j) const {
+	auto* non_const_this = const_cast<sm::bone*>(this);
+	return non_const_this->opposite_node(j);
+}
+
+std::optional<sm::node_ref> sm::bone::shared_node(const bone& b) {
 	auto* b_u = &b.parent_node();
 	auto* b_v = &b.child_node();
-	if (&u_ == b_u) {
-		return sm::node_ref(*b_u);
-	} else if (&u_ == b_v) {
-		return sm::node_ref(*b_v);
-	} else if (&v_ == b_u) {
-		return sm::node_ref(*b_u);
-	} else if (&v_ == b_v) {
-		return sm::node_ref(*b_v);
+	if (&u_ == b_u || (&u_ == b_v)) {
+		return u_;
+	} else if (&v_ == b_u || &v_ == b_v) {
+		return v_;
 	}
 	return {};
+}
+
+std::optional<sm::const_node_ref> sm::bone::shared_node(const bone& b) const {
+	auto* non_const_this = const_cast<sm::bone*>(this);
+	return non_const_this->shared_node(b);
 }
 
 std::tuple<sm::point, sm::point> sm::bone::line_segment() const {
@@ -678,8 +721,12 @@ double sm::bone::absolute_scale() const {
     return scaled_length() / length();
 }
 
-sm::maybe_bone_ref  sm::bone::parent_bone() const {
+sm::maybe_const_bone_ref  sm::bone::parent_bone() const {
     return u_.parent_bone();
+}
+
+sm::maybe_bone_ref  sm::bone::parent_bone() {
+	return u_.parent_bone();
 }
 
 std::any sm::bone::get_user_data() const {
