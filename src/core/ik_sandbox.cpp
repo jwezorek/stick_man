@@ -27,7 +27,7 @@ namespace {
 		node_or_bone pred_;
 		sm::bone_ref current_;
 		sm::node* current_node_;
-		mutable const sm::node* pred_node_;
+		mutable sm::node* pred_node_;
 
 	public:
 
@@ -85,9 +85,9 @@ namespace {
 		// otherwise, return the node of the predecessor bone that is not 
 		// the current node i.e. the node that preceded the current node.
 
-		sm::maybe_const_node_ref pred_node() const {
+		sm::maybe_node_ref pred_node() const {
 			if (!pred_node_ && std::holds_alternative<sm::bone_ref>(pred_)) {
-				const auto& pred_bone = std::get<sm::bone_ref>(pred_).get();
+				auto& pred_bone = std::get<sm::bone_ref>(pred_).get();
 				pred_node_ = &pred_bone.opposite_node(current_node());
 			}
 			if (!pred_node_) {
@@ -103,20 +103,22 @@ namespace {
 		}
 
 		// the trick here is to just return the parent and children of the current bone, 
-		// not sibling bones. this forces a traversal in which it is impossible
+		// not sibling bones unless this is the root. this forces a traversal in which it is impossible
 		// for an applicable rotation constraint to be relative to a bone that is not
 		// the predecessor bone.(because we do not currently support sibling constraints)
 
-		std::vector<sm::bone_ref> neighbor_bones() {
+		std::vector<sm::bone_ref> neighbor_bones(const std::unordered_set<sm::bone*>& visited) {
 			auto neighbors = current_bone().child_bones();
 			auto parent = current_bone().parent_bone();
 			if (parent) {
 				neighbors.push_back(*parent);
+			} else {
+				r::copy(current_bone().sibling_bones(), std::back_inserter(neighbors));
 			}
 			return neighbors |
 				rv::filter(
-					[this](auto neighbor) {
-						return !pred_bone() || (&pred_bone()->get() != &neighbor.get());
+					[&visited](auto neighbor) {
+						return !visited.contains(&neighbor.get());
 					}
 				) | r::to<std::vector<sm::bone_ref>>();
 		}
@@ -130,6 +132,7 @@ namespace {
 
 	void fabrik_traversal(sm::node& start, fabrik_item_visitor visitor) {
 		std::stack<fabrik_item> stack;
+		std::unordered_set<sm::bone*> visited;
 		auto adj_bones = start.adjacent_bones();
 		stack.push_range(
 			to_fabrik_items(sm::node_ref(start), adj_bones)
@@ -140,7 +143,8 @@ namespace {
 			if (!visitor(item)) {
 				return;
 			}
-			auto neighbors = item.neighbor_bones();
+			visited.insert(&item.current_bone());
+			auto neighbors = item.neighbor_bones(visited);
 			stack.push_range(
 				to_fabrik_items(std::ref(item.current_bone()), neighbors)
 			);
@@ -219,10 +223,15 @@ namespace {
         return reinterpret_cast<uint64_t>(&var);
     }
 
-    std::unordered_map<sm::bone*, double> build_bone_length_table(sm::node& j) {
-        std::unordered_map<sm::bone*, double> length_tbl;
+	struct bone_info {
+		double length;
+		double rotation;
+	};
+
+    std::unordered_map<sm::bone*, bone_info> build_bone_table(sm::node& j) {
+        std::unordered_map<sm::bone*, bone_info> length_tbl;
         auto visit_bone = [&length_tbl](sm::bone& b)->bool {
-            length_tbl[&b] = b.scaled_length();
+			length_tbl[&b] = { b.scaled_length(), b.world_rotation() };
             return true;
         };
         sm::dfs(j, {}, visit_bone);
@@ -329,6 +338,13 @@ namespace {
 
 	}
 
+	sm::angle_range absolute_constraint(bool is_forward, double start_angle, double span_angle) {
+		return sm::angle_range{
+			is_forward ? start_angle : sm::normalize_angle(start_angle + std::numbers::pi),
+				span_angle
+		};
+	}
+
 	std::optional<sm::angle_range> get_absolute_rot_constraint(const fabrik_item& fi) {
 		const sm::bone& curr = fi.current_bone();
 		auto constraint = curr.rotation_constraint();
@@ -342,14 +358,11 @@ namespace {
 		}
 
 		const auto& pivot_node = fi.current_node();
-		bool is_forward = (&pivot_node == &curr.parent_node());
-
-		return sm::angle_range{
-			is_forward ? constraint->start_angle : 
-				sm::normalize_angle(constraint->start_angle + std::numbers::pi),
-			constraint->span_angle
-		};
+		return absolute_constraint(
+			(&pivot_node == &curr.parent_node()), constraint->start_angle, constraint->span_angle
+		);
 	}
+
 
 	std::vector<sm::angle_range> get_applicable_rot_constraints(const fabrik_item& fi) {
 		std::vector<sm::angle_range> constraints;
@@ -410,6 +423,10 @@ namespace {
 		return closest;
 	}
 
+	double constrain_angle_to_range(double theta, sm::angle_range range) {
+		return constrain_angle_to_ranges(theta, { &range,1 });
+	}
+
 	std::optional<double> apply_rotation_constraints(const fabrik_item& fi, double theta) {
 
 		auto constraints = get_applicable_rot_constraints(fi);
@@ -443,8 +460,28 @@ namespace {
 
 	}
 
+	sm::point constraint_angular_velocity(
+			const fabrik_item& fi, double original_rot, double max_angle_delta,
+			const sm::point& free_pt) {
+		auto curr = fi.current_bone();
+		const auto& pivot_node = fi.current_node();
+		auto old_theta = angle_from_u_to_v(pivot_node.world_pos(), free_pt);
+		bool is_forward = (&pivot_node == &curr.parent_node());
+		
+		auto start_angle = sm::normalize_angle(original_rot - max_angle_delta);
+		auto new_theta = constrain_angle_to_range(
+			old_theta,
+			absolute_constraint(is_forward, start_angle, 2.0 * max_angle_delta)
+		);
+
+		return sm::transform(
+			sm::point{ sm::distance(pivot_node.world_pos(), free_pt), 0.0 },
+			translation_matrix(pivot_node.world_pos())* sm::rotation_matrix(new_theta)
+		);
+	}
+
 	void perform_one_fabrik_pass(sm::node& start_node, const sm::point& target_pt,
-		const std::unordered_map<sm::bone*, double>& bone_lengths, bool use_constraints) {
+		const std::unordered_map<sm::bone*, bone_info>& bone_tbl, bool use_constraints) {
 
 		auto perform_fabrik_on_bone = [&](fabrik_item& fi) {
 
@@ -455,12 +492,18 @@ namespace {
 			auto new_follower_pos = point_on_line_at_distance(
 				leader_node.world_pos(), 
 				follower_node.world_pos(), 
-				bone_lengths.at(&current_bone)
+				bone_tbl.at(&current_bone).length
 			);
 			
 			if (use_constraints) {
 				new_follower_pos = apply_rotation_constraints( fi, new_follower_pos );
 			}
+			
+			new_follower_pos = constraint_angular_velocity(
+				fi, bone_tbl.at(&current_bone).rotation, 
+				1.0 * std::numbers::pi / 180.0,
+				new_follower_pos
+			);
 
 			follower_node.set_world_pos(new_follower_pos);
 			return true;
@@ -507,7 +550,7 @@ namespace {
     }
 
     void solve_for_multiple_targets(std::span<targeted_node> targeted_nodes, 
-            double tolerance, const std::unordered_map<sm::bone*, double>& bone_lengths,
+            double tolerance, const std::unordered_map<sm::bone*, bone_info>& bone_tbl,
             int max_iter, bool use_constraints) {
         int j = 0;
         do {
@@ -517,13 +560,13 @@ namespace {
             if (j % 2 == 0) {
                 for (auto& pinned_node : targeted_nodes) {
                     perform_one_fabrik_pass(
-						pinned_node.node, pinned_node.target_pos, bone_lengths, use_constraints
+						pinned_node.node, pinned_node.target_pos, bone_tbl, use_constraints
 					);
                 }
             } else {
                 for (auto& pinned_node : targeted_nodes | rv::reverse) {
                     perform_one_fabrik_pass(
-						pinned_node.node, pinned_node.target_pos, bone_lengths, use_constraints
+						pinned_node.node, pinned_node.target_pos, bone_tbl, use_constraints
 					);
                 }
             }
@@ -686,6 +729,15 @@ std::vector<sm::bone_ref> sm::bone::child_bones() {
 
 std::vector<sm::const_bone_ref> sm::bone::child_bones() const {
 	return const_cast<const sm::node&>(v_).child_bones();
+}
+
+std::vector<sm::bone_ref> sm::bone::sibling_bones() {
+	return u_.child_bones() |
+		rv::filter(
+			[this](bone_ref sib) {
+				return &sib.get() != this;
+			}
+	) | r::to< std::vector<sm::bone_ref>>();
 }
 
 const sm::node& sm::bone::opposite_node(const node& j) const {
@@ -879,7 +931,7 @@ void sm::visit_nodes(node& j, node_visitor visit_node) {
 sm::fabrik_result sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
         double tolerance, int max_iter) {
 
-    auto bone_lengths = build_bone_length_table(effector);
+    auto bone_tbl = build_bone_table(effector);
     auto targeted_nodes = find_pinned_nodes(effector);
     targeted_nodes.emplace_back(effector, target_pt);
     auto& target = targeted_nodes.back();
@@ -894,11 +946,11 @@ sm::fabrik_result sm::perform_fabrik(sm::node& effector, const sm::point& target
         update_prev_positions(targeted_nodes);
 
         // reach for target from effector...
-        perform_one_fabrik_pass(target.node, target.target_pos, bone_lengths, !has_pinned_nodes); 
+        perform_one_fabrik_pass(target.node, target.target_pos, bone_tbl, !has_pinned_nodes); 
 
         // reach for pinned locations from pinned nodes
 		if (has_pinned_nodes) {
-			solve_for_multiple_targets(pinned_nodes, tolerance, bone_lengths, max_iter, true);
+			solve_for_multiple_targets(pinned_nodes, tolerance, bone_tbl, max_iter, true);
 		}
 	} while (!found_ik_solution(targeted_nodes, tolerance));
 

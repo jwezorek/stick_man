@@ -129,6 +129,8 @@ namespace sm {
 		std::vector<bone_ref> child_bones();
 		std::vector<const_bone_ref> child_bones() const;
 
+		std::vector<bone_ref> sibling_bones();
+
         const node& parent_node() const;
 		const node& child_node() const;
 		const node& opposite_node(const node& j) const;
