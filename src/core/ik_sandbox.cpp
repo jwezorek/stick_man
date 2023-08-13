@@ -103,7 +103,7 @@ namespace {
 		}
 
 		// the trick here is to just return the parent and children of the current bone, 
-		// not siblings. this forces a traversal in which it is impossible
+		// not sibling bones. this forces a traversal in which it is impossible
 		// for an applicable rotation constraint to be relative to a bone that is not
 		// the predecessor bone.(because we do not currently support sibling constraints)
 
