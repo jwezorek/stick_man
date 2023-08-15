@@ -20,18 +20,18 @@ namespace {
         fk_rotate
     };
 
-	std::string fabrik_result_to_string(sm::fabrik_result result) {
+	std::string fabrik_result_to_string(sm::result result) {
 		switch (result) {
-			case sm::fabrik_result::target_reached:
+			case sm::result::fabrik_target_reached:
 				return "target reached";
 
-			case sm::fabrik_result::converged:
+			case sm::result::fabrik_converged:
 				return "converged";
 
-			case sm::fabrik_result::mixed:
+			case sm::result::fabrik_mixed:
 				return "mixed";
 
-			case sm::fabrik_result::no_solution_found:
+			case sm::result::fabrik_no_solution_found:
 				return "no solution found";
 		}
 	}

@@ -106,7 +106,7 @@ namespace ui {
         void set_selection(std::span<abstract_canvas_item*> itms);
         void set_selection(abstract_canvas_item* itm);
         void clear_selection();
-
+		void clear();
         void show_status_line(const QString& txt);
         void hide_status_line();
 

@@ -10,6 +10,7 @@
 #include <expected>
 #include <tuple>
 #include <any>
+#include <ranges>
 #include "ik_types.h"
 
 /*------------------------------------------------------------------------------------------------*/
@@ -29,19 +30,33 @@ namespace sm {
                 return std::make_unique<make_unique_enabler>(std::forward<Args>(args)...);
             }
         };
+
+		template<typename T>
+		auto to_range_view(auto& tbl) {
+			return tbl | std::ranges::views::transform(
+				[](auto& pair)->T {
+					return *pair.second;
+				}
+			);
+		}
     }
 
     class bone;
     class node;
 
     enum class result {
-        no_error,
+        success,
         multi_parent_node,
         cyclic_bones,
         non_unique_name,
 		not_found,
 		no_parent,
 		out_of_bounds,
+		invalid_json,
+		fabrik_target_reached,
+		fabrik_converged,
+		fabrik_mixed,
+		fabrik_no_solution_found,
 		unknown_error
     };
 
@@ -164,18 +179,28 @@ namespace sm {
 
     class ik_sandbox {
     private:
+		using nodes_tbl = std::unordered_map<std::string, std::unique_ptr<node>>;
+		using bones_tbl = std::unordered_map<std::string, std::unique_ptr<bone>>;
+
         int node_id_;
         int bone_id_;
-        std::unordered_map<std::string, std::unique_ptr<node>> nodes_;
-        std::unordered_map<std::string, std::unique_ptr<bone>> bones_;
+		nodes_tbl nodes_;
+		bones_tbl bones_;
 
     public:
         ik_sandbox();
         expected_node create_node(const std::string& name, double x, double y);
-        bool set_node_name(node& j, const std::string& name);
+        result set_node_name(node& j, const std::string& name);
         expected_bone create_bone(const std::string& name, node& u, node& v);
-        bool set_bone_name(bone& b, const std::string& name);
+        result set_bone_name(bone& b, const std::string& name);
         bool is_reachable(node& j1, node& j2);
+		result from_json(const std::string&);
+		std::string to_json() const;
+
+		auto nodes() { return detail::to_range_view<node_ref>(nodes_); }
+		auto bones() { return detail::to_range_view<bone_ref>(bones_); }
+		auto nodes() const { return detail::to_range_view<const_node_ref>(nodes_); }
+		auto bones() const { return detail::to_range_view<const_bone_ref>(bones_); }
     };
 
     void dfs(node& j1, node_visitor visit_node = {}, bone_visitor visit_bone = {},
@@ -183,14 +208,7 @@ namespace sm {
 
     void visit_nodes(node& j, node_visitor visit_node);
 
-	enum class fabrik_result {
-		target_reached,
-		converged,
-		mixed,
-		no_solution_found
-	};
-
-	fabrik_result perform_fabrik(node& j, const sm::point& pt, double tolerance = 0.005, int max_iter = 100);
+	result perform_fabrik(node& j, const sm::point& pt, double tolerance = 0.005, int max_iter = 100);
 
 	
 

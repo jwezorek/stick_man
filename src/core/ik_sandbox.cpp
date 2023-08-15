@@ -1,5 +1,6 @@
 #include "ik_sandbox.h"
 #include "ik_types.h"
+#include "json.hpp"
 #include <cmath>
 #include <variant>
 #include <stack>
@@ -7,10 +8,13 @@
 #include <unordered_map>
 #include <limits>
 #include <numbers>
-#include <qdebug.h>
+#include <functional>
+
+using namespace std::placeholders;
 
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
+using json = nlohmann::json;
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -513,25 +517,25 @@ namespace {
 		fabrik_traversal(start_node, perform_fabrik_on_bone);
 	}
 
-    sm::fabrik_result target_satisfaction_state(const targeted_node& tj, double tolerance) {
+    sm::result target_satisfaction_state(const targeted_node& tj, double tolerance) {
 
         // has it reached the target?
         if (sm::distance(tj.node.world_pos(), tj.target_pos) < tolerance) {
-            return sm::fabrik_result::target_reached;
+            return sm::result::fabrik_target_reached;
         }
 
         // has it moved since the last iteration?
         if (sm::distance(tj.node.world_pos(), tj.prev_pos.value()) < tolerance) {
-            return sm::fabrik_result::converged;
+            return sm::result::fabrik_converged;
         }
 
-        return sm::fabrik_result::no_solution_found;
+        return sm::result::fabrik_no_solution_found;
     }
 
 	bool is_satisfied(const targeted_node& tj, double tolerance) {
 		auto result = target_satisfaction_state(tj, tolerance);
-		return result == sm::fabrik_result::target_reached || 
-			result == sm::fabrik_result::converged;
+		return result == sm::result::fabrik_target_reached ||
+			result == sm::result::fabrik_converged;
 	}
 
     bool found_ik_solution( std::span<targeted_node> targeted_nodes, double tolerance) {
@@ -572,6 +576,32 @@ namespace {
             }
 		} while (!found_ik_solution(targeted_nodes, tolerance));
     }
+
+	json node_to_json(const sm::node& node) {
+		return {
+			{"name", node.name()},
+			{"pos",
+				{{"x", node.world_x()}, {"y", node.world_y()} }
+			}
+		};
+	}
+
+	json bone_to_json(const sm::bone& bone) {
+		json bone_json = {
+			{"name", bone.name()},
+			{"u", bone.parent_node().name()},
+			{"v", bone.child_node().name()},
+		};
+		auto constraint = bone.rotation_constraint();
+		if (constraint) {
+			bone_json["rot_constraint"] = {
+				{"relative_to_parent", constraint->relative_to_parent},
+				{"start_angle",  constraint->start_angle},
+				{"span_angle",  constraint->span_angle}
+			};
+		}
+		return bone_json;
+	}
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -682,7 +712,7 @@ sm::result sm::bone::set_rotation_constraint(double min, double max, bool relati
 		return result::no_parent;
 	}
 	rot_constraint_ = rot_constraint{ relative_to_parent, min, max };
-	return result::no_error;
+	return result::success;
 }
 
 std::optional<sm::rot_constraint> sm::bone::rotation_constraint() const {
@@ -846,13 +876,13 @@ std::expected<sm::node_ref, sm::result> sm::ik_sandbox::create_node(
     return std::ref( *nodes_[name] );
 }
 
-bool sm::ik_sandbox::set_node_name(node& j, const std::string& name) {
+sm::result sm::ik_sandbox::set_node_name(node& j, const std::string& name) {
     if (nodes_.contains(name)) {
-        return false;
+        return result::non_unique_name;
     }
     nodes_[name] = std::move(nodes_[j.name()]);
     nodes_.erase(j.name());
-    return true;
+    return result::success;
 }
 
 std::expected<sm::bone_ref, sm::result> sm::ik_sandbox::create_bone(
@@ -875,13 +905,13 @@ std::expected<sm::bone_ref, sm::result> sm::ik_sandbox::create_bone(
     return std::ref( *bones_[name] );
 }
 
-bool sm::ik_sandbox::set_bone_name(sm::bone& b, const std::string& name) {
+sm::result sm::ik_sandbox::set_bone_name(sm::bone& b, const std::string& name) {
     if (bones_.contains(name)) {
-        return false;
+		return result::non_unique_name;
     }
     bones_[name] = std::move(bones_[b.name()]);
     bones_.erase(b.name());
-    return false;
+    return result::success;
 }
 
 bool sm::ik_sandbox::is_reachable(node& j1, node& j2) {
@@ -895,6 +925,91 @@ bool sm::ik_sandbox::is_reachable(node& j1, node& j2) {
     };
     dfs(j1, visit_node);
     return found;
+}
+
+sm::result sm::ik_sandbox::from_json(const std::string& json_str) {
+	try {
+		json stick_man = json::parse(json_str);
+
+		const auto& sandbox = stick_man["sandbox"];
+		node_id_ = sandbox["curr_node_id"].get<int>();
+		bone_id_ = sandbox["curr_bone_id"].get<int>();
+
+		nodes_ = sandbox["nodes"] |
+			rv::transform(
+				[](const json& jobj)->nodes_tbl::value_type {
+					const auto& pos = jobj["pos"];
+					return {
+						jobj["name"],
+						node::make_unique(
+							jobj["name"].get<std::string>(),
+							pos["x"].get<double>(),
+							pos["y"].get<double>()
+						)
+					};
+				}
+		) | r::to< nodes_tbl>();
+
+		bones_ = sandbox["bones"] |
+			rv::transform(
+				[&](const json& jobj)->bones_tbl::value_type {
+					auto u = jobj["u"].get<std::string>();
+					auto v = jobj["v"].get<std::string>();
+					auto b = bone::make_unique(
+						jobj["name"].get<std::string>(),
+						*nodes_[u],
+						*nodes_[v]
+					);
+					if (jobj.contains("rot_constraint")) {
+						const auto& constraint = jobj["rot_constraint"];
+						b->set_rotation_constraint(
+							constraint["start_angle"].get<double>(),
+							constraint["span_angle"].get<double>(),
+							constraint["relative_to_parent"].get<bool>()
+						);
+					}
+					return {
+						jobj["name"],
+						std::move(b)
+					};
+				}
+			) | r::to<bones_tbl>();
+
+	}
+	catch (...) {
+		return sm::result::invalid_json;
+	}
+	return sm::result::success;
+}
+
+std::string sm::ik_sandbox::to_json() const {
+	auto nodes = nodes_ | rv::transform(
+				[](const auto& pair)->const node& {
+					return *pair.second;
+				}
+			) | 
+			rv::transform( std::bind( node_to_json, _1)) | 
+			r::to<json>();
+	
+	auto bones = bones_ | rv::transform(
+				[](const auto& pair)->const bone& {
+					return *pair.second;
+				}
+			) | 
+			rv::transform( std::bind( bone_to_json, _1)) | 
+			r::to<json>();
+
+	json stick_man = {
+		{ "sandbox" , {
+				{"version", 0.0},
+				{"curr_node_id", node_id_},
+				{"curr_bone_id", bone_id_},
+				{"nodes" , nodes},
+				{"bones", bones}
+			}
+		}
+	};
+	return stick_man.dump(4);
 }
 
 void sm::dfs(node& j1, node_visitor visit_node, bone_visitor visit_bone,
@@ -928,7 +1043,7 @@ void sm::visit_nodes(node& j, node_visitor visit_node) {
     dfs(j, visit_node, {}, true);
 }
 
-sm::fabrik_result sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
+sm::result sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
         double tolerance, int max_iter) {
 
     auto bone_tbl = build_bone_table(effector);
@@ -941,7 +1056,7 @@ sm::fabrik_result sm::perform_fabrik(sm::node& effector, const sm::point& target
 
     do {
         if (++iter >= max_iter) {
-			return fabrik_result::no_solution_found;
+			return result::fabrik_no_solution_found;
         }
         update_prev_positions(targeted_nodes);
 
@@ -954,9 +1069,9 @@ sm::fabrik_result sm::perform_fabrik(sm::node& effector, const sm::point& target
 		}
 	} while (!found_ik_solution(targeted_nodes, tolerance));
 
-	return (target_satisfaction_state(target, tolerance) == fabrik_result::target_reached) ?
-		fabrik_result::target_reached :
-		fabrik_result::converged;
+	return (target_satisfaction_state(target, tolerance) == result::fabrik_target_reached) ?
+		result::fabrik_target_reached :
+		result::fabrik_converged;
 }
 
 

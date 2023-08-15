@@ -20,6 +20,10 @@ namespace ui {
         stick_man(QWidget* parent = Q_NULLPTR);
 
         void open();
+		void save();
+		void save_as();
+		void exit();
+
         tool_manager& tool_mgr();
         canvas_view& view();
         sm::ik_sandbox& sandbox();

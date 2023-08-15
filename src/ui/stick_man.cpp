@@ -3,6 +3,7 @@
 #include "tool_palette.h"
 #include "skeleton_pane.h"
 #include "tool_settings_pane.h"
+#include "canvas_item.h"
 #include <QtWidgets>
 
 #ifdef Q_OS_WIN
@@ -48,7 +49,72 @@ ui::stick_man::stick_man(QWidget* parent) :
 
 void ui::stick_man::open()
 {
+	QString filePath = QFileDialog::getOpenFileName(
+		this, "Open stick man", QDir::homePath(), "stick man JSON (*.smj);;All Files (*)");
+
+	if (!filePath.isEmpty()) {
+		QFile file(filePath);
+		if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+			QTextStream in(&file);
+			QString content = in.readAll();
+			file.close();
+
+			sandbox_.from_json(content.toStdString());
+			auto& canv = view().canvas();
+			canv.clear();
+			canv.sync_to_model();
+		} else {
+			QMessageBox::critical(this, "Error", "Could not open file.");
+		}
+	}
 }
+
+void ui::stick_man::save() {
+	
+}
+
+void ui::stick_man::save_as() {
+	QString filePath = QFileDialog::getSaveFileName(
+		this, "Save stick man As", QDir::homePath(), "stick man JSON (*.smj);;All Files (*)");
+
+	if (!filePath.isEmpty()) {
+		// Perform the actual save operation
+		QFile file(filePath);
+		if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+			QTextStream out(&file);
+			out << sandbox_.to_json().c_str();
+			file.close();
+		} else {
+			QMessageBox::critical(this, "Error", "Bad pathname.");
+		}
+	}
+}
+
+void ui::stick_man::exit() {
+	bool unsavedChanges = false; // TODO
+
+	if (unsavedChanges) {
+
+		QMessageBox::StandardButton response = QMessageBox::question(
+			this, "Unsaved Changes",
+			"You have unsaved changes. Do you want to save them before quitting?",
+			QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+
+		if (response == QMessageBox::Save) {
+			save();
+		}
+		else if (response == QMessageBox::Discard) {
+
+		} else {
+			// User cancelled quitting
+			return;
+		}
+	}
+
+	// Quit the application
+	QCoreApplication::quit();
+}
+
 
 ui::tool_manager& ui::stick_man::tool_mgr() {
     return tool_mgr_;
@@ -69,9 +135,25 @@ ui::tool_settings_pane& ui::stick_man::tool_pane() {
 void ui::stick_man::createMainMenu()
 {
     auto file_menu = menuBar()->addMenu(tr("&File"));
-    QAction* actionOpen = new QAction(tr("&Open"), this);
-    connect(actionOpen, &QAction::triggered, this, &stick_man::open);
-    file_menu->addAction(actionOpen);
+    QAction* actionOpen  = new QAction(tr("Open stick man"), this);
+	QAction* actionSave  = new QAction(tr("Save stick man"), this);
+	QAction* actionSaveAs = new QAction(tr("Save as..."), this);
+	QAction* actionExit  = new QAction(tr("Exit"), this);
+
+    file_menu->addAction(actionOpen  );
+	file_menu->addAction(actionSave  );
+	file_menu->addAction(actionSaveAs);
+	file_menu->addSeparator();
+	file_menu->addAction(actionExit  );
+
+	QFontMetrics metrics(file_menu->font());
+	int maxWidth = metrics.horizontalAdvance(actionSaveAs->text()) + 20; 
+	file_menu->setMinimumWidth(maxWidth);
+
+	connect(actionOpen  , &QAction::triggered, this, &stick_man::open  );
+	connect(actionSave  , &QAction::triggered, this, &stick_man::save  );
+	connect(actionSaveAs, &QAction::triggered, this, &stick_man::save_as);
+	connect(actionExit  , &QAction::triggered, this, &stick_man::exit  );
 
     auto view_menu = menuBar()->addMenu(tr("View"));
     QAction* actionNewDockTab = new QAction(tr("foo"), this);

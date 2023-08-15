@@ -199,8 +199,18 @@ double ui::canvas::scale() const {
 }
 
 void ui::canvas::sync_to_model() {
+	auto itms = items();
+	if (itms.isEmpty()) {
+		auto& sandbox = view().main_window().sandbox();
+		for (auto node : sandbox.nodes()) {
+			addItem(new ui::node_item(node.get(), scale()));
+		}
+		for (auto bone : sandbox.bones()) {
+			addItem(new ui::bone_item(bone.get(), scale()));
+		}
+	}
     auto is_non_null = [](auto* p) {return p; };
-    for (auto* child : items() | rv::transform(to_stick_man) | rv::filter(is_non_null)) {
+    for (auto* child : itms | rv::transform(to_stick_man) | rv::filter(is_non_null)) {
         child->sync_to_model();
     }
 }
@@ -288,6 +298,14 @@ void ui::canvas::set_selection(ui::abstract_canvas_item* itm) {
 void ui::canvas::clear_selection() {
     selection_.clear();
     sync_selection();
+}
+
+void ui::canvas::clear() {
+	QList<QGraphicsItem*> itemList = this->items();
+	for (QGraphicsItem* item : itemList) {
+		this->removeItem(item);
+		delete item;
+	}
 }
 
 void ui::canvas::sync_selection() {
