@@ -208,16 +208,11 @@ namespace sm {
 
     void visit_nodes(node& j, node_visitor visit_node);
 
-	struct angular_velocity_constraint {
-		double max_angular_velocity;
-		double elapsed_time;
-	};
-
 	struct fabrik_options {
 		int max_iterations;
 		double tolerance;
 		bool forw_reaching_constraints;
-		std::optional<angular_velocity_constraint> ang_vel;
+		double max_ang_delta;
 
 		fabrik_options();
 	};

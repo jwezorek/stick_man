@@ -488,7 +488,8 @@ namespace {
 	}
 
 	void perform_one_fabrik_pass(sm::node& start_node, const sm::point& target_pt,
-		const std::unordered_map<sm::bone*, bone_info>& bone_tbl, bool use_constraints) {
+		const std::unordered_map<sm::bone*, bone_info>& bone_tbl, bool use_constraints,
+		double max_ang_delta) {
 
 		auto perform_fabrik_on_bone = [&](fabrik_item& fi) {
 
@@ -505,13 +506,13 @@ namespace {
 			if (use_constraints) {
 				new_follower_pos = apply_rotation_constraints( fi, new_follower_pos );
 			}
-			/*
-			new_follower_pos = constraint_angular_velocity(
-				fi, bone_tbl.at(&current_bone).rotation, 
-				1.0 * std::numbers::pi / 180.0,
-				new_follower_pos
-			);
-			*/
+			
+			if (max_ang_delta > 0.0) {
+				new_follower_pos = constraint_angular_velocity(
+					fi, bone_tbl.at(&current_bone).rotation, max_ang_delta, new_follower_pos
+				);
+			}
+
 			follower_node.set_world_pos(new_follower_pos);
 			return true;
 		};
@@ -564,18 +565,11 @@ namespace {
             if (++j > opts.max_iterations) {
                 return;
             }
-            if (j % 2 == 0) {
-                for (auto& pinned_node : targeted_nodes) {
-                    perform_one_fabrik_pass(
-						pinned_node.node, pinned_node.target_pos, bone_tbl, use_constraints
-					);
-                }
-            } else {
-                for (auto& pinned_node : targeted_nodes | rv::reverse) {
-                    perform_one_fabrik_pass(
-						pinned_node.node, pinned_node.target_pos, bone_tbl, use_constraints
-					);
-                }
+            for (auto& pinned_node : targeted_nodes) {
+                perform_one_fabrik_pass(
+					pinned_node.node, pinned_node.target_pos, bone_tbl, use_constraints,
+					opts.max_ang_delta
+				);
             }
 		} while (!found_ik_solution(targeted_nodes, opts.tolerance));
     }
@@ -1050,7 +1044,7 @@ sm::fabrik_options::fabrik_options() :
 	max_iterations{k_max_iter},
 	tolerance{k_tolerance},
 	forw_reaching_constraints{false},
-	ang_vel{}
+	max_ang_delta{0.0}
 {}
 
 
@@ -1072,7 +1066,8 @@ sm::result sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
         update_prev_positions(targeted_nodes);
 
         // reach for target from effector...
-        perform_one_fabrik_pass(target.node, target.target_pos, bone_tbl, !has_pinned_nodes); 
+        perform_one_fabrik_pass(target.node, target.target_pos, bone_tbl, !has_pinned_nodes,
+			opts.max_ang_delta); 
 
         // reach for pinned locations from pinned nodes
 		if (has_pinned_nodes) {
