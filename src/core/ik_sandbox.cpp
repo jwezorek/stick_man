@@ -502,13 +502,13 @@ namespace {
 			if (use_constraints) {
 				new_follower_pos = apply_rotation_constraints( fi, new_follower_pos );
 			}
-			
+			/*
 			new_follower_pos = constraint_angular_velocity(
 				fi, bone_tbl.at(&current_bone).rotation, 
 				1.0 * std::numbers::pi / 180.0,
 				new_follower_pos
 			);
-
+			*/
 			follower_node.set_world_pos(new_follower_pos);
 			return true;
 		};
