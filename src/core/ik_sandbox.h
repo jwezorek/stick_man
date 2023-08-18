@@ -208,8 +208,20 @@ namespace sm {
 
     void visit_nodes(node& j, node_visitor visit_node);
 
-	result perform_fabrik(node& j, const sm::point& pt, double tolerance = 0.005, int max_iter = 100);
+	struct angular_velocity_constraint {
+		double max_angular_velocity;
+		double elapsed_time;
+	};
 
-	
+	struct fabrik_options {
+		int max_iterations;
+		double tolerance;
+		bool forw_reaching_constraints;
+		std::optional<angular_velocity_constraint> ang_vel;
+
+		fabrik_options();
+	};
+
+	result perform_fabrik(node& j, const sm::point& pt, const fabrik_options& opts = {});
 
 }

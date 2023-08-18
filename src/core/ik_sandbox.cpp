@@ -20,6 +20,9 @@ using json = nlohmann::json;
 
 namespace {
 
+	constexpr double k_tolerance = 0.005;
+	constexpr int k_max_iter = 100;
+
     using node_or_bone = std::variant<sm::bone_ref, sm::node_ref>;
 
 	// The core of the implementation of the FABRIK ik algorithm is a DFS over the bones in the
@@ -554,11 +557,11 @@ namespace {
     }
 
     void solve_for_multiple_targets(std::span<targeted_node> targeted_nodes, 
-            double tolerance, const std::unordered_map<sm::bone*, bone_info>& bone_tbl,
-            int max_iter, bool use_constraints) {
+           const std::unordered_map<sm::bone*, bone_info>& bone_tbl, 
+			const sm::fabrik_options& opts, bool use_constraints) {
         int j = 0;
         do {
-            if (++j > max_iter) {
+            if (++j > opts.max_iterations) {
                 return;
             }
             if (j % 2 == 0) {
@@ -574,7 +577,7 @@ namespace {
 					);
                 }
             }
-		} while (!found_ik_solution(targeted_nodes, tolerance));
+		} while (!found_ik_solution(targeted_nodes, opts.tolerance));
     }
 
 	json node_to_json(const sm::node& node) {
@@ -1043,8 +1046,16 @@ void sm::visit_nodes(node& j, node_visitor visit_node) {
     dfs(j, visit_node, {}, true);
 }
 
+sm::fabrik_options::fabrik_options() :
+	max_iterations{k_max_iter},
+	tolerance{k_tolerance},
+	forw_reaching_constraints{false},
+	ang_vel{}
+{}
+
+
 sm::result sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
-        double tolerance, int max_iter) {
+		const fabrik_options& opts) {
 
     auto bone_tbl = build_bone_table(effector);
     auto targeted_nodes = find_pinned_nodes(effector);
@@ -1055,7 +1066,7 @@ sm::result sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
     int iter = 0;
 
     do {
-        if (++iter >= max_iter) {
+        if (++iter >= opts.max_iterations) {
 			return result::fabrik_no_solution_found;
         }
         update_prev_positions(targeted_nodes);
@@ -1065,11 +1076,11 @@ sm::result sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
 
         // reach for pinned locations from pinned nodes
 		if (has_pinned_nodes) {
-			solve_for_multiple_targets(pinned_nodes, tolerance, bone_tbl, max_iter, true);
+			solve_for_multiple_targets(pinned_nodes, bone_tbl, opts, true);
 		}
-	} while (!found_ik_solution(targeted_nodes, tolerance));
+	} while (!found_ik_solution(targeted_nodes, opts.tolerance));
 
-	return (target_satisfaction_state(target, tolerance) == result::fabrik_target_reached) ?
+	return (target_satisfaction_state(target, opts.tolerance) == result::fabrik_target_reached) ?
 		result::fabrik_target_reached :
 		result::fabrik_converged;
 }
