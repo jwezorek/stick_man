@@ -3,7 +3,7 @@
 #include <QtWidgets/QMainWindow>
 #include "canvas.h"
 #include "tools.h"
-#include "../core/ik_sandbox.h"
+#include "../core/ik_skeleton.h"
 
 namespace ui {
 
@@ -26,7 +26,7 @@ namespace ui {
 
         tool_manager& tool_mgr();
         canvas_view& view();
-        sm::ik_sandbox& sandbox();
+        sm::skeleton& sandbox();
         tool_settings_pane& tool_pane();
 
     private:
@@ -41,7 +41,7 @@ namespace ui {
         tool_settings_pane* tool_pane_;
         skeleton_pane* skel_pane_;
         canvas_view* view_;
-        sm::ik_sandbox sandbox_;
+        sm::skeleton sandbox_;
 		bool was_shown_;
 		bool has_fully_layed_out_widgets_;
     };

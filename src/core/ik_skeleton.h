@@ -78,7 +78,7 @@ namespace sm {
 	};
 
     class node : public detail::enable_protected_make_unique<node> {
-        friend class ik_sandbox;
+        friend class skeleton;
         friend class bone;
     private:
         std::string name_;
@@ -118,7 +118,7 @@ namespace sm {
     };
 
     class bone : public detail::enable_protected_make_unique<bone> {
-        friend class ik_sandbox;
+        friend class skeleton;
     private:
 
         std::string name_;
@@ -174,7 +174,7 @@ namespace sm {
     using node_visitor = std::function<bool(node&)>;
     using bone_visitor = std::function<bool(bone&)>;
 
-    class ik_sandbox {
+    class skeleton {
     private:
 		using nodes_tbl = std::unordered_map<std::string, std::unique_ptr<node>>;
 		using bones_tbl = std::unordered_map<std::string, std::unique_ptr<bone>>;
@@ -185,7 +185,7 @@ namespace sm {
 		bones_tbl bones_;
 
     public:
-        ik_sandbox();
+		skeleton();
         expected_node create_node(const std::string& name, double x, double y);
         result set_node_name(node& j, const std::string& name);
         expected_bone create_bone(const std::string& name, node& u, node& v);

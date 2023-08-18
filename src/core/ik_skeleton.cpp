@@ -1,4 +1,4 @@
-#include "ik_sandbox.h"
+#include "ik_skeleton.h"
 #include "ik_types.h"
 #include "json.hpp"
 #include <cmath>
@@ -862,9 +862,9 @@ void sm::bone::rotate(double theta) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-sm::ik_sandbox::ik_sandbox() : node_id_(0), bone_id_(0) {};
+sm::skeleton::skeleton() : node_id_(0), bone_id_(0) {};
 
-std::expected<sm::node_ref, sm::result> sm::ik_sandbox::create_node(
+std::expected<sm::node_ref, sm::result> sm::skeleton::create_node(
         const std::string& node_name, double x, double y) {
     auto name = (node_name.empty()) ? "node-" + std::to_string(++node_id_) : node_name;
     if (nodes_.contains(name)) {
@@ -874,7 +874,7 @@ std::expected<sm::node_ref, sm::result> sm::ik_sandbox::create_node(
     return std::ref( *nodes_[name] );
 }
 
-sm::result sm::ik_sandbox::set_node_name(node& j, const std::string& name) {
+sm::result sm::skeleton::set_node_name(node& j, const std::string& name) {
     if (nodes_.contains(name)) {
         return result::non_unique_name;
     }
@@ -883,7 +883,7 @@ sm::result sm::ik_sandbox::set_node_name(node& j, const std::string& name) {
     return result::success;
 }
 
-std::expected<sm::bone_ref, sm::result> sm::ik_sandbox::create_bone(
+std::expected<sm::bone_ref, sm::result> sm::skeleton::create_bone(
         const std::string& bone_name, node& u, node& v) {
 
     if (!v.is_root()) {
@@ -903,7 +903,7 @@ std::expected<sm::bone_ref, sm::result> sm::ik_sandbox::create_bone(
     return std::ref( *bones_[name] );
 }
 
-sm::result sm::ik_sandbox::set_bone_name(sm::bone& b, const std::string& name) {
+sm::result sm::skeleton::set_bone_name(sm::bone& b, const std::string& name) {
     if (bones_.contains(name)) {
 		return result::non_unique_name;
     }
@@ -912,7 +912,7 @@ sm::result sm::ik_sandbox::set_bone_name(sm::bone& b, const std::string& name) {
     return result::success;
 }
 
-bool sm::ik_sandbox::is_reachable(node& j1, node& j2) {
+bool sm::skeleton::is_reachable(node& j1, node& j2) {
     auto found = false;
     auto visit_node = [&found, &j2](node& j) {
         if (&j == &j2) {
@@ -925,7 +925,7 @@ bool sm::ik_sandbox::is_reachable(node& j1, node& j2) {
     return found;
 }
 
-sm::result sm::ik_sandbox::from_json(const std::string& json_str) {
+sm::result sm::skeleton::from_json(const std::string& json_str) {
 	try {
 		json stick_man = json::parse(json_str);
 
@@ -980,7 +980,7 @@ sm::result sm::ik_sandbox::from_json(const std::string& json_str) {
 	return sm::result::success;
 }
 
-std::string sm::ik_sandbox::to_json() const {
+std::string sm::skeleton::to_json() const {
 	auto nodes = nodes_ | rv::transform(
 				[](const auto& pair)->const node& {
 					return *pair.second;

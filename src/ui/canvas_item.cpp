@@ -1,7 +1,7 @@
 #include "canvas_item.h"
 #include "canvas.h"
 #include "util.h"
-#include "../core/ik_sandbox.h"
+#include "../core/ik_skeleton.h"
 
 namespace {
 

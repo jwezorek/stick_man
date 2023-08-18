@@ -28,10 +28,10 @@ add_executable(stick_man
     src/ui/tool_settings_pane.cpp
     src/ui/animation_pane.cpp
     src/ui/util.cpp
-    src/core/ik_sandbox.cpp
-    src/main.cpp
+    src/core/ik_skeleton.cpp
     src/core/ik_types.cpp
     src/ui/canvas_item.cpp
+    src/main.cpp
 )
 
 target_link_libraries(stick_man PRIVATE Qt6::Widgets  Eigen3::Eigen)
