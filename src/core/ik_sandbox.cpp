@@ -246,15 +246,16 @@ namespace {
     }
 
     struct targeted_node {
-        sm::node& node;
+        sm::node_ref node;
         sm::point target_pos;
         std::optional<sm::point> prev_pos;
 
-        targeted_node(sm::node& j, const sm::point& pt) :
+        targeted_node(sm::node_ref j, const sm::point& pt) :
             node(j), target_pos(pt), prev_pos()
         {}
     };
 
+	/*
     std::vector<targeted_node> find_pinned_nodes(sm::node& node) {
         std::vector<targeted_node> pinned_nodes;
         auto visit_node = [&pinned_nodes](sm::node& j)->bool {
@@ -266,6 +267,15 @@ namespace {
         sm::dfs(node, visit_node, {}, false);
         return pinned_nodes;
     }
+	*/
+
+	std::vector<targeted_node> pinned_nodes(const std::vector<sm::node_ref>& pins) {
+		return pins | rv::transform(
+			[](sm::node_ref node)->targeted_node {
+				return targeted_node(node, node.get().world_pos());
+			}
+		) | r::to<std::vector<targeted_node>>();
+	}
 
     sm::point point_on_line_at_distance(const sm::point& u, const sm::point& v, double d) {
         auto pt = sm::point{ u.x + d, u.y };
@@ -524,12 +534,12 @@ namespace {
     sm::result target_satisfaction_state(const targeted_node& tj, double tolerance) {
 
         // has it reached the target?
-        if (sm::distance(tj.node.world_pos(), tj.target_pos) < tolerance) {
+        if (sm::distance(tj.node.get().world_pos(), tj.target_pos) < tolerance) {
             return sm::result::fabrik_target_reached;
         }
 
         // has it moved since the last iteration?
-        if (sm::distance(tj.node.world_pos(), tj.prev_pos.value()) < tolerance) {
+        if (sm::distance(tj.node.get().world_pos(), tj.prev_pos.value()) < tolerance) {
             return sm::result::fabrik_converged;
         }
 
@@ -553,7 +563,7 @@ namespace {
 
     void  update_prev_positions(std::vector<targeted_node>& targeted_nodes) {
         for (auto& tj : targeted_nodes) {
-            tj.prev_pos = tj.node.world_pos();
+            tj.prev_pos = tj.node.get().world_pos();
         }
     }
 
@@ -606,8 +616,7 @@ namespace {
 sm::node::node(const std::string& name, double x, double y) :
     name_(name),
     x_(x),
-    y_(y),
-    is_pinned_(false)
+    y_(y)
 {}
 
 void sm::node::set_parent(bone& b) {
@@ -685,14 +694,6 @@ void sm::node::set_user_data(std::any data) {
 
 bool sm::node::is_root() const {
     return !parent_.has_value();
-}
-
-bool sm::node::is_pinned() const {
-    return  is_pinned_;
-}
-
-void sm::node::set_pinned(bool pinned) {
-    is_pinned_ = pinned;
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -1049,10 +1050,10 @@ sm::fabrik_options::fabrik_options() :
 
 
 sm::result sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
-		const fabrik_options& opts) {
+		const std::vector<sm::node_ref>& pins, const fabrik_options& opts) {
 
     auto bone_tbl = build_bone_table(effector);
-    auto targeted_nodes = find_pinned_nodes(effector);
+    auto targeted_nodes = pinned_nodes(pins);
     targeted_nodes.emplace_back(effector, target_pt);
     auto& target = targeted_nodes.back();
     auto pinned_nodes = std::span{ targeted_nodes.begin(), std::prev(targeted_nodes.end())};

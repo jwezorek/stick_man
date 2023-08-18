@@ -36,6 +36,19 @@ namespace {
 		}
 	}
 
+	std::vector<sm::node_ref> pinned_nodes(sm::node& node) {
+		std::vector<sm::node_ref> pinned_nodes;
+		auto visit_node = [&pinned_nodes](sm::node& j)->bool {
+			ui::node_item& ni = ui::item_from_model<ui::node_item>(j);
+			if (ni.is_pinned()) {
+				pinned_nodes.emplace_back(j);
+			}
+			return true;
+			};
+		sm::dfs(node, visit_node, {}, false);
+		return pinned_nodes;
+	}
+
     class abstract_move_tool {
         move_mode mode_;
         QString name_;
@@ -129,7 +142,7 @@ namespace {
                 if (!node) {
                     return;
                 }
-                bool current_state = node->model().is_pinned();
+                bool current_state = node->is_pinned();
                 node->set_pinned(!current_state);
             }
         }
@@ -145,9 +158,11 @@ namespace {
 
         void mouseMoveEvent(move_state& ms) override {
             if (ms.anchor_) {
-                auto result = sm::perform_fabrik(ms.anchor_->model(), ui::from_qt_pt(ms.event_->scenePos()));
+                auto result = sm::perform_fabrik(
+					ms.anchor_->model(), ui::from_qt_pt(ms.event_->scenePos()),
+					pinned_nodes(ms.anchor_->model())
+				);
                 ms.canvas_->sync_to_model();
-				//qDebug() << fabrik_result_to_string(result).c_str();
             }
         };
 

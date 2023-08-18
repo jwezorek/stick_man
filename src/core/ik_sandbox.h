@@ -87,7 +87,6 @@ namespace sm {
         maybe_bone_ref parent_;
         std::vector<bone_ref> children_;
         std::any user_data_;
-        bool is_pinned_;
 
     protected:
 
@@ -114,10 +113,8 @@ namespace sm {
 
         std::any get_user_data() const;
         bool is_root() const;
-        bool is_pinned() const;
         
 		void set_user_data(std::any data);
-        void set_pinned(bool pinned);
     };
 
     class bone : public detail::enable_protected_make_unique<bone> {
@@ -217,6 +214,8 @@ namespace sm {
 		fabrik_options();
 	};
 
-	result perform_fabrik(node& j, const sm::point& pt, const fabrik_options& opts = {});
+	result perform_fabrik(node& j, const sm::point& pt, 
+		const std::vector<sm::node_ref>& pinned_nodes, 
+		const fabrik_options& opts = {});
 
 }

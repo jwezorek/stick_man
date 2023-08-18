@@ -86,8 +86,9 @@ void ui::abstract_canvas_item::set_selected(bool selected) {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::node_item::node_item(sm::node& node, double scale) :
-	has_stick_man_model<ui::node_item, sm::node&>(node),
-	pin_(nullptr) {
+		has_stick_man_model<ui::node_item, sm::node&>(node),
+		is_pinned_(false),
+		pin_(nullptr) {
 	auto inv_scale = 1.0 / scale;
 	setBrush(Qt::white);
 	setPen(QPen(Qt::black, 2.0 * inv_scale));
@@ -105,11 +106,14 @@ void ui::node_item::set_pinned(bool pinned) {
 	}
 	if (pinned) {
 		pin_->show();
-	}
-	else {
+	} else {
 		pin_->hide();
 	}
-	model_.set_pinned(pinned);
+	is_pinned_ = pinned;
+}
+
+bool ui::node_item::is_pinned() const {
+	return is_pinned_;
 }
 
 void ui::node_item::sync_item_to_model() {
