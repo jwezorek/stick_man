@@ -1049,14 +1049,36 @@ sm::fabrik_options::fabrik_options() :
 {}
 
 
-sm::result sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
-		const std::vector<sm::node_ref>& pins, const fabrik_options& opts) {
+sm::result sm::perform_fabrik(
+		const std::vector<std::tuple<node_ref, point>>& effectors,
+		const std::vector<sm::node_ref>& pins,
+		const fabrik_options& opts) {
 
-    auto bone_tbl = build_bone_table(effector);
+    auto bone_tbl = build_bone_table(std::get<0>(effectors.front()));
     auto targeted_nodes = pinned_nodes(pins);
-    targeted_nodes.emplace_back(effector, target_pt);
-    auto& target = targeted_nodes.back();
-    auto pinned_nodes = std::span{ targeted_nodes.begin(), std::prev(targeted_nodes.end())};
+	auto num_pinned_nodes = targeted_nodes.size();
+
+	r::copy(
+		effectors | 
+			rv::transform(
+				[](const auto& tup)->targeted_node {
+					const auto& [node, pt] = tup;
+					return { node, pt };
+				}
+			),
+		std::back_inserter(targeted_nodes)
+	);
+
+	auto pinned_nodes = std::span{
+		targeted_nodes.begin(),
+		targeted_nodes.begin() + num_pinned_nodes
+	};
+
+	auto effectors_and_targets = std::span{ 
+		targeted_nodes.begin() + num_pinned_nodes, 
+		targeted_nodes.end() 
+	};
+    
 	auto has_pinned_nodes = !pinned_nodes.empty();
     int iter = 0;
 
@@ -1066,9 +1088,8 @@ sm::result sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
         }
         update_prev_positions(targeted_nodes);
 
-        // reach for target from effector...
-        perform_one_fabrik_pass(target.node, target.target_pos, bone_tbl, !has_pinned_nodes,
-			opts.max_ang_delta); 
+        // reach for targets from effectors...
+		solve_for_multiple_targets(effectors_and_targets, bone_tbl, opts, !has_pinned_nodes);
 
         // reach for pinned locations from pinned nodes
 		if (has_pinned_nodes) {
@@ -1076,9 +1097,10 @@ sm::result sm::perform_fabrik(sm::node& effector, const sm::point& target_pt,
 		}
 	} while (!found_ik_solution(targeted_nodes, opts.tolerance));
 
-	return (target_satisfaction_state(target, opts.tolerance) == result::fabrik_target_reached) ?
-		result::fabrik_target_reached :
-		result::fabrik_converged;
+	return result::fabrik_target_reached;
+	//return (target_satisfaction_state(targeted_nodes, opts.tolerance) == result::fabrik_target_reached) ?
+	//	result::fabrik_target_reached :
+	//	result::fabrik_converged;
 }
 
 

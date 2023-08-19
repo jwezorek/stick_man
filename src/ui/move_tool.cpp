@@ -158,8 +158,11 @@ namespace {
 
         void mouseMoveEvent(move_state& ms) override {
             if (ms.anchor_) {
+				std::vector<std::tuple<sm::node_ref, sm::point>> target = {
+					{ms.anchor_->model(), ui::from_qt_pt(ms.event_->scenePos())}
+				};
                 auto result = sm::perform_fabrik(
-					ms.anchor_->model(), ui::from_qt_pt(ms.event_->scenePos()),
+					target,
 					pinned_nodes(ms.anchor_->model())
 				);
                 ms.canvas_->sync_to_model();

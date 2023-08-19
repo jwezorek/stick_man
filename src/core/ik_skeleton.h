@@ -214,8 +214,10 @@ namespace sm {
 		fabrik_options();
 	};
 
-	result perform_fabrik(node& j, const sm::point& pt, 
+	result perform_fabrik(
+		const std::vector<std::tuple<node_ref,point>>& effectors, 
 		const std::vector<sm::node_ref>& pinned_nodes, 
-		const fabrik_options& opts = {});
+		const fabrik_options& opts = {}
+	);
 
 }
