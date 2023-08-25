@@ -206,7 +206,7 @@ namespace {
             );
             tab_->addTab(
                 new QWidget(),
-                "model"
+                "skeleton"
             );
 
             tab_->addTab(

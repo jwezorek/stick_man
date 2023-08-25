@@ -255,20 +255,6 @@ namespace {
         {}
     };
 
-	/*
-    std::vector<targeted_node> find_pinned_nodes(sm::node& node) {
-        std::vector<targeted_node> pinned_nodes;
-        auto visit_node = [&pinned_nodes](sm::node& j)->bool {
-            if (j.is_pinned()) {
-                pinned_nodes.emplace_back(j, j.world_pos());
-            }
-            return true;
-        };
-        sm::dfs(node, visit_node, {}, false);
-        return pinned_nodes;
-    }
-	*/
-
 	std::vector<targeted_node> pinned_nodes(const std::vector<sm::node_ref>& pins) {
 		return pins | rv::transform(
 			[](sm::node_ref node)->targeted_node {
