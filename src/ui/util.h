@@ -3,7 +3,7 @@
 #include <QWidget>
 #include <QtWidgets>
 #include <ranges>
-#include "../core/ik_types.h"
+#include "../core/sm_types.h"
 
 /*------------------------------------------------------------------------------------------------*/
 

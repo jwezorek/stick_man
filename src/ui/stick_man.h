@@ -3,7 +3,7 @@
 #include <QtWidgets/QMainWindow>
 #include "canvas.h"
 #include "tools.h"
-#include "../core/ik_skeleton.h"
+#include "../core/sm_skeleton.h"
 
 namespace ui {
 

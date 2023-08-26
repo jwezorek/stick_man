@@ -28,8 +28,9 @@ add_executable(stick_man
     src/ui/tool_settings_pane.cpp
     src/ui/animation_pane.cpp
     src/ui/util.cpp
-    src/core/ik_skeleton.cpp
-    src/core/ik_types.cpp
+    src/core/sm_skeleton.cpp
+    src/core/sm_bone.cpp
+    src/core/sm_types.cpp
     src/ui/canvas_item.cpp
     src/main.cpp
 )

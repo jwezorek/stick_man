@@ -2,7 +2,7 @@
 #include "canvas_item.h"
 #include "tool_settings_pane.h"
 #include "util.h"
-#include "../core/ik_skeleton.h"
+#include "../core/sm_skeleton.h"
 #include <unordered_map>
 #include <array>
 #include <numbers>

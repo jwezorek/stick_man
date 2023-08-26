@@ -3,7 +3,7 @@
 #include "stick_man.h"
 #include "tools.h"
 #include "util.h"
-#include "../core/ik_skeleton.h"
+#include "../core/sm_skeleton.h"
 #include <boost/geometry.hpp>
 #include <ranges>
 #include <numbers>

@@ -3,8 +3,8 @@
 #include "canvas.h"
 #include "canvas_item.h"
 #include "stick_man.h"
-#include "../core/ik_skeleton.h"
-#include "../core/ik_types.h"
+#include "../core/sm_skeleton.h"
+#include "../core/sm_types.h"
 #include <array>
 #include <ranges>
 #include <unordered_map>

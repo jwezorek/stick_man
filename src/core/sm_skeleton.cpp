@@ -1,5 +1,5 @@
-#include "ik_skeleton.h"
-#include "ik_types.h"
+#include "sm_skeleton.h"
+#include "sm_types.h"
 #include "json.hpp"
 #include <cmath>
 #include <variant>
