@@ -986,6 +986,14 @@ sm::skeleton_ref sm::world::create_skeleton(double x, double y) {
 	return *skeletons_[new_name];
 }
 
+sm::expected_skeleton sm::world::skeleton(const std::string& name) {
+	auto iter = skeletons_.find(name);
+	if (iter == skeletons_.end()) {
+		return std::unexpected(sm::result::not_found);
+	}
+	return *iter->second;
+}
+
 std::vector<std::string> sm::world::skeleton_names() const {
 	return skeletons() |
 		rv::transform([](auto skel) {return skel.get().name(); }) |
