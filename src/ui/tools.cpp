@@ -123,9 +123,9 @@ ui::add_node_tool::add_node_tool(tool_manager* mgr) :
 void ui::add_node_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     auto pt = event->scenePos();
     auto& sandbox = canv.view().main_window().sandbox();
-    auto j = sandbox.create_node({}, pt.x(), pt.y());
+    auto new_skeleton = sandbox.create_skeleton(pt.x(), pt.y());
 
-    auto item = new ui::node_item(j->get(), canv.scale());
+    auto item = new ui::node_item(new_skeleton.get().root_node().get(), canv.scale());
     canv.addItem(item);
 }
 

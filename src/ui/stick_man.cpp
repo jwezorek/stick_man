@@ -124,7 +124,7 @@ ui::canvas_view& ui::stick_man::view() {
     return *view_;
 }
 
-sm::skeleton& ui::stick_man::sandbox() {
+sm::world& ui::stick_man::sandbox() {
     return sandbox_;
 }
 

@@ -9,6 +9,8 @@
 #include <limits>
 #include <numbers>
 #include <functional>
+#include <span>
+
 
 using namespace std::placeholders;
 
@@ -19,6 +21,9 @@ using json = nlohmann::json;
 /*------------------------------------------------------------------------------------------------*/
 
 namespace {
+
+	template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; }; 
+	template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;  
 
 	constexpr double k_tolerance = 0.005;
 	constexpr int k_max_iter = 100;
@@ -595,11 +600,98 @@ namespace {
 		}
 		return bone_json;
 	}
+
+	bool is_prefix(const std::string& prefix, const std::string& str) {
+		auto [lhs, rhs] = r::mismatch(prefix, str);
+		return lhs == prefix.end();
+	}
+
+	// given {foo-3,bar,quux,foo-1,foo-2} return {3, 1, 2}
+
+	std::vector<int> extract_prefixed_integers(const std::string& prefix, const std::vector<std::string>& names) {
+		auto n = prefix.size();
+		return names | rv::filter(
+				std::bind(is_prefix, prefix, _1)
+			) | rv::transform(
+				[n](const auto& str)->int {
+					try {
+						auto num_str = str.substr(n, str.size() - n);
+						return std::stoi(num_str);
+					} catch (...) {
+						return 0;
+					}
+				}
+			) | rv::filter(
+				[](int v) {return v > 0; }
+			) | r::to< std::vector<int>>();
+	}
+
+	int smallest_excluded_positive_integer(const std::vector<int>& nums) {
+		int n = static_cast<int>(nums.size()) + 1;
+		std::vector<bool> appears(n, false);
+		appears[0] = true;
+		for (auto i : nums) {
+			if (i < n) {
+				appears[i] = true;
+			}
+		}
+		auto first_false = r::find(appears, false);
+		if (first_false == appears.end()) {
+			return n;
+		}
+		return std::distance(appears.begin(), first_false);
+	}
+
+	std::string unique_name(const std::string& prefix, const std::vector<std::string>& names) {
+		std::string prefix_with_hyphen = prefix + "-";
+		std::vector<int> ids_taken = extract_prefixed_integers(prefix_with_hyphen, names);
+		auto index = smallest_excluded_positive_integer(ids_taken);
+		return prefix + "-" + std::to_string(index);
+	}
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
-sm::node::node(const std::string& name, double x, double y) :
+sm::skeleton::skeleton(world& w, const std::string& name, double x, double y) :
+		name_(name),
+		root_(w.create_node(*this, x, y)) {
+	nodes_.insert({ root_.get().name(), &root_.get()});
+}
+
+void sm::skeleton::on_new_bone() {
+	//TODO: make sure node and bone names are unique...
+}
+
+std::string sm::skeleton::name() const {
+	return name_;
+}
+
+void sm::skeleton::set_name(const std::string& str) {
+	name_ = str;
+}
+
+sm::node_ref sm::skeleton::root_node() {
+	return root_;
+}
+
+sm::const_node_ref sm::skeleton::root_node() const {
+	return root_;
+}
+
+sm::result sm::skeleton::from_json(const std::string&) {
+	//TODO
+	return sm::result::not_found;
+}
+
+std::string sm::skeleton::to_json() const {
+	return ""; //TODO
+}
+
+
+/*------------------------------------------------------------------------------------------------*/
+
+sm::node::node(skeleton& parent, const std::string& name, double x, double y) :
+	parent_(parent),
     name_(name),
     x_(x),
     y_(y)
@@ -618,11 +710,24 @@ std::string sm::node::name() const {
 }
 
 sm::maybe_bone_ref sm::node::parent_bone() {
-	return parent_;
+	return std::visit(
+		overloaded{
+			[](skeleton_ref skel)->maybe_bone_ref {return {}; },
+			[](bone_ref bone)->maybe_bone_ref { return bone; }
+		},
+		parent_
+	);
 }
 
+// TODO: get rid of duplicate code
 sm::maybe_const_bone_ref sm::node::parent_bone() const {
-	return parent_;
+	return std::visit(
+		overloaded{
+			[](skeleton_ref skel)->maybe_const_bone_ref {return {}; },
+			[](bone_ref bone)->maybe_const_bone_ref { return bone; }
+		},
+		parent_
+	);
 }
 
 std::vector<sm::bone_ref> sm::node::child_bones() {
@@ -639,7 +744,7 @@ std::vector<sm::bone_ref> sm::node::adjacent_bones() {
 	std::vector<sm::bone_ref> bones;
 	bones.reserve(children_.size() + 1);
 	if (!is_root()) {
-		bones.push_back(*parent_);
+		bones.push_back(*parent_bone());
 	}
 	r::copy(children_, std::back_inserter(bones));
 	bones.shrink_to_fit();
@@ -651,6 +756,23 @@ std::vector<sm::const_bone_ref> sm::node::adjacent_bones() const {
 	return non_const_this->adjacent_bones() |
 		rv::transform([](const auto& c) {return sm::const_bone_ref(c); }) |
 		r::to< std::vector<sm::const_bone_ref>>();
+}
+
+sm::skeleton_ref sm::node::owner() {
+	return std::visit(
+		overloaded{
+			[](skeleton_ref skel) {return skel; },
+			[](bone_ref bone) {
+				return bone.get().owner();
+			}
+		},
+		parent_
+	);
+}
+
+sm::const_skeleton_ref sm::node::owner() const {
+	auto non_const_this = const_cast<sm::node*>(this);
+	return non_const_this->owner();
 }
 
 double sm::node::world_x() const {
@@ -679,7 +801,7 @@ void sm::node::set_user_data(std::any data) {
 }
 
 bool sm::node::is_root() const {
-    return !parent_.has_value();
+    return std::holds_alternative<skeleton_ref>(parent_);
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -757,6 +879,14 @@ std::vector<sm::bone_ref> sm::bone::sibling_bones() {
 const sm::node& sm::bone::opposite_node(const node& j) const {
 	auto* non_const_this = const_cast<sm::bone*>(this);
 	return non_const_this->opposite_node(j);
+}
+
+sm::skeleton_ref sm::bone::owner() {
+	return parent_node().owner();
+}
+
+sm::const_skeleton_ref sm::bone::owner() const {
+	return parent_node().owner();
 }
 
 std::optional<sm::node_ref> sm::bone::shared_node(const bone& b) {
@@ -848,70 +978,49 @@ void sm::bone::rotate(double theta) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-sm::skeleton::skeleton() : node_id_(0), bone_id_(0) {};
+sm::world::world() {}
 
-std::expected<sm::node_ref, sm::result> sm::skeleton::create_node(
-        const std::string& node_name, double x, double y) {
-    auto name = (node_name.empty()) ? "node-" + std::to_string(++node_id_) : node_name;
-    if (nodes_.contains(name)) {
-        return std::unexpected{ sm::result::non_unique_name };
-    }
-    nodes_[name] = node::make_unique(name, x, y);
-    return std::ref( *nodes_[name] );
+sm::skeleton_ref sm::world::create_skeleton(double x, double y) {
+	auto new_name = unique_name("skeleton", skeleton_names());
+	skeletons_.emplace( new_name, skeleton::make_unique( *this, new_name, x, y ) );
+	return *skeletons_[new_name];
 }
 
-sm::result sm::skeleton::set_node_name(node& j, const std::string& name) {
-    if (nodes_.contains(name)) {
-        return result::non_unique_name;
-    }
-    nodes_[name] = std::move(nodes_[j.name()]);
-    nodes_.erase(j.name());
-    return result::success;
+std::vector<std::string> sm::world::skeleton_names() const {
+	return skeletons() |
+		rv::transform([](auto skel) {return skel.get().name(); }) |
+		r::to< std::vector<std::string>>();
 }
 
-std::expected<sm::bone_ref, sm::result> sm::skeleton::create_bone(
+sm::node_ref sm::world::create_node(sm::skeleton& parent, double x, double y) {
+	nodes_.push_back(node::make_unique(parent, "root", x, y));
+	return *nodes_.back();
+}
+
+std::expected<sm::bone_ref, sm::result> sm::world::create_bone(
         const std::string& bone_name, node& u, node& v) {
 
     if (!v.is_root()) {
         return std::unexpected(sm::result::multi_parent_node);
     }
 
-    if (is_reachable(u, v)) {
+	auto skel_u = u.owner();
+	auto skel_v = v.owner();
+    if (&skel_u.get() == &skel_v.get()) {
         return std::unexpected(sm::result::cyclic_bones);
     }
 
-    auto name = (bone_name.empty()) ? "bone-" + std::to_string(++bone_id_) : bone_name;
-    if (bones_.contains(name)) {
-        return std::unexpected{ sm::result::non_unique_name };
-    }
+	skeletons_.erase(skel_v.get().name());
+	skel_u.get().on_new_bone();
 
-    bones_[name] = bone::make_unique(name, u, v);
-    return std::ref( *bones_[name] );
+	bones_.push_back(bone::make_unique("bone-1", u, v));
+    return *bones_.back();
 }
 
-sm::result sm::skeleton::set_bone_name(sm::bone& b, const std::string& name) {
-    if (bones_.contains(name)) {
-		return result::non_unique_name;
-    }
-    bones_[name] = std::move(bones_[b.name()]);
-    bones_.erase(b.name());
-    return result::success;
-}
-
-bool sm::skeleton::is_reachable(node& j1, node& j2) {
-    auto found = false;
-    auto visit_node = [&found, &j2](node& j) {
-        if (&j == &j2) {
-            found = true;
-            return false;
-        }
-        return true;
-    };
-    dfs(j1, visit_node);
-    return found;
-}
-
-sm::result sm::skeleton::from_json(const std::string& json_str) {
+sm::result sm::world::from_json(const std::string& json_str) {
+	//TODO
+	return result::not_found;
+	/*
 	try {
 		json stick_man = json::parse(json_str);
 
@@ -964,9 +1073,13 @@ sm::result sm::skeleton::from_json(const std::string& json_str) {
 		return sm::result::invalid_json;
 	}
 	return sm::result::success;
+	*/
 }
 
-std::string sm::skeleton::to_json() const {
+std::string sm::world::to_json() const {
+	return "";
+	// TODO
+	/*
 	auto nodes = nodes_ | rv::transform(
 				[](const auto& pair)->const node& {
 					return *pair.second;
@@ -994,6 +1107,7 @@ std::string sm::skeleton::to_json() const {
 		}
 	};
 	return stick_man.dump(4);
+	*/
 }
 
 void sm::dfs(node& j1, node_visitor visit_node, bone_visitor visit_bone,

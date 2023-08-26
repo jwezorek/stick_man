@@ -200,7 +200,9 @@ double ui::canvas::scale() const {
 
 void ui::canvas::sync_to_model() {
 	auto itms = items();
-	if (itms.isEmpty()) {
+	if (itms.isEmpty()) { 
+		//TODO
+		/*
 		auto& sandbox = view().main_window().sandbox();
 		for (auto node : sandbox.nodes()) {
 			addItem(new ui::node_item(node.get(), scale()));
@@ -208,6 +210,7 @@ void ui::canvas::sync_to_model() {
 		for (auto bone : sandbox.bones()) {
 			addItem(new ui::bone_item(bone.get(), scale()));
 		}
+		*/
 	}
     auto is_non_null = [](auto* p) {return p; };
     for (auto* child : itms | rv::transform(to_stick_man) | rv::filter(is_non_null)) {

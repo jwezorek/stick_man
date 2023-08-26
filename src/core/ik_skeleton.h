@@ -11,6 +11,7 @@
 #include <tuple>
 #include <any>
 #include <ranges>
+#include <variant>
 #include "ik_types.h"
 
 /*------------------------------------------------------------------------------------------------*/
@@ -41,56 +42,50 @@ namespace sm {
 		}
     }
 
-    class bone;
-    class node;
+	class skeleton : public detail::enable_protected_make_unique<skeleton> {
+		friend class world;
 
-    enum class result {
-        success,
-        multi_parent_node,
-        cyclic_bones,
-        non_unique_name,
-		not_found,
-		no_parent,
-		out_of_bounds,
-		invalid_json,
-		fabrik_target_reached,
-		fabrik_converged,
-		fabrik_mixed,
-		fabrik_no_solution_found,
-		unknown_error
-    };
+	private:
 
-    using const_bone_ref =  std::reference_wrapper<const bone>;
-    using const_node_ref =  std::reference_wrapper<const node>;
-    using bone_ref = std::reference_wrapper<bone>;
-	using node_ref = std::reference_wrapper<node>;
-    using maybe_bone_ref = std::optional<bone_ref>;
-	using maybe_node_ref = std::optional<node_ref>;
-	using maybe_const_node_ref = std::optional<const_node_ref>;
-	using maybe_const_bone_ref = std::optional<const_bone_ref>;
-    using expected_bone = std::expected<bone_ref, result>;
-    using expected_node = std::expected<node_ref, result>;;
+		std::string name_;
+		node_ref root_;
+		std::unordered_map<std::string, node*> nodes_;
+		std::unordered_map<std::string, bone*> bones_;
 
-	struct rot_constraint {
-		bool relative_to_parent;
-		double start_angle;
-		double span_angle;
+	protected:
+
+		skeleton(world& w, const std::string& name, double x, double y);
+		void on_new_bone();
+
+	public:
+		std::string name() const;
+		void set_name(const std::string& str);
+		node_ref root_node();
+		const_node_ref root_node() const;
+
+		result from_json(const std::string&);
+		std::string to_json() const;
+		auto nodes() { return detail::to_range_view<node_ref>(nodes_); }
+		auto bones() { return detail::to_range_view<bone_ref>(bones_); }
+		auto nodes() const { return detail::to_range_view<const_node_ref>(nodes_); }
+		auto bones() const { return detail::to_range_view<const_bone_ref>(bones_); }
 	};
 
     class node : public detail::enable_protected_make_unique<node> {
-        friend class skeleton;
+        friend class world;
         friend class bone;
+		friend class world;
     private:
         std::string name_;
         double x_;
         double y_;
-        maybe_bone_ref parent_;
+        std::variant<skeleton_ref, bone_ref> parent_;
         std::vector<bone_ref> children_;
         std::any user_data_;
 
     protected:
 
-        node(const std::string& name, double x, double y);
+        node(skeleton& parent, const std::string& name, double x, double y);
         void set_parent(bone& b);
         void add_child(bone& b);
 
@@ -106,6 +101,9 @@ namespace sm {
 		std::vector<const_bone_ref> adjacent_bones() const;
 		std::vector<bone_ref> adjacent_bones();
 
+		skeleton_ref owner();
+		const_skeleton_ref owner() const;
+
         double world_x() const;
         double world_y() const;
         void set_world_pos(const point& pt);
@@ -118,7 +116,7 @@ namespace sm {
     };
 
     class bone : public detail::enable_protected_make_unique<bone> {
-        friend class skeleton;
+        friend class world;
     private:
 
         std::string name_;
@@ -147,6 +145,9 @@ namespace sm {
 		const node& child_node() const;
 		const node& opposite_node(const node& j) const;
 
+		skeleton_ref owner();
+		const_skeleton_ref owner() const;
+
 		node& parent_node();
 		node& child_node();
 		node& opposite_node(const node& j);
@@ -174,30 +175,28 @@ namespace sm {
     using node_visitor = std::function<bool(node&)>;
     using bone_visitor = std::function<bool(bone&)>;
 
-    class skeleton {
+    class world {
+		friend class skeleton;
     private:
-		using nodes_tbl = std::unordered_map<std::string, std::unique_ptr<node>>;
-		using bones_tbl = std::unordered_map<std::string, std::unique_ptr<bone>>;
+		
+		std::vector<std::unique_ptr<node>> nodes_;
+		std::vector<std::unique_ptr<bone>> bones_;
+		std::unordered_map<std::string, std::unique_ptr<skeleton>> skeletons_;
 
-        int node_id_;
-        int bone_id_;
-		nodes_tbl nodes_;
-		bones_tbl bones_;
+		node_ref create_node(skeleton& parent, double x, double y);
 
     public:
-		skeleton();
-        expected_node create_node(const std::string& name, double x, double y);
-        result set_node_name(node& j, const std::string& name);
+		world();
+		skeleton_ref create_skeleton(double x, double y);
+		expected_skeleton skeleton(const std::string& name);
+		std::vector<std::string> skeleton_names() const;
+
         expected_bone create_bone(const std::string& name, node& u, node& v);
-        result set_bone_name(bone& b, const std::string& name);
-        bool is_reachable(node& j1, node& j2);
 		result from_json(const std::string&);
 		std::string to_json() const;
 
-		auto nodes() { return detail::to_range_view<node_ref>(nodes_); }
-		auto bones() { return detail::to_range_view<bone_ref>(bones_); }
-		auto nodes() const { return detail::to_range_view<const_node_ref>(nodes_); }
-		auto bones() const { return detail::to_range_view<const_bone_ref>(bones_); }
+		auto skeletons() { return detail::to_range_view<skeleton_ref>(skeletons_); }
+		auto skeletons() const { return detail::to_range_view<const_skeleton_ref>(skeletons_); }
     };
 
     void dfs(node& j1, node_visitor visit_node = {}, bone_visitor visit_bone = {},

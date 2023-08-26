@@ -1,6 +1,10 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <expected>
+#include <optional>
+#include <vector>
+#include <functional>
 
 namespace sm {
 
@@ -41,8 +45,50 @@ namespace sm {
 		double span_angle;
 	};
 
+	struct rot_constraint {
+		bool relative_to_parent;
+		double start_angle;
+		double span_angle;
+	};
+
 	bool angle_in_range(double theta, const angle_range& range);
 
 	std::vector<sm::angle_range> intersect_angle_ranges(
 		const angle_range& a, const angle_range& b);
+
+	enum class result {
+		success,
+		multi_parent_node,
+		cyclic_bones,
+		non_unique_name,
+		not_found,
+		no_parent,
+		out_of_bounds,
+		invalid_json,
+		fabrik_target_reached,
+		fabrik_converged,
+		fabrik_mixed,
+		fabrik_no_solution_found,
+		unknown_error
+	};
+
+	class bone;
+	class node;
+	class skeleton;
+	class world;
+
+	using const_bone_ref = std::reference_wrapper<const bone>;
+	using const_node_ref = std::reference_wrapper<const node>;
+	using bone_ref = std::reference_wrapper<bone>;
+	using node_ref = std::reference_wrapper<node>;
+	using skeleton_ref = std::reference_wrapper<skeleton>;
+	using const_skeleton_ref = std::reference_wrapper<const skeleton>;
+	using maybe_bone_ref = std::optional<bone_ref>;
+	using maybe_node_ref = std::optional<node_ref>;
+	using maybe_const_node_ref = std::optional<const_node_ref>;
+	using maybe_const_bone_ref = std::optional<const_bone_ref>;
+	using expected_bone = std::expected<bone_ref, result>;
+	using expected_node = std::expected<node_ref, result>;
+	using expected_skeleton = std::expected<skeleton_ref, result>;
+	
 }

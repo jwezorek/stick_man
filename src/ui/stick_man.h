@@ -26,7 +26,7 @@ namespace ui {
 
         tool_manager& tool_mgr();
         canvas_view& view();
-        sm::skeleton& sandbox();
+        sm::world& sandbox();
         tool_settings_pane& tool_pane();
 
     private:
@@ -41,7 +41,7 @@ namespace ui {
         tool_settings_pane* tool_pane_;
         skeleton_pane* skel_pane_;
         canvas_view* view_;
-        sm::skeleton sandbox_;
+        sm::world sandbox_;
 		bool was_shown_;
 		bool has_fully_layed_out_widgets_;
     };
