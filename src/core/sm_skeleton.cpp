@@ -463,12 +463,12 @@ namespace {
 
 		return sm::transform(
 			sm::point{ sm::distance(pivot_pt, free_pt), 0.0 },
-			translation_matrix(pivot_pt)* sm::rotation_matrix(*new_theta)
+			translation_matrix(pivot_pt) * sm::rotation_matrix(*new_theta)
 		);
 
 	}
 
-	sm::point constraint_angular_velocity(
+	sm::point constrain_angular_velocity(
 			const fabrik_item& fi, double original_rot, double max_angle_delta,
 			const sm::point& free_pt) {
 		auto curr = fi.current_bone();
@@ -489,8 +489,8 @@ namespace {
 	}
 
 	void perform_one_fabrik_pass(sm::node& start_node, const sm::point& target_pt,
-		const std::unordered_map<sm::bone*, bone_info>& bone_tbl, bool use_constraints,
-		double max_ang_delta) {
+			const std::unordered_map<sm::bone*, bone_info>& bone_tbl, bool use_constraints,
+			double max_ang_delta) {
 
 		auto perform_fabrik_on_bone = [&](fabrik_item& fi) {
 
@@ -509,7 +509,7 @@ namespace {
 			}
 			
 			if (max_ang_delta > 0.0) {
-				new_follower_pos = constraint_angular_velocity(
+				new_follower_pos = constrain_angular_velocity(
 					fi, bone_tbl.at(&current_bone).rotation, max_ang_delta, new_follower_pos
 				);
 			}
