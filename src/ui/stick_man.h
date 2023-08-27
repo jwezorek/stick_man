@@ -28,6 +28,7 @@ namespace ui {
         canvas_view& view();
         sm::world& sandbox();
         tool_settings_pane& tool_pane();
+		skeleton_pane& skel_pane();
 
     private:
 
@@ -39,7 +40,7 @@ namespace ui {
         tool_palette* tool_pal_;
         animation_pane* anim_pane_;
         tool_settings_pane* tool_pane_;
-        skeleton_pane* skel_pane_;
+		skeleton_pane* skel_pane_;
         canvas_view* view_;
         sm::world sandbox_;
 		bool was_shown_;

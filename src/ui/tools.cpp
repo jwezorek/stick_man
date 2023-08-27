@@ -174,7 +174,7 @@ ui::tool_manager::tool_manager(stick_man* sm) :
         curr_item_index_(-1){
     tool_registry_.emplace_back(std::make_unique<ui::pan_tool>(this));
     tool_registry_.emplace_back(std::make_unique<ui::zoom_tool>(this));
-    tool_registry_.emplace_back(std::make_unique<ui::selection_tool>(this));
+    tool_registry_.emplace_back(std::make_unique<ui::selection_tool>(this, &main_window_));
     tool_registry_.emplace_back(std::make_unique<ui::move_tool>(this));
     tool_registry_.emplace_back(std::make_unique<ui::add_node_tool>(this));
     tool_registry_.emplace_back(std::make_unique<ui::add_bone_tool>(this));

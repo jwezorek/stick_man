@@ -10,6 +10,8 @@ namespace ui {
 
     using selection_set = std::unordered_set<ui::abstract_canvas_item*>;
 
+	class stick_man;
+
     class selection_tool : public abstract_tool {
     public: 
         enum class modal_state {
@@ -22,7 +24,7 @@ namespace ui {
         bool intitialized_;
         std::optional<QRectF> rubber_band_;
         QMetaObject::Connection conn_;
-        QWidget* properties_;
+		stick_man& main_wnd_;
         modal_state state_;
 
         void handle_click(canvas& c, QPointF pt, bool shift_down, bool alt_down);
@@ -31,7 +33,7 @@ namespace ui {
 
     public:
 
-        selection_tool(tool_manager* mgr);
+        selection_tool(tool_manager* mgr, ui::stick_man* main_wnd );
         void activate(canvas& c) override;
 
         void keyReleaseEvent(canvas& c, QKeyEvent* event) override;

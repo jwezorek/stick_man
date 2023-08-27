@@ -1,7 +1,7 @@
 #include "stick_man.h"
+#include "skeleton_pane.h"
 #include "animation_pane.h"
 #include "tool_palette.h"
-#include "skeleton_pane.h"
 #include "tool_settings_pane.h"
 #include "canvas_item.h"
 #include <QtWidgets>
@@ -27,14 +27,14 @@ namespace {
 }
 
 ui::stick_man::stick_man(QWidget* parent) :
-        QMainWindow(parent), 
-		was_shown_( false ),
-		has_fully_layed_out_widgets_( false ),
-        tool_mgr_(this),
-        tool_pal_(new tool_palette(this)),
-        skel_pane_(new skeleton_pane(this)),
-        anim_pane_(new animation_pane(this)),
-        tool_pane_(new tool_settings_pane(this)) {
+		QMainWindow(parent),
+		was_shown_(false),
+		has_fully_layed_out_widgets_(false),
+		tool_mgr_(this),
+		tool_pal_(new tool_palette(this)),
+		anim_pane_(new animation_pane(this)),
+		tool_pane_(new tool_settings_pane(this)),
+		skel_pane_(new skeleton_pane(this)) {
     setDarkTitleBar(winId());
 
     setDockNestingEnabled(true);
@@ -45,6 +45,7 @@ ui::stick_man::stick_man(QWidget* parent) :
 
     setCentralWidget(view_ = new canvas_view());
     createMainMenu();
+	skel_pane_->init();
 }
 
 void ui::stick_man::open()
@@ -130,6 +131,11 @@ sm::world& ui::stick_man::sandbox() {
 
 ui::tool_settings_pane& ui::stick_man::tool_pane() {
     return *tool_pane_;
+}
+
+
+ui::skeleton_pane& ui::stick_man::skel_pane() {
+	return *skel_pane_;
 }
 
 void ui::stick_man::createMainMenu()
