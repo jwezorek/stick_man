@@ -42,7 +42,7 @@ namespace ui {
         tool_settings_pane* tool_pane_;
 		skeleton_pane* skel_pane_;
         canvas_view* view_;
-        sm::world sandbox_;
+        sm::world world_;
 		bool was_shown_;
 		bool has_fully_layed_out_widgets_;
     };

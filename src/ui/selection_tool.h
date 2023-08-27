@@ -6,6 +6,8 @@
 #include <optional>
 #include <unordered_set>
 
+/*------------------------------------------------------------------------------------------------*/
+
 namespace ui {
 
     using selection_set = std::unordered_set<ui::abstract_canvas_item*>;

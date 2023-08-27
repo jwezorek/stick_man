@@ -60,7 +60,7 @@ void ui::stick_man::open()
 			QString content = in.readAll();
 			file.close();
 
-			sandbox_.from_json(content.toStdString());
+			world_.from_json(content.toStdString());
 			auto& canv = view().canvas();
 			canv.clear();
 			canv.sync_to_model();
@@ -83,7 +83,7 @@ void ui::stick_man::save_as() {
 		QFile file(filePath);
 		if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
 			QTextStream out(&file);
-			out << sandbox_.to_json().c_str();
+			out << world_.to_json().c_str();
 			file.close();
 		} else {
 			QMessageBox::critical(this, "Error", "Bad pathname.");
@@ -126,7 +126,7 @@ ui::canvas_view& ui::stick_man::view() {
 }
 
 sm::world& ui::stick_man::sandbox() {
-    return sandbox_;
+    return world_;
 }
 
 ui::tool_settings_pane& ui::stick_man::tool_pane() {

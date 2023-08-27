@@ -397,7 +397,8 @@ void ui::canvas::wheelEvent(QGraphicsSceneWheelEvent* event) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::canvas_view::canvas_view() {
+ui::canvas_view::canvas_view() : 
+	main_window_(nullptr) {
     setRenderHint(QPainter::Antialiasing, true);
     setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
     setScene(new ui::canvas()); 

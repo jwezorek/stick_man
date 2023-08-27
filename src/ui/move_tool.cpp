@@ -230,7 +230,8 @@ ui::move_tool::move_state::move_state() :
     canvas_(nullptr), 
     anchor_(nullptr),
     bone_(nullptr),
-    event_(nullptr) 
+    event_(nullptr),
+	key_event_(nullptr)
 {}
 
 void ui::move_tool::move_state::set(canvas& c, QGraphicsSceneMouseEvent* evnt) {
@@ -247,6 +248,7 @@ void  ui::move_tool::move_state::set(canvas& c, QKeyEvent* evnt) {
 
 ui::move_tool::move_tool(tool_manager* mgr) :
         settings_(nullptr), 
+		btns_(nullptr),
         abstract_tool(mgr, "move", "move_icon.png", ui::tool_id::move) {
 
 }

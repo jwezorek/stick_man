@@ -112,6 +112,7 @@ namespace ui {
 
     signals:
         void selection_changed( );
+		void contents_changed();
     };
 
     class canvas_view : public QGraphicsView {
