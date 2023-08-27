@@ -14,7 +14,6 @@
 namespace sm {
     class node;
     class bone;
-    class ik_sandbox;
 }
 
 namespace ui {
@@ -96,6 +95,9 @@ namespace ui {
         std::vector<ui::node_item*> selected_nodes() const;
         bool is_status_line_visible() const;
 
+		void insert_item(sm::node& node);
+		void insert_item(sm::bone& bone);
+
         void transform_selection(item_transform trans);
         void transform_selection(node_transform trans);
         void transform_selection(bone_transform trans);
@@ -111,7 +113,7 @@ namespace ui {
         void hide_status_line();
 
     signals:
-        void selection_changed( );
+        void selection_changed();
 		void contents_changed();
     };
 

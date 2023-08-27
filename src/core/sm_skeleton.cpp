@@ -860,6 +860,10 @@ void sm::visit_nodes(node& j, node_visitor visit_node) {
     dfs(j, visit_node, {}, true);
 }
 
+void sm::visit_bones(node& j, bone_visitor visit_bone) {
+	dfs(j, {}, visit_bone, true);
+}
+
 sm::fabrik_options::fabrik_options() :
 	max_iterations{k_max_iter},
 	tolerance{k_tolerance},

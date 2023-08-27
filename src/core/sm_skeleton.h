@@ -79,6 +79,7 @@ namespace sm {
         bool just_downstream = false);
 
     void visit_nodes(node& j, node_visitor visit_node);
+	void visit_bones(node& j, bone_visitor visit_node);
 
 	struct fabrik_options {
 		int max_iterations;

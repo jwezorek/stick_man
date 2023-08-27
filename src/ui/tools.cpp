@@ -124,9 +124,7 @@ void ui::add_node_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
     auto pt = event->scenePos();
     auto& sandbox = canv.view().main_window().sandbox();
     auto new_skeleton = sandbox.create_skeleton(pt.x(), pt.y());
-
-    auto item = new ui::node_item(new_skeleton.get().root_node().get(), canv.scale());
-    canv.addItem(item);
+    canv.insert_item(new_skeleton.get().root_node().get());
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -160,7 +158,7 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
         auto& sandbox = canv.view().main_window().sandbox();
         auto bone = sandbox.create_bone({}, parent_node->model(), child_node->model());
         if (bone) {
-            canv.addItem(new ui::bone_item(bone->get(), canv.scale()));
+			canv.insert_item(bone->get());
         } else {
             auto error = bone.error();
         }

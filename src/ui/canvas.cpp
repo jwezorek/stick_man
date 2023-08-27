@@ -257,6 +257,16 @@ bool ui::canvas::is_status_line_visible() const {
     return !status_line_.isEmpty();
 }
 
+void ui::canvas::insert_item(sm::node& node) {
+	addItem(new node_item(node, 1.0 / scale()));
+	emit contents_changed();
+}
+
+void ui::canvas::insert_item(sm::bone& bone) {
+	addItem(new bone_item(bone, 1.0 / scale()));
+	emit contents_changed();
+}
+
 void ui::canvas::transform_selection(item_transform trans) {
     r::for_each(selection_, trans);
 }

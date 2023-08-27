@@ -7,8 +7,11 @@
 #include "stick_man.h"
 #include "../core/sm_bone.h"
 #include "../core/sm_skeleton.h"
+#include "../core/sm_skeleton.h"
 #include <numbers>
 #include <ranges>
+#include <unordered_map>
+#include <qDebug>
 
 using namespace std::placeholders;
 namespace r = std::ranges;
@@ -477,6 +480,33 @@ namespace{
 
 		return treeView;
 	 }
+
+	QStandardItem* create_bone_item(sm::bone& b) {
+		auto str = b.name() +
+			" [" + b.parent_node().name() +
+			" - " +
+			b.child_node().name() + "]";
+		return new QStandardItem(str.c_str());
+	}
+
+	void insert_skeleton(QStandardItemModel* tree, sm::skeleton_ref skel) {
+		std::unordered_map<sm::bone*,QStandardItem*> bone_to_tree_item;
+		QStandardItem* root = tree->invisibleRootItem();
+		QStandardItem* skel_item = new QStandardItem(skel.get().name().c_str());
+		root->appendRow(skel_item);
+
+		auto visit = [&](sm::bone& b)->bool {
+			auto parent = b.parent_bone();
+			QStandardItem* bone_row = create_bone_item(b);
+			QStandardItem* parent_item = 
+				(!parent) ? skel_item : bone_to_tree_item.at(&parent->get());
+			parent_item->appendRow(bone_row);
+			bone_to_tree_item[&b] = bone_row;
+			return true;
+		};
+
+		sm::visit_bones(skel.get().root_node().get(), visit);
+	}
 }
 
 ui::selection_properties::selection_properties(ui::tool_manager* mgr) {
@@ -537,12 +567,23 @@ ui::canvas& ui::abstract_properties_widget::canvas() {
 void ui::abstract_properties_widget::lose_selection() {}
 
 
+void ui::skeleton_pane::sync_with_model()
+{
+	QStandardItemModel* tree_model = static_cast<QStandardItemModel*>(skeleton_tree_->model());
+	tree_model->clear();
+	auto& sandbox = main_wnd_->sandbox();
+	for (const auto& skel : sandbox.skeletons()) {
+		insert_skeleton(tree_model, skel);
+	}
+}
+
 ui::skeleton_pane::skeleton_pane(QMainWindow* wnd) :
-    QDockWidget(tr(""), wnd) {
+		main_wnd_(static_cast<stick_man*>(wnd)),
+		QDockWidget(tr(""), wnd) {
 
     setTitleBarWidget( custom_title_bar("skeleton") );
 
-	auto& tool_mgr = static_cast<stick_man*>(wnd)->tool_mgr();
+	auto& tool_mgr = main_wnd_->tool_mgr();
 
 	QWidget* contents = new QWidget();
 	auto column = new QVBoxLayout(contents);
@@ -565,5 +606,7 @@ void ui::skeleton_pane::init()
 	// tool properties...
 
 	sel_properties_->init();
+	auto& canv = main_wnd_->view().canvas();
+	connect( &canv, &ui::canvas::contents_changed, this, &ui::skeleton_pane::sync_with_model );
 }
 

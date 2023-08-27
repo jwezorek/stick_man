@@ -9,6 +9,7 @@
 namespace ui {
 
 	class tool_manager;
+	class stick_man;
 
 	class abstract_properties_widget : public QScrollArea {
 	private:
@@ -36,10 +37,14 @@ namespace ui {
 
     class skeleton_pane : public QDockWidget {
 
+		stick_man* main_wnd_;
 		QTreeView* skeleton_tree_;
 		selection_properties* sel_properties_;
 
+		void sync_with_model();
+
     public:
+
         skeleton_pane(QMainWindow* wnd);
 		selection_properties& sel_properties();
 		void init();
