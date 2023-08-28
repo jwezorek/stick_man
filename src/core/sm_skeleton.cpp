@@ -9,6 +9,7 @@
 #include <limits>
 #include <numbers>
 #include <functional>
+#include <tuple>
 #include <span>
 
 
@@ -648,6 +649,82 @@ namespace {
 		auto index = smallest_excluded_positive_integer(ids_taken);
 		return prefix + "-" + std::to_string(index);
 	}
+
+	template<typename T>
+	auto to_name_table(auto itms) {
+		using name_table_t = std::unordered_map<T*, std::string>;
+		return itms | rv::transform(
+				[](auto r)->name_table_t::value_type {
+					return { &r.get(), r.get().name() };
+				}
+			) | r::to<name_table_t>();
+	}
+
+	std::string normalize_name(const std::string& input) {
+		if (input.empty()) {
+			return "";
+		}
+
+		if (std::isdigit(input.back())) {
+			size_t hyphenPos = input.find_last_of('-');
+			if (hyphenPos != std::string::npos && hyphenPos < input.size() - 1) {
+				std::string numPart = input.substr(hyphenPos + 1);
+				bool isPositiveInteger = true;
+				for (char c : numPart) {
+					if (!std::isdigit(c)) {
+						isPositiveInteger = false;
+						break;
+					}
+				}
+				if (isPositiveInteger) {
+					return input.substr(0, hyphenPos);
+				}
+			}
+		}
+
+		return input;
+	}
+
+	template<typename T>
+	std::unordered_map<T*, std::string> get_unique_names(std::unordered_map<T*, std::string> tbl) {
+		std::unordered_map<std::string, int> names;
+		std::unordered_map<T*, std::string> output;
+		for (const auto& [ptr, name] : tbl) {
+			auto new_name = normalize_name(name);
+			auto index = names[new_name]++;
+			if (index > 0) {
+				output[ptr] = new_name + "-" + std::to_string(index);
+			} else {
+				output[ptr] = new_name;
+			}
+		}
+		return output;
+	}
+
+	// TODO: remove code duplication via metaprogramming...
+	std::vector<sm::node_ref> nodes_from_traversal(sm::node& root) {
+		std::vector<sm::node_ref> nodes;
+		sm::visit_nodes(
+			root,
+			[&](sm::node& n)->bool {
+				nodes.push_back(n);
+				return true;
+			}
+		);
+		return nodes;
+	}
+
+	std::vector<sm::bone_ref> bones_from_traversal(sm::node& root) {
+		std::vector<sm::bone_ref> bones;
+		sm::visit_bones(
+			root,
+			[&](sm::bone& n)->bool {
+				bones.push_back(n);
+				return true;
+			}
+		);
+		return bones;
+	}
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -659,7 +736,24 @@ sm::skeleton::skeleton(world& w, const std::string& name, double x, double y) :
 }
 
 void sm::skeleton::on_new_bone() {
-	//TODO: make sure node and bone names are unique...
+	auto nodes = to_name_table<sm::node>(nodes_from_traversal(root_));
+	auto bones = to_name_table<sm::bone>(bones_from_traversal(root_));
+
+	for (auto& node_name : nodes) {
+		if (node_name.first != &root_.get() && node_name.second == "root") {
+			node_name.second = "node-0";
+		}
+	}
+
+	nodes = get_unique_names(nodes);
+	for (const auto& [ptr, name] : nodes) {
+		ptr->set_name(name);
+	}
+
+	bones = get_unique_names(bones);
+	for (const auto& [ptr, name] : bones) {
+		ptr->set_name(name);
+	}
 }
 
 std::string sm::skeleton::name() const {
@@ -730,9 +824,9 @@ std::expected<sm::bone_ref, sm::result> sm::world::create_bone(
     }
 
 	skeletons_.erase(skel_v.get().name());
+	bones_.push_back(bone::make_unique("bone-1", u, v));
 	skel_u.get().on_new_bone();
 
-	bones_.push_back(bone::make_unique("bone-1", u, v));
     return *bones_.back();
 }
 

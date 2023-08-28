@@ -39,7 +39,7 @@ namespace sm {
 	class node : public detail::enable_protected_make_unique<node> {
 		friend class world;
 		friend class bone;
-		friend class world;
+		friend class skeleton;
 	private:
 		std::string name_;
 		double x_;
@@ -53,6 +53,7 @@ namespace sm {
 		node(skeleton& parent, const std::string& name, double x, double y);
 		void set_parent(bone& b);
 		void add_child(bone& b);
+		void set_name(const std::string& new_name);
 
 	public:
 		std::string name() const;
@@ -82,6 +83,7 @@ namespace sm {
 
 	class bone : public detail::enable_protected_make_unique<bone> {
 		friend class world;
+		friend class skeleton;
 	private:
 
 		std::string name_;
@@ -94,6 +96,7 @@ namespace sm {
 	protected:
 
 		bone(std::string name, node& u, node& v);
+		void set_name(const std::string& new_name);
 
 	public:
 		std::string name() const;

@@ -28,6 +28,10 @@ void sm::node::set_parent(bone& b) {
 	parent_ = std::ref(b);
 }
 
+void sm::node::set_name(const std::string& new_name) {
+	name_ = new_name;
+}
+
 void sm::node::add_child(bone& b) {
 	children_.push_back(std::ref(b));
 }
@@ -138,6 +142,10 @@ sm::bone::bone(std::string name, sm::node& u, sm::node& v) :
 	v.set_parent(*this);
 	u.add_child(*this);
 	length_ = scaled_length();
+}
+
+void sm::bone::set_name(const std::string& new_name) {
+	name_ = new_name;
 }
 
 sm::result sm::bone::set_rotation_constraint(double min, double max, bool relative_to_parent) {
