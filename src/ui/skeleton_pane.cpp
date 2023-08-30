@@ -574,7 +574,7 @@ void ui::skeleton_pane::init()
 {
 	//TODO: refactor application startup such that this
 	// can be removed (it is an artifact of when properties
-	// were original a pane on the selection tool's per
+	// were originally a pane on the selection tool's per
 	// tool properties...
 
 	sel_properties_->init();

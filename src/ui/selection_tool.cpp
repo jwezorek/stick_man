@@ -35,27 +35,26 @@ namespace {
 			QSizeF(width, height)
 		);
 	}
-
 }
 
 ui::selection_tool::selection_tool(tool_manager* mgr, ui::stick_man* main_wnd) :
-    intitialized_(false),
 	main_wnd_(*main_wnd),
     state_(modal_state::none),
     abstract_tool(mgr, "selection", "arrow_icon.png", ui::tool_id::selection) {
 
 }
 
+void ui::selection_tool::init() {
+	auto& canv = main_wnd_.view().canvas();
+	canv.connect(&canv, &canvas::selection_changed,
+		[this, &canv]() {
+			const auto& sel = canv.selection();
+			this->handle_sel_changed(canv);
+		}
+	);
+}
+
 void ui::selection_tool::activate(canvas& canv) {
-    if (!intitialized_) {
-        canv.connect(&canv, &canvas::selection_changed, 
-            [this, &canv]() {
-				const auto& sel = canv.selection();
-                this->handle_sel_changed(canv);
-            }
-        );
-        intitialized_ = true;
-    }
     auto& view = canv.view();
     view.setDragMode(QGraphicsView::RubberBandDrag);
     rubber_band_ = {};

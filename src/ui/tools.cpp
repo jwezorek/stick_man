@@ -52,7 +52,9 @@ void ui::abstract_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* e
 void ui::abstract_tool::mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
 void ui::abstract_tool::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {}
 void ui::abstract_tool::deactivate(canvas& c) {}
+void ui::abstract_tool::init() {}
 QWidget* ui::abstract_tool::settings_widget() { return nullptr; }
+ui::abstract_tool::~abstract_tool() {}
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -176,6 +178,12 @@ ui::tool_manager::tool_manager(stick_man* sm) :
     tool_registry_.emplace_back(std::make_unique<ui::move_tool>(this));
     tool_registry_.emplace_back(std::make_unique<ui::add_node_tool>(this));
     tool_registry_.emplace_back(std::make_unique<ui::add_bone_tool>(this));
+}
+
+void ui::tool_manager::init() {
+	for (auto& tool : tool_registry_) {
+		tool->init();
+	}
 }
 
 void ui::tool_manager::keyPressEvent(ui::canvas& c, QKeyEvent* event) {

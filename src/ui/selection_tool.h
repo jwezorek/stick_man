@@ -23,7 +23,6 @@ namespace ui {
         };
     private:
 
-        bool intitialized_;
         std::optional<QRectF> rubber_band_;
         QMetaObject::Connection conn_;
 		stick_man& main_wnd_;
@@ -46,6 +45,7 @@ namespace ui {
         QWidget* settings_widget() override;
         void set_modal(modal_state state, canvas& c);
         bool is_in_modal_state() const;
+		void init() override;
     };
 
 }

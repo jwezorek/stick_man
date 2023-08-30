@@ -50,7 +50,9 @@ namespace ui {
         virtual void mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event);
         virtual void wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) ;
         virtual void deactivate(canvas& c);
+		virtual void init();
         virtual QWidget* settings_widget();
+		virtual ~abstract_tool();
 
     private:
         tool_id id_;
@@ -107,6 +109,7 @@ namespace ui {
 
     public:
         tool_manager(stick_man* c);
+		void init();
         void keyPressEvent(canvas& c, QKeyEvent* event);
         void keyReleaseEvent(canvas& c, QKeyEvent* event);
         void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event);
