@@ -279,33 +279,37 @@ void ui::canvas::transform_selection(bone_transform trans) {
     r::for_each(as_range_view_of_type<bone_item>(selection_), trans);
 }
 
-void ui::canvas::add_to_selection(std::span<ui::abstract_canvas_item*> itms) {
+void ui::canvas::add_to_selection(std::span<ui::abstract_canvas_item*> itms, bool sync) {
     selection_.insert(itms.begin(), itms.end());
-    sync_selection();
+	if (sync) {
+		sync_selection();
+	}
 }
 
-void ui::canvas::add_to_selection(ui::abstract_canvas_item* itm) {
-    add_to_selection({ &itm,1 });
+void ui::canvas::add_to_selection(ui::abstract_canvas_item* itm, bool sync) {
+    add_to_selection({ &itm,1 }, sync);
 }
 
-void ui::canvas::subtract_from_selection(std::span<ui::abstract_canvas_item*> itms) {
+void ui::canvas::subtract_from_selection(std::span<ui::abstract_canvas_item*> itms, bool sync) {
     for (auto itm : itms) {
         selection_.erase(itm);
     }
-    sync_selection();
+	if (sync) {
+		sync_selection();
+	}
 }
 
-void ui::canvas::subtract_from_selection(ui::abstract_canvas_item* itm) {
-    subtract_from_selection({ &itm,1 });
+void ui::canvas::subtract_from_selection(ui::abstract_canvas_item* itm, bool sync) {
+    subtract_from_selection({ &itm,1 }, sync);
 }
 
-void ui::canvas::set_selection(std::span<ui::abstract_canvas_item*> itms) {
+void ui::canvas::set_selection(std::span<ui::abstract_canvas_item*> itms, bool sync) {
     selection_.clear();
-    add_to_selection(itms);
+    add_to_selection(itms,sync);
 }
 
-void ui::canvas::set_selection(ui::abstract_canvas_item* itm) {
-    set_selection({ &itm,1 });
+void ui::canvas::set_selection(ui::abstract_canvas_item* itm, bool sync) {
+    set_selection({ &itm,1 },sync);
 }
 
 void ui::canvas::clear_selection() {

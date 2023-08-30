@@ -42,6 +42,8 @@ namespace ui {
 		selection_properties* sel_properties_;
 
 		void sync_with_model();
+		void skel_tree_selection_change(const QItemSelection& selected, const QItemSelection& deselected);
+		QTreeView* create_skeleton_tree();
 
     public:
 

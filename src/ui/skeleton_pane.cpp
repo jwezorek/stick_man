@@ -425,60 +425,37 @@ namespace{
 		double radius;
 	};
 
-	QTreeView* create_skeleton_tree() {
-		QStandardItemModel* model = new QStandardItemModel();
-		QTreeView* treeView = new QTreeView();
-		treeView->setModel(model);
-		treeView->setHeaderHidden(true);
+	/*
+	class bone_tree_item : public QStandardItem {
+	private:
+		sm::bone* bone_;
+	public:
+		bone_tree_item(sm::bone& b) : bone_(&b), QStandardItem(b.name().c_str())
+		{}
 
-		treeView->setStyleSheet(
-			R"(
-					QTreeView::branch:has-siblings:!adjoins-item {
-						border-image: url(:images/vline.png) 0;
-					}
+		sm::bone& get() const {
+			return *bone_;
+		}
+	};
+	*/
 
-					QTreeView::branch:has-siblings:adjoins-item {
-						border-image: url(:images/branch-more.png) 0;
-					}
-
-					QTreeView::branch:!has-children:!has-siblings:adjoins-item {
-						border-image: url(:images/branch-end.png) 0;
-					}
-
-					QTreeView::branch:has-children:!has-siblings:closed,
-					QTreeView::branch:closed:has-children:has-siblings {
-							border-image: none;
-							image: url(:images/branch-closed.png);
-					}
-
-					QTreeView::branch:open:has-children:!has-siblings,
-					QTreeView::branch:open:has-children:has-siblings  {
-							border-image: none;
-							image: url(:images/branch-open.png);
-					}
-			)"
-		);
-
-		return treeView;
-	 }
-
-	QStandardItem* create_bone_item(sm::bone& b) {
-		auto str = b.name() +
-			" [" + b.parent_node().name() +
-			" - " +
-			b.child_node().name() + "]";
-		return new QStandardItem(str.c_str());
+	QStandardItem* make_bone_tree_item(sm::bone& b) {
+		auto* itm = new QStandardItem(b.name().c_str());
+		auto& bi = ui::item_from_model<ui::bone_item>(b);
+		itm->setData(QVariant::fromValue(&bi));
+		return itm;
 	}
 
 	void insert_skeleton(QStandardItemModel* tree, sm::skeleton_ref skel) {
 		std::unordered_map<sm::bone*,QStandardItem*> bone_to_tree_item;
 		QStandardItem* root = tree->invisibleRootItem();
-		QStandardItem* skel_item = new QStandardItem(skel.get().name().c_str());
+		QStandardItem* skel_item = new QStandardItem(skel.get().name().c_str()); 
+		skel_item->setSelectable(false);
 		root->appendRow(skel_item);
 
 		auto visit = [&](sm::bone& b)->bool {
 			auto parent = b.parent_bone();
-			QStandardItem* bone_row = create_bone_item(b);
+			QStandardItem* bone_row = make_bone_tree_item(b);
 			QStandardItem* parent_item = 
 				(!parent) ? skel_item : bone_to_tree_item.at(&parent->get());
 			parent_item->appendRow(bone_row);
@@ -552,10 +529,24 @@ void ui::skeleton_pane::sync_with_model()
 {
 	QStandardItemModel* tree_model = static_cast<QStandardItemModel*>(skeleton_tree_->model());
 	tree_model->clear();
+
 	auto& sandbox = main_wnd_->sandbox();
 	for (const auto& skel : sandbox.skeletons()) {
 		insert_skeleton(tree_model, skel);
 	}
+}
+
+void ui::skeleton_pane::skel_tree_selection_change(const QItemSelection& selected, const QItemSelection& deselected)
+{
+	auto model = static_cast<QStandardItemModel*>(skeleton_tree_->model());
+	auto& canv = main_wnd_->view().canvas();
+	QModelIndexList selectedIdxs = selected.indexes();
+	std::vector<abstract_canvas_item*> sel_canv_items;
+	for (QModelIndex& idx : selectedIdxs) {
+		bone_item* bi = idx.data(Qt::UserRole + 1).value<bone_item*>();
+		sel_canv_items.push_back(bi);
+	}
+	canv.set_selection(sel_canv_items, true);
 }
 
 ui::skeleton_pane::skeleton_pane(QMainWindow* wnd) :
@@ -591,3 +582,43 @@ void ui::skeleton_pane::init()
 	connect( &canv, &ui::canvas::contents_changed, this, &ui::skeleton_pane::sync_with_model );
 }
 
+QTreeView* ui::skeleton_pane::create_skeleton_tree() {
+	QStandardItemModel* model = new QStandardItemModel();
+	QTreeView* treeView = new QTreeView();
+
+	treeView->setModel(model);
+	treeView->setHeaderHidden(true);
+
+	treeView->setStyleSheet(
+		R"(
+			QTreeView::branch:has-siblings:!adjoins-item {
+				border-image: url(:images/vline.png) 0;
+			}
+
+			QTreeView::branch:has-siblings:adjoins-item {
+				border-image: url(:images/branch-more.png) 0;
+			}
+
+			QTreeView::branch:!has-children:!has-siblings:adjoins-item {
+				border-image: url(:images/branch-end.png) 0;
+			}
+
+			QTreeView::branch:has-children:!has-siblings:closed,
+			QTreeView::branch:closed:has-children:has-siblings {
+					border-image: none;
+					image: url(:images/branch-closed.png);
+			}
+
+			QTreeView::branch:open:has-children:!has-siblings,
+			QTreeView::branch:open:has-children:has-siblings  {
+					border-image: none;
+					image: url(:images/branch-open.png);
+			}
+		 )"
+	);
+
+	connect(treeView->selectionModel(), &QItemSelectionModel::selectionChanged,
+		this, &ui::skeleton_pane::skel_tree_selection_change);
+
+	return treeView;
+}

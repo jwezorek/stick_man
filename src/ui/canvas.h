@@ -35,12 +35,6 @@ namespace ui {
 		mixed
 	};
 
-	struct joint_info {
-		sm::bone* anchor_bone;
-		sm::bone* dependent_bone;
-		sm::node* shared_node;
-	};
-
 	using item_transform = std::function<void(abstract_canvas_item*)>;
 	using node_transform = std::function<void(node_item*)>;
 	using bone_transform = std::function<void(bone_item*)>;
@@ -58,7 +52,6 @@ namespace ui {
 
         tool_manager& tool_mgr();
         void sync_selection();
-		void sync_rotation_constraint_to_model();
 
     protected:
 
@@ -89,7 +82,6 @@ namespace ui {
 
         const selection_set& selection() const;
 		sel_type selection_type() const;
-		std::optional<joint_info> selected_joint() const;
 
         std::vector<ui::bone_item*> selected_bones() const;
         std::vector<ui::node_item*> selected_nodes() const;
@@ -101,12 +93,12 @@ namespace ui {
         void transform_selection(item_transform trans);
         void transform_selection(node_transform trans);
         void transform_selection(bone_transform trans);
-        void add_to_selection(std::span<abstract_canvas_item*> itms);
-        void add_to_selection(abstract_canvas_item* itm);
-        void subtract_from_selection(std::span<abstract_canvas_item*> itms);
-        void subtract_from_selection(abstract_canvas_item* itm);
-        void set_selection(std::span<abstract_canvas_item*> itms);
-        void set_selection(abstract_canvas_item* itm);
+        void add_to_selection(std::span<abstract_canvas_item*> itms, bool sync = false);
+        void add_to_selection(abstract_canvas_item* itm, bool sync = false);
+        void subtract_from_selection(std::span<abstract_canvas_item*> itms, bool sync = false);
+        void subtract_from_selection(abstract_canvas_item* itm, bool sync = false);
+        void set_selection(std::span<abstract_canvas_item*> itms, bool sync = false);
+        void set_selection(abstract_canvas_item* itm, bool sync = false);
         void clear_selection();
 		void clear();
         void show_status_line(const QString& txt);

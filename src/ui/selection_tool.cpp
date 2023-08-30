@@ -102,16 +102,16 @@ void ui::selection_tool::handle_click(canvas& canv, QPointF pt, bool shift_down,
     }
 
     if (shift_down && !alt_down) {
-        canv.add_to_selection(clicked_item);
+        canv.add_to_selection(clicked_item, true);
         return;
     }
 
     if (alt_down && !shift_down) {
-        canv.subtract_from_selection(clicked_item);
+        canv.subtract_from_selection(clicked_item, true);
         return;
     }
 
-    canv.set_selection(clicked_item);
+    canv.set_selection(clicked_item, true);
 }
 
 void ui::selection_tool::handle_drag(canvas& canv, QRectF rect, bool shift_down, bool alt_down) {
@@ -122,16 +122,16 @@ void ui::selection_tool::handle_drag(canvas& canv, QRectF rect, bool shift_down,
     }
 
     if (shift_down && !alt_down) {
-        canv.add_to_selection(clicked_items);
+        canv.add_to_selection(clicked_items, true);
         return;
     }
 
     if (alt_down && !shift_down) {
-        canv.subtract_from_selection(clicked_items);
+        canv.subtract_from_selection(clicked_items, true);
         return;
     }
 
-    canv.set_selection( clicked_items);
+    canv.set_selection( clicked_items, true );
 }
 
 void ui::selection_tool::handle_sel_changed( const ui::canvas& canv) {

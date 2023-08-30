@@ -2,7 +2,8 @@
 
 #include <QWidget>
 #include <QtWidgets>
-#include <QGraphicsScene>
+#include <QGraphicsScene> 
+#include <QMetaType>
 #include <any>
 #include <ranges>
 
@@ -80,6 +81,8 @@ namespace ui {
 		node_item& parent_node_item() const;
 		node_item& child_node_item() const;
 	};
+
+	Q_DECLARE_METATYPE(bone_item*);
 
 	class rot_constraint_adornment : 
 		public QGraphicsEllipseItem {
