@@ -146,6 +146,7 @@ QGraphicsItem* ui::node_item::create_selection_frame() const {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::bone_item::bone_item(sm::bone& bone, double scale) :
+		treeview_item_(nullptr),
 		has_stick_man_model<ui::bone_item, sm::bone&>(bone),
 		rot_constraint_(nullptr) {
 	setBrush(Qt::black);
@@ -170,6 +171,14 @@ ui::node_item& ui::bone_item::child_node_item() const {
 	return std::any_cast<std::reference_wrapper<ui::node_item>>(
 		model_.child_node().get_user_data()
 	);
+}
+
+void ui::bone_item::set_treeview_item(QStandardItem* itm) {
+	treeview_item_ = itm;
+}
+
+QStandardItem* ui::bone_item::treeview_item() const {
+	return treeview_item_;
 }
 
 void ui::bone_item::sync_rotation_constraint_to_model() {

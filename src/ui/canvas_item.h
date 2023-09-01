@@ -68,6 +68,7 @@ namespace ui {
 		public has_stick_man_model<bone_item, sm::bone&>, public QGraphicsPolygonItem {
 	private:
 		rot_constraint_adornment* rot_constraint_;
+		QStandardItem* treeview_item_;
 
 		void sync_item_to_model() override;
 		void sync_sel_frame_to_model() override;
@@ -80,6 +81,8 @@ namespace ui {
 		bone_item(sm::bone& bone, double scale);
 		node_item& parent_node_item() const;
 		node_item& child_node_item() const;
+		void set_treeview_item(QStandardItem* itm);
+		QStandardItem* treeview_item() const;
 	};
 
 	Q_DECLARE_METATYPE(bone_item*);
