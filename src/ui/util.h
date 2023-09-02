@@ -40,6 +40,11 @@ namespace ui {
         int m_vSpace;
     };
 
+	class hyperlink_button : public QPushButton {
+	public:
+		hyperlink_button(QString txt);
+	};
+
 	class labeled_field : public QWidget {
 		QLabel* lbl_;
 		QLineEdit* val_;
@@ -48,6 +53,14 @@ namespace ui {
 		void set_label(QString str);
 		void set_value(QString str);
 		void set_color(QColor color);
+	};
+
+	class labeled_hyperlink : public QWidget {
+		QLabel* lbl_;
+		hyperlink_button* val_;
+	public:
+		labeled_hyperlink(QString lbl, QString val);
+		hyperlink_button* hyperlink();
 	};
 
     class number_edit : public QLineEdit {

@@ -203,6 +203,32 @@ int ui::FlowLayout::smartSpacing(QStyle::PixelMetric pm) const
 
 /*------------------------------------------------------------------------------------------------*/
 
+ui::hyperlink_button::hyperlink_button(QString txt) :
+		QPushButton(txt) {
+	// Set the hyperlink appearance using a stylesheet
+	setObjectName("hyperlinkButton");
+	setStyleSheet(R"(
+            QPushButton#hyperlinkButton {
+                color: yellow;
+                border: none;
+                background: transparent;
+            }
+
+            QPushButton#hyperlinkButton:hover {
+                text-decoration: underline;
+                color: yellow;
+            }
+
+            QPushButton#hyperlinkButton:pressed {
+                text-decoration: underline;
+                border: 1px solid yellow;
+            }
+        )"
+	);
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
 ui::labeled_field::labeled_field(QString lbl, QString val) {
 	auto* layout = new QHBoxLayout(this);
 	layout->addWidget(lbl_ = new QLabel(lbl+":"));
@@ -219,6 +245,19 @@ void ui::labeled_field::set_value(QString str) {
 void ui::labeled_field::set_color(QColor color) {
 	QString colorString = QString("color: %1;").arg(color.name());
 	val_->setStyleSheet(colorString);
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
+ui::labeled_hyperlink::labeled_hyperlink(QString lbl, QString val) {
+	auto* layout = new QHBoxLayout(this);
+	layout->addWidget(lbl_ = new QLabel(lbl + ":"));
+	layout->addWidget(val_ = new hyperlink_button(val));
+	layout->addStretch();
+}
+
+ui::hyperlink_button* ui::labeled_hyperlink::hyperlink() {
+	return val_;
 }
 
 /*------------------------------------------------------------------------------------------------*/

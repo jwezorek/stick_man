@@ -12,6 +12,7 @@
 #include <ranges>
 #include <unordered_map>
 #include <unordered_set>
+#include <functional>
 #include <qDebug>
 
 using namespace std::placeholders;
@@ -307,9 +308,18 @@ namespace{
 		}
 	};
 
+	std::function<void()> make_select_node_fn(ui::canvas& canv, sm::node& node) {
+		return [&canv, &node]() {
+			auto& node_itm = ui::item_from_model<ui::node_item>(node);
+			canv.set_selection(&node_itm, true);
+		};
+	}
+
 	class bone_properties : public ui::abstract_properties_widget {
 		ui::labeled_numeric_val* length_;
 		ui::labeled_field* name_;
+		ui::labeled_hyperlink* u_;
+		ui::labeled_hyperlink* v_;
 		QTabWidget* rotation_tab_ctrl_;
 		ui::labeled_numeric_val* world_rotation_;
 		ui::labeled_numeric_val* parent_rotation_;
@@ -332,27 +342,39 @@ namespace{
 
 	public:
 		bone_properties(ui::tool_manager* mgr, QWidget* parent, bool multi) :
-			abstract_properties_widget(
-				mgr,
-				parent,
-				(multi) ? "selected bones" : "selected bone"
-			),
-			multi_(multi),
-			name_(nullptr),
-			length_(nullptr),
-			rotation_tab_ctrl_(nullptr),
-			world_rotation_(nullptr),
-			parent_rotation_(nullptr),
-			constraint_box_(nullptr),
-			constraint_btn_(nullptr) {
+				abstract_properties_widget(
+					mgr,
+					parent,
+					(multi) ? "selected bones" : "selected bone"
+				),
+				multi_(multi),
+				name_(nullptr),
+				length_(nullptr),
+				rotation_tab_ctrl_(nullptr),
+				world_rotation_(nullptr),
+				parent_rotation_(nullptr),
+				constraint_box_(nullptr),
+				constraint_btn_(nullptr),
+				u_(nullptr),
+				v_(nullptr) {
 		}
 
 		void populate() override {
 			if (!multi_) {
 				layout_->addWidget(
-					name_ = new ui::labeled_field("name", "")
+					name_ = new ui::labeled_field("   name", "")
 				);
 				name_->set_color(QColor("yellow"));
+
+				layout_->addWidget(new QLabel("nodes"));
+
+				auto vert_pair = new QVBoxLayout();
+				vert_pair->addWidget(u_ = new ui::labeled_hyperlink("   u", ""));
+				vert_pair->addWidget(v_ = new ui::labeled_hyperlink("   v", ""));
+				vert_pair->setAlignment(Qt::AlignTop);
+				vert_pair->setSpacing(0);
+
+				layout_->addLayout(vert_pair);
 			}
 			layout_->addWidget(
 				length_ = new ui::labeled_numeric_val("length", 0.0, 0.0, 1500.0)
@@ -408,6 +430,14 @@ namespace{
 				else {
 					constraint_box_->hide();
 				}
+				u_->hyperlink()->setText(bone.parent_node().name().c_str());
+				v_->hyperlink()->setText(bone.child_node().name().c_str());
+				connect(u_->hyperlink(), &QPushButton::clicked,
+					make_select_node_fn(canvas(), bone.parent_node())
+				);
+				connect(v_->hyperlink(), &QPushButton::clicked,
+					make_select_node_fn(canvas(), bone.child_node())
+				);
 			}
 		}
 
