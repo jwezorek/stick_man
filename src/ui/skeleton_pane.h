@@ -42,13 +42,15 @@ namespace ui {
 		selection_properties* sel_properties_;
 		QMetaObject::Connection conn_;
 
+		void expand_selected_items();
 		void connect_tree_sel_handler();
 		void disconnect_tree_sel_handler();
 		void sync_with_model();
 		void handle_canv_sel_change();
-		void skel_tree_selection_change(const QItemSelection& selected, const QItemSelection& deselected);
+		void skel_tree_selection_change(const QItemSelection&, const QItemSelection&);
 		QTreeView* create_skeleton_tree();
 		std::vector<QStandardItem*> selected_items() const;
+		ui::canvas& canvas();
 
 		void select_item(QStandardItem* item);
 		void select_items(const std::vector<QStandardItem*>& items, bool emit_signal = true);

@@ -436,12 +436,16 @@ namespace{
 	}
 
 	void insert_skeleton(QStandardItemModel* tree, sm::skeleton_ref skel) {
-		std::unordered_map<sm::bone*,QStandardItem*> bone_to_tree_item;
+		
+		// traverse the graph and repopulate the treeview during the traversal 
+		// by building a hash table mapping bones to their tree items.
+
 		QStandardItem* root = tree->invisibleRootItem();
 		QStandardItem* skel_item = new QStandardItem(skel.get().name().c_str()); 
 		skel_item->setSelectable(false);
 		root->appendRow(skel_item);
 
+		std::unordered_map<sm::bone*, QStandardItem*> bone_to_tree_item;
 		auto visit = [&](sm::bone& b)->bool {
 			auto parent = b.parent_bone();
 			QStandardItem* bone_row = make_bone_tree_item(b);
@@ -544,9 +548,27 @@ ui::canvas& ui::abstract_properties_widget::canvas() {
 
 void ui::abstract_properties_widget::lose_selection() {}
 
+void ui::skeleton_pane::expand_selected_items() {
+
+	QAbstractItemModel* model = skeleton_tree_->model();
+	QItemSelectionModel* selectionModel = skeleton_tree_->selectionModel();
+
+	QModelIndexList selectedIndexes = selectionModel->selectedIndexes();
+
+	for (const QModelIndex& selectedIndex : selectedIndexes) {
+		// Expand all parent items of the selected item
+		QModelIndex parentIndex = selectedIndex.parent();
+		while (parentIndex.isValid()) {
+			skeleton_tree_->setExpanded(parentIndex, true);
+			parentIndex = parentIndex.parent();
+		}
+	}
+}
+
 
 void ui::skeleton_pane::sync_with_model()
 {
+	// clear the treeview and repopulate it.
 	QStandardItemModel* tree_model = static_cast<QStandardItemModel*>(skeleton_tree_->model());
 	tree_model->clear();
 
@@ -554,16 +576,30 @@ void ui::skeleton_pane::sync_with_model()
 	for (const auto& skel : sandbox.skeletons()) {
 		insert_skeleton(tree_model, skel);
 	}
+
+	//sync the new treeview selection state with the selected bones in the canvas.
+	auto selected_tree_items = canvas().bone_items() | rv::filter(
+			[](bone_item* bi)->bool {
+				return bi->is_selected();
+			}
+		) | rv::transform(
+			[](bone_item* bi)->QStandardItem* {
+				return bi->treeview_item();
+			}
+		) | r::to<std::vector<QStandardItem*>>();
+	select_items(selected_tree_items, false);
+	expand_selected_items();
 }
 
-void ui::skeleton_pane::skel_tree_selection_change(const QItemSelection&, const QItemSelection&) {
+void ui::skeleton_pane::skel_tree_selection_change(
+		const QItemSelection&, const QItemSelection&) {
 	auto selection = selected_items();
 	std::vector<abstract_canvas_item*> sel_canv_items;
 	for (auto* sel : selection) {
 		bone_item* bi = sel->data(Qt::UserRole + 1).value<bone_item*>();
 		sel_canv_items.push_back(bi);
 	}
-	main_wnd_->view().canvas().set_selection(sel_canv_items, true);
+	canvas().set_selection(sel_canv_items, true);
 }
 
 ui::skeleton_pane::skeleton_pane(QMainWindow* wnd) :
@@ -613,7 +649,7 @@ void ui::skeleton_pane::init() {
 	
 	sel_properties_->init();
 
-	auto& canv = main_wnd_->view().canvas();
+	auto& canv = canvas();
 	connect( &canv, &ui::canvas::contents_changed, 
 		this, &ui::skeleton_pane::sync_with_model 
 	);
@@ -640,7 +676,7 @@ void ui::skeleton_pane::select_items(const std::vector<QStandardItem*>& items, b
 
 void ui::skeleton_pane::handle_canv_sel_change() {
 	auto tree_sel = selected_items();
-	auto canvas_sel = main_wnd_->view().canvas().selected_bones();
+	auto canvas_sel = canvas().selected_bones();
 
 	if (is_same_bone_selection(canvas_sel, tree_sel)) {
 		return;
@@ -650,6 +686,7 @@ void ui::skeleton_pane::handle_canv_sel_change() {
 			[](auto* bi) { return bi->treeview_item();  }
 		) | r::to<std::vector<QStandardItem*>>();
     select_items(itms, false);
+	expand_selected_items();
 }
 
 std::vector<QStandardItem*> ui::skeleton_pane::selected_items() const {
@@ -668,10 +705,14 @@ std::vector<QStandardItem*> ui::skeleton_pane::selected_items() const {
 	return selection;
 }
 
+ui::canvas& ui::skeleton_pane::canvas() {
+	return main_wnd_->view().canvas();
+}
+
 QTreeView* ui::skeleton_pane::create_skeleton_tree() {
 	QStandardItemModel* model = new QStandardItemModel();
 	QTreeView* treeView = new QTreeView();
-	treeView->setSelectionMode(QAbstractItemView::MultiSelection);
+	treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
 	treeView->setModel(model);
 	treeView->setHeaderHidden(true);
 

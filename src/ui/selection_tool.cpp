@@ -84,28 +84,28 @@ void ui::selection_tool::mouseMoveEvent(canvas& canv, QGraphicsSceneMouseEvent* 
 
 void ui::selection_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     bool shift_down = event->modifiers().testFlag(Qt::ShiftModifier);
-    bool alt_down = event->modifiers().testFlag(Qt::AltModifier);
+    bool ctrl_down = event->modifiers().testFlag(Qt::ControlModifier);
     if (rubber_band_) {
-        handle_drag(canv, *rubber_band_, shift_down, alt_down);
+        handle_drag(canv, *rubber_band_, shift_down, ctrl_down);
     } else {
-        handle_click(canv, event->scenePos(), shift_down, alt_down);
+        handle_click(canv, event->scenePos(), shift_down, ctrl_down);
     }
 	canv.sync_to_model();
 }
 
-void ui::selection_tool::handle_click(canvas& canv, QPointF pt, bool shift_down, bool alt_down) {
+void ui::selection_tool::handle_click(canvas& canv, QPointF pt, bool shift_down, bool ctrl_down) {
     auto clicked_item = canv.top_item(pt);
     if (!clicked_item) {
         canv.clear_selection();
         return;
     }
 
-    if (shift_down && !alt_down) {
+    if (shift_down && !ctrl_down) {
         canv.add_to_selection(clicked_item, true);
         return;
     }
 
-    if (alt_down && !shift_down) {
+    if (ctrl_down && !shift_down) {
         canv.subtract_from_selection(clicked_item, true);
         return;
     }
@@ -113,19 +113,19 @@ void ui::selection_tool::handle_click(canvas& canv, QPointF pt, bool shift_down,
     canv.set_selection(clicked_item, true);
 }
 
-void ui::selection_tool::handle_drag(canvas& canv, QRectF rect, bool shift_down, bool alt_down) {
+void ui::selection_tool::handle_drag(canvas& canv, QRectF rect, bool shift_down, bool ctrl_down) {
     auto clicked_items = canv.items_in_rect(rect);
     if (clicked_items.empty()) {
         canv.clear_selection();
         return;
     }
 
-    if (shift_down && !alt_down) {
+    if (shift_down && !ctrl_down) {
         canv.add_to_selection(clicked_items, true);
         return;
     }
 
-    if (alt_down && !shift_down) {
+    if (ctrl_down && !shift_down) {
         canv.subtract_from_selection(clicked_items, true);
         return;
     }
