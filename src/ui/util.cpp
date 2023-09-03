@@ -225,6 +225,7 @@ ui::hyperlink_button::hyperlink_button(QString txt) :
             }
         )"
 	);
+	setFocusPolicy(Qt::StrongFocus);
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -271,12 +272,16 @@ ui::hyperlink_button* ui::labeled_hyperlink::hyperlink() {
 void ui::string_edit::keyPressEvent(QKeyEvent* e) {
 	QLineEdit::keyPressEvent(e);
 	if (e->key() == Qt::Key_Return) {
-		handle_done_editing();
+		focusNextChild();
 	}
 }
 
 std::string ui::string_edit::value() const {
 	return this->text().toStdString();
+}
+
+void ui::string_edit::set_validator(string_edit_validator fn) {
+	valid_fn_ = fn;
 }
 
 void ui::string_edit::focusInEvent(QFocusEvent* event) {
@@ -290,10 +295,20 @@ void ui::string_edit::focusOutEvent(QFocusEvent* event) {
 }
 
 void ui::string_edit::handle_done_editing() {
+	if (valid_fn_ && !valid_fn_(value())) {
+		this->setText(old_val_.c_str());
+	}
+
 	if (!old_val_.empty() && value() != old_val_) {
 		emit value_changed(value());
+		old_val_ = {};
 	}
-	old_val_ = {};
+}
+
+ui::string_edit::string_edit(const std::string& str, string_edit_validator valid_fn) :
+		QLineEdit(str.c_str()),
+		valid_fn_(valid_fn) {
+
 }
 
 /*------------------------------------------------------------------------------------------------*/

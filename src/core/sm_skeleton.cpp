@@ -786,6 +786,8 @@ sm::result sm::skeleton::set_name(bone& bone, const std::string& new_name) {
 	bone.set_name(new_name);
 	bones_.erase(old_name);
 	bones_[new_name] = &bone;
+
+	return result::success;
 }
 
 sm::result sm::skeleton::set_name(node& node, const std::string& new_name) {
@@ -796,6 +798,8 @@ sm::result sm::skeleton::set_name(node& node, const std::string& new_name) {
 	node.set_name(new_name);
 	nodes_.erase(old_name);
 	nodes_[new_name] = &node;
+
+	return result::success;
 }
 
 sm::result sm::skeleton::from_json(const std::string&) {

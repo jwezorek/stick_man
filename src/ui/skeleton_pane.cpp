@@ -14,6 +14,7 @@
 #include <unordered_set>
 #include <functional>
 #include <variant>
+#include <type_traits>
 #include <qDebug>
 
 using namespace std::placeholders;
@@ -146,6 +147,11 @@ namespace{
 					name_ = new ui::labeled_field("   name", "")
 				);
 				name_->set_color(QColor("yellow"));
+				name_->value()->set_validator(
+					[this](const std::string& new_name)->bool {
+						return main_wnd_->skel_pane().validate_props_name_change(new_name);
+					}
+				);
 
 				connect(name_->value(), &ui::string_edit::value_changed,
 					[this]() {
@@ -332,9 +338,30 @@ namespace{
 		}
 	};
 
-	std::function<void()> make_select_node_fn(ui::canvas& canv, sm::node& node) {
-		return [&canv, &node]() {
-			auto& node_itm = ui::item_from_model<ui::node_item>(node);
+	using node_or_bone = std::variant<sm::node_ref, sm::bone_ref>;
+	std::optional<node_or_bone> selected_node_or_bone(const ui::canvas& canv) {
+		auto bones = canv.selected_bones();
+		auto nodes = canv.selected_nodes();
+		if (bones.size() == 1 && nodes.empty()) {
+			return node_or_bone{ std::ref(bones.front()->model()) };
+		}
+		if (nodes.size() == 1 && bones.empty()) {
+			return node_or_bone{ std::ref(nodes.front()->model()) };
+		}
+		return {};
+	}
+
+	std::function<void()> make_select_node_fn(ui::stick_man& mw, bool parent_node) {
+		return [&mw, parent_node]() {
+			auto& canv = mw.view().canvas();
+			auto model_item = selected_node_or_bone(canv);
+			if (!model_item || !std::holds_alternative<sm::bone_ref>(*model_item)) {
+				return;
+			}
+			sm::bone& bone = std::get<sm::bone_ref>(*model_item).get();
+			auto& node_itm = ui::item_from_model<ui::node_item>(
+				(parent_node) ? bone.parent_node() : bone.child_node()
+			);
 			canv.set_selection(&node_itm, true);
 		};
 	}
@@ -389,6 +416,11 @@ namespace{
 					name_ = new ui::labeled_field("   name", "")
 				);
 				name_->set_color(QColor("yellow"));
+				name_->value()->set_validator(
+					[this](const std::string& new_name)->bool {
+						return main_wnd_->skel_pane().validate_props_name_change(new_name);
+					}
+				);
 
 				layout_->addWidget(new QLabel("nodes"));
 
@@ -433,6 +465,13 @@ namespace{
 						);
 					}
 				);
+				
+				connect(u_->hyperlink(), &QPushButton::clicked,
+					make_select_node_fn(*main_wnd_, true)
+				);
+				connect(v_->hyperlink(), &QPushButton::clicked,
+					make_select_node_fn(*main_wnd_, false)
+				);
 			}
 
 			auto& canv = this->canvas();
@@ -464,22 +503,13 @@ namespace{
 				}
 				u_->hyperlink()->setText(bone.parent_node().name().c_str());
 				v_->hyperlink()->setText(bone.child_node().name().c_str());
-				connect(u_->hyperlink(), &QPushButton::clicked,
-					make_select_node_fn(canvas(), bone.parent_node())
-				);
-				connect(v_->hyperlink(), &QPushButton::clicked,
-					make_select_node_fn(canvas(), bone.child_node())
-				);
+				
 			}
 		}
 
 		void lose_selection() override {
 			if (constraint_box_) {
 				constraint_box_->hide();
-			}
-			if (!multi_) {
-				disconnect(u_->hyperlink(), &QPushButton::clicked, 0, 0);
-				disconnect(v_->hyperlink(), &QPushButton::clicked, 0, 0);
 			}
 		}
 	};
@@ -664,21 +694,22 @@ void ui::skeleton_pane::skel_tree_selection_change(
 	canvas().set_selection(sel_canv_items, true);
 }
 
-using node_or_bone = std::variant<sm::node_ref, sm::bone_ref>;
-std::optional<node_or_bone> selected_node_or_bone(const ui::canvas& canv) {
-	auto bones = canv.selected_bones();
-	if (bones.size() == 1) {
-		return node_or_bone{std::ref(bones.front()->model())};
-	} 
-	auto nodes = canv.selected_nodes();
-	if (nodes.size() == 1) {
-		return node_or_bone{ std::ref(nodes.front()->model()) };
+bool ui::skeleton_pane::validate_props_name_change(const std::string& new_name) {
+	auto model_item = selected_node_or_bone(canvas());
+	if (!model_item) {
+		return false;
 	}
-	return {};
+	return std::visit(
+		[new_name](auto model_ref)->bool {
+			auto& model = model_ref.get();
+			auto& skel = model.owner().get();
+			return skel.can_name<std::remove_cvref_t<decltype(model)>>(new_name);
+		},
+		*model_item
+	);
 }
 
 void ui::skeleton_pane::handle_props_name_change(const std::string& new_name) {
-
 	auto model_item = selected_node_or_bone(canvas());
 	if (!model_item) {
 		return;
@@ -691,6 +722,10 @@ void ui::skeleton_pane::handle_props_name_change(const std::string& new_name) {
 		},
 		*model_item
 	);
+	if (result != sm::result::success) { 
+		//this should not happen...
+		return;
+	}
 	if (std::holds_alternative<sm::bone_ref>(*model_item)) {
 		bone_item& bi = item_from_model<bone_item>(
 			std::get<sm::bone_ref>(*model_item).get()

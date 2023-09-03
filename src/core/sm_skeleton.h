@@ -40,6 +40,18 @@ namespace sm {
 		node_ref root_node();
 		const_node_ref root_node() const;
 
+		template <typename T>
+		bool can_name(const std::string& name) const {
+			if constexpr (std::is_same<T, sm::node>::value) {
+				return !nodes_.contains(name);
+			} else if constexpr (std::is_same<T, sm::bone>::value) {
+				return !bones_.contains(name);
+			} else {
+				static_assert(std::is_same<T, T>::value, 
+					"skeleton::can_name, unsupported type");
+			}
+		}
+
 		result set_name(bone& bone, const std::string& new_name);
 		result set_name(node& node, const std::string& new_name);
 

@@ -45,16 +45,21 @@ namespace ui {
 		hyperlink_button(QString txt);
 	};
 
+	using string_edit_validator = std::function<bool(const std::string&)>;
 	class string_edit : public QLineEdit {
 		Q_OBJECT
 
-			void keyPressEvent(QKeyEvent* e) override;
+		void keyPressEvent(QKeyEvent* e) override;
 		void focusInEvent(QFocusEvent* event) override;
 		void focusOutEvent(QFocusEvent* event) override;
 		void handle_done_editing();
-		std::string value() const;
 
 		std::string old_val_;
+		string_edit_validator valid_fn_;
+	public:
+		string_edit(const std::string& = "", string_edit_validator valid_fn = {});
+		std::string value() const;
+		void set_validator(string_edit_validator fn);
 	signals:
 		void value_changed(std::string val);
 	};

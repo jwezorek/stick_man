@@ -60,6 +60,7 @@ namespace ui {
         skeleton_pane(ui::stick_man* mgr);
 		selection_properties& sel_properties();
 		void init();
+		bool validate_props_name_change(const std::string& new_name);
 		void handle_props_name_change(const std::string& new_name);
     };
 
