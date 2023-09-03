@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <functional>
+#include <variant>
 #include <qDebug>
 
 using namespace std::placeholders;
@@ -145,6 +146,14 @@ namespace{
 					name_ = new ui::labeled_field("   name", "")
 				);
 				name_->set_color(QColor("yellow"));
+
+				connect(name_->value(), &ui::string_edit::value_changed,
+					[this]() {
+						main_wnd_->skel_pane().handle_props_name_change(
+							name_->value()->text().toStdString()
+						);
+					}
+				);
 			}
 
 			layout_->addWidget(tab_ = new ui::TabWidget(this));
@@ -209,21 +218,10 @@ namespace{
 			if (!multi_) {
 				auto& node = nodes.front();
 				name_->set_value(node.name().c_str());
-
-				connect(name_->value(), &ui::string_edit::value_changed,
-					[this, &node]() {
-						main_wnd_->skel_pane().handle_props_name_change(
-							name_->value(), std::ref(node)
-						);
-					}
-				);
 			}
 		}
 
 		void lose_selection() override {
-			if (!multi_) {
-				disconnect(name_->value(), &ui::string_edit::value_changed, 0, 0);
-			}
 		}
 	};
 
@@ -427,6 +425,14 @@ namespace{
 
 				connect(constraint_btn_, &QPushButton::clicked,
 					this, &bone_properties::add_or_delete_constraint);
+
+				connect(name_->value(), &ui::string_edit::value_changed,
+					[this]() {
+						main_wnd_->skel_pane().handle_props_name_change(
+							name_->value()->text().toStdString()
+						);
+					}
+				);
 			}
 
 			auto& canv = this->canvas();
@@ -464,13 +470,6 @@ namespace{
 				connect(v_->hyperlink(), &QPushButton::clicked,
 					make_select_node_fn(canvas(), bone.child_node())
 				);
-				connect(name_->value(), &ui::string_edit::value_changed,
-					[this, &bone]() {
-						main_wnd_->skel_pane().handle_props_name_change(
-							name_->value(), bone
-						);
-					}
-				);
 			}
 		}
 
@@ -481,7 +480,6 @@ namespace{
 			if (!multi_) {
 				disconnect(u_->hyperlink(), &QPushButton::clicked, 0, 0);
 				disconnect(v_->hyperlink(), &QPushButton::clicked, 0, 0);
-				disconnect(name_->value(), &ui::string_edit::value_changed, 0, 0);
 			}
 		}
 	};
@@ -666,20 +664,36 @@ void ui::skeleton_pane::skel_tree_selection_change(
 	canvas().set_selection(sel_canv_items, true);
 }
 
-void ui::skeleton_pane::handle_props_name_change(QLineEdit* edit,
-	    std::variant<sm::node_ref, sm::bone_ref> model_item) {
-	auto new_name = edit->text().toStdString();
+using node_or_bone = std::variant<sm::node_ref, sm::bone_ref>;
+std::optional<node_or_bone> selected_node_or_bone(const ui::canvas& canv) {
+	auto bones = canv.selected_bones();
+	if (bones.size() == 1) {
+		return node_or_bone{std::ref(bones.front()->model())};
+	} 
+	auto nodes = canv.selected_nodes();
+	if (nodes.size() == 1) {
+		return node_or_bone{ std::ref(nodes.front()->model()) };
+	}
+	return {};
+}
+
+void ui::skeleton_pane::handle_props_name_change(const std::string& new_name) {
+
+	auto model_item = selected_node_or_bone(canvas());
+	if (!model_item) {
+		return;
+	}
 	auto result = std::visit(
 		[new_name](auto model_ref)->sm::result {
 			auto& model = model_ref.get();
 			auto& skel = model.owner().get();
 			return skel.set_name(model, new_name);
 		},
-		model_item
+		*model_item
 	);
-	if (std::holds_alternative<sm::bone_ref>(model_item)) {
+	if (std::holds_alternative<sm::bone_ref>(*model_item)) {
 		bone_item& bi = item_from_model<bone_item>(
-			std::get<sm::bone_ref>(model_item).get()
+			std::get<sm::bone_ref>(*model_item).get()
 		);
 		QStandardItem* tree_item = bi.treeview_item();
 		tree_item->setText(new_name.c_str());

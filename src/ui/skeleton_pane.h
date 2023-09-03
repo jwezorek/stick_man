@@ -3,7 +3,6 @@
 #include "canvas.h"
 #include <QWidget>
 #include <QtWidgets>
-#include <variant>
 #include "../core/sm_types.h"
 
 /*------------------------------------------------------------------------------------------------*/
@@ -61,8 +60,7 @@ namespace ui {
         skeleton_pane(ui::stick_man* mgr);
 		selection_properties& sel_properties();
 		void init();
-		void handle_props_name_change(QLineEdit* edit,
-			std::variant<sm::node_ref, sm::bone_ref> model_item);
+		void handle_props_name_change(const std::string& new_name);
     };
 
 }
