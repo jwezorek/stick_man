@@ -735,7 +735,7 @@ sm::skeleton::skeleton(world& w, const std::string& name, double x, double y) :
 	nodes_.insert({ root_.get().name(), &root_.get()});
 }
 
-void sm::skeleton::on_new_bone() {
+void sm::skeleton::on_new_bone(sm::bone& b) {
 	auto nodes = to_name_table<sm::node>(nodes_from_traversal(root_));
 	auto bones = to_name_table<sm::bone>(bones_from_traversal(root_));
 
@@ -745,15 +745,21 @@ void sm::skeleton::on_new_bone() {
 		}
 	}
 
+	nodes_.clear();
+	bones_.clear();
+
 	nodes = get_unique_names(nodes);
 	for (const auto& [ptr, name] : nodes) {
 		ptr->set_name(name);
+		nodes_[name] = ptr;
 	}
 
 	bones = get_unique_names(bones);
 	for (const auto& [ptr, name] : bones) {
 		ptr->set_name(name);
+		bones_[name] = ptr;
 	}
+
 }
 
 std::string sm::skeleton::name() const {
@@ -770,6 +776,26 @@ sm::node_ref sm::skeleton::root_node() {
 
 sm::const_node_ref sm::skeleton::root_node() const {
 	return root_;
+}
+
+sm::result sm::skeleton::set_name(bone& bone, const std::string& new_name) {
+	if (bones_.contains(new_name)) {
+		return result::non_unique_name;
+	}
+	auto old_name = bone.name();
+	bone.set_name(new_name);
+	bones_.erase(old_name);
+	bones_[new_name] = &bone;
+}
+
+sm::result sm::skeleton::set_name(node& node, const std::string& new_name) {
+	if (nodes_.contains(new_name)) {
+		return result::non_unique_name;
+	}
+	auto old_name = node.name();
+	node.set_name(new_name);
+	nodes_.erase(old_name);
+	nodes_[new_name] = &node;
 }
 
 sm::result sm::skeleton::from_json(const std::string&) {
@@ -825,7 +851,7 @@ std::expected<sm::bone_ref, sm::result> sm::world::create_bone(
 
 	skeletons_.erase(skel_v.get().name());
 	bones_.push_back(bone::make_unique("bone-1", u, v));
-	skel_u.get().on_new_bone();
+	skel_u.get().on_new_bone( *bones_.back() );
 
     return *bones_.back();
 }

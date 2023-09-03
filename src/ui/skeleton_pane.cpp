@@ -109,26 +109,27 @@ namespace{
 
 	class no_properties : public ui::abstract_properties_widget{
 	public:
-		no_properties(ui::tool_manager* mgr, QWidget* parent) : abstract_properties_widget(mgr, parent, "no selection") {}
+		no_properties(ui::stick_man* mw, QWidget* parent) : abstract_properties_widget(mw, parent, "no selection") {}
 		void set_selection(const ui::canvas& canv) override {}
 	};
 
 	class mixed_properties : public ui::abstract_properties_widget {
 	public:
-		mixed_properties(ui::tool_manager* mgr, QWidget* parent) :
-			abstract_properties_widget(mgr, parent, "mixed selection") {}
+		mixed_properties(ui::stick_man* mw, QWidget* parent) :
+			abstract_properties_widget(mw, parent, "mixed selection") {}
 		void set_selection(const ui::canvas& canv) override {}
 	};
 
 	class node_properties : public ui::abstract_properties_widget {
+		ui::labeled_field* name_;
 		ui::TabWidget* tab_;
 		ui::labeled_numeric_val* world_x_;
 		ui::labeled_numeric_val* world_y_;
 		bool multi_;
 	public:
-		node_properties(ui::tool_manager* mgr, QWidget* parent, bool multi) :
+		node_properties(ui::stick_man* mw, QWidget* parent, bool multi) :
 			abstract_properties_widget(
-				mgr,
+				mw,
 				parent,
 				(multi) ? "selected nodes" : "selected node"
 			),
@@ -139,6 +140,12 @@ namespace{
 		}
 
 		void populate() override {
+			if (!multi_) {
+				layout_->addWidget(
+					name_ = new ui::labeled_field("   name", "")
+				);
+				name_->set_color(QColor("yellow"));
+			}
 
 			layout_->addWidget(tab_ = new ui::TabWidget(this));
 			tab_->setTabPosition(QTabWidget::South);
@@ -198,6 +205,25 @@ namespace{
 				rv::transform([](sm::node& n) {return n.world_y(); }));
 			world_x_->num_edit()->set_value(x_pos);
 			world_y_->num_edit()->set_value(y_pos);
+
+			if (!multi_) {
+				auto& node = nodes.front();
+				name_->set_value(node.name().c_str());
+
+				connect(name_->value(), &ui::string_edit::value_changed,
+					[this, &node]() {
+						main_wnd_->skel_pane().handle_props_name_change(
+							name_->value(), std::ref(node)
+						);
+					}
+				);
+			}
+		}
+
+		void lose_selection() override {
+			if (!multi_) {
+				disconnect(name_->value(), &ui::string_edit::value_changed, 0, 0);
+			}
 		}
 	};
 
@@ -341,9 +367,9 @@ namespace{
 		}
 
 	public:
-		bone_properties(ui::tool_manager* mgr, QWidget* parent, bool multi) :
+		bone_properties(ui::stick_man* mw, QWidget* parent, bool multi) :
 				abstract_properties_widget(
-					mgr,
+					mw,
 					parent,
 					(multi) ? "selected bones" : "selected bone"
 				),
@@ -438,12 +464,24 @@ namespace{
 				connect(v_->hyperlink(), &QPushButton::clicked,
 					make_select_node_fn(canvas(), bone.child_node())
 				);
+				connect(name_->value(), &ui::string_edit::value_changed,
+					[this, &bone]() {
+						main_wnd_->skel_pane().handle_props_name_change(
+							name_->value(), bone
+						);
+					}
+				);
 			}
 		}
 
 		void lose_selection() override {
 			if (constraint_box_) {
 				constraint_box_->hide();
+			}
+			if (!multi_) {
+				disconnect(u_->hyperlink(), &QPushButton::clicked, 0, 0);
+				disconnect(v_->hyperlink(), &QPushButton::clicked, 0, 0);
+				disconnect(name_->value(), &ui::string_edit::value_changed, 0, 0);
 			}
 		}
 	};
@@ -516,13 +554,13 @@ namespace{
 	}
 }
 
-ui::selection_properties::selection_properties(ui::tool_manager* mgr) {
-	addWidget(new no_properties(mgr, this));
-	addWidget(new node_properties(mgr, this, false));
-	addWidget(new node_properties(mgr, this, true));
-	addWidget(new bone_properties(mgr, this, false));
-	addWidget(new bone_properties(mgr, this, true));
-	addWidget(new mixed_properties(mgr, this));
+ui::selection_properties::selection_properties(ui::stick_man* mw) {
+	addWidget(new no_properties(mw, this));
+	addWidget(new node_properties(mw, this, false));
+	addWidget(new node_properties(mw, this, true));
+	addWidget(new bone_properties(mw, this, false));
+	addWidget(new bone_properties(mw, this, true));
+	addWidget(new mixed_properties(mw, this));
 }
 
 ui::abstract_properties_widget* ui::selection_properties::current_props() const {
@@ -550,10 +588,9 @@ void ui::selection_properties::init()
 	set(ui::sel_type::none, {});
 }
 
-ui::abstract_properties_widget::abstract_properties_widget(ui::tool_manager* mgr, QWidget* parent, QString title) :
+ui::abstract_properties_widget::abstract_properties_widget(ui::stick_man* mw, QWidget* parent, QString title) :
 		QScrollArea(parent),
-		mgr_(mgr),
-		canv_(nullptr),
+		main_wnd_(mw),
 		title_(nullptr),
 		layout_(new QVBoxLayout(this)) {
 		layout_->addWidget(title_ = new QLabel(title));
@@ -570,10 +607,7 @@ void ui::abstract_properties_widget::populate() {
 }
 
 ui::canvas& ui::abstract_properties_widget::canvas() {
-	if (!canv_) {
-		canv_ = &(mgr_->canvas());
-	}
-	return *canv_;
+	return main_wnd_->view().canvas();
 }
 
 void ui::abstract_properties_widget::lose_selection() {}
@@ -632,9 +666,29 @@ void ui::skeleton_pane::skel_tree_selection_change(
 	canvas().set_selection(sel_canv_items, true);
 }
 
-ui::skeleton_pane::skeleton_pane(QMainWindow* wnd) :
-		main_wnd_(static_cast<stick_man*>(wnd)),
-		QDockWidget(tr(""), wnd) {
+void ui::skeleton_pane::handle_props_name_change(QLineEdit* edit,
+	    std::variant<sm::node_ref, sm::bone_ref> model_item) {
+	auto new_name = edit->text().toStdString();
+	auto result = std::visit(
+		[new_name](auto model_ref)->sm::result {
+			auto& model = model_ref.get();
+			auto& skel = model.owner().get();
+			return skel.set_name(model, new_name);
+		},
+		model_item
+	);
+	if (std::holds_alternative<sm::bone_ref>(model_item)) {
+		bone_item& bi = item_from_model<bone_item>(
+			std::get<sm::bone_ref>(model_item).get()
+		);
+		QStandardItem* tree_item = bi.treeview_item();
+		tree_item->setText(new_name.c_str());
+	}
+}
+
+ui::skeleton_pane::skeleton_pane(ui::stick_man* mw) :
+		main_wnd_(mw),
+		QDockWidget(tr(""), mw) {
 
     setTitleBarWidget( custom_title_bar("skeleton") );
 
@@ -643,7 +697,7 @@ ui::skeleton_pane::skeleton_pane(QMainWindow* wnd) :
 	QWidget* contents = new QWidget();
 	auto column = new QVBoxLayout(contents);
 	column->addWidget(skeleton_tree_ = create_skeleton_tree());
-	column->addWidget(sel_properties_ = new selection_properties(&tool_mgr));
+	column->addWidget(sel_properties_ = new selection_properties(mw));
 
 
     setWidget(contents);

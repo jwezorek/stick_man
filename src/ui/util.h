@@ -45,11 +45,26 @@ namespace ui {
 		hyperlink_button(QString txt);
 	};
 
+	class string_edit : public QLineEdit {
+		Q_OBJECT
+
+			void keyPressEvent(QKeyEvent* e) override;
+		void focusInEvent(QFocusEvent* event) override;
+		void focusOutEvent(QFocusEvent* event) override;
+		void handle_done_editing();
+		std::string value() const;
+
+		std::string old_val_;
+	signals:
+		void value_changed(std::string val);
+	};
+
 	class labeled_field : public QWidget {
 		QLabel* lbl_;
-		QLineEdit* val_;
+		string_edit* val_;
 	public:
 		labeled_field(QString lbl, QString val);
+		string_edit* value();
 		void set_label(QString str);
 		void set_value(QString str);
 		void set_color(QColor color);

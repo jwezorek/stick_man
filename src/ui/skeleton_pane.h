@@ -3,6 +3,8 @@
 #include "canvas.h"
 #include <QWidget>
 #include <QtWidgets>
+#include <variant>
+#include "../core/sm_types.h"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -12,14 +14,12 @@ namespace ui {
 	class stick_man;
 
 	class abstract_properties_widget : public QScrollArea {
-	private:
-		ui::canvas* canv_;
 	protected:
 		QVBoxLayout* layout_;
 		QLabel* title_;
-		tool_manager* mgr_;
+		stick_man* main_wnd_;
 	public:
-		abstract_properties_widget(ui::tool_manager* mgr, QWidget* parent, QString title);
+		abstract_properties_widget(ui::stick_man* mw, QWidget* parent, QString title);
 		void init();
 		virtual void populate();
 		ui::canvas& canvas();
@@ -29,7 +29,7 @@ namespace ui {
 
 	class selection_properties : public QStackedWidget {
 	public:
-		selection_properties(ui::tool_manager* mgr);
+		selection_properties(ui::stick_man* mgr);
 		abstract_properties_widget* current_props() const;
 		void set(ui::sel_type typ, const ui::canvas& canv);
 		void init();
@@ -48,6 +48,7 @@ namespace ui {
 		void sync_with_model();
 		void handle_canv_sel_change();
 		void skel_tree_selection_change(const QItemSelection&, const QItemSelection&);
+
 		QTreeView* create_skeleton_tree();
 		std::vector<QStandardItem*> selected_items() const;
 		ui::canvas& canvas();
@@ -57,9 +58,11 @@ namespace ui {
 
     public:
 
-        skeleton_pane(QMainWindow* wnd);
+        skeleton_pane(ui::stick_man* mgr);
 		selection_properties& sel_properties();
 		void init();
+		void handle_props_name_change(QLineEdit* edit,
+			std::variant<sm::node_ref, sm::bone_ref> model_item);
     };
 
 }

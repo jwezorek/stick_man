@@ -32,13 +32,16 @@ namespace sm {
 	protected:
 
 		skeleton(world& w, const std::string& name, double x, double y);
-		void on_new_bone();
+		void on_new_bone(sm::bone& bone);
+		void set_name(const std::string& str);
 
 	public:
 		std::string name() const;
-		void set_name(const std::string& str);
 		node_ref root_node();
 		const_node_ref root_node() const;
+
+		result set_name(bone& bone, const std::string& new_name);
+		result set_name(node& node, const std::string& new_name);
 
 		result from_json(const std::string&);
 		std::string to_json() const;

@@ -232,8 +232,14 @@ ui::hyperlink_button::hyperlink_button(QString txt) :
 ui::labeled_field::labeled_field(QString lbl, QString val) {
 	auto* layout = new QHBoxLayout(this);
 	layout->addWidget(lbl_ = new QLabel(lbl+":"));
-	layout->addWidget(val_ = new QLineEdit(val));
+	layout->addWidget(val_ = new string_edit());
+	val_->setText(val);
 }
+
+ui::string_edit* ui::labeled_field::value() {
+	return val_;
+}
+
 void ui::labeled_field::set_label(QString str) {
 	lbl_->setText(str);
 }
@@ -258,6 +264,36 @@ ui::labeled_hyperlink::labeled_hyperlink(QString lbl, QString val) {
 
 ui::hyperlink_button* ui::labeled_hyperlink::hyperlink() {
 	return val_;
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
+void ui::string_edit::keyPressEvent(QKeyEvent* e) {
+	QLineEdit::keyPressEvent(e);
+	if (e->key() == Qt::Key_Return) {
+		handle_done_editing();
+	}
+}
+
+std::string ui::string_edit::value() const {
+	return this->text().toStdString();
+}
+
+void ui::string_edit::focusInEvent(QFocusEvent* event) {
+	QLineEdit::focusInEvent(event);
+	old_val_ = value();
+}
+
+void ui::string_edit::focusOutEvent(QFocusEvent* event) {
+	QLineEdit::focusOutEvent(event);
+	handle_done_editing();
+}
+
+void ui::string_edit::handle_done_editing() {
+	if (!old_val_.empty() && value() != old_val_) {
+		emit value_changed(value());
+	}
+	old_val_ = {};
 }
 
 /*------------------------------------------------------------------------------------------------*/
