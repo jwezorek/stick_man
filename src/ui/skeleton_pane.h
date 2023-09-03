@@ -46,6 +46,7 @@ namespace ui {
 		void disconnect_tree_sel_handler();
 		void sync_with_model();
 		void handle_canv_sel_change();
+		void handle_treeitem_changed(QStandardItem* item);
 		void skel_tree_selection_change(const QItemSelection&, const QItemSelection&);
 
 		QTreeView* create_skeleton_tree();

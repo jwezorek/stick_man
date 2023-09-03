@@ -657,7 +657,6 @@ void ui::skeleton_pane::expand_selected_items() {
 	}
 }
 
-
 void ui::skeleton_pane::sync_with_model()
 {
 	// clear the treeview and repopulate it.
@@ -739,7 +738,7 @@ ui::skeleton_pane::skeleton_pane(ui::stick_man* mw) :
 		main_wnd_(mw),
 		QDockWidget(tr(""), mw) {
 
-    setTitleBarWidget( custom_title_bar("skeleton") );
+    setTitleBarWidget( custom_title_bar("skeleton view") );
 
 	auto& tool_mgr = main_wnd_->tool_mgr();
 
@@ -822,6 +821,20 @@ void ui::skeleton_pane::handle_canv_sel_change() {
 	expand_selected_items();
 }
 
+void ui::skeleton_pane::handle_treeitem_changed(QStandardItem* item) {
+	bone_item* bi = item->data(Qt::UserRole + 1).value<bone_item*>();
+	auto& bone = bi->model();
+	auto old_name = bone.name();
+	auto& skel = bone.owner().get();
+
+	auto result = skel.set_name(bone, item->text().toStdString());
+	if (result != sm::result::success) {
+		item->setText(old_name.c_str());
+	} else {
+		emit canvas().selection_changed();
+	}
+}
+
 std::vector<QStandardItem*> ui::skeleton_pane::selected_items() const {
 	std::vector<QStandardItem*> selection;
 	QItemSelectionModel* sel_model = skeleton_tree_->selectionModel();
@@ -844,6 +857,12 @@ ui::canvas& ui::skeleton_pane::canvas() {
 
 QTreeView* ui::skeleton_pane::create_skeleton_tree() {
 	QStandardItemModel* model = new QStandardItemModel();
+
+	connect(model, &QStandardItemModel::itemChanged, this, 
+		&skeleton_pane::handle_treeitem_changed
+	);
+
+
 	QTreeView* treeView = new QTreeView();
 	treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
 	treeView->setModel(model);
