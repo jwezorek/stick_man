@@ -14,6 +14,7 @@
 namespace sm {
     class node;
     class bone;
+	class skeleton;
 }
 
 namespace ui {
@@ -23,6 +24,7 @@ namespace ui {
     class tool_manager;
     class node_item;
     class bone_item;
+	class skeleton_item;
     class abstract_canvas_item;
 
     using selection_set = std::unordered_set<ui::abstract_canvas_item*>;
@@ -32,6 +34,7 @@ namespace ui {
 		nodes,
 		bone,
 		bones,
+		skeleton,
 		mixed
 	};
 
@@ -87,8 +90,9 @@ namespace ui {
         std::vector<ui::node_item*> selected_nodes() const;
         bool is_status_line_visible() const;
 
-		void insert_item(sm::node& node);
-		void insert_item(sm::bone& bone);
+		ui::node_item* insert_item(sm::node& node);
+		ui::bone_item* insert_item(sm::bone& bone);
+		ui::skeleton_item* insert_item(sm::skeleton& skel);
 
         void transform_selection(item_transform trans);
         void transform_selection(node_transform trans);
@@ -103,6 +107,8 @@ namespace ui {
 		void clear();
         void show_status_line(const QString& txt);
         void hide_status_line();
+		void filter_selection(std::function<bool(abstract_canvas_item*)> filter);
+		void delete_item(abstract_canvas_item* item, bool emit_signals);
 
     signals:
         void selection_changed();

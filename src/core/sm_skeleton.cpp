@@ -786,6 +786,10 @@ void sm::skeleton::set_user_data(std::any data) {
 	user_data_ = data;
 }
 
+void sm::skeleton::clear_user_data() {
+	user_data_.reset();
+}
+
 sm::result sm::skeleton::set_name(bone& bone, const std::string& new_name) {
 	if (bones_.contains(new_name)) {
 		return result::non_unique_name;

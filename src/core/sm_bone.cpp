@@ -131,6 +131,10 @@ void sm::node::set_user_data(std::any data) {
 	user_data_ = data;
 }
 
+void  sm::node::clear_user_data() {
+	user_data_.reset();
+}
+
 bool sm::node::is_root() const {
 	return std::holds_alternative<skeleton_ref>(parent_);
 }
@@ -296,6 +300,10 @@ std::any sm::bone::get_user_data() const {
 
 void sm::bone::set_user_data(std::any data) {
 	user_data_ = data;
+}
+
+void sm::bone::clear_user_data() {
+	user_data_.reset();
 }
 
 void sm::bone::rotate(double theta) {

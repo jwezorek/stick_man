@@ -122,6 +122,13 @@ namespace{
 		void set_selection(const ui::canvas& canv) override {}
 	};
 
+	class skeleton_properties : public ui::abstract_properties_widget {
+	public:
+		skeleton_properties(ui::stick_man* mw, QWidget* parent) :
+			abstract_properties_widget(mw, parent, "skeleton selection") {}
+		void set_selection(const ui::canvas& canv) override {}
+	};
+
 	class node_properties : public ui::abstract_properties_widget {
 		ui::labeled_field* name_;
 		ui::TabWidget* tab_;
@@ -583,11 +590,13 @@ namespace{
 }
 
 ui::selection_properties::selection_properties(ui::stick_man* mw) {
-	addWidget(new no_properties(mw, this));
+	// !!! Must be in same order as the enum, sel_type !!!
+	addWidget(new no_properties(mw, this));   
 	addWidget(new node_properties(mw, this, false));
 	addWidget(new node_properties(mw, this, true));
 	addWidget(new bone_properties(mw, this, false));
 	addWidget(new bone_properties(mw, this, true));
+	addWidget(new skeleton_properties(mw, this));
 	addWidget(new mixed_properties(mw, this));
 }
 

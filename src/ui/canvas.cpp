@@ -228,6 +228,11 @@ ui::sel_type ui::canvas::selection_type() const {
 	if (sel.empty()) {
 		return sel_type::none;
 	}
+
+	if (sel.size() == 1 && dynamic_cast<ui::skeleton_item*>(*sel.begin())) {
+		return sel_type::skeleton;
+	}
+
 	bool has_node = false;
 	bool has_bone = false;
 	for (auto itm_ptr : sel) {
@@ -257,14 +262,24 @@ bool ui::canvas::is_status_line_visible() const {
     return !status_line_.isEmpty();
 }
 
-void ui::canvas::insert_item(sm::node& node) {
-	addItem(new node_item(node, 1.0 / scale()));
+ui::node_item* ui::canvas::insert_item(sm::node& node) {
+	ui::node_item* ni;
+	addItem(ni = new node_item(node, 1.0 / scale()));
 	emit contents_changed();
+	return ni;
 }
 
-void ui::canvas::insert_item(sm::bone& bone) {
-	addItem(new bone_item(bone, 1.0 / scale()));
+ui::bone_item* ui::canvas::insert_item(sm::bone& bone) {
+	ui::bone_item* bi;
+	addItem(bi = new bone_item(bone, 1.0 / scale()));
 	emit contents_changed();
+	return bi;
+}
+
+ui::skeleton_item* ui::canvas::insert_item(sm::skeleton& skel) {
+	ui::skeleton_item* si;
+	addItem(si = new skeleton_item(skel, 1.0 / scale()));
+	return si;
 }
 
 void ui::canvas::transform_selection(item_transform trans) {
@@ -338,6 +353,40 @@ void ui::canvas::show_status_line(const QString& txt) {
     status_line_ = txt;
     update();
     setFocus();
+}
+
+void ui::canvas::filter_selection(std::function<bool(abstract_canvas_item*)> filter) {
+	selection_set sel;
+	for (auto* aci : selection_) {
+		if (filter(aci)) {
+			sel.insert(aci);
+		} else {
+			aci->set_selected(false);
+		}
+	}
+	selection_ = sel;
+}
+
+void ui::canvas::delete_item(abstract_canvas_item* deletee, bool emit_signals) {
+	bool was_selected = deletee->is_selected();
+	if (was_selected) {
+		filter_selection(
+			[deletee](abstract_canvas_item* item)->bool {
+				return item != deletee;
+			}
+		);
+	}
+
+	removeItem(deletee->item_body());
+	removeItem(deletee->selection_frame());
+	delete deletee;
+
+	if (emit_signals) {
+		if (was_selected) {
+			emit selection_changed();
+		}
+		emit contents_changed();
+	}
 }
 
 void ui::canvas::hide_status_line() {

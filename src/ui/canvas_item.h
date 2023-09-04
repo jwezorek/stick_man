@@ -19,6 +19,7 @@ namespace ui {
 	class canvas;
 
 	class abstract_canvas_item {
+		friend class canvas;
 	protected:
 		QGraphicsItem* selection_frame_;
 
@@ -27,6 +28,7 @@ namespace ui {
 		virtual void sync_sel_frame_to_model() = 0;
 		virtual bool is_selection_frame_only() const = 0;
 		virtual QGraphicsItem* item_body() = 0;
+		QGraphicsItem* selection_frame();
 		const QGraphicsItem* item_body() const;
 	public:
 		abstract_canvas_item();
@@ -34,6 +36,7 @@ namespace ui {
 		canvas* canvas() const;
 		bool is_selected() const;
 		void set_selected(bool selected);
+		virtual ~abstract_canvas_item();
 	};
 
 	template<typename T, typename U>
@@ -46,6 +49,9 @@ namespace ui {
 			model.set_user_data(std::ref(*derived));
 		}
 		U& model() { return model_; }
+		virtual ~has_stick_man_model() {
+			model_.set_user_data(std::any{});
+		}
 	};
 
 	class skeleton_item :
@@ -120,6 +126,9 @@ namespace ui {
 		);
 	};
 
+	// T is a graphics item type (node_item, bone_item, or skeleton_item) and 
+	// is provided explicitely by the caller
+	// U is a model type (node, bone, or skeleton) and is deduced.
 	template<typename T, typename U>
 	T& item_from_model(U& model_obj) {
 		return std::any_cast<std::reference_wrapper<T>>(model_obj.get_user_data());

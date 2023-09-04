@@ -76,9 +76,10 @@ namespace sm {
 		point world_pos() const;
 
 		std::any get_user_data() const;
-		bool is_root() const;
-
 		void set_user_data(std::any data);
+		void clear_user_data();
+
+		bool is_root() const;
 	};
 
 	class bone : public detail::enable_protected_make_unique<bone> {
@@ -134,8 +135,10 @@ namespace sm {
 		double rotation() const;
 		double scale() const;
 		double absolute_scale() const;
+
 		std::any get_user_data() const;
 		void set_user_data(std::any data);
+		void clear_user_data();
 
 		void rotate(double theta);
 	};

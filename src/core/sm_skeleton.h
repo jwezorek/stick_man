@@ -40,8 +40,10 @@ namespace sm {
 		std::string name() const;
 		node_ref root_node();
 		const_node_ref root_node() const;
+
 		std::any get_user_data() const;
 		void set_user_data(std::any data);
+		void clear_user_data();
 
 		result set_name(bone& bone, const std::string& new_name);
 		result set_name(node& node, const std::string& new_name);

@@ -16,6 +16,7 @@ namespace {
 	const auto k_sel_color = QColorConstants::Svg::turquoise;
 	constexpr double k_sel_thickness = 3.0;
 	constexpr int k_bone_zorder = 5;
+	constexpr int k_skel_marg = k_node_radius + 3.0;
 
 	QRectF scale_rect(double scale, const QRectF r) {
 		return {
@@ -24,6 +25,16 @@ namespace {
 			scale * r.width(),
 			scale * r.height()
 		};
+	}
+
+	QRectF inflate_rect(const QRectF& originalRect, qreal amnt)
+	{
+		qreal x = originalRect.x() - amnt;
+		qreal y = originalRect.y() - amnt;
+		qreal width = originalRect.width() + 2 * amnt;
+		qreal height = originalRect.height() + 2 * amnt;
+
+		return QRectF(x, y, width, height);
 	}
 
 	QRectF skeleton_bounds(const sm::skeleton& skel) {
@@ -125,15 +136,25 @@ void ui::abstract_canvas_item::set_selected(bool selected) {
 	}
 }
 
+ui::abstract_canvas_item::~abstract_canvas_item() {
+	if (selection_frame_) {
+		delete selection_frame_;
+	}
+}
+
 const QGraphicsItem* ui::abstract_canvas_item::item_body() const {
 	auto* nonconst_this = const_cast<abstract_canvas_item*>(this);
 	return const_cast<const QGraphicsItem*>(nonconst_this->item_body());
 }
 
+QGraphicsItem* ui::abstract_canvas_item::selection_frame() {
+	return selection_frame_;
+}
+
 /*------------------------------------------------------------------------------------------------*/
 
 void ui::skeleton_item::sync_item_to_model() {
-	QRectF rect = skeleton_bounds(model_);
+	QRectF rect = inflate_rect(skeleton_bounds(model_), k_skel_marg);
 	auto& canv = *canvas();
 	double inv_scale = 1.0 / canv.scale();
 	setRect(
@@ -158,7 +179,7 @@ QGraphicsItem* ui::skeleton_item::item_body() {
 
 ui::skeleton_item::skeleton_item(sm::skeleton& skel, double scale) :
 		has_stick_man_model<ui::skeleton_item, sm::skeleton&>(skel)  {
-	setPen(QPen(Qt::cyan, 1, Qt::DashLine));
+	setPen(QPen(Qt::cyan, 3, Qt::DotLine));
 	setBrush(Qt::NoBrush);
 }
 
