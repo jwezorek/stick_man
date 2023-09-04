@@ -10,7 +10,7 @@
 namespace sm {
 	class node;
 	class bone;
-	class ik_sandbox;
+	class skeleton;
 	class rot_constraint;
 }
 
@@ -25,7 +25,9 @@ namespace ui {
 		virtual QGraphicsItem* create_selection_frame() const = 0;
 		virtual void sync_item_to_model() = 0;
 		virtual void sync_sel_frame_to_model() = 0;
-
+		virtual bool is_selection_frame_only() const = 0;
+		virtual QGraphicsItem* item_body() = 0;
+		const QGraphicsItem* item_body() const;
 	public:
 		abstract_canvas_item();
 		void sync_to_model();
@@ -46,6 +48,20 @@ namespace ui {
 		U& model() { return model_; }
 	};
 
+	class skeleton_item :
+		public has_stick_man_model<skeleton_item, sm::skeleton&>, public QGraphicsRectItem {
+	private:
+		void sync_item_to_model() override;
+		void sync_sel_frame_to_model() override;
+		QGraphicsItem* create_selection_frame() const override;
+		bool is_selection_frame_only() const override;
+		QGraphicsItem* item_body() override;
+
+	public:
+		using model_type = sm::skeleton;
+		skeleton_item(sm::skeleton& skel, double scale);
+	};
+
 	class node_item :
 		public has_stick_man_model<node_item, sm::node&>, public QGraphicsEllipseItem {
 	private:
@@ -53,6 +69,9 @@ namespace ui {
 		void sync_item_to_model() override;
 		void sync_sel_frame_to_model() override;
 		QGraphicsItem* create_selection_frame() const override;
+		bool is_selection_frame_only() const override;
+	    QGraphicsItem* item_body() override;
+
 		bool is_pinned_;
 	public:
 		using model_type = sm::node;
@@ -73,6 +92,8 @@ namespace ui {
 		void sync_item_to_model() override;
 		void sync_sel_frame_to_model() override;
 		QGraphicsItem* create_selection_frame() const override;
+		bool is_selection_frame_only() const override;
+		QGraphicsItem* item_body() override;
 		void sync_rotation_constraint_to_model();
 
 	public:

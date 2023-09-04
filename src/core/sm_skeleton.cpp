@@ -778,6 +778,14 @@ sm::const_node_ref sm::skeleton::root_node() const {
 	return root_;
 }
 
+std::any sm::skeleton::get_user_data() const {
+	return user_data_;
+}
+
+void sm::skeleton::set_user_data(std::any data) {
+	user_data_ = data;
+}
+
 sm::result sm::skeleton::set_name(bone& bone, const std::string& new_name) {
 	if (bones_.contains(new_name)) {
 		return result::non_unique_name;

@@ -3,6 +3,9 @@
 #include "util.h"
 #include "../core/sm_skeleton.h"
 
+namespace r = std::ranges;
+namespace rv = std::ranges::views;
+
 namespace {
 
 	constexpr double k_node_radius = 8.0;
@@ -13,6 +16,34 @@ namespace {
 	const auto k_sel_color = QColorConstants::Svg::turquoise;
 	constexpr double k_sel_thickness = 3.0;
 	constexpr int k_bone_zorder = 5;
+
+	QRectF scale_rect(double scale, const QRectF r) {
+		return {
+			scale * r.topLeft().x(),
+			scale * r.topLeft().y(),
+			scale * r.width(),
+			scale * r.height()
+		};
+	}
+
+	QRectF skeleton_bounds(const sm::skeleton& skel) {
+		auto pts = skel.nodes() | rv::transform(
+				[](const sm::node& node)->sm::point {
+					return node.world_pos();
+				}
+			) | r::to<std::vector<sm::point>>();
+		auto [min_x, max_x] = r::minmax(
+				pts | rv::transform([](const auto& pt) {return pt.x; })
+			);
+		auto [min_y, max_y] = r::minmax(
+			pts | rv::transform([](const auto& pt) {return pt.y; })
+		);
+		return {
+			min_x, min_y,
+			max_x - min_x,
+			max_y - min_y
+		};
+	}
 
 	void set_circle(QGraphicsEllipseItem* ei, QPointF pos, double radius, double scale) {
 		ei->setPos(0, 0);
@@ -55,8 +86,10 @@ ui::abstract_canvas_item::abstract_canvas_item() : selection_frame_(nullptr)
 
 void ui::abstract_canvas_item::sync_to_model() {
 	sync_item_to_model();
-	if (selection_frame_) {
-		sync_sel_frame_to_model();
+	if (!is_selection_frame_only()) {
+		if (selection_frame_) {
+			sync_sel_frame_to_model();
+		}
 	}
 }
 
@@ -66,21 +99,67 @@ ui::canvas* ui::abstract_canvas_item::canvas() const {
 }
 
 bool ui::abstract_canvas_item::is_selected() const {
-	return selection_frame_ && selection_frame_->isVisible();
+	if (!is_selection_frame_only()) {
+		return selection_frame_ && selection_frame_->isVisible();
+	} else {
+		return item_body()->isVisible();
+	}
 }
 
 void ui::abstract_canvas_item::set_selected(bool selected) {
-	if (selected) {
-		if (!selection_frame_) {
-			selection_frame_ = create_selection_frame();
-			selection_frame_->setParentItem(dynamic_cast<QGraphicsItem*>(this));
+	if (!is_selection_frame_only()) {
+		if (selected) {
+			if (!selection_frame_) {
+				selection_frame_ = create_selection_frame();
+				selection_frame_->setParentItem(dynamic_cast<QGraphicsItem*>(this));
+			}
+			selection_frame_->show();
 		}
-		selection_frame_->show();
+		else {
+			if (selection_frame_) {
+				selection_frame_->hide();
+			}
+		}
 	} else {
-		if (selection_frame_) {
-			selection_frame_->hide();
-		}
+		item_body()->setVisible(selected);
 	}
+}
+
+const QGraphicsItem* ui::abstract_canvas_item::item_body() const {
+	auto* nonconst_this = const_cast<abstract_canvas_item*>(this);
+	return const_cast<const QGraphicsItem*>(nonconst_this->item_body());
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
+void ui::skeleton_item::sync_item_to_model() {
+	QRectF rect = skeleton_bounds(model_);
+	auto& canv = *canvas();
+	double inv_scale = 1.0 / canv.scale();
+	setRect(
+		scale_rect(inv_scale, rect)
+	);
+}
+
+void ui::skeleton_item::sync_sel_frame_to_model() {
+}
+
+QGraphicsItem* ui::skeleton_item::create_selection_frame() const {
+	return nullptr;
+}
+
+bool ui::skeleton_item::is_selection_frame_only() const {
+	return true;
+}
+
+QGraphicsItem* ui::skeleton_item::item_body() {
+	return this;
+}
+
+ui::skeleton_item::skeleton_item(sm::skeleton& skel, double scale) :
+		has_stick_man_model<ui::skeleton_item, sm::skeleton&>(skel)  {
+	setPen(QPen(Qt::cyan, 1, Qt::DashLine));
+	setBrush(Qt::NoBrush);
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -141,6 +220,14 @@ QGraphicsItem* ui::node_item::create_selection_frame() const {
 	sf->setPen(QPen(k_sel_color, k_sel_thickness * inv_scale, Qt::DotLine));
 	sf->setBrush(Qt::NoBrush);
 	return sf;
+}
+
+bool ui::node_item::is_selection_frame_only() const {
+	return false;
+}
+
+QGraphicsItem* ui::node_item::item_body() {
+	return this;
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -228,6 +315,14 @@ QGraphicsItem* ui::bone_item::create_selection_frame() const {
 	sf->setLine(0, 0, model_.length(), 0);
 	sf->setPen(QPen(k_sel_color, k_sel_thickness * inv_scale, Qt::DotLine));
 	return sf;
+}
+
+bool ui::bone_item::is_selection_frame_only() const {
+	return false;
+}
+
+QGraphicsItem* ui::bone_item::item_body()  {
+	return this;
 }
 
 /*------------------------------------------------------------------------------------------------*/
