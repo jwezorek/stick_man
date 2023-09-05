@@ -132,6 +132,7 @@ void ui::abstract_canvas_item::set_selected(bool selected) {
 			}
 		}
 	} else {
+		sync_to_model();
 		item_body()->setVisible(selected);
 	}
 }

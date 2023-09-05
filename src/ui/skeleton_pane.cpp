@@ -25,9 +25,31 @@ namespace rv = std::ranges::views;
 
 namespace{ 
 
+	const int k_is_bone_role = Qt::UserRole + 1;
+	const int k_model_role = Qt::UserRole + 2;
+
 	constexpr double k_tolerance = 0.00005;
 	constexpr double k_default_rot_constraint_min = -std::numbers::pi / 2.0;
 	constexpr double k_default_rot_constraint_span = std::numbers::pi;
+
+	bool is_bone_treeitem(QStandardItem* qsi) {
+		return qsi->data(k_is_bone_role).value<bool>();
+	}
+
+	void set_treeitem_data(QStandardItem* qsi, sm::skeleton& skel) {
+		qsi->setData(QVariant::fromValue(false), k_is_bone_role);
+		qsi->setData(QVariant::fromValue(&skel), k_model_role);
+	}
+
+	void set_treeitem_data(QStandardItem* qsi, sm::bone& bone) {
+		qsi->setData(QVariant::fromValue(true), k_is_bone_role);
+		qsi->setData(QVariant::fromValue(&bone), k_model_role);
+	}
+
+	template<typename T>
+	T* get_treeitem_data(QStandardItem* qsi) {
+		return qsi->data(k_model_role).value<T*>();
+	}
 
 	auto to_model_objects(r::input_range auto&& itms) {
 		return itms |
@@ -529,11 +551,10 @@ namespace{
 		double radius;
 	};
 
-
-	QStandardItem* make_bone_tree_item(sm::bone& b) {
-		auto* itm = new QStandardItem(b.name().c_str());
-		auto& bi = ui::item_from_model<ui::bone_item>(b);
-		itm->setData(QVariant::fromValue(&bi));
+	QStandardItem* make_bone_tree_item(sm::bone& bone) {
+		auto* itm = new QStandardItem(bone.name().c_str());
+		auto& bi = ui::item_from_model<ui::bone_item>(bone);
+		set_treeitem_data(itm, bone);
 		bi.set_treeview_item(itm);
 		return itm;
 	}
@@ -545,7 +566,7 @@ namespace{
 
 		QStandardItem* root = tree->invisibleRootItem();
 		QStandardItem* skel_item = new QStandardItem(skel.get().name().c_str()); 
-		skel_item->setSelectable(false);
+		set_treeitem_data(skel_item, skel.get());
 		root->appendRow(skel_item);
 
 		std::unordered_map<sm::bone*, QStandardItem*> bone_to_tree_item;
@@ -691,13 +712,39 @@ void ui::skeleton_pane::sync_with_model()
 	expand_selected_items();
 }
 
-void ui::skeleton_pane::skel_tree_selection_change(
+void ui::skeleton_pane::handle_tree_selection_change(
 		const QItemSelection&, const QItemSelection&) {
 	auto selection = selected_items();
+	QStandardItem* selected_skel = nullptr;
+	for (auto* qsi : selection) {
+		if (!is_bone_treeitem(qsi)) {
+			selected_skel = qsi;
+			break;
+		}
+	}
+	if (selected_skel) {
+
+		auto bone_canv_items = canvas().bone_items();
+		for (auto* bi : bone_canv_items) {
+			select_item(bi->treeview_item(), false);
+		}
+
+		auto* skel_ptr = get_treeitem_data<sm::skeleton>(selected_skel);
+		skeleton_item* skel_canv_item = nullptr;
+		if (skel_ptr->get_user_data().has_value()) {
+			skel_canv_item = &item_from_model<skeleton_item>(*skel_ptr);
+		} else {
+			skel_canv_item = canvas().insert_item(*skel_ptr);
+		}
+		canvas().set_selection(skel_canv_item, true);
+
+		return;
+	}
+
 	std::vector<abstract_canvas_item*> sel_canv_items;
 	for (auto* sel : selection) {
-		bone_item* bi = sel->data(Qt::UserRole + 1).value<bone_item*>();
-		sel_canv_items.push_back(bi);
+		sm::bone* bone_ptr = get_treeitem_data<sm::bone>(sel);
+		sel_canv_items.push_back(&item_from_model<bone_item>(*bone_ptr));
 	}
 	canvas().set_selection(sel_canv_items, true);
 }
@@ -764,7 +811,7 @@ ui::selection_properties& ui::skeleton_pane::sel_properties() {
 	return *sel_properties_;
 }
 
-void ui::skeleton_pane::select_item(QStandardItem* item) {
+void ui::skeleton_pane::select_item(QStandardItem* item, bool select = true) {
 
 	QStandardItemModel* model = qobject_cast<QStandardItemModel*>(skeleton_tree_->model());
 	if (!model) {
@@ -782,7 +829,10 @@ void ui::skeleton_pane::select_item(QStandardItem* item) {
 	}
 
 	QItemSelection selection(index, index);
-	selectionModel->select(selection, QItemSelectionModel::Select);
+	selectionModel->select(
+		selection, 
+		(select) ? QItemSelectionModel::Select : QItemSelectionModel::Deselect
+	);
 
 }
 
@@ -830,9 +880,9 @@ void ui::skeleton_pane::handle_canv_sel_change() {
 	expand_selected_items();
 }
 
-void ui::skeleton_pane::handle_treeitem_changed(QStandardItem* item) {
-	bone_item* bi = item->data(Qt::UserRole + 1).value<bone_item*>();
-	auto& bone = bi->model();
+void ui::skeleton_pane::handle_tree_change(QStandardItem* item) {
+	sm::bone* bone_ptr = get_treeitem_data<sm::bone>(item);
+	auto& bone = *bone_ptr;
 	auto old_name = bone.name();
 	auto& skel = bone.owner().get();
 
@@ -868,7 +918,7 @@ QTreeView* ui::skeleton_pane::create_skeleton_tree() {
 	QStandardItemModel* model = new QStandardItemModel();
 
 	connect(model, &QStandardItemModel::itemChanged, this, 
-		&skeleton_pane::handle_treeitem_changed
+		&skeleton_pane::handle_tree_change
 	);
 
 
@@ -909,7 +959,7 @@ QTreeView* ui::skeleton_pane::create_skeleton_tree() {
 
 void ui::skeleton_pane::connect_tree_sel_handler() {
 	conn_ = connect(skeleton_tree_->selectionModel(), &QItemSelectionModel::selectionChanged,
-		this, &ui::skeleton_pane::skel_tree_selection_change);
+		this, &ui::skeleton_pane::handle_tree_selection_change);
 }
 
 void ui::skeleton_pane::disconnect_tree_sel_handler() {
