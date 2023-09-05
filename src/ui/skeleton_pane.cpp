@@ -747,12 +747,13 @@ void ui::skeleton_pane::handle_tree_selection_change(
 	if (selected_skel) {
 		select_item(selected_skel, true);
 
-		/*
 		auto bone_canv_items = canvas().bone_items();
 		for (auto* bi : bone_canv_items) {
-			select_item(bi->treeview_item(), false);
+			if (bi->is_selected()) {
+				select_item(bi->treeview_item(), false);
+			}
 		}
-		*/
+
 		auto* skel_ptr = get_treeitem_data<sm::skeleton>(selected_skel);
 		skeleton_item* skel_canv_item = nullptr;
 		if (skel_ptr->get_user_data().has_value()) {
