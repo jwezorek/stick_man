@@ -72,6 +72,7 @@ namespace{
 	const int k_is_bone_role = Qt::UserRole + 1;
 	const int k_model_role = Qt::UserRole + 2;
 
+	constexpr int k_treeview_max_hgt = 300;
 	constexpr double k_tolerance = 0.00005;
 	constexpr double k_default_rot_constraint_min = -std::numbers::pi / 2.0;
 	constexpr double k_default_rot_constraint_span = std::numbers::pi;
@@ -1112,6 +1113,7 @@ QTreeView* ui::skeleton_pane::create_skeleton_tree() {
 			}
 		 )"
 	);
+	treeView->setMaximumHeight( k_treeview_max_hgt );
 	return treeView;
 }
 
