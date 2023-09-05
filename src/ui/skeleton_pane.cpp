@@ -700,6 +700,8 @@ void ui::skeleton_pane::expand_selected_items() {
 
 void ui::skeleton_pane::sync_with_model()
 {
+	disconnect_tree_sel_handler();
+
 	// clear the treeview and repopulate it.
 	QStandardItemModel* tree_model = static_cast<QStandardItemModel*>(skeleton_tree_->model());
 	tree_model->clear();
@@ -709,18 +711,22 @@ void ui::skeleton_pane::sync_with_model()
 		insert_skeleton(canvas(), tree_model, skel);
 	}
 
+	skeleton_tree_->clearSelection();
+
 	//sync the new treeview selection state with the selected bones in the canvas.
-	auto selected_tree_items = canvas().bone_items() | rv::filter(
-			[](bone_item* bi)->bool {
-				return bi->is_selected();
+	auto selected_tree_items = canvas().selection() | rv::filter(
+			[](auto* aci)->bool {
+				return aci->is_selected() && dynamic_cast<has_treeview_item*>(aci);
 			}
 		) | rv::transform(
-			[](bone_item* bi)->QStandardItem* {
-				return bi->treeview_item();
+			[](auto* aci)->QStandardItem* {
+				return  dynamic_cast<has_treeview_item*>(aci)->treeview_item();
 			}
 		) | r::to<std::vector<QStandardItem*>>();
-	select_items(selected_tree_items, false);
+	select_items(selected_tree_items, true);
 	expand_selected_items();
+
+	connect_tree_sel_handler();
 }
 
 void ui::skeleton_pane::handle_tree_selection_change(
