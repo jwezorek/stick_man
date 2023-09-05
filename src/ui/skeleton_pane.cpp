@@ -25,6 +25,50 @@ namespace rv = std::ranges::views;
 
 namespace{ 
 
+	template <typename T>
+	struct item_for_model;
+
+	template <>
+	struct item_for_model<sm::node> {
+		using type = ui::node_item;
+	};
+
+	template <>
+	struct item_for_model<sm::bone> {
+		using type = ui::bone_item;
+	};
+
+	template <>
+	struct item_for_model<sm::skeleton> {
+		using type = ui::skeleton_item;
+	};
+
+	template <class... Args>
+	struct variant_cast_proxy
+	{
+		std::variant<Args...> v;
+
+		template <class... ToArgs>
+		operator std::variant<ToArgs...>() const
+		{
+			return std::visit(
+				[](auto&& arg) -> std::variant<ToArgs...> {
+					if constexpr (std::is_convertible_v<decltype(arg), std::variant<ToArgs...>>)
+						return arg;
+					else
+						throw std::runtime_error("bad variant cast");
+				},
+				v
+			);
+		}
+	};
+
+	template <class... Args>
+	auto variant_cast(const std::variant<Args...>& v) -> variant_cast_proxy<Args...>
+	{
+		return { v };
+	}
+
 	const int k_is_bone_role = Qt::UserRole + 1;
 	const int k_model_role = Qt::UserRole + 2;
 
@@ -49,6 +93,16 @@ namespace{
 	template<typename T>
 	T* get_treeitem_data(QStandardItem* qsi) {
 		return qsi->data(k_model_role).value<T*>();
+	}
+
+	std::variant<sm::skeleton_ref, sm::bone_ref> get_treeitem_var(QStandardItem* qsi) {
+		if (is_bone_treeitem(qsi)) {
+			auto* bone = get_treeitem_data<sm::bone>(qsi);
+			return { std::ref(*bone) };
+		} else {
+			auto* skeleton = get_treeitem_data<sm::skeleton>(qsi);
+			return { std::ref(*skeleton) };
+		}
 	}
 
 	auto to_model_objects(r::input_range auto&& itms) {
@@ -145,10 +199,35 @@ namespace{
 	};
 
 	class skeleton_properties : public ui::abstract_properties_widget {
+		ui::labeled_field* name_;
 	public:
 		skeleton_properties(ui::stick_man* mw, QWidget* parent) :
 			abstract_properties_widget(mw, parent, "skeleton selection") {}
-		void set_selection(const ui::canvas& canv) override {}
+
+		void populate() override {
+			layout_->addWidget(
+				name_ = new ui::labeled_field("   name", "")
+			);
+			name_->set_color(QColor("yellow"));
+			name_->value()->set_validator(
+				[this](const std::string& new_name)->bool {
+					return main_wnd_->skel_pane().validate_props_name_change(new_name);
+				}
+			);
+
+			connect(name_->value(), &ui::string_edit::value_changed,
+				[this]() {
+					main_wnd_->skel_pane().handle_props_name_change(
+						name_->value()->text().toStdString()
+					);
+				}
+			);
+		}
+
+		void set_selection(const ui::canvas& canv) override {
+			auto* skel_item = canv.selected_skeleton();
+			name_->set_value(skel_item->model().name().c_str());
+		}
 	};
 
 	class node_properties : public ui::abstract_properties_widget {
@@ -367,15 +446,19 @@ namespace{
 		}
 	};
 
-	using node_or_bone = std::variant<sm::node_ref, sm::bone_ref>;
-	std::optional<node_or_bone> selected_node_or_bone(const ui::canvas& canv) {
+	using model_var = std::variant<sm::skeleton_ref, sm::node_ref, sm::bone_ref>;
+	std::optional<model_var> selected_model(const ui::canvas& canv) {
+		auto* skel_item = canv.selected_skeleton();
+		if (skel_item) {
+			return model_var{ std::ref(skel_item->model()) };
+		}
 		auto bones = canv.selected_bones();
 		auto nodes = canv.selected_nodes();
 		if (bones.size() == 1 && nodes.empty()) {
-			return node_or_bone{ std::ref(bones.front()->model()) };
+			return model_var{ std::ref(bones.front()->model()) };
 		}
 		if (nodes.size() == 1 && bones.empty()) {
-			return node_or_bone{ std::ref(nodes.front()->model()) };
+			return model_var{ std::ref(nodes.front()->model()) };
 		}
 		return {};
 	}
@@ -383,7 +466,7 @@ namespace{
 	std::function<void()> make_select_node_fn(ui::stick_man& mw, bool parent_node) {
 		return [&mw, parent_node]() {
 			auto& canv = mw.view().canvas();
-			auto model_item = selected_node_or_bone(canv);
+			auto model_item = selected_model(canv);
 			if (!model_item || !std::holds_alternative<sm::bone_ref>(*model_item)) {
 				return;
 			}
@@ -775,25 +858,32 @@ void ui::skeleton_pane::handle_tree_selection_change(
 }
 
 bool ui::skeleton_pane::validate_props_name_change(const std::string& new_name) {
-	auto model_item = selected_node_or_bone(canvas());
+	auto model_item = selected_model(canvas());
 	if (!model_item) {
 		return false;
 	}
+	if (std::holds_alternative<sm::skeleton_ref>(*model_item)) {
+		auto& world = main_wnd_->sandbox();
+		return world.can_name_skeleton(new_name);
+	}
+
+	std::variant<sm::node_ref, sm::bone_ref> node_or_bone = variant_cast(*model_item);
 	return std::visit(
 		[new_name](auto model_ref)->bool {
 			auto& model = model_ref.get();
 			auto& skel = model.owner().get();
 			return skel.can_name<std::remove_cvref_t<decltype(model)>>(new_name);
 		},
-		*model_item
+		node_or_bone
 	);
 }
 
 void ui::skeleton_pane::handle_props_name_change(const std::string& new_name) {
-	auto model_item = selected_node_or_bone(canvas());
+	auto model_item = selected_model(canvas());
 	if (!model_item) {
 		return;
 	}
+
 	auto result = std::visit(
 		[new_name](auto model_ref)->sm::result {
 			auto& model = model_ref.get();
@@ -802,17 +892,23 @@ void ui::skeleton_pane::handle_props_name_change(const std::string& new_name) {
 		},
 		*model_item
 	);
-	if (result != sm::result::success) { 
-		//this should not happen...
-		return;
-	}
-	if (std::holds_alternative<sm::bone_ref>(*model_item)) {
-		bone_item& bi = item_from_model<bone_item>(
-			std::get<sm::bone_ref>(*model_item).get()
-		);
-		QStandardItem* tree_item = bi.treeview_item();
-		tree_item->setText(new_name.c_str());
-	}
+
+	disconnect_tree_change_handler();
+	std::visit(
+		[new_name](auto model_ref) {
+			auto& model = model_ref.get();
+			using item_type = 
+				typename item_for_model<std::remove_cvref_t<decltype(model)>>::type;
+			item_type& item = item_from_model<item_type>(model);
+			auto* tv_holder = dynamic_cast<has_treeview_item*>(&item);
+			if (tv_holder) {
+				QStandardItem* tree_item = tv_holder->treeview_item();
+				tree_item->setText(new_name.c_str());
+			}
+		},
+		*model_item
+	);
+	connect_tree_change_handler();
 }
 
 ui::skeleton_pane::skeleton_pane(ui::stick_man* mw) :
@@ -827,9 +923,9 @@ ui::skeleton_pane::skeleton_pane(ui::stick_man* mw) :
 	auto column = new QVBoxLayout(contents);
 	column->addWidget(skeleton_tree_ = create_skeleton_tree());
 	column->addWidget(sel_properties_ = new selection_properties(mw));
-
-
     setWidget(contents);
+
+	connect_tree_change_handler();
 }
 
 ui::selection_properties& ui::skeleton_pane::sel_properties() {
@@ -932,15 +1028,22 @@ void ui::skeleton_pane::handle_canv_sel_change() {
 }
 
 void ui::skeleton_pane::handle_tree_change(QStandardItem* item) {
-	sm::bone* bone_ptr = get_treeitem_data<sm::bone>(item);
-	auto& bone = *bone_ptr;
-	auto old_name = bone.name();
-	auto& skel = bone.owner().get();
+	auto success = std::visit(
+		[item](auto model_ref)->bool {
+			auto& model = model_ref.get();
+			auto old_name = model.name();
+			auto& owner = model.owner().get();
+			auto result = owner.set_name(model, item->text().toStdString());
+			if (result != sm::result::success) {
+				item->setText(old_name.c_str());
+				return false;
+			}
+			return true;
+		},
+		get_treeitem_var(item)
+		);
 
-	auto result = skel.set_name(bone, item->text().toStdString());
-	if (result != sm::result::success) {
-		item->setText(old_name.c_str());
-	} else {
+	if (success) {
 		emit canvas().selection_changed();
 	}
 }
@@ -965,14 +1068,18 @@ ui::canvas& ui::skeleton_pane::canvas() {
 	return main_wnd_->view().canvas();
 }
 
-QTreeView* ui::skeleton_pane::create_skeleton_tree() {
-	QStandardItemModel* model = new QStandardItemModel();
-
-	connect(model, &QStandardItemModel::itemChanged, this, 
+void ui::skeleton_pane::connect_tree_change_handler() {
+	auto* model = static_cast<QStandardItemModel*>(skeleton_tree_->model());
+	tree_conn_ = connect(model, &QStandardItemModel::itemChanged, this,
 		&skeleton_pane::handle_tree_change
 	);
+}
+void ui::skeleton_pane::disconnect_tree_change_handler() {
+	disconnect(tree_conn_);
+}
 
-
+QTreeView* ui::skeleton_pane::create_skeleton_tree() {
+	QStandardItemModel* model = new QStandardItemModel();
 	QTreeView* treeView = new QTreeView();
 	treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
 	treeView->setModel(model);

@@ -730,6 +730,7 @@ namespace {
 /*------------------------------------------------------------------------------------------------*/
 
 sm::skeleton::skeleton(world& w, const std::string& name, double x, double y) :
+		owner_(w),
 		name_(name),
 		root_(w.create_node(*this, x, y)) {
 	nodes_.insert({ root_.get().name(), &root_.get()});
@@ -823,6 +824,14 @@ std::string sm::skeleton::to_json() const {
 	return ""; //TODO
 }
 
+sm::world_ref sm::skeleton::owner() {
+	return owner_;
+}
+
+sm::const_world_ref sm::skeleton::owner() const {
+	return owner_;
+}
+
 /*------------------------------------------------------------------------------------------------*/
 
 sm::world::world() {}
@@ -845,6 +854,23 @@ std::vector<std::string> sm::world::skeleton_names() const {
 	return skeletons() |
 		rv::transform([](auto skel) {return skel.get().name(); }) |
 		r::to< std::vector<std::string>>();
+}
+
+bool sm::world::can_name_skeleton(const std::string& name) const {
+	return !skeletons_.contains(name);
+}
+
+sm::result sm::world::set_name(sm::skeleton& skel, const std::string& new_name) {
+	if (!can_name_skeleton(new_name)) {
+		return result::non_unique_name;
+	}
+
+	auto old_name = skel.name();
+	skel.set_name(new_name);
+	skeletons_[new_name] = std::move(skeletons_[old_name]);
+	skeletons_.erase(old_name);
+
+	return result::success;
 }
 
 sm::node_ref sm::world::create_node(sm::skeleton& parent, double x, double y) {

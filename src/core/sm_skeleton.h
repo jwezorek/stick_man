@@ -19,11 +19,13 @@
 
 namespace sm {
 
+	class world;
+
 	class skeleton : public detail::enable_protected_make_unique<skeleton> {
 		friend class world;
 
 	private:
-
+		world& owner_;
 		std::string name_;
 		node_ref root_;
 		std::any user_data_;
@@ -55,6 +57,9 @@ namespace sm {
 		auto nodes() const { return detail::to_range_view<const_node_ref>(nodes_); }
 		auto bones() const { return detail::to_range_view<const_bone_ref>(bones_); }
 
+		world_ref owner();
+		const_world_ref owner() const;
+
 		template <typename T>
 		bool can_name(const std::string& name) const {
 			if constexpr (std::is_same<T, sm::node>::value) {
@@ -68,7 +73,6 @@ namespace sm {
 					"skeleton::can_name, unsupported type");
 			}
 		}
-
 	};
 
     class world {
@@ -85,7 +89,10 @@ namespace sm {
 		world();
 		skeleton_ref create_skeleton(double x, double y);
 		expected_skeleton skeleton(const std::string& name);
+
 		std::vector<std::string> skeleton_names() const;
+		bool can_name_skeleton(const std::string& name) const;
+		result set_name(sm::skeleton& skel, const std::string& new_name);
 
         expected_bone create_bone(const std::string& name, node& u, node& v);
 		result from_json(const std::string&);
