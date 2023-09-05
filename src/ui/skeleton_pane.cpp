@@ -43,32 +43,6 @@ namespace{
 		using type = ui::skeleton_item;
 	};
 
-	template <class... Args>
-	struct variant_cast_proxy
-	{
-		std::variant<Args...> v;
-
-		template <class... ToArgs>
-		operator std::variant<ToArgs...>() const
-		{
-			return std::visit(
-				[](auto&& arg) -> std::variant<ToArgs...> {
-					if constexpr (std::is_convertible_v<decltype(arg), std::variant<ToArgs...>>)
-						return arg;
-					else
-						throw std::runtime_error("bad variant cast");
-				},
-				v
-			);
-		}
-	};
-
-	template <class... Args>
-	auto variant_cast(const std::variant<Args...>& v) -> variant_cast_proxy<Args...>
-	{
-		return { v };
-	}
-
 	const int k_is_bone_role = Qt::UserRole + 1;
 	const int k_model_role = Qt::UserRole + 2;
 
@@ -863,19 +837,18 @@ bool ui::skeleton_pane::validate_props_name_change(const std::string& new_name) 
 	if (!model_item) {
 		return false;
 	}
-	if (std::holds_alternative<sm::skeleton_ref>(*model_item)) {
-		auto& world = main_wnd_->sandbox();
-		return world.can_name_skeleton(new_name);
-	}
-
-	std::variant<sm::node_ref, sm::bone_ref> node_or_bone = variant_cast(*model_item);
 	return std::visit(
 		[new_name](auto model_ref)->bool {
 			auto& model = model_ref.get();
-			auto& skel = model.owner().get();
-			return skel.can_name<std::remove_cvref_t<decltype(model)>>(new_name);
+			using T = std::remove_cvref_t<decltype(model)>;
+			auto& owner = model.owner().get();
+			if constexpr (std::is_same<T, sm::skeleton>::value) {
+				return owner.can_name_skeleton(new_name);
+			} else {
+				return owner.can_name<T>(new_name);
+			}
 		},
-		node_or_bone
+		*model_item
 	);
 }
 
