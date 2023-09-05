@@ -86,6 +86,7 @@ namespace ui {
         const selection_set& selection() const;
 		sel_type selection_type() const;
 
+		ui::skeleton_item* selected_skeleton() const;
         std::vector<ui::bone_item*> selected_bones() const;
         std::vector<ui::node_item*> selected_nodes() const;
         bool is_status_line_visible() const;

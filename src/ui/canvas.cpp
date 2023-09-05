@@ -250,6 +250,12 @@ ui::sel_type ui::canvas::selection_type() const {
 		return multi ? sel_type::bones : sel_type::bone;
 	}
 }
+
+ui::skeleton_item* ui::canvas::selected_skeleton() const {
+	auto skeletons = to_vector_of_type<ui::skeleton_item>(selection_);
+	return (skeletons.size() == 1) ? skeletons.front() : nullptr;
+}
+
 std::vector<ui::bone_item*> ui::canvas::selected_bones() const {
     return to_vector_of_type<ui::bone_item>(selection_);
 }

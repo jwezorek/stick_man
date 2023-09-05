@@ -154,6 +154,20 @@ QGraphicsItem* ui::abstract_canvas_item::selection_frame() {
 
 /*------------------------------------------------------------------------------------------------*/
 
+ui::has_treeview_item::has_treeview_item() :
+	tree_view_item_(nullptr) {
+}
+
+void ui::has_treeview_item::set_treeview_item(QStandardItem* itm) {
+	tree_view_item_ = itm;
+}
+
+QStandardItem* ui::has_treeview_item::treeview_item() const {
+	return tree_view_item_;
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
 void ui::skeleton_item::sync_item_to_model() {
 	QRectF rect = inflate_rect(skeleton_bounds(model_), k_skel_marg);
 	auto& canv = *canvas();
@@ -161,6 +175,7 @@ void ui::skeleton_item::sync_item_to_model() {
 	setRect(
 		scale_rect(inv_scale, rect)
 	);
+	setVisible(is_selected());
 }
 
 void ui::skeleton_item::sync_sel_frame_to_model() {
@@ -182,6 +197,7 @@ ui::skeleton_item::skeleton_item(sm::skeleton& skel, double scale) :
 		has_stick_man_model<ui::skeleton_item, sm::skeleton&>(skel)  {
 	setPen(QPen(Qt::cyan, 3, Qt::DotLine));
 	setBrush(Qt::NoBrush);
+	setVisible(false);
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -280,14 +296,6 @@ ui::node_item& ui::bone_item::child_node_item() const {
 	return std::any_cast<std::reference_wrapper<ui::node_item>>(
 		model_.child_node().get_user_data()
 	);
-}
-
-void ui::bone_item::set_treeview_item(QStandardItem* itm) {
-	treeview_item_ = itm;
-}
-
-QStandardItem* ui::bone_item::treeview_item() const {
-	return treeview_item_;
 }
 
 void ui::bone_item::sync_rotation_constraint_to_model() {

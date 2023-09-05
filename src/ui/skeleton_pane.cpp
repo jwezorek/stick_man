@@ -551,7 +551,7 @@ namespace{
 		double radius;
 	};
 
-	QStandardItem* make_bone_tree_item(sm::bone& bone) {
+	QStandardItem* make_treeitem(sm::bone& bone) {
 		auto* itm = new QStandardItem(bone.name().c_str());
 		auto& bi = ui::item_from_model<ui::bone_item>(bone);
 		set_treeitem_data(itm, bone);
@@ -559,20 +559,31 @@ namespace{
 		return itm;
 	}
 
-	void insert_skeleton(QStandardItemModel* tree, sm::skeleton_ref skel) {
+	QStandardItem* make_treeitem(ui::canvas& canv, sm::skeleton& skel) {
+		auto* itm = new QStandardItem(skel.name().c_str());
+
+		ui::skeleton_item* canv_item = nullptr;
+		canv_item = (ui::has_canvas_item(skel)) ?
+			 &ui::item_from_model<ui::skeleton_item>(skel):
+			 canv.insert_item(skel);
+		set_treeitem_data(itm, skel);
+		canv_item->set_treeview_item(itm);
+		return itm;
+	}
+
+	void insert_skeleton(ui::canvas& canv, QStandardItemModel* tree, sm::skeleton_ref skel) {
 		
 		// traverse the graph and repopulate the treeview during the traversal 
 		// by building a hash table mapping bones to their tree items.
 
 		QStandardItem* root = tree->invisibleRootItem();
-		QStandardItem* skel_item = new QStandardItem(skel.get().name().c_str()); 
-		set_treeitem_data(skel_item, skel.get());
+		QStandardItem* skel_item = make_treeitem(canv, skel.get());
 		root->appendRow(skel_item);
 
 		std::unordered_map<sm::bone*, QStandardItem*> bone_to_tree_item;
 		auto visit = [&](sm::bone& b)->bool {
 			auto parent = b.parent_bone();
-			QStandardItem* bone_row = make_bone_tree_item(b);
+			QStandardItem* bone_row = make_treeitem(b);
 			QStandardItem* parent_item = 
 				(!parent) ? skel_item : bone_to_tree_item.at(&parent->get());
 			parent_item->appendRow(bone_row);
@@ -695,7 +706,7 @@ void ui::skeleton_pane::sync_with_model()
 
 	auto& sandbox = main_wnd_->sandbox();
 	for (const auto& skel : sandbox.skeletons()) {
-		insert_skeleton(tree_model, skel);
+		insert_skeleton(canvas(), tree_model, skel);
 	}
 
 	//sync the new treeview selection state with the selected bones in the canvas.
@@ -714,6 +725,10 @@ void ui::skeleton_pane::sync_with_model()
 
 void ui::skeleton_pane::handle_tree_selection_change(
 		const QItemSelection&, const QItemSelection&) {
+
+	std::vector<abstract_canvas_item*> sel_canv_items;
+	disconnect_canv_sel_handler();
+
 	auto selection = selected_items();
 	QStandardItem* selected_skel = nullptr;
 	for (auto* qsi : selection) {
@@ -722,13 +737,16 @@ void ui::skeleton_pane::handle_tree_selection_change(
 			break;
 		}
 	}
-	if (selected_skel) {
 
+	if (selected_skel) {
+		select_item(selected_skel, true);
+
+		/*
 		auto bone_canv_items = canvas().bone_items();
 		for (auto* bi : bone_canv_items) {
 			select_item(bi->treeview_item(), false);
 		}
-
+		*/
 		auto* skel_ptr = get_treeitem_data<sm::skeleton>(selected_skel);
 		skeleton_item* skel_canv_item = nullptr;
 		if (skel_ptr->get_user_data().has_value()) {
@@ -736,17 +754,17 @@ void ui::skeleton_pane::handle_tree_selection_change(
 		} else {
 			skel_canv_item = canvas().insert_item(*skel_ptr);
 		}
-		canvas().set_selection(skel_canv_item, true);
-
-		return;
+		sel_canv_items.push_back(skel_canv_item);
+	} else {
+		for (auto* sel : selection) {
+			sm::bone* bone_ptr = get_treeitem_data<sm::bone>(sel);
+			sel_canv_items.push_back(&item_from_model<bone_item>(*bone_ptr));
+		}
 	}
 
-	std::vector<abstract_canvas_item*> sel_canv_items;
-	for (auto* sel : selection) {
-		sm::bone* bone_ptr = get_treeitem_data<sm::bone>(sel);
-		sel_canv_items.push_back(&item_from_model<bone_item>(*bone_ptr));
-	}
 	canvas().set_selection(sel_canv_items, true);
+	connect_canv_sel_handler();
+
 }
 
 bool ui::skeleton_pane::validate_props_name_change(const std::string& new_name) {
@@ -836,6 +854,17 @@ void ui::skeleton_pane::select_item(QStandardItem* item, bool select = true) {
 
 }
 
+void ui::skeleton_pane::connect_canv_sel_handler() {
+	auto& canv = canvas();
+	canv_sel_conn_ = connect(&canv, &ui::canvas::selection_changed,
+		this, &ui::skeleton_pane::handle_canv_sel_change
+	);
+}
+
+void ui::skeleton_pane::disconnect_canv_sel_handler() {
+	disconnect(canv_sel_conn_);
+}
+
 void ui::skeleton_pane::init() {
 	
 	sel_properties_->init();
@@ -845,10 +874,7 @@ void ui::skeleton_pane::init() {
 		this, &ui::skeleton_pane::sync_with_model 
 	);
 
-	connect( &canv, &ui::canvas::selection_changed,
-		this, &ui::skeleton_pane::handle_canv_sel_change
-	);
-
+	connect_canv_sel_handler();
 	connect_tree_sel_handler();
 }
 
@@ -865,9 +891,11 @@ void ui::skeleton_pane::select_items(const std::vector<QStandardItem*>& items, b
 	}
 }
 
+/*
 void ui::skeleton_pane::handle_canv_sel_change() {
-	auto tree_sel = selected_items();
+
 	auto canvas_sel = canvas().selected_bones();
+	auto tree_sel = selected_items();
 
 	if (is_same_bone_selection(canvas_sel, tree_sel)) {
 		return;
@@ -878,6 +906,22 @@ void ui::skeleton_pane::handle_canv_sel_change() {
 		) | r::to<std::vector<QStandardItem*>>();
     select_items(itms, false);
 	expand_selected_items();
+}
+*/
+
+void ui::skeleton_pane::handle_canv_sel_change() {
+
+	disconnect_tree_sel_handler();
+
+	skeleton_tree_->clearSelection();
+	for (abstract_canvas_item* canv_itm : canvas().selection()) {
+		auto* treeitem_holder = dynamic_cast<has_treeview_item*>(canv_itm);
+		if (treeitem_holder) {
+			select_item(treeitem_holder->treeview_item(), true);
+		}
+	}
+
+	connect_tree_sel_handler();
 }
 
 void ui::skeleton_pane::handle_tree_change(QStandardItem* item) {

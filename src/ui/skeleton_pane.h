@@ -40,10 +40,16 @@ namespace ui {
 		QTreeView* skeleton_tree_;
 		selection_properties* sel_properties_;
 		QMetaObject::Connection conn_;
+		QMetaObject::Connection canv_sel_conn_;
 
 		void expand_selected_items();
+
 		void connect_tree_sel_handler();
 		void disconnect_tree_sel_handler();
+
+		void connect_canv_sel_handler();
+		void disconnect_canv_sel_handler();
+
 		void sync_with_model();
 		void handle_canv_sel_change();
 		void handle_tree_change(QStandardItem* item);

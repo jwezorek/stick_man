@@ -54,8 +54,18 @@ namespace ui {
 		}
 	};
 
+	class has_treeview_item {
+		QStandardItem* tree_view_item_;
+	public:
+		has_treeview_item();
+		void set_treeview_item(QStandardItem* itm);
+		QStandardItem* treeview_item() const;
+	};
+
 	class skeleton_item :
-		public has_stick_man_model<skeleton_item, sm::skeleton&>, public QGraphicsRectItem {
+		public has_treeview_item,
+		public has_stick_man_model<skeleton_item, sm::skeleton&>, 
+		public QGraphicsRectItem {
 	private:
 		void sync_item_to_model() override;
 		void sync_sel_frame_to_model() override;
@@ -90,7 +100,9 @@ namespace ui {
 	class rot_constraint_adornment;
 
 	class bone_item :
-		public has_stick_man_model<bone_item, sm::bone&>, public QGraphicsPolygonItem {
+		public has_treeview_item,
+		public has_stick_man_model<bone_item, sm::bone&>, 
+		public QGraphicsPolygonItem {
 	private:
 		rot_constraint_adornment* rot_constraint_;
 		QStandardItem* treeview_item_;
@@ -108,8 +120,6 @@ namespace ui {
 		bone_item(sm::bone& bone, double scale);
 		node_item& parent_node_item() const;
 		node_item& child_node_item() const;
-		void set_treeview_item(QStandardItem* itm);
-		QStandardItem* treeview_item() const;
 	};
 
 	Q_DECLARE_METATYPE(bone_item*);
@@ -134,23 +144,27 @@ namespace ui {
 		return std::any_cast<std::reference_wrapper<T>>(model_obj.get_user_data());
 	}
 
+	bool has_canvas_item(const auto& model_obj) {
+		return model_obj.get_user_data().has_value();
+	}
+
 	template<typename T>
 	auto to_models_of_item_type(const auto& sel) {
 		namespace r = std::ranges;
 		namespace rv = std::ranges::views;
 		using out_type = typename T::model_type;
 		return sel | rv::transform(
-			[](auto ptr)->out_type* {
-				auto bi = dynamic_cast<T*>(ptr);
-				if (!bi) {
-					return nullptr;
+				[](auto ptr)->out_type* {
+					auto bi = dynamic_cast<T*>(ptr);
+					if (!bi) {
+						return nullptr;
+					}
+					return &(bi->model());
 				}
-				return &(bi->model());
-			}
-		) | rv::filter(
-			[](auto ptr) {
-				return ptr;
-			}
-		) | r::to<std::vector<out_type*>>();
+			) | rv::filter(
+				[](auto ptr) {
+					return ptr;
+				}
+			) | r::to<std::vector<out_type*>>();
 	}
 }
