@@ -853,6 +853,8 @@ bool ui::skeleton_pane::validate_props_name_change(const std::string& new_name) 
 }
 
 void ui::skeleton_pane::handle_props_name_change(const std::string& new_name) {
+
+	// change the name in the model...
 	auto model_item = selected_model(canvas());
 	if (!model_item) {
 		return;
@@ -866,6 +868,8 @@ void ui::skeleton_pane::handle_props_name_change(const std::string& new_name) {
 		},
 		*model_item
 	);
+
+	// then update the skeleton treeview if this is a bone or a skeleton...
 
 	disconnect_tree_change_handler();
 	std::visit(
