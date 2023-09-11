@@ -222,35 +222,6 @@ const ui::selection_set&  ui::canvas::selection() const {
 	return selection_;
 }
 
-ui::sel_type ui::canvas::selection_type() const {
-	const auto& sel = selection_;
-
-	if (sel.empty()) {
-		return sel_type::none;
-	}
-
-	if (sel.size() == 1 && dynamic_cast<ui::skeleton_item*>(*sel.begin())) {
-		return sel_type::skeleton;
-	}
-
-	bool has_node = false;
-	bool has_bone = false;
-	for (auto itm_ptr : sel) {
-		has_node = dynamic_cast<ui::node_item*>(itm_ptr) || has_node;
-		has_bone = dynamic_cast<ui::bone_item*>(itm_ptr) || has_bone;
-		if (has_node && has_bone) {
-			return sel_type::mixed;
-		}
-	}
-	bool multi = sel.size() > 1;
-	if (has_node) {
-		return multi ? sel_type::nodes : sel_type::node;
-	}
-	else {
-		return multi ? sel_type::bones : sel_type::bone;
-	}
-}
-
 ui::skeleton_item* ui::canvas::selected_skeleton() const {
 	auto skeletons = to_vector_of_type<ui::skeleton_item>(selection_);
 	return (skeletons.size() == 1) ? skeletons.front() : nullptr;
@@ -480,4 +451,20 @@ ui::canvas& ui::canvas_view::canvas() {
 
 ui::stick_man& ui::canvas_view::main_window() {
     return *static_cast<stick_man*>( parentWidget() );
+}
+
+std::optional<ui::model_variant> ui::selected_single_model(const ui::canvas& canv) {
+	auto* skel_item = canv.selected_skeleton();
+	if (skel_item) {
+		return model_variant{ std::ref(skel_item->model()) };
+	}
+	auto bones = canv.selected_bones();
+	auto nodes = canv.selected_nodes();
+	if (bones.size() == 1 && nodes.empty()) {
+		return model_variant{ std::ref(bones.front()->model()) };
+	}
+	if (nodes.size() == 1 && bones.empty()) {
+		return model_variant{ std::ref(nodes.front()->model()) };
+	}
+	return {};
 }

@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QtWidgets>
 #include "../core/sm_types.h"
+#include "properties.h"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -11,28 +12,6 @@ namespace ui {
 
 	class tool_manager;
 	class stick_man;
-
-	class abstract_properties_widget : public QScrollArea {
-	protected:
-		QVBoxLayout* layout_;
-		QLabel* title_;
-		stick_man* main_wnd_;
-	public:
-		abstract_properties_widget(ui::stick_man* mw, QWidget* parent, QString title);
-		void init();
-		virtual void populate();
-		ui::canvas& canvas();
-		virtual void set_selection(const ui::canvas& canv) = 0;
-		virtual void lose_selection();
-	};
-
-	class selection_properties : public QStackedWidget {
-	public:
-		selection_properties(ui::stick_man* mgr);
-		abstract_properties_widget* current_props() const;
-		void set(ui::sel_type typ, const ui::canvas& canv);
-		void init();
-	};
 
     class skeleton_pane : public QDockWidget {
 

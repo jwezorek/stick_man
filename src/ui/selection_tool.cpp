@@ -237,9 +237,8 @@ void ui::selection_tool::handle_drag(canvas& canv, QRectF rect, bool shift_down,
 }
 
 void ui::selection_tool::handle_sel_changed( const ui::canvas& canv) {
-    auto type_of_sel = canv.selection_type();
 	auto& props = main_wnd_.skel_pane().sel_properties();
-    props.set(type_of_sel, canv);
+    props.set(canv);
 }
 
 void ui::selection_tool::set_modal(modal_state state, canvas& c) {

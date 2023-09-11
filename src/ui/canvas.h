@@ -8,6 +8,8 @@
 #include <unordered_set>
 #include <span>
 #include <functional>
+#include <variant>
+#include <optional>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -28,15 +30,6 @@ namespace ui {
     class abstract_canvas_item;
 
     using selection_set = std::unordered_set<ui::abstract_canvas_item*>;
-	enum class sel_type {
-		none = 0,
-		node,
-		nodes,
-		bone,
-		bones,
-		skeleton,
-		mixed
-	};
 
 	using item_transform = std::function<void(abstract_canvas_item*)>;
 	using node_transform = std::function<void(node_item*)>;
@@ -84,7 +77,7 @@ namespace ui {
         void sync_to_model();
 
         const selection_set& selection() const;
-		sel_type selection_type() const;
+		//sel_type selection_type() const;
 
 		ui::skeleton_item* selected_skeleton() const;
         std::vector<ui::bone_item*> selected_bones() const;
@@ -125,5 +118,8 @@ namespace ui {
         canvas& canvas();
         stick_man& main_window();
     };
-
+	using model_variant = std::variant<std::reference_wrapper<sm::skeleton>,
+		std::reference_wrapper<sm::node>,
+		std::reference_wrapper<sm::bone>>;
+	std::optional<model_variant> selected_single_model(const ui::canvas& canv);
 }

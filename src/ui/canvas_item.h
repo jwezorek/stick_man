@@ -6,13 +6,7 @@
 #include <QMetaType>
 #include <any>
 #include <ranges>
-
-namespace sm {
-	class node;
-	class bone;
-	class skeleton;
-	class rot_constraint;
-}
+#include "../core/sm_types.h"
 
 namespace ui {
 
@@ -167,4 +161,6 @@ namespace ui {
 				}
 			) | r::to<std::vector<out_type*>>();
 	}
+
+	
 }

@@ -33,7 +33,7 @@ add_executable(stick_man
     src/core/sm_types.cpp
     src/ui/canvas_item.cpp
     src/main.cpp
-)
+ "src/ui/properties.h" "src/ui/properties.cpp")
 
 target_link_libraries(stick_man PRIVATE Qt6::Widgets  Eigen3::Eigen)
 

@@ -1,5 +1,5 @@
-#include "canvas_item.h"
 #include "canvas.h"
+#include "canvas_item.h"
 #include "util.h"
 #include "../core/sm_skeleton.h"
 
