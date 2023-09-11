@@ -182,12 +182,55 @@ namespace {
 		}
 	};
 
+	class node_position_tab : public ui::tabbed_values {
+	private:
+		ui::stick_man* main_wnd_;
+
+		double to_nth_tab(int n, int field, double val) override {
+			switch (n) {
+			case 0:
+				return val;
+			case 1:
+				return val * 10.0;
+			case 2:
+				return val * 100.0;
+			}
+			return val;
+		}
+
+		double from_nth_tab(int n, int field, double val) override {
+			switch (n) {
+			case 0:
+				return val;
+			case 1:
+				return val / 10.0;
+			case 2:
+				return val / 100.0;
+			}
+			return val;
+		}
+
+	public:
+		node_position_tab(ui::stick_man* main_wnd) :
+			ui::tabbed_values(nullptr,
+					{ "world", "skeleton", "parent" }, {
+						{"x", 0.0, -1500.0, 1500.0},
+						{"y", 0.0, -1500.0, 1500.0}
+					}, 135
+			),
+			main_wnd_(main_wnd)
+		{}
+	};
+
 	class node_properties : public ui::abstract_properties_widget {
 		ui::labeled_field* name_;
-		ui::TabWidget* tab_;
-		ui::labeled_numeric_val* world_x_;
-		ui::labeled_numeric_val* world_y_;
+		node_position_tab* positions_;
 		bool multi_;
+
+		static double world_coordinate_to_rel(int index, double val) {
+			return val;
+		}
+
 	public:
 		node_properties(ui::stick_man* mw, QWidget* parent, bool multi) :
 			abstract_properties_widget(
@@ -196,9 +239,7 @@ namespace {
 				(multi) ? "selected nodes" : "selected node"
 			),
 			multi_(multi),
-			tab_{},
-			world_x_{},
-			world_y_{} {
+			positions_{} {
 		}
 
 		void populate() override {
@@ -222,50 +263,27 @@ namespace {
 				);
 			}
 
-			layout_->addWidget(tab_ = new ui::TabWidget(this));
-			tab_->setTabPosition(QTabWidget::South);
+			layout_->addWidget(positions_ = new node_position_tab( main_wnd_ ));
 
-			QWidget* world_tab = new QWidget();
-			QVBoxLayout* wtl;
-			world_tab->setLayout(wtl = new QVBoxLayout());
-			wtl->addWidget(world_x_ = new ui::labeled_numeric_val("x", 0.0, -1500.0, 1500.0));
-			wtl->addWidget(world_y_ = new ui::labeled_numeric_val("y", 0.0, -1500.0, 1500.0));
-			wtl->addStretch();
-			tab_->addTab(
-				world_tab,
-				"world"
-			);
-			tab_->addTab(
-				new QWidget(),
-				"skeleton"
-			);
-
-			tab_->addTab(
-				new QWidget(),
-				"parent"
-			);
-			tab_->setFixedHeight(135); //TODO: figure out how to size a tab to its contents
-			auto& canv = this->canvas();
-			connect(world_x_->num_edit(), &ui::number_edit::value_changed,
-				[&canv](double v) {
-					canv.transform_selection(
-						[v](ui::node_item* ni) {
-							auto y = ni->model().world_y();
-							ni->model().set_world_pos(sm::point(v, y));
-						}
-					);
-					canv.sync_to_model();
-				}
-			);
-
-			connect(world_y_->num_edit(), &ui::number_edit::value_changed,
-				[&canv](double v) {
-					canv.transform_selection(
-						[v](ui::node_item* ni) {
-							auto x = ni->model().world_x();
-							ni->model().set_world_pos(sm::point(x, v));
-						}
-					);
+			connect(positions_, &ui::tabbed_values::value_changed,
+				[this](int field) {
+					auto& canv = main_wnd_->view().canvas();
+					auto v = positions_->value(field);
+					if (field == 0) {
+						canv.transform_selection(
+							[v](ui::node_item* ni) {
+								auto y = ni->model().world_y();
+								ni->model().set_world_pos(sm::point(*v, y));
+							}
+						);
+					} else {
+						canv.transform_selection(
+							[v](ui::node_item* ni) {
+								auto x = ni->model().world_x();
+								ni->model().set_world_pos(sm::point(x, *v));
+							}
+						);
+					}
 					canv.sync_to_model();
 				}
 			);
@@ -278,8 +296,9 @@ namespace {
 				rv::transform([](sm::node& n) {return n.world_x(); }));
 			auto y_pos = get_unique_val(nodes |
 				rv::transform([](sm::node& n) {return n.world_y(); }));
-			world_x_->num_edit()->set_value(x_pos);
-			world_y_->num_edit()->set_value(y_pos);
+
+			positions_->set_value(0, x_pos);
+			positions_->set_value(1, y_pos);
 
 			if (!multi_) {
 				auto& node = nodes.front();

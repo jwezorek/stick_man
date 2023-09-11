@@ -1,9 +1,12 @@
 #pragma once
 
+#include "../core/sm_types.h"
 #include <QWidget>
 #include <QtWidgets>
 #include <ranges>
-#include "../core/sm_types.h"
+#include <string>
+#include <vector>
+#include <functional>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -134,9 +137,42 @@ namespace ui {
         };
         TabBar* _tabBar;
     public:
-        TabWidget(QWidget* a_parent);
+        TabWidget(QWidget* parent);
         void resizeEvent(QResizeEvent* e) override;
     };
+
+	struct field_info {
+		std::string str;
+		double val;
+		double min;
+		double max;
+	};
+
+	class tabbed_values : public TabWidget {
+
+		Q_OBJECT
+
+	private:
+		std::vector<std::vector<number_edit*>> num_editors_;
+
+		void handle_value_changed(number_edit* num_edit);
+
+	protected:
+		virtual double to_nth_tab(int n, int field, double val) = 0;
+		virtual double from_nth_tab(int n, int field, double val) = 0;
+		void set_value(int tab_index, int field_index, std::optional<double> val);
+		std::optional<double> get_tab_zero_value(int tab_index, int field_index);
+		std::tuple<int, int> indices_from_editor(const number_edit* num_edit) const;
+	public:
+		tabbed_values(QWidget* parent, const std::vector<std::string>& tabs,
+			const std::vector<field_info>& fields, int hgt);
+
+		std::optional<double> value(int field);
+		void set_value(int field, std::optional<double> tab0_val);
+
+	signals:
+		void value_changed(int field_index);
+	};
 
     QWidget* custom_title_bar(const QString& lbl);
     void set_custom_title_bar_txt(QDockWidget* pane, const QString& txt);

@@ -2,8 +2,12 @@
 #include <QtWidgets>
 #include <sstream>
 #include <numbers>
+#include <ranges>
 
 /*------------------------------------------------------------------------------------------------*/
+
+namespace r = std::ranges;
+namespace rv = std::ranges::views;
 
 namespace {
 
@@ -544,3 +548,94 @@ double ui::clamp(double v, double floor, double ceiling) {
 	return clamp_below(clamp_above(v, floor), ceiling);
 
 }
+
+/*------------------------------------------------------------------------------------------------*/
+
+ui::tabbed_values::tabbed_values(QWidget* parent, const std::vector<std::string>& tabs,
+			const std::vector<field_info>& fields, int hgt) :
+		TabWidget(parent),
+		num_editors_{ tabs.size(), std::vector<number_edit*>{fields.size(), nullptr }} {
+
+	setTabPosition(QTabWidget::South);
+	setFixedHeight(hgt);
+
+	for (const auto& [tab_index, tab_name] : rv::enumerate(tabs)) {
+		QWidget* tab = new QWidget();
+		QVBoxLayout* column;
+		tab->setLayout(column = new QVBoxLayout());
+		for (const auto& [field_index, field] : rv::enumerate(fields)) {
+			ui::labeled_numeric_val* labeled_val;
+			column->addWidget(
+				labeled_val = new ui::labeled_numeric_val(
+					field.str.c_str(),
+					field.val,
+					field.min,
+					field.max
+				)
+			);
+			auto* num_editor = (num_editors_[tab_index][field_index] = labeled_val->num_edit());
+			connect(
+				num_editors_[tab_index][field_index],
+				&ui::number_edit::value_changed,
+				[this, num_editor]() {
+					handle_value_changed(num_editor);
+				}
+			);
+		}
+		addTab(tab, tab_name.c_str());
+	}
+}
+
+std::optional<double> ui::tabbed_values::value(int field) {
+	return num_editors_[0][field]->value();
+}
+
+void  ui::tabbed_values::set_value(int field, std::optional<double> tab0_val) {
+	for (int i = 0; i < num_editors_.size(); ++i) {
+		set_value(i, field, tab0_val);
+	}
+}
+
+void ui::tabbed_values::set_value(int tab_index, int field_index, 
+		std::optional<double> tab_zero_val)
+{
+	if (tab_zero_val) {
+		num_editors_[tab_index][field_index]->set_value(
+			to_nth_tab(tab_index, field_index, *tab_zero_val)
+		);
+	} else {
+		num_editors_[tab_index][field_index]->set_value(tab_zero_val);
+	}
+}
+
+std::tuple<int, int> ui::tabbed_values::indices_from_editor(const number_edit* num_edit) const {
+	for (int tab_index = 0; tab_index < num_editors_.size(); ++tab_index) {
+		for (int field_index = 0; field_index < num_editors_.front().size(); ++field_index) {
+			if (num_editors_.at(tab_index).at(field_index) == num_edit) {
+				return { tab_index, field_index };
+			}
+		}
+	}
+	throw std::runtime_error("error in tabbed_values");
+}
+
+std::optional<double> ui::tabbed_values::get_tab_zero_value(int tab_index, int field_index)
+{
+	auto tab_n_val = num_editors_[tab_index][field_index]->value();
+	if (!tab_n_val) {
+		return {};
+	}
+	return from_nth_tab(tab_index, field_index, *tab_n_val);
+}
+
+void ui::tabbed_values::handle_value_changed(number_edit* num_edit) {
+	auto [tab_index, field_index] = indices_from_editor(num_edit);
+	auto new_tab0_val = get_tab_zero_value(tab_index, field_index);
+	for (int i = 0; i < num_editors_.size(); ++i) {
+		if (i != tab_index) {
+			set_value(i, field_index, new_tab0_val);
+		}
+	}
+	emit value_changed(field_index);
+}
+
