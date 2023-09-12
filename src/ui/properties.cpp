@@ -262,25 +262,23 @@ namespace {
 		}
 
 		void populate() override {
-			if (!multi_) {
-				layout_->addWidget(
-					name_ = new ui::labeled_field("   name", "")
-				);
-				name_->set_color(QColor("yellow"));
-				name_->value()->set_validator(
-					[this](const std::string& new_name)->bool {
-						return main_wnd_->skel_pane().validate_props_name_change(new_name);
-					}
-				);
+			layout_->addWidget(
+				name_ = new ui::labeled_field("   name", "")
+			);
+			name_->set_color(QColor("yellow"));
+			name_->value()->set_validator(
+				[this](const std::string& new_name)->bool {
+					return main_wnd_->skel_pane().validate_props_name_change(new_name);
+				}
+			);
 
-				connect(name_->value(), &ui::string_edit::value_changed,
-					[this]() {
-						main_wnd_->skel_pane().handle_props_name_change(
-							name_->value()->text().toStdString()
-						);
-					}
-				);
-			}
+			connect(name_->value(), &ui::string_edit::value_changed,
+				[this]() {
+					main_wnd_->skel_pane().handle_props_name_change(
+						name_->value()->text().toStdString()
+					);
+				}
+			);
 
 			layout_->addWidget(positions_ = new node_position_tab( main_wnd_ ));
 
@@ -320,8 +318,10 @@ namespace {
 			positions_->set_value(1, y_pos);
 
 			if (multi_) {
+				name_->hide();
 				positions_->lock_to_primary_tab();
 			} else {
+				name_->show();
 				auto& node = nodes.front();
 				name_->set_value(node.name().c_str());
 			}
@@ -503,6 +503,7 @@ namespace {
 		ui::labeled_field* name_;
 		ui::labeled_hyperlink* u_;
 		ui::labeled_hyperlink* v_;
+		QWidget* nodes_;
 
 		rotation_tab* rotation_;
 		rot_constraint_box* constraint_box_;
@@ -536,60 +537,60 @@ namespace {
 			constraint_box_(nullptr),
 			constraint_btn_(nullptr),
 			u_(nullptr),
-			v_(nullptr) {
+			v_(nullptr),
+			nodes_(nullptr) {
 		}
 
 		void populate() override {
-			if (!multi_) {
-				layout_->addWidget(
-					name_ = new ui::labeled_field("   name", "")
-				);
-				name_->set_color(QColor("yellow"));
-				name_->value()->set_validator(
-					[this](const std::string& new_name)->bool {
-						return main_wnd_->skel_pane().validate_props_name_change(new_name);
-					}
-				);
+			layout_->addWidget(
+				name_ = new ui::labeled_field("   name", "")
+			);
+			name_->set_color(QColor("yellow"));
+			name_->value()->set_validator(
+				[this](const std::string& new_name)->bool {
+					return main_wnd_->skel_pane().validate_props_name_change(new_name);
+				}
+			);
 
-				layout_->addWidget(new QLabel("nodes"));
+			layout_->addWidget(new QLabel("nodes"));
 
-				auto vert_pair = new QVBoxLayout();
-				vert_pair->addWidget(u_ = new ui::labeled_hyperlink("   u", ""));
-				vert_pair->addWidget(v_ = new ui::labeled_hyperlink("   v", ""));
-				vert_pair->setAlignment(Qt::AlignTop);
-				vert_pair->setSpacing(0);
+			nodes_ = new QWidget();
+			auto vert_pair = new QVBoxLayout(nodes_);
+			vert_pair->addWidget(u_ = new ui::labeled_hyperlink("   u", ""));
+			vert_pair->addWidget(v_ = new ui::labeled_hyperlink("   v", ""));
+			vert_pair->setAlignment(Qt::AlignTop);
+			vert_pair->setSpacing(0);
 
-				layout_->addLayout(vert_pair);
-			}
+			layout_->addWidget(nodes_);
+
 			layout_->addWidget(
 				length_ = new ui::labeled_numeric_val("length", 0.0, 0.0, 1500.0)
 			);
 
 			layout_->addWidget(rotation_ = new rotation_tab(main_wnd_));
 
-			if (!multi_) {
-				constraint_btn_ = new QPushButton();
-				layout_->addWidget(constraint_box_ = new rot_constraint_box(constraint_btn_, canvas()));
-				layout_->addWidget(constraint_btn_);
 
-				connect(constraint_btn_, &QPushButton::clicked,
-					this, &bone_properties::add_or_delete_constraint);
+			constraint_btn_ = new QPushButton();
+			layout_->addWidget(constraint_box_ = new rot_constraint_box(constraint_btn_, canvas()));
+			layout_->addWidget(constraint_btn_);
 
-				connect(name_->value(), &ui::string_edit::value_changed,
-					[this]() {
-						main_wnd_->skel_pane().handle_props_name_change(
-							name_->value()->text().toStdString()
-						);
-					}
-				);
+			connect(constraint_btn_, &QPushButton::clicked,
+				this, &bone_properties::add_or_delete_constraint);
 
-				connect(u_->hyperlink(), &QPushButton::clicked,
-					make_select_node_fn(*main_wnd_, true)
-				);
-				connect(v_->hyperlink(), &QPushButton::clicked,
-					make_select_node_fn(*main_wnd_, false)
-				);
-			}
+			connect(name_->value(), &ui::string_edit::value_changed,
+				[this]() {
+					main_wnd_->skel_pane().handle_props_name_change(
+						name_->value()->text().toStdString()
+					);
+				}
+			);
+
+			connect(u_->hyperlink(), &QPushButton::clicked,
+				make_select_node_fn(*main_wnd_, true)
+			);
+			connect(v_->hyperlink(), &QPushButton::clicked,
+				make_select_node_fn(*main_wnd_, false)
+			);
 
 			auto& canv = this->canvas();
 			connect(length_->num_edit(), &ui::number_edit::value_changed,
@@ -623,8 +624,16 @@ namespace {
 			rotation_->set_value(0, world_rot.transform(ui::radians_to_degrees));
 
 			if (multi_) {
+				name_->hide();
+				nodes_->hide();
+				constraint_box_->hide();
+				constraint_btn_->hide();
 				rotation_->lock_to_primary_tab();
 			} else {
+				name_->show();
+				nodes_->show();
+				constraint_btn_->show();
+				rotation_->lock_to_primary_tab();
 				auto& bone = bones.front();
 				name_->set_value(bone.name().c_str());
 				auto rot_constraint = bone.rotation_constraint();
@@ -635,8 +644,7 @@ namespace {
 						rot_constraint->start_angle,
 						rot_constraint->span_angle
 					);
-				}
-				else {
+				} else {
 					constraint_box_->hide();
 				}
 				u_->hyperlink()->setText(bone.parent_node().name().c_str());
