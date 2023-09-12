@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QtWidgets>
+#include <unordered_map>
 
 namespace ui {
 
@@ -15,7 +16,7 @@ namespace ui {
 		mixed
 	};
 
-	class abstract_properties_widget : public QScrollArea {
+	class abstract_properties_widget : public QWidget {
 	protected:
 		QVBoxLayout* layout_;
 		QLabel* title_;
@@ -42,6 +43,7 @@ namespace ui {
 
 	class selection_properties : public QStackedWidget {
 		stick_man* main_wnd_;
+		std::unordered_map<selection_type, abstract_properties_widget*> props_;
 	public:
 		selection_properties(stick_man* mnd_wnd);
 		abstract_properties_widget* current_props() const;

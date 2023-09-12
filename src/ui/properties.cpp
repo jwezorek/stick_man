@@ -127,13 +127,6 @@ namespace {
 		void set_selection(const ui::canvas& canv) override {}
 	};
 
-	class mixed_properties : public ui::abstract_properties_widget {
-	public:
-		mixed_properties(ui::stick_man* mw, QWidget* parent) :
-			abstract_properties_widget(mw, parent, "mixed selection") {}
-		void set_selection(const ui::canvas& canv) override {}
-	};
-
 	class skeleton_properties : public ui::abstract_properties_widget {
 		ui::labeled_field* name_;
 	public:
@@ -430,11 +423,11 @@ namespace {
 	std::function<void()> make_select_node_fn(ui::stick_man& mw, bool parent_node) {
 		return [&mw, parent_node]() {
 			auto& canv = mw.view().canvas();
-			auto model_item = ui::selected_single_model(canv);
-			if (!model_item || !std::holds_alternative<sm::bone_ref>(*model_item)) {
+			auto bones = canv.selected_bones();
+			if (bones.size() != 1) {
 				return;
 			}
-			sm::bone& bone = std::get<sm::bone_ref>(*model_item).get();
+			sm::bone& bone = bones.front()->model();
 			auto& node_itm = ui::item_from_model<ui::node_item>(
 				(parent_node) ? bone.parent_node() : bone.child_node()
 			);
@@ -538,10 +531,9 @@ namespace {
 				}
 			);
 
-			layout_->addWidget(new QLabel("nodes"));
-
 			nodes_ = new QWidget();
 			auto vert_pair = new QVBoxLayout(nodes_);
+			vert_pair->addWidget(new QLabel("nodes"));
 			vert_pair->addWidget(u_ = new ui::labeled_hyperlink("   u", ""));
 			vert_pair->addWidget(v_ = new ui::labeled_hyperlink("   v", ""));
 			vert_pair->setAlignment(Qt::AlignTop);
@@ -652,16 +644,50 @@ namespace {
 			}
 		}
 	};
+
+	class mixed_properties : public ui::abstract_properties_widget {
+	private:
+		node_properties* nodes_;
+		bone_properties* bones_;
+	public:
+		mixed_properties(ui::stick_man* mw, QWidget* parent) :
+			abstract_properties_widget(mw, parent, "") {
+		}
+
+		void populate() override {
+			layout_->addWidget(
+				nodes_ = new node_properties(main_wnd_, this)
+			);
+			layout_->addWidget( ui::horz_separator() );
+			layout_->addWidget(
+				bones_ = new bone_properties(main_wnd_, this)
+			);
+			nodes_->populate();
+			bones_->populate();
+			nodes_->show();
+			bones_->show();
+		}
+
+		void set_selection(const ui::canvas& canv) override {
+			nodes_->set_selection(canv);
+			bones_->set_selection(canv);
+		}
+
+		void lose_selection() override {
+			nodes_->lose_selection();
+			bones_->lose_selection();
+		}
+	};
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
 ui::abstract_properties_widget::abstract_properties_widget(ui::stick_man* mw, 
-		QWidget* parent, QString title) :
-	QScrollArea(parent),
-	main_wnd_(mw),
-	title_(nullptr),
-	layout_(new QVBoxLayout(this)) {
+			QWidget* parent, QString title) :
+		QWidget(parent),
+		main_wnd_(mw),
+		title_(nullptr),
+		layout_(new QVBoxLayout(this)) {
 	layout_->addWidget(title_ = new QLabel(title));
 	hide();
 }
@@ -704,13 +730,17 @@ void ui::single_or_multi_props_widget::set_selection(const ui::canvas& canv) {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::selection_properties::selection_properties(ui::stick_man* mw) :
-		main_wnd_(mw) {
-	// !!! Must be in same order as the enum, sel_type !!!
-	addWidget(new no_properties(mw, this));
-	addWidget(new node_properties(mw, this));
-	addWidget(new bone_properties(mw, this));
-	addWidget(new skeleton_properties(mw, this));
-	addWidget(new mixed_properties(mw, this));
+		main_wnd_(mw),
+		props_{
+			{selection_type::none, new no_properties(mw, this)},
+			{selection_type::node, new node_properties(mw, this)},
+			{selection_type::bone, new bone_properties(mw, this)},
+			{selection_type::skeleton, new skeleton_properties(mw, this)},
+			{selection_type::mixed, new mixed_properties(mw, this)}
+		} {
+	for (const auto& [key, prop_box] : props_) {
+		addWidget(prop_box);
+	}
 }
 
 ui::abstract_properties_widget* ui::selection_properties::current_props() const {
@@ -720,9 +750,7 @@ ui::abstract_properties_widget* ui::selection_properties::current_props() const 
 void ui::selection_properties::set(const ui::canvas& canv) {
 	auto* old_props = current_props();
 
-	setCurrentIndex(
-		static_cast<int>(type_of_selection(canv.selection()))
-	);
+	setCurrentWidget(props_.at(type_of_selection(canv.selection())));
 
 	old_props->lose_selection();
 	current_props()->set_selection(canv);
@@ -735,8 +763,8 @@ void ui::selection_properties::set(const ui::canvas& canv) {
 
 void ui::selection_properties::init()
 {
-	for (auto* child : findChildren<abstract_properties_widget*>()) {
-		child->init();
+	for (const auto& [key, prop_box] : props_) {
+		prop_box->init();
 	}
 	set(main_wnd_->view().canvas());
 }

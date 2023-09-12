@@ -450,6 +450,15 @@ ui::number_edit* ui::labeled_numeric_val::num_edit() const {
 
 /*------------------------------------------------------------------------------------------------*/
 
+QWidget* ui::horz_separator()
+{
+	QFrame* line = new QFrame();
+	line->setFrameShape(QFrame::HLine);
+	line->setFrameShadow(QFrame::Sunken);
+	line->setLineWidth(1);
+	return line;
+}
+
 QWidget* ui::custom_title_bar(const QString& lbl) {
     return new title_bar(lbl);
 }

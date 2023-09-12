@@ -14,6 +14,8 @@ namespace ui {
 
 	const QColor k_accent_color = QColor::fromRgb(64, 53, 130);
 
+	QWidget* horz_separator();
+
     class FlowLayout : public QLayout
     {
     public:
