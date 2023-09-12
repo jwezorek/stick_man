@@ -453,14 +453,58 @@ namespace {
 			};
 	}
 
+	class rotation_tab : public ui::tabbed_values {
+	private:
+		ui::stick_man* main_wnd_;
+
+		double convert_to_or_from_parent_coords(double val, bool to_parent) {
+			auto bone_selection = main_wnd_->view().canvas().selected_bones();
+			if (bone_selection.size() != 1) {
+				return val;
+			}
+			auto& bone = bone_selection.front()->model();
+			auto parent = bone.parent_bone();
+			if (!parent) {
+				return val;
+			}
+			auto parent_rot = ui::radians_to_degrees(parent->get().world_rotation());
+			return (to_parent) ?
+				val - parent_rot :
+				val + parent_rot;
+		}
+
+	public:
+		rotation_tab(ui::stick_man* mw) :
+			ui::tabbed_values(nullptr,
+				{"world", "parent"}, {
+					{"rotation", 0.0, -180.0, 180.0}
+				}, 100
+			),
+			main_wnd_(mw) 
+		{}
+
+		double to_nth_tab(int tab, int, double val) override {
+			if (tab == 0) {
+				return val;
+			}
+			return convert_to_or_from_parent_coords(val, true);
+		}
+
+		double from_nth_tab(int tab, int, double val) override {
+			if (tab == 0) {
+				return val;
+			}
+			return convert_to_or_from_parent_coords(val, false);
+		}
+	};
+
 	class bone_properties : public ui::abstract_properties_widget {
 		ui::labeled_numeric_val* length_;
 		ui::labeled_field* name_;
 		ui::labeled_hyperlink* u_;
 		ui::labeled_hyperlink* v_;
-		QTabWidget* rotation_tab_ctrl_;
-		ui::labeled_numeric_val* world_rotation_;
-		ui::labeled_numeric_val* parent_rotation_;
+
+		rotation_tab* rotation_;
 		rot_constraint_box* constraint_box_;
 		QPushButton* constraint_btn_;
 		bool multi_;
@@ -488,9 +532,7 @@ namespace {
 			multi_(multi),
 			name_(nullptr),
 			length_(nullptr),
-			rotation_tab_ctrl_(nullptr),
-			world_rotation_(nullptr),
-			parent_rotation_(nullptr),
+			rotation_(nullptr),
 			constraint_box_(nullptr),
 			constraint_btn_(nullptr),
 			u_(nullptr),
@@ -523,19 +565,7 @@ namespace {
 				length_ = new ui::labeled_numeric_val("length", 0.0, 0.0, 1500.0)
 			);
 
-			layout_->addWidget(rotation_tab_ctrl_ = new ui::TabWidget(this));
-			rotation_tab_ctrl_->setTabPosition(QTabWidget::South);
-
-			rotation_tab_ctrl_->addTab(
-				world_rotation_ = new ui::labeled_numeric_val("rotation", 0.0, -180.0, 180.0),
-				"world"
-			);
-			rotation_tab_ctrl_->addTab(
-				world_rotation_ = new ui::labeled_numeric_val("rotation", 0.0, -180.0, 180.0),
-				"parent"
-			);
-			rotation_tab_ctrl_->setFixedHeight(70);
-			//TODO: figure out how to size a tab to its contents
+			layout_->addWidget(rotation_ = new rotation_tab(main_wnd_));
 
 			if (!multi_) {
 				constraint_btn_ = new QPushButton();
@@ -565,6 +595,20 @@ namespace {
 			connect(length_->num_edit(), &ui::number_edit::value_changed,
 				std::bind(set_bone_length, std::ref(canv), _1)
 			);
+			connect(rotation_, &ui::tabbed_values::value_changed,
+				[this](int field) {
+					auto& canv = main_wnd_->view().canvas();
+					auto rot = rotation_->value(0);
+					canv.transform_selection(
+						[rot](ui::bone_item* bi) {
+							auto& bone = bi->model();
+							auto delta = ui::degrees_to_radians(*rot) - bone.world_rotation();
+							bone.rotate(delta);
+						}
+					);
+					canv.sync_to_model();
+				}
+			);
 		}
 
 		void set_selection(const ui::canvas& canv) override {
@@ -573,7 +617,14 @@ namespace {
 			auto length = get_unique_val(bones |
 				rv::transform([](sm::bone& b) {return b.scaled_length(); }));
 			length_->num_edit()->set_value(length);
-			if (!multi_) {
+
+			auto world_rot = get_unique_val(bones |
+				rv::transform([](sm::bone& b) {return b.world_rotation(); }));
+			rotation_->set_value(0, world_rot.transform(ui::radians_to_degrees));
+
+			if (multi_) {
+				rotation_->lock_to_primary_tab();
+			} else {
 				auto& bone = bones.front();
 				name_->set_value(bone.name().c_str());
 				auto rot_constraint = bone.rotation_constraint();
