@@ -153,6 +153,7 @@ namespace ui {
 		Q_OBJECT
 
 	private:
+		QWidget* primary_tab_;
 		std::vector<std::vector<number_edit*>> num_editors_;
 
 		void handle_value_changed(number_edit* num_edit);
@@ -167,8 +168,13 @@ namespace ui {
 		tabbed_values(QWidget* parent, const std::vector<std::string>& tabs,
 			const std::vector<field_info>& fields, int hgt);
 
+		int num_tabs() const;
+		int num_fields() const;
+
 		std::optional<double> value(int field);
 		void set_value(int field, std::optional<double> tab0_val);
+		void lock_to_primary_tab();
+		void unlock();
 
 	signals:
 		void value_changed(int field_index);

@@ -561,6 +561,11 @@ ui::tabbed_values::tabbed_values(QWidget* parent, const std::vector<std::string>
 
 	for (const auto& [tab_index, tab_name] : rv::enumerate(tabs)) {
 		QWidget* tab = new QWidget();
+
+		if (tab_index == 0) {
+			primary_tab_ = tab;
+		}
+
 		QVBoxLayout* column;
 		tab->setLayout(column = new QVBoxLayout());
 		for (const auto& [field_index, field] : rv::enumerate(fields)) {
@@ -586,13 +591,34 @@ ui::tabbed_values::tabbed_values(QWidget* parent, const std::vector<std::string>
 	}
 }
 
+int ui::tabbed_values::num_tabs() const {
+	return static_cast<int>(num_editors_.size());
+}
+
+int ui::tabbed_values::num_fields() const {
+	return static_cast<int>(num_editors_.front().size());
+}
+
 std::optional<double> ui::tabbed_values::value(int field) {
 	return num_editors_[0][field]->value();
 }
 
 void  ui::tabbed_values::set_value(int field, std::optional<double> tab0_val) {
-	for (int i = 0; i < num_editors_.size(); ++i) {
+	for (int i = 0; i < num_tabs(); ++i) {
 		set_value(i, field, tab0_val);
+	}
+}
+
+void ui::tabbed_values::lock_to_primary_tab() {
+	setCurrentWidget(primary_tab_);
+	for (int i = 1; i < num_tabs(); ++i) {
+		setTabEnabled(i, false);
+	}
+}
+
+void ui::tabbed_values::unlock() {
+	for (int i = 1; i < num_tabs(); ++i) {
+		setTabEnabled(i, true);
 	}
 }
 
@@ -609,8 +635,8 @@ void ui::tabbed_values::set_value(int tab_index, int field_index,
 }
 
 std::tuple<int, int> ui::tabbed_values::indices_from_editor(const number_edit* num_edit) const {
-	for (int tab_index = 0; tab_index < num_editors_.size(); ++tab_index) {
-		for (int field_index = 0; field_index < num_editors_.front().size(); ++field_index) {
+	for (int tab_index = 0; tab_index < num_tabs(); ++tab_index) {
+		for (int field_index = 0; field_index < num_fields(); ++field_index) {
 			if (num_editors_.at(tab_index).at(field_index) == num_edit) {
 				return { tab_index, field_index };
 			}
@@ -631,7 +657,7 @@ std::optional<double> ui::tabbed_values::get_tab_zero_value(int tab_index, int f
 void ui::tabbed_values::handle_value_changed(number_edit* num_edit) {
 	auto [tab_index, field_index] = indices_from_editor(num_edit);
 	auto new_tab0_val = get_tab_zero_value(tab_index, field_index);
-	for (int i = 0; i < num_editors_.size(); ++i) {
+	for (int i = 0; i < num_tabs(); ++i) {
 		if (i != tab_index) {
 			set_value(i, field_index, new_tab0_val);
 		}

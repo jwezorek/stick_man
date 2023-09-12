@@ -186,28 +186,47 @@ namespace {
 	private:
 		ui::stick_man* main_wnd_;
 
-		double to_nth_tab(int n, int field, double val) override {
-			switch (n) {
-			case 0:
-				return val;
-			case 1:
-				return val * 10.0;
-			case 2:
-				return val * 100.0;
+		static sm::point origin_by_tab(int tab_index, const sm::node& selected_node) {
+			if (tab_index == 1) {
+				// skeleton relative...
+				const auto& owner = selected_node.owner().get();
+				return owner.root_node().get().world_pos();
 			}
-			return val;
+			else {
+				// parent relative...
+				auto parent_bone = selected_node.parent_bone();
+				return (parent_bone) ?
+					parent_bone->get().parent_node().world_pos() :
+					sm::point(0, 0);
+			}
+		}
+
+		double to_nth_tab(int n, int field, double val) override {
+			auto selected_nodes = main_wnd_->view().canvas().selected_nodes();
+			if (selected_nodes.size() != 1 || n == 0) {
+				return val;
+			}
+
+			auto origin = origin_by_tab(n, selected_nodes.front()->model());
+			if (field == 0) {
+				return val - origin.x;
+			} else {
+				return val - origin.y;
+			}
 		}
 
 		double from_nth_tab(int n, int field, double val) override {
-			switch (n) {
-			case 0:
+			auto selected_nodes = main_wnd_->view().canvas().selected_nodes();
+			if (selected_nodes.size() != 1 || n == 0) {
 				return val;
-			case 1:
-				return val / 10.0;
-			case 2:
-				return val / 100.0;
 			}
-			return val;
+
+			auto origin = origin_by_tab(n, selected_nodes.front()->model());
+			if (field == 0) {
+				return origin.x + val;
+			} else {
+				return origin.y + val;
+			}
 		}
 
 	public:
@@ -300,7 +319,9 @@ namespace {
 			positions_->set_value(0, x_pos);
 			positions_->set_value(1, y_pos);
 
-			if (!multi_) {
+			if (multi_) {
+				positions_->lock_to_primary_tab();
+			} else {
 				auto& node = nodes.front();
 				name_->set_value(node.name().c_str());
 			}
