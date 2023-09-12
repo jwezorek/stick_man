@@ -19,24 +19,14 @@ namespace {
 	constexpr double k_default_rot_constraint_min = -std::numbers::pi / 2.0;
 	constexpr double k_default_rot_constraint_span = std::numbers::pi;
 
-	enum class selection_type {
-		none = 0,
-		node,
-		nodes,
-		bone,
-		bones,
-		skeleton,
-		mixed
-	};
-
-	selection_type type_of_selection(const ui::selection_set& sel) {
+	ui::selection_type type_of_selection(const ui::selection_set& sel) {
 
 		if (sel.empty()) {
-			return selection_type::none;
+			return ui::selection_type::none;
 		}
 
 		if (sel.size() == 1 && dynamic_cast<ui::skeleton_item*>(*sel.begin())) {
-			return selection_type::skeleton;
+			return ui::selection_type::skeleton;
 		}
 
 		bool has_node = false;
@@ -45,16 +35,10 @@ namespace {
 			has_node = dynamic_cast<ui::node_item*>(itm_ptr) || has_node;
 			has_bone = dynamic_cast<ui::bone_item*>(itm_ptr) || has_bone;
 			if (has_node && has_bone) {
-				return selection_type::mixed;
+				return ui::selection_type::mixed;
 			}
 		}
-		bool multi = sel.size() > 1;
-		if (has_node) {
-			return multi ? selection_type::nodes : selection_type::node;
-		}
-		else {
-			return multi ? selection_type::bones : selection_type::bone;
-		}
+		return has_node ? ui::selection_type::node : ui::selection_type::bone;
 	}
 
 	auto to_model_objects(r::input_range auto&& itms) {
@@ -244,20 +228,18 @@ namespace {
 	class node_properties : public ui::abstract_properties_widget {
 		ui::labeled_field* name_;
 		node_position_tab* positions_;
-		bool multi_;
 
 		static double world_coordinate_to_rel(int index, double val) {
 			return val;
 		}
 
 	public:
-		node_properties(ui::stick_man* mw, QWidget* parent, bool multi) :
+		node_properties(ui::stick_man* mw, QWidget* parent) :
 			abstract_properties_widget(
 				mw,
 				parent,
-				(multi) ? "selected nodes" : "selected node"
+				"selected nodes"
 			),
-			multi_(multi),
 			positions_{} {
 		}
 
@@ -317,7 +299,7 @@ namespace {
 			positions_->set_value(0, x_pos);
 			positions_->set_value(1, y_pos);
 
-			if (multi_) {
+			if (sel.size() > 1) {
 				name_->hide();
 				positions_->lock_to_primary_tab();
 			} else {
@@ -524,13 +506,12 @@ namespace {
 		}
 
 	public:
-		bone_properties(ui::stick_man* mw, QWidget* parent, bool multi) :
+		bone_properties(ui::stick_man* mw, QWidget* parent) :
 			abstract_properties_widget(
 				mw,
 				parent,
-				(multi) ? "selected bones" : "selected bone"
+				"selected bones"
 			),
-			multi_(multi),
 			name_(nullptr),
 			length_(nullptr),
 			rotation_(nullptr),
@@ -623,7 +604,7 @@ namespace {
 				rv::transform([](sm::bone& b) {return b.world_rotation(); }));
 			rotation_->set_value(0, world_rot.transform(ui::radians_to_degrees));
 
-			if (multi_) {
+			if (sel.size() > 1) {
 				name_->hide();
 				nodes_->hide();
 				constraint_box_->hide();
@@ -675,6 +656,10 @@ ui::abstract_properties_widget::abstract_properties_widget(ui::stick_man* mw,
 	hide();
 }
 
+void ui::abstract_properties_widget::set_title(QString title) {
+	title_->setText(title);
+}
+
 void ui::abstract_properties_widget::init() {
 	populate();
 	layout_->addStretch();
@@ -692,14 +677,26 @@ void ui::abstract_properties_widget::lose_selection() {}
 
 /*------------------------------------------------------------------------------------------------*/
 
+ui::single_or_multi_props_widget::single_or_multi_props_widget(ui::stick_man* mw, QWidget* parent) :
+	abstract_properties_widget(mw, parent, "")
+{}
+
+void ui::single_or_multi_props_widget::set_selection(const ui::canvas& canv) {
+	if (is_multi(canv)) {
+		set_selection_multi(canv);
+	} else {
+		set_selection_single(canv);
+	}
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
 ui::selection_properties::selection_properties(ui::stick_man* mw) :
 		main_wnd_(mw) {
 	// !!! Must be in same order as the enum, sel_type !!!
 	addWidget(new no_properties(mw, this));
-	addWidget(new node_properties(mw, this, false));
-	addWidget(new node_properties(mw, this, true));
-	addWidget(new bone_properties(mw, this, false));
-	addWidget(new bone_properties(mw, this, true));
+	addWidget(new node_properties(mw, this));
+	addWidget(new bone_properties(mw, this));
 	addWidget(new skeleton_properties(mw, this));
 	addWidget(new mixed_properties(mw, this));
 }
