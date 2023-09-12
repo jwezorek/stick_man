@@ -32,8 +32,9 @@ namespace ui {
 
 	class single_or_multi_props_widget : public abstract_properties_widget {
 	public:
-		single_or_multi_props_widget(ui::stick_man* mw, QWidget* parent);
+		single_or_multi_props_widget(ui::stick_man* mw, QWidget* parent, QString title);
 		void set_selection(const ui::canvas& canv) override;
+		virtual void set_selection_common(const ui::canvas& canv) = 0;
 		virtual void set_selection_single(const ui::canvas& canv) = 0;
 		virtual void set_selection_multi(const ui::canvas& canv) = 0;
 		virtual bool is_multi(const ui::canvas& canv) = 0;

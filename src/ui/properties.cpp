@@ -225,7 +225,7 @@ namespace {
 		{}
 	};
 
-	class node_properties : public ui::abstract_properties_widget {
+	class node_properties : public ui::single_or_multi_props_widget {
 		ui::labeled_field* name_;
 		node_position_tab* positions_;
 
@@ -235,7 +235,7 @@ namespace {
 
 	public:
 		node_properties(ui::stick_man* mw, QWidget* parent) :
-			abstract_properties_widget(
+			single_or_multi_props_widget(
 				mw,
 				parent,
 				"selected nodes"
@@ -288,7 +288,7 @@ namespace {
 			);
 		}
 
-		void set_selection(const ui::canvas& canv) override {
+		void set_selection_common(const ui::canvas& canv) {
 			const auto& sel = canv.selection();
 			auto nodes = to_model_objects(ui::as_range_view_of_type<ui::node_item>(sel));
 			auto x_pos = get_unique_val(nodes |
@@ -298,15 +298,22 @@ namespace {
 
 			positions_->set_value(0, x_pos);
 			positions_->set_value(1, y_pos);
+		}
 
-			if (sel.size() > 1) {
-				name_->hide();
-				positions_->lock_to_primary_tab();
-			} else {
-				name_->show();
-				auto& node = nodes.front();
-				name_->set_value(node.name().c_str());
-			}
+		void set_selection_single(const ui::canvas& canv) {
+			name_->show();
+			auto& node = canv.selected_nodes().front()->model();
+			name_->set_value(node.name().c_str());
+			positions_->unlock();
+		}
+
+		void set_selection_multi(const ui::canvas& canv) {
+			name_->hide();
+			positions_->lock_to_primary_tab();
+		}
+
+		bool is_multi(const ui::canvas& canv) {
+			return canv.selected_nodes().size() > 1;
 		}
 
 		void lose_selection() override {
@@ -480,17 +487,15 @@ namespace {
 		}
 	};
 
-	class bone_properties : public ui::abstract_properties_widget {
+	class bone_properties : public ui::single_or_multi_props_widget {
 		ui::labeled_numeric_val* length_;
 		ui::labeled_field* name_;
 		ui::labeled_hyperlink* u_;
 		ui::labeled_hyperlink* v_;
 		QWidget* nodes_;
-
 		rotation_tab* rotation_;
 		rot_constraint_box* constraint_box_;
 		QPushButton* constraint_btn_;
-		bool multi_;
 
 		void add_or_delete_constraint() {
 			bool is_adding = !constraint_box_->isVisible();
@@ -507,7 +512,7 @@ namespace {
 
 	public:
 		bone_properties(ui::stick_man* mw, QWidget* parent) :
-			abstract_properties_widget(
+			single_or_multi_props_widget(
 				mw,
 				parent,
 				"selected bones"
@@ -593,7 +598,11 @@ namespace {
 			);
 		}
 
-		void set_selection(const ui::canvas& canv) override {
+		bool is_multi(const ui::canvas& canv) override {
+			return canv.selected_bones().size() > 1;
+		}
+
+		void set_selection_common(const ui::canvas& canv) override {
 			const auto& sel = canv.selection();
 			auto bones = to_model_objects(ui::as_range_view_of_type<ui::bone_item>(sel));
 			auto length = get_unique_val(bones |
@@ -603,35 +612,38 @@ namespace {
 			auto world_rot = get_unique_val(bones |
 				rv::transform([](sm::bone& b) {return b.world_rotation(); }));
 			rotation_->set_value(0, world_rot.transform(ui::radians_to_degrees));
+		}
 
-			if (sel.size() > 1) {
-				name_->hide();
-				nodes_->hide();
-				constraint_box_->hide();
-				constraint_btn_->hide();
-				rotation_->lock_to_primary_tab();
+		void set_selection_multi(const ui::canvas& canv) override {
+
+			name_->hide();
+			nodes_->hide();
+			constraint_box_->hide();
+			constraint_btn_->hide();
+			rotation_->lock_to_primary_tab();
+
+		}
+
+		void set_selection_single(const ui::canvas& canv) override {
+			name_->show();
+			nodes_->show();
+			constraint_btn_->show();
+			rotation_->unlock();
+			auto& bone = canv.selected_bones().front()->model();
+			name_->set_value(bone.name().c_str());
+			auto rot_constraint = bone.rotation_constraint();
+			if (rot_constraint) {
+				constraint_box_->show();
+				constraint_box_->set(
+					rot_constraint->relative_to_parent,
+					rot_constraint->start_angle,
+					rot_constraint->span_angle
+				);
 			} else {
-				name_->show();
-				nodes_->show();
-				constraint_btn_->show();
-				rotation_->lock_to_primary_tab();
-				auto& bone = bones.front();
-				name_->set_value(bone.name().c_str());
-				auto rot_constraint = bone.rotation_constraint();
-				if (rot_constraint) {
-					constraint_box_->show();
-					constraint_box_->set(
-						rot_constraint->relative_to_parent,
-						rot_constraint->start_angle,
-						rot_constraint->span_angle
-					);
-				} else {
-					constraint_box_->hide();
-				}
-				u_->hyperlink()->setText(bone.parent_node().name().c_str());
-				v_->hyperlink()->setText(bone.child_node().name().c_str());
-
+				constraint_box_->hide();
 			}
+			u_->hyperlink()->setText(bone.parent_node().name().c_str());
+			v_->hyperlink()->setText(bone.child_node().name().c_str());
 		}
 
 		void lose_selection() override {
@@ -640,8 +652,6 @@ namespace {
 			}
 		}
 	};
-
-
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -677,11 +687,13 @@ void ui::abstract_properties_widget::lose_selection() {}
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::single_or_multi_props_widget::single_or_multi_props_widget(ui::stick_man* mw, QWidget* parent) :
-	abstract_properties_widget(mw, parent, "")
+ui::single_or_multi_props_widget::single_or_multi_props_widget(
+		ui::stick_man* mw, QWidget* parent, QString title) :
+	abstract_properties_widget(mw, parent, title)
 {}
 
 void ui::single_or_multi_props_widget::set_selection(const ui::canvas& canv) {
+	set_selection_common(canv);
 	if (is_multi(canv)) {
 		set_selection_multi(canv);
 	} else {
