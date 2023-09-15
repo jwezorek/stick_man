@@ -15,7 +15,7 @@ namespace {
 
 }
 
-std::optional<double> apply_rotation_constraints_aux(sm::bone& b, double theta);
+double constrain_rotation(sm::bone& b, double theta);
 
 sm::node::node(skeleton& parent, const std::string& name, double x, double y) :
 	parent_(parent),
@@ -307,16 +307,40 @@ void sm::bone::clear_user_data() {
 }
 
 void sm::bone::rotate(double theta) {
+	set_world_rotation(
+		world_rotation() + theta
+	);
+}
 
-	auto new_theta = apply_rotation_constraints_aux(*this, theta + world_rotation());
-	theta = new_theta ? *new_theta - world_rotation() : theta;
+void sm::bone::set_world_rotation(double theta) {
+	std::unordered_map<bone*, double> rotation_tbl;
+	std::unordered_map<bone*, double> length_tbl;
+	visit_bones(*this, 
+		[&](bone& b)->bool {
+			rotation_tbl[&b] = b.rotation();
+			length_tbl[&b] = b.scaled_length();
+			return true;
+		}
+	);
 
-	auto rotate_mat = rotate_about_point_matrix(u_.world_pos(), theta);
+	rotation_tbl[this] = parent_bone().transform(
+			[theta](bone_ref br) { return theta - br.get().world_rotation(); }
+		).value_or(theta);
 
-	auto rotate_about_u = [&rotate_mat](node& j)->bool {
-		j.set_world_pos(transform(j.world_pos(), rotate_mat));
-		return true;
-	};
-
-	visit_nodes(v_, rotate_about_u);
+	visit_bones(*this,
+		[&](bone& b)->bool {
+			auto parent_rot = b.parent_bone().transform(
+					[](bone_ref br) {return br.get().world_rotation(); }
+				).value_or(0.0);
+			auto theta = parent_rot + rotation_tbl.at(&b);
+			theta = constrain_rotation(b, theta);
+			auto rotate_about_u = rotate_about_point_matrix(
+				b.parent_node().world_pos(), theta);
+			auto v = b.parent_node().world_pos() + sm::point{ length_tbl.at(&b), 0.0 };
+			b.child_node().set_world_pos(
+				transform(v, rotate_about_u)
+			);
+			return true;
+		}
+	);
 }

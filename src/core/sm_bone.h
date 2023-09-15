@@ -141,6 +141,7 @@ namespace sm {
 		void clear_user_data();
 
 		void rotate(double theta);
+		void set_world_rotation(double theta);
 	};
 
 }

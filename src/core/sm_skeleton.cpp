@@ -1026,6 +1026,11 @@ void sm::visit_bones(node& j, bone_visitor visit_bone) {
 	dfs(j, {}, visit_bone, true);
 }
 
+void sm::visit_bones(bone& b, bone_visitor visit_bone) {
+	visit_bone(b);
+	visit_bones(b.child_node(), visit_bone);
+}
+
 sm::fabrik_options::fabrik_options() :
 	max_iterations{k_max_iter},
 	tolerance{k_tolerance},
@@ -1088,10 +1093,10 @@ sm::result sm::perform_fabrik(
 	//	result::fabrik_converged;
 }
 
-std::optional<double> apply_rotation_constraints_aux(sm::bone& b, double theta) {
+double constrain_rotation(sm::bone& b, double theta) {
 
 	fabrik_item fi(b);
-	return ::apply_rotation_constraints(fi, theta);
+	return ::apply_rotation_constraints(fi, theta).value_or(theta);
 }
 
 

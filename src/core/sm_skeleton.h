@@ -110,6 +110,7 @@ namespace sm {
 
     void visit_nodes(node& j, node_visitor visit_node);
 	void visit_bones(node& j, bone_visitor visit_node);
+	void visit_bones(bone& b, bone_visitor visit_bone);
 
 	struct fabrik_options {
 		int max_iterations;
