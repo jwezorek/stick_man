@@ -5,6 +5,7 @@
 #include "stick_man.h"
 #include "skeleton_pane.h"
 #include <unordered_map>
+#include <unordered_set>
 #include <ranges>
 #include <functional>
 #include <numbers>
@@ -118,6 +119,40 @@ namespace {
 		for (auto& bone : to_model_objects(bone_items)) {
 			bone.remove_rotation_constraint();
 		}
+		canv.sync_to_model();
+	}
+
+	// TODO: the following has bad computational complexity
+	// maybe do this in one pass if it is ever an issue.
+	// (the way it is now it is like O(n * V * E) where n is the number
+	// of selected bones and V and E are the avergae numbers on vertices 
+	// and edges in skeletons because each call to set_world_rotation
+	// is doing a traversal of the skeleton)
+
+	void set_selected_bone_rotation(ui::canvas& canv, double theta) {
+		auto& main_window = canv.view().main_window();
+		auto bone_items = canv.selected_bones();
+		std::unordered_set<sm::bone*> selected = ui::to_model_ptrs( rv::all(bone_items) ) |
+			r::to< std::unordered_set<sm::bone*>>();
+		std::vector<sm::bone*> ordered_bones;
+		auto& world = main_window.sandbox();
+		
+		for (auto skel : world.skeletons()) {
+			sm::visit_bones(skel.get().root_node().get(),
+				[&](auto& bone)->bool {
+					if (selected.contains(&bone)) {
+						ordered_bones.push_back(&bone);
+					}
+					return true;
+				}
+			);
+		}
+
+		r::reverse(ordered_bones);
+		for (auto* bone : ordered_bones) {
+			bone->set_world_rotation(theta);
+		}
+
 		canv.sync_to_model();
 	}
 
@@ -575,17 +610,12 @@ namespace {
 				std::bind(set_bone_length, std::ref(canv), _1)
 			);
 			connect(rotation_, &ui::tabbed_values::value_changed,
-				[this](int field) {
-					auto& canv = main_wnd_->view().canvas();
+				[this](int) {
 					auto rot = rotation_->value(0);
-					canv.transform_selection(
-						[rot](ui::bone_item* bi) {
-							auto& bone = bi->model();
-							auto delta = ui::degrees_to_radians(*rot) - bone.world_rotation();
-							bone.rotate(delta);
-						}
+					set_selected_bone_rotation(
+						main_wnd_->view().canvas(), 
+						ui::degrees_to_radians(*rot)
 					);
-					canv.sync_to_model();
 				}
 			);
 		}

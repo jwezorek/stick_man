@@ -141,26 +141,12 @@ namespace ui {
 	bool has_canvas_item(const auto& model_obj) {
 		return model_obj.get_user_data().has_value();
 	}
-
-	template<typename T>
-	auto to_models_of_item_type(const auto& sel) {
-		namespace r = std::ranges;
-		namespace rv = std::ranges::views;
-		using out_type = typename T::model_type;
-		return sel | rv::transform(
-				[](auto ptr)->out_type* {
-					auto bi = dynamic_cast<T*>(ptr);
-					if (!bi) {
-						return nullptr;
-					}
-					return &(bi->model());
-				}
-			) | rv::filter(
-				[](auto ptr) {
-					return ptr;
-				}
-			) | r::to<std::vector<out_type*>>();
-	}
-
 	
+	auto to_model_ptrs(auto items) {
+		return items | std::ranges::views::transform(
+			[](auto* item) {
+				return &item->model();
+			}
+		);
+	}
 }
