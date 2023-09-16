@@ -127,7 +127,7 @@ namespace {
 	// (the way it is now it is like O(n * V * E) where n is the number
 	// of selected bones and V and E are the avergae numbers on vertices 
 	// and edges in skeletons because each call to set_world_rotation
-	// is doing a traversal of the skeleton)
+	// is doing a traversal of the skeleton dowwnstream of the bone)
 
 	void set_selected_bone_rotation(ui::canvas& canv, double theta) {
 		auto& main_window = canv.view().main_window();
