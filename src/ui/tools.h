@@ -122,6 +122,7 @@ namespace ui {
         abstract_tool& current_tool() const;
         void set_current_tool(tool_id id);
         ui::canvas& canvas();
+        stick_man& main_window();
     };
 
 }

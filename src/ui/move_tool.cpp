@@ -133,10 +133,7 @@ namespace {
 
         void keyPressEvent(move_state& ms) override {
             if (ms.key_event_->key() == Qt::Key::Key_Space) {
-                QPoint pos = QCursor::pos();
-                auto& view = ms.canvas_->view();
-                pos = view.mapFromGlobal(pos);
-                QPointF pos_scene = view.mapToScene(pos);
+                QPointF pos_scene = ms.canvas_->from_global_to_canvas(QCursor::pos());
 
                 auto node = ms.canvas_->top_node(pos_scene);
                 if (!node) {

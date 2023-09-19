@@ -15,18 +15,11 @@ namespace ui {
 	class stick_man;
 
     class selection_tool : public abstract_tool {
-    public: 
-        enum class modal_state {
-            none = 0,
-            defining_joint_constraint,
-            selecting_anchor_bone
-        };
     private:
 
         std::optional<QRectF> rubber_band_;
         QMetaObject::Connection conn_;
 		stick_man& main_wnd_;
-        modal_state state_;
 
         void handle_click(canvas& c, QPointF pt, bool shift_down, bool alt_down);
         void handle_drag(canvas& c, QRectF rect, bool shift_down, bool alt_down);
@@ -43,8 +36,6 @@ namespace ui {
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void deactivate(canvas& c) override;
         QWidget* settings_widget() override;
-        void set_modal(modal_state state, canvas& c);
-        bool is_in_modal_state() const;
 		void init() override;
     };
 

@@ -20,6 +20,18 @@ namespace {
     const auto k_light_gridline_color = QColor::fromRgb(240, 240, 240);
     constexpr int k_ribbon_height = 35;
 
+    QGraphicsView::DragMode to_qt_drag_mode(ui::drag_mode dm) {
+        switch (dm) {
+            case ui::drag_mode::none:
+                return QGraphicsView::NoDrag;
+            case ui::drag_mode::pan:
+                return QGraphicsView::ScrollHandDrag;
+            case ui::drag_mode::rubber_band:
+                return QGraphicsView::RubberBandDrag;
+        }
+        return QGraphicsView::NoDrag;
+    }
+
     template<typename T>
     std::vector<ui::abstract_canvas_item*> to_stick_man_items(const T& collection) {
         return ui::to_vector_of_type<ui::abstract_canvas_item*>(collection);
@@ -122,9 +134,17 @@ namespace {
 	}
 }
 /*------------------------------------------------------------------------------------------------*/
+//rubberBandChanged)
 
 ui::canvas::canvas(){
     setSceneRect(QRectF(-1500, -1500, 3000, 3000));
+    /*
+    connect( &view(), &QGraphicsView::rubberBandChanged,
+        [this](QRect rbr, QPointF from, QPointF to) {
+            emit rubber_band_change(rbr, from, to);
+        }
+    );
+    */
 }
 
 void ui::canvas::drawBackground(QPainter* painter, const QRectF& dirty_rect) {
@@ -179,7 +199,12 @@ void ui::canvas::focusOutEvent(QFocusEvent* focusEvent) {
 }
 
 ui::tool_manager& ui::canvas::tool_mgr() {
-    return view().main_window().tool_mgr();
+    QWidget* parent = &view();
+    while (parent->parent()) {
+        parent = static_cast<QWidget*>(parent->parent());
+    }
+    auto* mw = static_cast<ui::stick_man*>(parent);
+    return mw->tool_mgr();
 }
 
 
@@ -194,8 +219,7 @@ void ui::canvas::set_scale(double scale, std::optional<QPointF> center) {
 }
 
 double ui::canvas::scale() const {
-    auto& view = this->view();
-    return view.transform().m11();
+    return view().transform().m11();
 }
 
 void ui::canvas::sync_to_model() {
@@ -326,6 +350,14 @@ void ui::canvas::sync_selection() {
     emit selection_changed();
 }
 
+QGraphicsView& ui::canvas::view() {
+    return *views().first();
+}
+
+const QGraphicsView& ui::canvas::view() const {
+    return *views().first();
+}
+
 void ui::canvas::show_status_line(const QString& txt) {
     status_line_ = txt;
     update();
@@ -366,16 +398,21 @@ void ui::canvas::delete_item(abstract_canvas_item* deletee, bool emit_signals) {
 	}
 }
 
+QPointF ui::canvas::from_global_to_canvas(const QPoint& pt) {
+    auto view_coords = view().mapFromGlobal(pt);
+    return view().mapToScene(view_coords);
+}
+
+void ui::canvas::set_drag_mode(drag_mode dm) {
+    view().setDragMode( to_qt_drag_mode(dm) );
+}
+
 void ui::canvas::hide_status_line() {
     status_line_.clear();
     update();
 }
 
 /*------------------------------------------------------------------------------------------------*/
-
-ui::canvas_view& ui::canvas::view() const {
-    return *static_cast<ui::canvas_view*>(this->views()[0]);
-}
 
 ui::node_item* ui::canvas::top_node(const QPointF& pt) const {
     return top_item_of_type<ui::node_item>(*this, pt);
@@ -437,21 +474,32 @@ void ui::canvas::wheelEvent(QGraphicsSceneWheelEvent* event) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::canvas_view::canvas_view() : 
-	main_window_(nullptr) {
-    setRenderHint(QPainter::Antialiasing, true);
-    setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
-    setScene(new ui::canvas()); 
-    scale(1, -1);
+ui::canvas_manager::canvas_manager() {
+    QGraphicsView* view = new QGraphicsView();
+
+    view->setRenderHint(QPainter::Antialiasing, true);
+    view->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
+    view->scale(1, -1);
+
+    addTab(view, QString("untitled skeleton"));
+    canvas* canv = new ui::canvas;
+    view->setScene(canv);
 }
 
-ui::canvas& ui::canvas_view::canvas() {
-    return *static_cast<ui::canvas*>(this->scene());
+QGraphicsView& ui::canvas_manager::active_view() {
+    return *static_cast<QGraphicsView*>(this->widget(currentIndex()));
 }
 
-ui::stick_man& ui::canvas_view::main_window() {
-    return *static_cast<stick_man*>( parentWidget() );
+ui::canvas& ui::canvas_manager::active_canvas() {
+    
+    return *static_cast<ui::canvas*>(active_view().scene());
 }
+
+void ui::canvas_manager::center_active_view() {
+    active_view().centerOn(0, 0);
+}
+
+/*------------------------------------------------------------------------------------------------*/
 
 std::optional<ui::model_variant> ui::selected_single_model(const ui::canvas& canv) {
 	auto* skel_item = canv.selected_skeleton();

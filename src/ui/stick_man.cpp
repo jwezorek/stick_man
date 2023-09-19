@@ -43,7 +43,7 @@ ui::stick_man::stick_man(QWidget* parent) :
     addDockWidget(Qt::RightDockWidgetArea, skel_pane_);
     addDockWidget(Qt::BottomDockWidgetArea, anim_pane_);
 
-    setCentralWidget(view_ = new canvas_view());
+    setCentralWidget(canvases_ = new canvas_manager());
     createMainMenu();
 	skel_pane_->init();
 	tool_mgr_.init();
@@ -62,7 +62,7 @@ void ui::stick_man::open()
 			file.close();
 
 			world_.from_json(content.toStdString());
-			auto& canv = view().canvas();
+			auto& canv = canvases_->active_canvas();
 			canv.clear();
 			canv.sync_to_model();
 		} else {
@@ -122,10 +122,6 @@ ui::tool_manager& ui::stick_man::tool_mgr() {
     return tool_mgr_;
 }
 
-ui::canvas_view& ui::stick_man::view() {
-    return *view_;
-}
-
 sm::world& ui::stick_man::sandbox() {
     return world_;
 }
@@ -137,6 +133,10 @@ ui::tool_settings_pane& ui::stick_man::tool_pane() {
 
 ui::skeleton_pane& ui::stick_man::skel_pane() {
 	return *skel_pane_;
+}
+
+ui::canvas_manager& ui::stick_man::canvases() {
+    return *canvases_;
 }
 
 void ui::stick_man::createMainMenu()
@@ -175,7 +175,7 @@ void ui::stick_man::showEvent(QShowEvent* event) {
 void ui::stick_man::resizeEvent(QResizeEvent* event) {
 	QMainWindow::resizeEvent(event);
 	if (was_shown_ && !has_fully_layed_out_widgets_) {
-		view().centerOn(0, 0);
+        canvases_->center_active_view();
 		has_fully_layed_out_widgets_ = true;
 	}
 }

@@ -460,7 +460,7 @@ std::vector<QStandardItem*> ui::skeleton_pane::selected_items() const {
 }
 
 ui::canvas& ui::skeleton_pane::canvas() {
-	return main_wnd_->view().canvas();
+	return main_wnd_->canvases().active_canvas();
 }
 
 void ui::skeleton_pane::connect_tree_change_handler() {

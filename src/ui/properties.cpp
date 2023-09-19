@@ -129,8 +129,8 @@ namespace {
 	// and edges in skeletons because each call to set_world_rotation
 	// is doing a traversal of the skeleton dowwnstream of the bone)
 
-	void set_selected_bone_rotation(ui::canvas& canv, double theta) {
-		auto& main_window = canv.view().main_window();
+	void set_selected_bone_rotation(ui::stick_man& main_window, double theta) {
+        auto& canv = main_window.canvases().active_canvas();
 		auto bone_items = canv.selected_bones();
 		std::unordered_set<sm::bone*> selected = ui::to_model_ptrs( rv::all(bone_items) ) |
 			r::to< std::unordered_set<sm::bone*>>();
@@ -214,7 +214,7 @@ namespace {
 		}
 
 		double to_nth_tab(int n, int field, double val) override {
-			auto selected_nodes = main_wnd_->view().canvas().selected_nodes();
+			auto selected_nodes = main_wnd_->canvases().active_canvas().selected_nodes();
 			if (selected_nodes.size() != 1 || n == 0) {
 				return val;
 			}
@@ -228,7 +228,7 @@ namespace {
 		}
 
 		double from_nth_tab(int n, int field, double val) override {
-			auto selected_nodes = main_wnd_->view().canvas().selected_nodes();
+			auto selected_nodes = main_wnd_->canvases().active_canvas().selected_nodes();
 			if (selected_nodes.size() != 1 || n == 0) {
 				return val;
 			}
@@ -294,7 +294,7 @@ namespace {
 
 			connect(positions_, &ui::tabbed_values::value_changed,
 				[this](int field) {
-					auto& canv = main_wnd_->view().canvas();
+					auto& canv = main_wnd_->canvases().active_canvas();
 					auto v = positions_->value(field);
 					if (field == 0) {
 						canv.transform_selection(
@@ -457,7 +457,7 @@ namespace {
 
 	std::function<void()> make_select_node_fn(ui::stick_man& mw, bool parent_node) {
 		return [&mw, parent_node]() {
-			auto& canv = mw.view().canvas();
+			auto& canv = mw.canvases().active_canvas();
 			auto bones = canv.selected_bones();
 			if (bones.size() != 1) {
 				return;
@@ -475,7 +475,7 @@ namespace {
 		ui::stick_man* main_wnd_;
 
 		double convert_to_or_from_parent_coords(double val, bool to_parent) {
-			auto bone_selection = main_wnd_->view().canvas().selected_bones();
+			auto bone_selection = main_wnd_->canvases().active_canvas().selected_bones();
 			if (bone_selection.size() != 1) {
 				return val;
 			}
@@ -612,10 +612,7 @@ namespace {
 			connect(rotation_, &ui::tabbed_values::value_changed,
 				[this](int) {
 					auto rot = rotation_->value(0);
-					set_selected_bone_rotation(
-						main_wnd_->view().canvas(), 
-						ui::degrees_to_radians(*rot)
-					);
+					set_selected_bone_rotation( *main_wnd_, ui::degrees_to_radians(*rot) );
 				}
 			);
 		}
@@ -736,7 +733,7 @@ void ui::abstract_properties_widget::populate() {
 }
 
 ui::canvas& ui::abstract_properties_widget::canvas() {
-	return main_wnd_->view().canvas();
+    return main_wnd_->canvases().active_canvas();
 }
 
 void ui::abstract_properties_widget::lose_selection() {}
@@ -796,5 +793,5 @@ void ui::selection_properties::init()
 	for (const auto& [key, prop_box] : props_) {
 		prop_box->init();
 	}
-	set(main_wnd_->view().canvas());
+	set(main_wnd_->canvases().active_canvas());
 }

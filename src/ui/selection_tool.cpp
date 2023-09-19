@@ -121,40 +121,34 @@ namespace {
 
 ui::selection_tool::selection_tool(tool_manager* mgr, ui::stick_man* main_wnd) :
 	main_wnd_(*main_wnd),
-    state_(modal_state::none),
     abstract_tool(mgr, "selection", "arrow_icon.png", ui::tool_id::selection) {
 
 }
 
 void ui::selection_tool::init() {
-	auto& canv = main_wnd_.view().canvas();
+	auto& canv = main_wnd_.canvases().active_canvas();
 	canv.connect(&canv, &canvas::selection_changed,
 		[this, &canv]() {
 			const auto& sel = canv.selection();
 			this->handle_sel_changed(canv);
 		}
 	);
-}
-
-void ui::selection_tool::activate(canvas& canv) {
-    auto& view = canv.view();
-    view.setDragMode(QGraphicsView::RubberBandDrag);
-    rubber_band_ = {};
-    conn_ = view.connect(
-        &view, &QGraphicsView::rubberBandChanged,
+    conn_ = canv.connect(
+        &canv, &canvas::rubber_band_change,
         [&](QRect rbr, QPointF from, QPointF to) {
             if (from != QPointF{ 0, 0 }) {
                 rubber_band_ = points_to_rect(from, to);
             }
         }
     );
-    state_ = modal_state::none;
+}
+
+void ui::selection_tool::activate(canvas& canv) {
+    canv.set_drag_mode(ui::drag_mode::rubber_band);
+    rubber_band_ = {};
 }
 
 void ui::selection_tool::keyReleaseEvent(canvas & c, QKeyEvent * event) {
-    if (is_in_modal_state() && event->key() == Qt::Key_Escape) {
-        set_modal(modal_state::none, c);
-    }
 }
 
 void ui::selection_tool::mousePressEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
@@ -241,31 +235,10 @@ void ui::selection_tool::handle_sel_changed( const ui::canvas& canv) {
     props.set(canv);
 }
 
-void ui::selection_tool::set_modal(modal_state state, canvas& c) {
-    static auto text = std::to_array<QString>({
-        "",
-        "Select angle of joint constraint",
-        "Select anchor bone for joint constraint"
-    });
-    state_ = state;
-    if (state == modal_state::none) {
-        c.view().setDragMode(QGraphicsView::RubberBandDrag);
-        c.hide_status_line();
-        return;
-    }
-    c.view().setDragMode(QGraphicsView::NoDrag);
-    c.show_status_line(text[static_cast<int>(state_)]);
-}
-
-bool ui::selection_tool::is_in_modal_state() const {
-    return state_ != modal_state::none;
-}
-
 void ui::selection_tool::deactivate(canvas& canv) {
     canv.hide_status_line();
-    auto& view = canv.view();
-    view.setDragMode(QGraphicsView::NoDrag);
-    view.disconnect(conn_);
+    canv.set_drag_mode(ui::drag_mode::none);
+    canv.disconnect(conn_);
 }
 
 QWidget* ui::selection_tool::settings_widget() {

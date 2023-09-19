@@ -16,24 +16,29 @@
 namespace sm {
     class node;
     class bone;
-	class skeleton;
+    class skeleton;
 }
 
 namespace ui {
 
-    class canvas_view; 
     class stick_man;
     class tool_manager;
     class node_item;
     class bone_item;
-	class skeleton_item;
+    class skeleton_item;
     class abstract_canvas_item;
 
     using selection_set = std::unordered_set<ui::abstract_canvas_item*>;
 
-	using item_transform = std::function<void(abstract_canvas_item*)>;
-	using node_transform = std::function<void(node_item*)>;
-	using bone_transform = std::function<void(bone_item*)>;
+    using item_transform = std::function<void(abstract_canvas_item*)>;
+    using node_transform = std::function<void(node_item*)>;
+    using bone_transform = std::function<void(bone_item*)>;
+
+    enum class drag_mode {
+        none,
+        pan,
+        rubber_band
+    };
 
     class canvas : public QGraphicsScene {
 
@@ -48,6 +53,8 @@ namespace ui {
 
         tool_manager& tool_mgr();
         void sync_selection();
+        QGraphicsView& view();
+        const QGraphicsView& view() const;
 
     protected:
 
@@ -65,7 +72,6 @@ namespace ui {
     public:
 
         canvas();
-        canvas_view& view() const;
         node_item* top_node(const QPointF& pt) const;
         abstract_canvas_item* top_item(const QPointF& pt) const;
         std::vector<abstract_canvas_item*> items_in_rect(const QRectF& pt) const;
@@ -77,16 +83,16 @@ namespace ui {
         void sync_to_model();
 
         const selection_set& selection() const;
-		//sel_type selection_type() const;
+        //sel_type selection_type() const;
 
-		ui::skeleton_item* selected_skeleton() const;
+        ui::skeleton_item* selected_skeleton() const;
         std::vector<ui::bone_item*> selected_bones() const;
         std::vector<ui::node_item*> selected_nodes() const;
         bool is_status_line_visible() const;
 
-		ui::node_item* insert_item(sm::node& node);
-		ui::bone_item* insert_item(sm::bone& bone);
-		ui::skeleton_item* insert_item(sm::skeleton& skel);
+        ui::node_item* insert_item(sm::node& node);
+        ui::bone_item* insert_item(sm::bone& bone);
+        ui::skeleton_item* insert_item(sm::skeleton& skel);
 
         void transform_selection(item_transform trans);
         void transform_selection(node_transform trans);
@@ -98,28 +104,30 @@ namespace ui {
         void set_selection(std::span<abstract_canvas_item*> itms, bool sync = false);
         void set_selection(abstract_canvas_item* itm, bool sync = false);
         void clear_selection();
-		void clear();
+        void clear();
         void show_status_line(const QString& txt);
         void hide_status_line();
-		void filter_selection(std::function<bool(abstract_canvas_item*)> filter);
-		void delete_item(abstract_canvas_item* item, bool emit_signals);
-
+        void filter_selection(std::function<bool(abstract_canvas_item*)> filter);
+        void delete_item(abstract_canvas_item* item, bool emit_signals);
+        QPointF from_global_to_canvas(const QPoint& pt);
+        void set_drag_mode(drag_mode dm);
     signals:
         void selection_changed();
-		void contents_changed();
+        void contents_changed();
+        void rubber_band_change(QRect rbr, QPointF from, QPointF to);
     };
 
-    class canvas_view : public QGraphicsView {
+    class canvas_manager : public QTabWidget {
     private:
-        stick_man* main_window_;
-        
+        QGraphicsView& active_view();
     public:
-        canvas_view();
-        canvas& canvas();
-        stick_man& main_window();
+        canvas_manager();
+        canvas& active_canvas();
+        void center_active_view();
     };
-	using model_variant = std::variant<std::reference_wrapper<sm::skeleton>,
-		std::reference_wrapper<sm::node>,
-		std::reference_wrapper<sm::bone>>;
-	std::optional<model_variant> selected_single_model(const ui::canvas& canv);
+
+    using model_variant = std::variant<std::reference_wrapper<sm::skeleton>,
+        std::reference_wrapper<sm::node>,
+        std::reference_wrapper<sm::bone>>;
+    std::optional<model_variant> selected_single_model(const ui::canvas& canv);
 }

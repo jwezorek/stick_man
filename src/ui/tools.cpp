@@ -109,11 +109,11 @@ ui::pan_tool::pan_tool(tool_manager* mgr) :
 {}
 
 void ui::pan_tool::deactivate(canvas& c) {
-    c.view().setDragMode(QGraphicsView::NoDrag);
+    c.set_drag_mode(ui::drag_mode::none);
 }
 
 void ui::pan_tool::activate(canvas& c) {
-    c.view().setDragMode(QGraphicsView::ScrollHandDrag);
+    c.set_drag_mode(ui::drag_mode::pan);
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -124,7 +124,7 @@ ui::add_node_tool::add_node_tool(tool_manager* mgr) :
 
 void ui::add_node_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     auto pt = event->scenePos();
-    auto& sandbox = canv.view().main_window().sandbox();
+    auto& sandbox = manager()->main_window().sandbox();
     auto new_skeleton = sandbox.create_skeleton(pt.x(), pt.y());
     canv.insert_item(new_skeleton.get().root_node().get());
 }
@@ -158,7 +158,7 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
 
 	
     if (parent_node && child_node && parent_node != child_node) {
-        auto& sandbox = canv.view().main_window().sandbox();
+        auto& sandbox = manager()->main_window().sandbox();
 		
 		auto skel_v = child_node->model().owner();
 		if (skel_v.get().get_user_data().has_value()) {
@@ -265,7 +265,7 @@ void ui::tool_manager::set_current_tool(tool_id id) {
     if (new_tool_index == curr_item_index_) {
         return;
     }
-    auto& canvas = main_window_.view().canvas();
+    auto& canvas = main_window().canvases().active_canvas();
     canvas.setFocus();
     if (has_current_tool()) {
         current_tool().deactivate(canvas);
@@ -277,7 +277,11 @@ void ui::tool_manager::set_current_tool(tool_id id) {
 }
 
 ui::canvas& ui::tool_manager::canvas() {
-    return main_window_.view().canvas();
+    return main_window_.canvases().active_canvas();
+}
+
+ui::stick_man& ui::tool_manager::main_window() {
+    return main_window_;
 }
 
 int ui::tool_manager::index_from_id(tool_id id) const {
