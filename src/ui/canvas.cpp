@@ -143,7 +143,7 @@ ui::canvas::canvas(){
 void ui::canvas::init() {
     connect(&view(), &QGraphicsView::rubberBandChanged,
         [this](QRect rbr, QPointF from, QPointF to) {
-            emit rubber_band_change(rbr, from, to);
+            emit manager().rubber_band_change(rbr, from, to);
         }
     );
 }
@@ -267,14 +267,14 @@ bool ui::canvas::is_status_line_visible() const {
 ui::node_item* ui::canvas::insert_item(sm::node& node) {
 	ui::node_item* ni;
 	addItem(ni = new node_item(node, 1.0 / scale()));
-	emit contents_changed();
+	emit manager().contents_changed();
 	return ni;
 }
 
 ui::bone_item* ui::canvas::insert_item(sm::bone& bone) {
 	ui::bone_item* bi;
 	addItem(bi = new bone_item(bone, 1.0 / scale()));
-	emit contents_changed();
+	emit manager().contents_changed();
 	return bi;
 }
 
@@ -348,7 +348,7 @@ void ui::canvas::sync_selection() {
         bool selected = selection_.contains(itm);
         itm->set_selected(selected);
     }
-    emit selection_changed();
+    emit manager().selection_changed();
 }
 
 QGraphicsView& ui::canvas::view() {
@@ -393,9 +393,9 @@ void ui::canvas::delete_item(abstract_canvas_item* deletee, bool emit_signals) {
 
 	if (emit_signals) {
 		if (was_selected) {
-			emit selection_changed();
+			emit manager().selection_changed();
 		}
-		emit contents_changed();
+		emit manager().contents_changed();
 	}
 }
 
@@ -411,6 +411,11 @@ void ui::canvas::set_drag_mode(drag_mode dm) {
 void ui::canvas::hide_status_line() {
     status_line_.clear();
     update();
+}
+
+ui::canvas_manager& ui::canvas::manager() {
+    auto* parent = view().parent()->parent();
+    return *static_cast<ui::canvas_manager*>(parent);
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -475,13 +480,13 @@ void ui::canvas::wheelEvent(QGraphicsSceneWheelEvent* event) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::canvas_manager::canvas_manager() {
+ui::canvas_manager::canvas_manager() : active_canv_(nullptr) {
     setStyleSheet(
         "QTabBar::tab {"
         "    height: 28px; /* Set the height of tabs */"
         "}"
     );
-    add_new_tab("untitled skeleton");
+    active_canv_ = add_new_tab("untitled skeleton");
     add_new_tab("untitled skeleton 2");
 
     connect(this, &QTabWidget::currentChanged,
@@ -489,7 +494,9 @@ ui::canvas_manager::canvas_manager() {
             auto* canv = static_cast<canvas*>(
                     static_cast<QGraphicsView*>(widget(i))->scene()
             );
-            emit active_canvas_changed( *canv );
+            auto old_active_pane = active_canv_;
+            active_canv_ = canv;
+            emit active_canvas_changed(*old_active_pane, *canv );
         }
     );
 }
@@ -520,6 +527,23 @@ ui::canvas& ui::canvas_manager::active_canvas() {
 
 void ui::canvas_manager::center_active_view() {
     active_view().centerOn(0, 0);
+}
+
+std::vector<ui::canvas*> ui::canvas_manager::canvases() {
+    return rv::iota(0, count()) |
+        rv::transform(
+            [this](int i)->ui::canvas* {
+                return static_cast<ui::canvas*>(
+                    static_cast<QGraphicsView*>(widget(i))->scene()
+                );
+            }
+    ) | r::to< std::vector<ui::canvas*>>();
+}
+
+void ui::canvas_manager::set_drag_mode(drag_mode dm) {
+    for (auto* canv : canvases()) {
+        canv->set_drag_mode(dm);
+    }
 }
 
 /*------------------------------------------------------------------------------------------------*/

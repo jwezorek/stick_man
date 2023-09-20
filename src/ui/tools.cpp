@@ -109,11 +109,11 @@ ui::pan_tool::pan_tool(tool_manager* mgr) :
 {}
 
 void ui::pan_tool::deactivate(canvas& c) {
-    c.set_drag_mode(ui::drag_mode::none);
+    c.manager().set_drag_mode(ui::drag_mode::none);
 }
 
 void ui::pan_tool::activate(canvas& c) {
-    c.set_drag_mode(ui::drag_mode::pan);
+    c.manager().set_drag_mode(ui::drag_mode::pan);
 }
 
 /*------------------------------------------------------------------------------------------------*/

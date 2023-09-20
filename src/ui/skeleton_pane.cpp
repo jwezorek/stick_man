@@ -353,7 +353,7 @@ void ui::skeleton_pane::select_item(QStandardItem* item, bool select = true) {
 }
 
 void ui::skeleton_pane::connect_canv_cont_handler() {
-    canv_content_conn_ = connect(&canvas(), &ui::canvas::contents_changed,
+    canv_content_conn_ = connect(&canvas().manager(), &ui::canvas_manager::contents_changed,
         this, &ui::skeleton_pane::sync_with_model
     );
 }
@@ -364,7 +364,7 @@ void ui::skeleton_pane::disconnect_canv_cont_handler() {
 
 void ui::skeleton_pane::connect_canv_sel_handler() {
 	auto& canv = canvas();
-	canv_sel_conn_ = connect(&canv, &ui::canvas::selection_changed,
+	canv_sel_conn_ = connect(&canv.manager(), &ui::canvas_manager::selection_changed,
 		this, &ui::skeleton_pane::handle_canv_sel_change
 	);
 }
@@ -377,6 +377,7 @@ void ui::skeleton_pane::init() {
 	
 	sel_properties_->init();
 
+    /*
     connect(&main_wnd_->canvases(), & canvas_manager::active_canvas_changed,
         [this](ui::canvas& canv) {
             disconnect_canv_cont_handler();
@@ -385,6 +386,7 @@ void ui::skeleton_pane::init() {
             connect_canv_sel_handler();
         }
     );
+    */
 
     connect_canv_cont_handler();
 	connect_canv_sel_handler();
@@ -454,7 +456,7 @@ void ui::skeleton_pane::handle_tree_change(QStandardItem* item) {
 		);
 
 	if (success) {
-		emit canvas().selection_changed();
+		emit canvas().manager().selection_changed();
 	}
 }
 

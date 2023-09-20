@@ -23,6 +23,7 @@ namespace ui {
 
     class stick_man;
     class tool_manager;
+    class canvas_manager;
     class node_item;
     class bone_item;
     class skeleton_item;
@@ -44,6 +45,8 @@ namespace ui {
 
         Q_OBJECT
 
+        friend class canvas_manager;
+
     private:
 
         constexpr static auto k_grid_line_spacing = 10;
@@ -55,6 +58,7 @@ namespace ui {
         void sync_selection();
         QGraphicsView& view();
         const QGraphicsView& view() const;
+        void set_drag_mode(drag_mode dm);
 
     protected:
 
@@ -111,11 +115,7 @@ namespace ui {
         void filter_selection(std::function<bool(abstract_canvas_item*)> filter);
         void delete_item(abstract_canvas_item* item, bool emit_signals);
         QPointF from_global_to_canvas(const QPoint& pt);
-        void set_drag_mode(drag_mode dm);
-    signals:
-        void selection_changed();
-        void contents_changed();
-        void rubber_band_change(QRect rbr, QPointF from, QPointF to);
+        canvas_manager& manager();
     };
 
     class canvas_manager : public QTabWidget {
@@ -124,13 +124,19 @@ namespace ui {
 
     private:
         QGraphicsView& active_view();
+        canvas* active_canv_;
     public:
         canvas_manager();
         canvas& active_canvas();
         void center_active_view();
         canvas* add_new_tab(QString name);
+        std::vector<canvas*> canvases();
+        void set_drag_mode(drag_mode dm);
     signals:
-        void active_canvas_changed(ui::canvas& canv);
+        void active_canvas_changed(ui::canvas& old_canv, ui::canvas& canv);
+        void selection_changed();
+        void contents_changed();
+        void rubber_band_change(QRect rbr, QPointF from, QPointF to);
     };
 
     using model_variant = std::variant<std::reference_wrapper<sm::skeleton>,
