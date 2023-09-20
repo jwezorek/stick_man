@@ -72,6 +72,7 @@ namespace ui {
     public:
 
         canvas();
+        void init();
         node_item* top_node(const QPointF& pt) const;
         abstract_canvas_item* top_item(const QPointF& pt) const;
         std::vector<abstract_canvas_item*> items_in_rect(const QRectF& pt) const;
@@ -118,12 +119,18 @@ namespace ui {
     };
 
     class canvas_manager : public QTabWidget {
+
+        Q_OBJECT
+
     private:
         QGraphicsView& active_view();
     public:
         canvas_manager();
         canvas& active_canvas();
         void center_active_view();
+        canvas* add_new_tab(QString name);
+    signals:
+        void active_canvas_changed(ui::canvas& canv);
     };
 
     using model_variant = std::variant<std::reference_wrapper<sm::skeleton>,

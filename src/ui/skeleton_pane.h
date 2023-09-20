@@ -18,9 +18,11 @@ namespace ui {
 		stick_man* main_wnd_;
 		QTreeView* skeleton_tree_;
 		selection_properties* sel_properties_;
-		QMetaObject::Connection conn_;
+
+		QMetaObject::Connection tree_sel_conn_;
+        QMetaObject::Connection tree_conn_;
 		QMetaObject::Connection canv_sel_conn_;
-		QMetaObject::Connection tree_conn_;
+        QMetaObject::Connection canv_content_conn_;
 
 		void expand_selected_items();
 
@@ -29,6 +31,9 @@ namespace ui {
 
 		void connect_canv_sel_handler();
 		void disconnect_canv_sel_handler();
+
+        void connect_canv_cont_handler();
+        void disconnect_canv_cont_handler();
 
 		void connect_tree_change_handler();
 		void disconnect_tree_change_handler();

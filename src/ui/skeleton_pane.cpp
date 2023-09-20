@@ -352,6 +352,16 @@ void ui::skeleton_pane::select_item(QStandardItem* item, bool select = true) {
 
 }
 
+void ui::skeleton_pane::connect_canv_cont_handler() {
+    canv_content_conn_ = connect(&canvas(), &ui::canvas::contents_changed,
+        this, &ui::skeleton_pane::sync_with_model
+    );
+}
+
+void ui::skeleton_pane::disconnect_canv_cont_handler() {
+    disconnect(canv_content_conn_);
+}
+
 void ui::skeleton_pane::connect_canv_sel_handler() {
 	auto& canv = canvas();
 	canv_sel_conn_ = connect(&canv, &ui::canvas::selection_changed,
@@ -367,11 +377,16 @@ void ui::skeleton_pane::init() {
 	
 	sel_properties_->init();
 
-	auto& canv = canvas();
-	connect( &canv, &ui::canvas::contents_changed, 
-		this, &ui::skeleton_pane::sync_with_model 
-	);
+    connect(&main_wnd_->canvases(), & canvas_manager::active_canvas_changed,
+        [this](ui::canvas& canv) {
+            disconnect_canv_cont_handler();
+            disconnect_canv_sel_handler();
+            connect_canv_cont_handler();
+            connect_canv_sel_handler();
+        }
+    );
 
+    connect_canv_cont_handler();
 	connect_canv_sel_handler();
 	connect_tree_sel_handler();
 }
@@ -512,10 +527,10 @@ QTreeView* ui::skeleton_pane::create_skeleton_tree() {
 }
 
 void ui::skeleton_pane::connect_tree_sel_handler() {
-	conn_ = connect(skeleton_tree_->selectionModel(), &QItemSelectionModel::selectionChanged,
+    tree_sel_conn_ = connect(skeleton_tree_->selectionModel(), &QItemSelectionModel::selectionChanged,
 		this, &ui::skeleton_pane::handle_tree_selection_change);
 }
 
 void ui::skeleton_pane::disconnect_tree_sel_handler() {
-	disconnect(conn_);
+	disconnect(tree_sel_conn_);
 }

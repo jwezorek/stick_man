@@ -138,13 +138,14 @@ namespace {
 
 ui::canvas::canvas(){
     setSceneRect(QRectF(-1500, -1500, 3000, 3000));
-    /*
-    connect( &view(), &QGraphicsView::rubberBandChanged,
+}
+
+void ui::canvas::init() {
+    connect(&view(), &QGraphicsView::rubberBandChanged,
         [this](QRect rbr, QPointF from, QPointF to) {
             emit rubber_band_change(rbr, from, to);
         }
     );
-    */
 }
 
 void ui::canvas::drawBackground(QPainter* painter, const QRectF& dirty_rect) {
@@ -475,15 +476,37 @@ void ui::canvas::wheelEvent(QGraphicsSceneWheelEvent* event) {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::canvas_manager::canvas_manager() {
+    setStyleSheet(
+        "QTabBar::tab {"
+        "    height: 28px; /* Set the height of tabs */"
+        "}"
+    );
+    add_new_tab("untitled skeleton");
+    add_new_tab("untitled skeleton 2");
+
+    connect(this, &QTabWidget::currentChanged,
+        [this](int i) {
+            auto* canv = static_cast<canvas*>(
+                    static_cast<QGraphicsView*>(widget(i))->scene()
+            );
+            emit active_canvas_changed( *canv );
+        }
+    );
+}
+
+ui::canvas* ui::canvas_manager::add_new_tab(QString name) {
     QGraphicsView* view = new QGraphicsView();
 
     view->setRenderHint(QPainter::Antialiasing, true);
     view->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
     view->scale(1, -1);
 
-    addTab(view, QString("untitled skeleton"));
+    addTab(view,name);
     canvas* canv = new ui::canvas;
     view->setScene(canv);
+    canv->init();
+
+    return canv;
 }
 
 QGraphicsView& ui::canvas_manager::active_view() {
