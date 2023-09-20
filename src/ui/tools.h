@@ -92,6 +92,9 @@ namespace ui {
     private:
         QPointF origin_;
         QGraphicsLineItem* rubber_band_;
+
+        void init_rubber_band(canvas& c);
+
     public:
         add_bone_tool(tool_manager* mgr);
         void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;

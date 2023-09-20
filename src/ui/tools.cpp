@@ -131,6 +131,17 @@ void ui::add_node_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
 
 /*------------------------------------------------------------------------------------------------*/
 
+void ui::add_bone_tool::init_rubber_band(canvas& c) {
+    if (!rubber_band_) {
+        c.addItem(rubber_band_ = new QGraphicsLineItem());
+        rubber_band_->setPen(QPen(Qt::black, 2.0, Qt::DotLine));
+        return;
+    } else if (rubber_band_->scene() != &c) {
+        rubber_band_->scene()->removeItem(rubber_band_);
+        c.addItem(rubber_band_);
+    }
+}
+
 ui::add_bone_tool::add_bone_tool(tool_manager* mgr) :
     rubber_band_(nullptr),
     abstract_tool(mgr, "add bone", "add_bone_icon.png", ui::tool_id::add_bone) {
@@ -138,10 +149,7 @@ ui::add_bone_tool::add_bone_tool(tool_manager* mgr) :
 
 void ui::add_bone_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
     origin_ = event->scenePos();
-    if (!rubber_band_) {
-        c.addItem(rubber_band_ = new QGraphicsLineItem());
-        rubber_band_->setPen(QPen(Qt::black, 2.0, Qt::DotLine));
-    }
+    init_rubber_band(c);
     rubber_band_->setLine(QLineF(origin_, origin_));
     rubber_band_->show();
 }
