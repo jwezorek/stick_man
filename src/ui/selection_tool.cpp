@@ -125,20 +125,46 @@ ui::selection_tool::selection_tool(tool_manager* mgr, ui::stick_man* main_wnd) :
 
 }
 
-void ui::selection_tool::init() {
-	auto& canv = main_wnd_.canvases().active_canvas();
-	canv.connect(&canv, &canvas::selection_changed,
-		[this, &canv]() {
-			const auto& sel = canv.selection();
-			this->handle_sel_changed(canv);
-		}
-	);
-    conn_ = canv.connect(
+void ui::selection_tool::connect_canv_rubber_band_listener(canvas& canv) {
+    canv_rubber_band_conn_ = canv.connect(
         &canv, &canvas::rubber_band_change,
         [&](QRect rbr, QPointF from, QPointF to) {
             if (from != QPointF{ 0, 0 }) {
                 rubber_band_ = points_to_rect(from, to);
             }
+        }
+    );
+}
+
+void ui::selection_tool::connect_canv_sel_listener(canvas& canv) {
+    canv_sel_conn_ = canv.connect(&canv, &canvas::selection_changed,
+        [this, &canv]() {
+            const auto& sel = canv.selection();
+            this->handle_sel_changed(canv);
+        }
+    );
+}
+
+void ui::selection_tool::disconnect_canv_rubber_band_listener() {
+    main_wnd_.disconnect(canv_rubber_band_conn_);
+}
+
+void ui::selection_tool::disconnect_canv_sel_listener() {
+    main_wnd_.disconnect(canv_sel_conn_);
+}
+
+void ui::selection_tool::init() {
+	auto& canv = main_wnd_.canvases().active_canvas();
+    connect_canv_sel_listener(canv);
+    connect_canv_rubber_band_listener(canv);
+    main_wnd_.connect(
+        &main_wnd_.canvases(),
+        &canvas_manager::active_canvas_changed,
+        [this](canvas& canv) {
+            disconnect_canv_rubber_band_listener();
+            disconnect_canv_sel_listener();
+            connect_canv_rubber_band_listener(canv);
+            connect_canv_sel_listener(canv);
         }
     );
 }
@@ -238,7 +264,6 @@ void ui::selection_tool::handle_sel_changed( const ui::canvas& canv) {
 void ui::selection_tool::deactivate(canvas& canv) {
     canv.hide_status_line();
     canv.set_drag_mode(ui::drag_mode::none);
-    canv.disconnect(conn_);
 }
 
 QWidget* ui::selection_tool::settings_widget() {

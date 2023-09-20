@@ -18,8 +18,14 @@ namespace ui {
     private:
 
         std::optional<QRectF> rubber_band_;
-        QMetaObject::Connection conn_;
+        QMetaObject::Connection canv_rubber_band_conn_;
+        QMetaObject::Connection canv_sel_conn_;
 		stick_man& main_wnd_;
+
+        void connect_canv_rubber_band_listener(canvas& canv);
+        void connect_canv_sel_listener(canvas& canv);
+        void disconnect_canv_rubber_band_listener();
+        void disconnect_canv_sel_listener();
 
         void handle_click(canvas& c, QPointF pt, bool shift_down, bool alt_down);
         void handle_drag(canvas& c, QRectF rect, bool shift_down, bool alt_down);
