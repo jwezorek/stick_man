@@ -268,9 +268,11 @@ void ui::skeleton_pane::handle_tree_selection_change(
         normalize_selection_per_active_canvas(sel_canv_items, curr_canv);
 	}
 
-    auto& sel_canv = *sel_canv_items.front()->canvas();
-    if (!sel_canv_items.empty() || &sel_canv != &curr_canv) {
-        main_wnd_->canvases().set_active_canvas(sel_canv);
+    if (!sel_canv_items.empty()) {
+        auto& sel_canv = *sel_canv_items.front()->canvas(); 
+        if (&sel_canv != &curr_canv) {
+            main_wnd_->canvases().set_active_canvas(sel_canv);
+        }
     }
 
     canvas().set_selection(sel_canv_items, true);

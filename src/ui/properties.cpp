@@ -605,9 +605,11 @@ namespace {
 				make_select_node_fn(*main_wnd_, false)
 			);
 
-			auto& canv = this->canvas();
 			connect(length_->num_edit(), &ui::number_edit::value_changed,
-				std::bind(set_bone_length, std::ref(canv), _1)
+                [this](double val) {
+                    auto& canv = main_wnd_->canvases().active_canvas();
+                    set_bone_length(canv, val);
+                }
 			);
 			connect(rotation_, &ui::tabbed_values::value_changed,
 				[this](int) {

@@ -22,8 +22,8 @@ namespace ui {
         QMetaObject::Connection canv_sel_conn_;
 		stick_man& main_wnd_;
 
-        void connect_canv_rubber_band_listener(canvas& canv);
-        void connect_canv_sel_listener(canvas& canv);
+        void connect_canv_rubber_band_listener();
+        void connect_canv_sel_listener();
         void disconnect_canv_rubber_band_listener();
         void disconnect_canv_sel_listener();
 
