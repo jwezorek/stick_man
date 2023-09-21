@@ -123,16 +123,17 @@ namespace ui {
         Q_OBJECT
 
     private:
-        QGraphicsView& active_view();
+        QGraphicsView& active_view() const;
         canvas* active_canv_;
     public:
         canvas_manager();
-        canvas& active_canvas();
+        canvas& active_canvas() const;
         void center_active_view();
         canvas* add_new_tab(QString name);
         std::vector<canvas*> canvases();
         void set_drag_mode(drag_mode dm);
         void set_active_canvas(const canvas& c);
+        std::vector<std::string> tab_names() const;
     signals:
         void active_canvas_changed(ui::canvas& old_canv, ui::canvas& canv);
         void selection_changed();

@@ -3,6 +3,7 @@
 #include <sstream>
 #include <numbers>
 #include <ranges>
+#include <unordered_set>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -10,6 +11,33 @@ namespace r = std::ranges;
 namespace rv = std::ranges::views;
 
 namespace {
+
+    int first_positive_integer_not_in_set(const std::unordered_set<int>& set) {
+        int n = static_cast<int>(set.size());
+        for (int i = 1; i <= n + 1; i++) {
+            if (!set.contains(i)) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    std::optional<int> get_prefixed_number(const std::string& prefix, const std::string& str) {
+        if (str.substr(0, prefix.size()) != prefix) {
+            return {};
+        }
+        if (str.size() < prefix.size() + 2 || str[prefix.size()] != '-') {
+            return {};
+        }
+        auto num_str_sz = str.size() - prefix.size() - 1;
+        auto num_str = str.substr(prefix.size() + 1, num_str_sz);
+        for (auto ch : num_str) {
+            if (!std::isdigit(ch)) {
+                return {};
+            }
+        }
+        return std::stoi(num_str);
+    }
 
     int to_sixteenth_of_deg(double theta) {
         return static_cast<int>(
@@ -674,3 +702,22 @@ void ui::tabbed_values::handle_value_changed(number_edit* num_edit) {
 	emit value_changed(field_index);
 }
 
+std::string ui::make_unique_name(const std::vector<std::string>& used_names,
+        const std::string& prefix) {
+    auto index_set = used_names | rv::transform(
+        [prefix](const auto& str) {
+            return get_prefixed_number(prefix, str);
+        }
+    ) | rv::filter(
+        [](auto maybe_num) {
+            return maybe_num.has_value();
+        }
+    ) | rv::transform(
+        [](auto maybe_num) {
+            return maybe_num.value();
+        }
+    ) | r::to<std::unordered_set<int>>();
+
+    auto index = first_positive_integer_not_in_set(index_set);
+    return prefix + "-" + std::to_string(index);
+}

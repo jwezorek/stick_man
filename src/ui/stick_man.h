@@ -23,6 +23,7 @@ namespace ui {
 		void save();
 		void save_as();
 		void exit();
+        void insert_new_tab();
 
         tool_manager& tool_mgr();
         sm::world& sandbox();

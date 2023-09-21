@@ -4,6 +4,7 @@
 #include "tool_palette.h"
 #include "tool_settings_pane.h"
 #include "canvas_item.h"
+#include "util.h"
 #include <QtWidgets>
 
 #ifdef Q_OS_WIN
@@ -117,6 +118,11 @@ void ui::stick_man::exit() {
 	QCoreApplication::quit();
 }
 
+void ui::stick_man::insert_new_tab() {
+    auto tab_names = canvases_->tab_names();
+    auto new_name = make_unique_name(tab_names, "untitled");
+    canvases_->add_new_tab(new_name.c_str());
+}
 
 ui::tool_manager& ui::stick_man::tool_mgr() {
     return tool_mgr_;
@@ -162,9 +168,18 @@ void ui::stick_man::createMainMenu()
 	connect(actionSaveAs, &QAction::triggered, this, &stick_man::save_as);
 	connect(actionExit  , &QAction::triggered, this, &stick_man::exit  );
 
+    auto edit_menu = menuBar()->addMenu(tr("Edit"));
+    QAction* edit_action = new QAction(tr("foo"), this);
+    edit_menu->addAction(edit_action);
+
+    auto project_menu = menuBar()->addMenu(tr("Project"));
+    QAction* new_tab_action = new QAction(tr("Insert new skeleton tab"), this);
+    project_menu->addAction(new_tab_action);
+    connect(new_tab_action, &QAction::triggered, this, &stick_man::insert_new_tab);
+
     auto view_menu = menuBar()->addMenu(tr("View"));
-    QAction* actionNewDockTab = new QAction(tr("foo"), this);
-    view_menu->addAction(actionNewDockTab);
+    QAction* view_action = new QAction(tr("foo"), this);
+    view_menu->addAction(view_action);
 }
 
 void ui::stick_man::showEvent(QShowEvent* event) {

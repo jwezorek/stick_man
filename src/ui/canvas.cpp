@@ -486,9 +486,7 @@ ui::canvas_manager::canvas_manager() : active_canv_(nullptr) {
         "    height: 28px; /* Set the height of tabs */"
         "}"
     );
-    active_canv_ = add_new_tab("untitled skeleton");
-    add_new_tab("untitled skeleton 2");
-
+    active_canv_ = add_new_tab("untitled-1");
     connect(this, &QTabWidget::currentChanged,
         [this](int i) {
             auto* canv = static_cast<canvas*>(
@@ -517,17 +515,25 @@ ui::canvas* ui::canvas_manager::add_new_tab(QString name) {
     return canv;
 }
 
-QGraphicsView& ui::canvas_manager::active_view() {
+QGraphicsView& ui::canvas_manager::active_view() const {
     return *static_cast<QGraphicsView*>(this->widget(currentIndex()));
 }
 
-ui::canvas& ui::canvas_manager::active_canvas() {
+ui::canvas& ui::canvas_manager::active_canvas() const {
     
     return *static_cast<ui::canvas*>(active_view().scene());
 }
 
 void ui::canvas_manager::center_active_view() {
     active_view().centerOn(0, 0);
+}
+
+std::vector<std::string> ui::canvas_manager::tab_names() const {
+    std::vector<std::string> names(count());
+    for (int i = 0; i < count(); ++i) {
+        names[i] = tabText(i).toStdString();
+    }
+    return names;
 }
 
 std::vector<ui::canvas*> ui::canvas_manager::canvases() {
