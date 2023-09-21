@@ -152,9 +152,30 @@ namespace{
 
 		return true;
 	}
+
+    // if the selection is all in one canvas return as is; otherwise, remove all
+    // items that are not on the active canvas.
+
+    std::vector<ui::abstract_canvas_item*> normalize_selection_per_active_canvas(
+        const std::vector<ui::abstract_canvas_item*>& itms, const ui::canvas& active_canv) {
+        if (itms.empty()) {
+            return {};
+        }
+        auto* some_canvas = itms.front()->canvas();
+        auto iter = r::find_if(itms,
+            [some_canvas](auto* itm) { return itm->canvas() != some_canvas; }
+        );
+        if (iter == itms.end()) {
+            return itms;
+        }
+        return itms |
+            rv::filter(
+                [&active_canv](ui::abstract_canvas_item* itm) {
+                    return  itm->canvas() == &active_canv;
+                }
+        ) | r::to< std::vector<ui::abstract_canvas_item*>>();
+    }
 }
-
-
 
 void ui::skeleton_pane::expand_selected_items() {
 
@@ -207,11 +228,13 @@ void ui::skeleton_pane::sync_with_model()
 void ui::skeleton_pane::handle_tree_selection_change(
 		const QItemSelection&, const QItemSelection&) {
 
-	std::vector<abstract_canvas_item*> sel_canv_items;
-	disconnect_canv_sel_handler();
+    disconnect_canv_sel_handler();
 
+    auto& curr_canv = canvas();
+	std::vector<abstract_canvas_item*> sel_canv_items;
 	auto selection = selected_items();
 	QStandardItem* selected_skel = nullptr;
+
 	for (auto* qsi : selection) {
 		if (!is_bone_treeitem(qsi)) {
 			selected_skel = qsi;
@@ -222,7 +245,7 @@ void ui::skeleton_pane::handle_tree_selection_change(
 	if (selected_skel) {
 		select_item(selected_skel, true);
 
-		auto bone_canv_items = canvas().bone_items();
+		auto bone_canv_items = curr_canv.bone_items();
 		for (auto* bi : bone_canv_items) {
 			if (bi->is_selected()) {
 				select_item(bi->treeview_item(), false);
@@ -234,7 +257,7 @@ void ui::skeleton_pane::handle_tree_selection_change(
 		if (skel_ptr->get_user_data().has_value()) {
 			skel_canv_item = &item_from_model<skeleton_item>(*skel_ptr);
 		} else {
-			skel_canv_item = canvas().insert_item(*skel_ptr);
+			skel_canv_item = curr_canv.insert_item(*skel_ptr);
 		}
 		sel_canv_items.push_back(skel_canv_item);
 	} else {
@@ -242,9 +265,15 @@ void ui::skeleton_pane::handle_tree_selection_change(
 			sm::bone* bone_ptr = get_treeitem_data<sm::bone>(sel);
 			sel_canv_items.push_back(&item_from_model<bone_item>(*bone_ptr));
 		}
+        normalize_selection_per_active_canvas(sel_canv_items, curr_canv);
 	}
 
-	canvas().set_selection(sel_canv_items, true);
+    auto& sel_canv = *sel_canv_items.front()->canvas();
+    if (!sel_canv_items.empty() || &sel_canv != &curr_canv) {
+        main_wnd_->canvases().set_active_canvas(sel_canv);
+    }
+
+    canvas().set_selection(sel_canv_items, true);
 	connect_canv_sel_handler();
 
 }
@@ -327,7 +356,23 @@ ui::selection_properties& ui::skeleton_pane::sel_properties() {
 	return *sel_properties_;
 }
 
+void expand_item(QStandardItem* item, QTreeView* treeView) {
+    if (!item || !treeView) {
+        return;
+    }
+
+    QModelIndex index = item->index();
+    while (index.isValid()) {
+        treeView->setExpanded(index, true);
+        index = index.parent();
+    }
+
+    treeView->scrollTo(item->index(), QAbstractItemView::PositionAtCenter);
+}
+
 void ui::skeleton_pane::select_item(QStandardItem* item, bool select = true) {
+
+    expand_item(item, skeleton_tree_);
 
 	QStandardItemModel* model = qobject_cast<QStandardItemModel*>(skeleton_tree_->model());
 	if (!model) {
@@ -405,24 +450,6 @@ void ui::skeleton_pane::select_items(const std::vector<QStandardItem*>& items, b
 		connect_tree_sel_handler();
 	}
 }
-
-/*
-void ui::skeleton_pane::handle_canv_sel_change() {
-
-	auto canvas_sel = canvas().selected_bones();
-	auto tree_sel = selected_items();
-
-	if (is_same_bone_selection(canvas_sel, tree_sel)) {
-		return;
-	}
-	
-	auto itms = canvas_sel | rv::transform( 
-			[](auto* bi) { return bi->treeview_item();  }
-		) | r::to<std::vector<QStandardItem*>>();
-    select_items(itms, false);
-	expand_selected_items();
-}
-*/
 
 void ui::skeleton_pane::handle_canv_sel_change() {
 

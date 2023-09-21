@@ -132,6 +132,7 @@ namespace ui {
         canvas* add_new_tab(QString name);
         std::vector<canvas*> canvases();
         void set_drag_mode(drag_mode dm);
+        void set_active_canvas(const canvas& c);
     signals:
         void active_canvas_changed(ui::canvas& old_canv, ui::canvas& canv);
         void selection_changed();

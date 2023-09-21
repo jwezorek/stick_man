@@ -495,6 +495,7 @@ ui::canvas_manager::canvas_manager() : active_canv_(nullptr) {
                     static_cast<QGraphicsView*>(widget(i))->scene()
             );
             auto old_active_pane = active_canv_;
+            old_active_pane->clear_selection();
             active_canv_ = canv;
             emit active_canvas_changed(*old_active_pane, *canv );
         }
@@ -543,6 +544,15 @@ std::vector<ui::canvas*> ui::canvas_manager::canvases() {
 void ui::canvas_manager::set_drag_mode(drag_mode dm) {
     for (auto* canv : canvases()) {
         canv->set_drag_mode(dm);
+    }
+}
+
+void ui::canvas_manager::set_active_canvas(const canvas& c) {
+    auto canvases = this->canvases();
+    for (auto [index, canv_ptr] : rv::enumerate(canvases)) {
+        if (&c == canv_ptr) {
+            setCurrentIndex(index);
+        }
     }
 }
 
