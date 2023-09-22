@@ -14,7 +14,7 @@
 #include <variant>
 #include "sm_types.h"
 #include "sm_bone.h"
-#include "json.hpp"
+#include "json_fwd.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 
