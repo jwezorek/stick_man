@@ -12,7 +12,6 @@
 #include <tuple>
 #include <span>
 
-
 using namespace std::placeholders;
 
 namespace r = std::ranges;
@@ -815,13 +814,49 @@ sm::result sm::skeleton::set_name(node& node, const std::string& new_name) {
 	return result::success;
 }
 
-sm::result sm::skeleton::from_json(const std::string&) {
+sm::result sm::skeleton::from_json(const json& js, sm::world& w) {
 	//TODO
 	return sm::result::not_found;
 }
 
-std::string sm::skeleton::to_json() const {
-	return ""; //TODO
+json sm::skeleton::to_json() const {
+    auto nodes = nodes_ | rv::transform(
+        [](const auto& pair)->const node& {
+            return *pair.second;
+        }
+    ) | rv::transform(
+        std::bind(node_to_json, _1)
+    ) | r::to<json>();
+
+    auto bones = bones_ | rv::transform(
+        [](const auto& pair)->const bone& {
+            return *pair.second;
+        }
+    ) | rv::transform(
+        std::bind(bone_to_json, _1)
+    ) | r::to<json>();
+
+   return {
+       { "skeleton" , {
+               {"name", name_},
+               {"tags", tags_ | r::to<json>()},
+               {"nodes" , nodes},
+               {"bones", bones}
+           }
+       }
+   };
+}
+
+void sm::skeleton::clear_tags() {
+    tags_.clear();
+}
+
+const std::vector<std::string>& sm::skeleton::tags() const {
+    return tags_;
+}
+
+void sm::skeleton::insert_tag(const std::string& tag) {
+    tags_.push_back(tag);
 }
 
 sm::world_ref sm::skeleton::owner() {
@@ -958,37 +993,22 @@ sm::result sm::world::from_json(const std::string& json_str) {
 }
 
 std::string sm::world::to_json() const {
-	return "";
-	// TODO
-	/*
-	auto nodes = nodes_ | rv::transform(
-				[](const auto& pair)->const node& {
-					return *pair.second;
-				}
-			) | 
-			rv::transform( std::bind( node_to_json, _1)) | 
-			r::to<json>();
-	
-	auto bones = bones_ | rv::transform(
-				[](const auto& pair)->const bone& {
-					return *pair.second;
-				}
-			) | 
-			rv::transform( std::bind( bone_to_json, _1)) | 
-			r::to<json>();
+	auto skeleton_json = skeletons_ | rv::transform(
+            [](const auto& pair)->const sm::skeleton* {
+                return pair.second.get();
+            }
+        ) | rv::transform(
+            std::bind(&sm::skeleton::to_json, _1)
+        ) | r::to<json>();
 
-	json stick_man = {
-		{ "sandbox" , {
-				{"version", 0.0},
-				{"curr_node_id", node_id_},
-				{"curr_bone_id", bone_id_},
-				{"nodes" , nodes},
-				{"bones", bones}
-			}
-		}
-	};
-	return stick_man.dump(4);
-	*/
+    json stick_man = {
+        { "stick_man" , {
+                {"version", 0.0},
+                {"skeletons", skeleton_json}
+            }
+        }
+    };
+    return stick_man.dump(4);
 }
 
 void sm::dfs(node& j1, node_visitor visit_node, bone_visitor visit_bone,

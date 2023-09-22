@@ -14,6 +14,7 @@
 #include <variant>
 #include "sm_types.h"
 #include "sm_bone.h"
+#include "json.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -31,6 +32,10 @@ namespace sm {
 		std::any user_data_;
 		std::unordered_map<std::string, node*> nodes_;
 		std::unordered_map<std::string, bone*> bones_;
+        std::vector<std::string> tags_;
+
+        result from_json(const nlohmann::json&, world& w);
+        nlohmann::json to_json() const;
 
 	protected:
 
@@ -50,12 +55,15 @@ namespace sm {
 		result set_name(bone& bone, const std::string& new_name);
 		result set_name(node& node, const std::string& new_name);
 
-		result from_json(const std::string&);
-		std::string to_json() const;
+		
 		auto nodes() { return detail::to_range_view<node_ref>(nodes_); }
 		auto bones() { return detail::to_range_view<bone_ref>(bones_); }
 		auto nodes() const { return detail::to_range_view<const_node_ref>(nodes_); }
 		auto bones() const { return detail::to_range_view<const_bone_ref>(bones_); }
+
+        void clear_tags();
+        const std::vector<std::string>& tags() const;
+        void insert_tag(const std::string& tag);
 
 		world_ref owner();
 		const_world_ref owner() const;
@@ -67,8 +75,7 @@ namespace sm {
 			}
 			else if constexpr (std::is_same<T, sm::bone>::value) {
 				return !bones_.contains(name);
-			}
-			else {
+			} else {
 				static_assert(std::is_same<T, T>::value,
 					"skeleton::can_name, unsupported type");
 			}

@@ -536,6 +536,11 @@ std::vector<std::string> ui::canvas_manager::tab_names() const {
     return names;
 }
 
+std::string ui::canvas_manager::tab_name(const canvas& canv) const {
+    int index = this->indexOf(&canv.view());
+    return (index >= 0) ? tabText(index).toStdString() : "";
+}
+
 std::vector<ui::canvas*> ui::canvas_manager::canvases() {
     return rv::iota(0, count()) |
         rv::transform(
