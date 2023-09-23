@@ -135,6 +135,7 @@ namespace ui {
         void set_active_canvas(const canvas& c);
         std::vector<std::string> tab_names() const;
         std::string tab_name(const canvas& canv) const;
+        void sync_to_model();
     signals:
         void active_canvas_changed(ui::canvas& old_canv, ui::canvas& canv);
         void selection_changed();

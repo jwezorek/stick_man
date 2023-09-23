@@ -69,6 +69,7 @@ namespace sm {
 		fabrik_converged,
 		fabrik_mixed,
 		fabrik_no_solution_found,
+        cross_skeleton_bone,
 		unknown_error
 	};
 

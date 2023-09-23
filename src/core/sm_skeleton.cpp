@@ -728,19 +728,24 @@ namespace {
 
 /*------------------------------------------------------------------------------------------------*/
 
+sm::skeleton::skeleton(world& w) :
+    owner_(w) {
+
+}
+
 sm::skeleton::skeleton(world& w, const std::string& name, double x, double y) :
 		owner_(w),
 		name_(name),
 		root_(w.create_node(*this, x, y)) {
-	nodes_.insert({ root_.get().name(), &root_.get()});
+	nodes_.insert({ root_->get().name(), &root_->get()});
 }
 
 void sm::skeleton::on_new_bone(sm::bone& b) {
-	auto nodes = to_name_table<sm::node>(nodes_from_traversal(root_));
-	auto bones = to_name_table<sm::bone>(bones_from_traversal(root_));
+	auto nodes = to_name_table<sm::node>(nodes_from_traversal(root_node()));
+	auto bones = to_name_table<sm::bone>(bones_from_traversal(root_node()));
 
 	for (auto& node_name : nodes) {
-		if (node_name.first != &root_.get() && node_name.second == "root") {
+		if (node_name.first != &root_node().get() && node_name.second == "root") {
 			node_name.second = "node-0";
 		}
 	}
@@ -771,11 +776,11 @@ void sm::skeleton::set_name(const std::string& str) {
 }
 
 sm::node_ref sm::skeleton::root_node() {
-	return root_;
+	return root_.value();
 }
 
 sm::const_node_ref sm::skeleton::root_node() const {
-	return root_;
+	return root_.value();
 }
 
 std::any sm::skeleton::get_user_data() const {
@@ -814,9 +819,45 @@ sm::result sm::skeleton::set_name(node& node, const std::string& new_name) {
 	return result::success;
 }
 
-sm::result sm::skeleton::from_json(const json& js, sm::world& w) {
-	//TODO
-	return sm::result::not_found;
+sm::result sm::skeleton::from_json(sm::world& w, const json& jobj) {
+    name_ = jobj["name"];
+    nodes_ = jobj["nodes"] |
+        rv::transform(
+            [&](const json& jobj)->nodes_tbl::value_type {
+                const auto& pos = jobj["pos"];
+                auto new_node = w.create_node(
+                    *this, jobj["name"], pos["x"].get<double>(), pos["y"].get<double>()
+                );
+                return { jobj["name"], &new_node.get() };
+                }
+        ) | r::to<nodes_tbl>();
+
+    bones_ = jobj["bones"] |
+        rv::transform(
+            [&](const json& jobj)->bones_tbl::value_type {
+                auto u = jobj["u"].get<std::string>();
+                auto v = jobj["v"].get<std::string>();
+                auto b = w.create_bone_in_skeleton(
+                    jobj["name"].get<std::string>(),
+                    *nodes_[u],
+                    *nodes_[v]
+                );
+                if (jobj.contains("rot_constraint")) {
+                    const auto& constraint = jobj["rot_constraint"];
+                    b->get().set_rotation_constraint(
+                        constraint["start_angle"].get<double>(),
+                        constraint["span_angle"].get<double>(),
+                        constraint["relative_to_parent"].get<bool>()
+                    );
+                }
+                return { b->get().name(), &b->get() };
+            }
+        ) | r::to<bones_tbl>();
+
+    root_ = *nodes_.at(jobj["root"]);
+    tags_ = jobj["tags"] | r::to<std::vector<std::string>>();
+
+	return sm::result::success;
 }
 
 json sm::skeleton::to_json() const {
@@ -824,27 +865,21 @@ json sm::skeleton::to_json() const {
         [](const auto& pair)->const node& {
             return *pair.second;
         }
-    ) | rv::transform(
-        std::bind(node_to_json, _1)
-    ) | r::to<json>();
+    ) | rv::transform(node_to_json) | r::to<json>();
 
     auto bones = bones_ | rv::transform(
         [](const auto& pair)->const bone& {
             return *pair.second;
         }
-    ) | rv::transform(
-        std::bind(bone_to_json, _1)
-    ) | r::to<json>();
+    ) | rv::transform(bone_to_json) | r::to<json>();
 
-   return {
-       { "skeleton" , {
-               {"name", name_},
-               {"tags", tags_ | r::to<json>()},
-               {"nodes" , nodes},
-               {"bones", bones}
-           }
-       }
-   };
+    return  {
+        {"name", name_},
+        {"tags", tags_ | r::to<json>()},
+        {"nodes" , nodes},
+        {"bones", bones},
+        {"root", root_node().get().name()}
+    };
 }
 
 void sm::skeleton::clear_tags() {
@@ -870,6 +905,12 @@ sm::const_world_ref sm::skeleton::owner() const {
 /*------------------------------------------------------------------------------------------------*/
 
 sm::world::world() {}
+
+void sm::world::clear() {
+    skeletons_.clear();
+    bones_.clear();
+    nodes_.clear();
+}
 
 sm::skeleton_ref sm::world::create_skeleton(double x, double y) {
 	auto new_name = unique_name("skeleton", skeleton_names());
@@ -908,9 +949,28 @@ sm::result sm::world::set_name(sm::skeleton& skel, const std::string& new_name) 
 	return result::success;
 }
 
+sm::node_ref sm::world::create_node(sm::skeleton& parent, const std::string& name, 
+        double x, double y) {
+    nodes_.push_back(node::make_unique(parent, name, x, y));
+    return *nodes_.back();
+}
+
 sm::node_ref sm::world::create_node(sm::skeleton& parent, double x, double y) {
-	nodes_.push_back(node::make_unique(parent, "root", x, y));
-	return *nodes_.back();
+    return create_node(parent, "root", x, y);
+}
+
+sm::expected_bone sm::world::create_bone_in_skeleton(
+        const std::string& bone_name, node & u, node& v) {
+    if (!v.is_root()) {
+        return std::unexpected(sm::result::multi_parent_node);
+    }
+    auto skel_u = u.owner();
+    auto skel_v = v.owner();
+    if (&skel_u.get() != &skel_v.get()) {
+        return std::unexpected(sm::result::cross_skeleton_bone);
+    }
+    bones_.push_back(bone::make_unique(bone_name, u, v));
+    return *bones_.back();
 }
 
 std::expected<sm::bone_ref, sm::result> sm::world::create_bone(
@@ -927,69 +987,33 @@ std::expected<sm::bone_ref, sm::result> sm::world::create_bone(
     }
 
 	skeletons_.erase(skel_v.get().name());
+
+    std::string name = (bone_name.empty()) ? "bone-1" : bone_name;
 	bones_.push_back(bone::make_unique("bone-1", u, v));
 	skel_u.get().on_new_bone( *bones_.back() );
 
     return *bones_.back();
 }
 
+
+
 sm::result sm::world::from_json(const std::string& json_str) {
-	//TODO
-	return result::not_found;
-	/*
+
 	try {
 		json stick_man = json::parse(json_str);
-
-		const auto& sandbox = stick_man["sandbox"];
-		node_id_ = sandbox["curr_node_id"].get<int>();
-		bone_id_ = sandbox["curr_bone_id"].get<int>();
-
-		nodes_ = sandbox["nodes"] |
+		skeletons_ = stick_man["skeletons"] |
 			rv::transform(
-				[](const json& jobj)->nodes_tbl::value_type {
-					const auto& pos = jobj["pos"];
-					return {
-						jobj["name"],
-						node::make_unique(
-							jobj["name"].get<std::string>(),
-							pos["x"].get<double>(),
-							pos["y"].get<double>()
-						)
-					};
+				[this](const json& jobj)->skeleton_tbl::value_type {
+                    std::unique_ptr<sm::skeleton> skel = skeleton::make_unique(*this);
+                    skel->from_json(*this, jobj);
+                    return { skel->name(), std::move(skel) };
 				}
-		) | r::to< nodes_tbl>();
-
-		bones_ = sandbox["bones"] |
-			rv::transform(
-				[&](const json& jobj)->bones_tbl::value_type {
-					auto u = jobj["u"].get<std::string>();
-					auto v = jobj["v"].get<std::string>();
-					auto b = bone::make_unique(
-						jobj["name"].get<std::string>(),
-						*nodes_[u],
-						*nodes_[v]
-					);
-					if (jobj.contains("rot_constraint")) {
-						const auto& constraint = jobj["rot_constraint"];
-						b->set_rotation_constraint(
-							constraint["start_angle"].get<double>(),
-							constraint["span_angle"].get<double>(),
-							constraint["relative_to_parent"].get<bool>()
-						);
-					}
-					return {
-						jobj["name"],
-						std::move(b)
-					};
-				}
-			) | r::to<bones_tbl>();
-
+		) | r::to<skeleton_tbl>();
 	}
 	catch (...) {
 		return sm::result::invalid_json;
 	}
 	return sm::result::success;
-	*/
 }
 
 std::string sm::world::to_json() const {
@@ -997,16 +1021,11 @@ std::string sm::world::to_json() const {
             [](const auto& pair)->const sm::skeleton* {
                 return pair.second.get();
             }
-        ) | rv::transform(
-            std::bind(&sm::skeleton::to_json, _1)
-        ) | r::to<json>();
+        ) | rv::transform( &sm::skeleton::to_json ) | r::to<json>();
 
     json stick_man = {
-        { "stick_man" , {
-                {"version", 0.0},
-                {"skeletons", skeleton_json}
-            }
-        }
+        {"version", 0.0},
+        {"skeletons", skeleton_json}
     };
     return stick_man.dump(4);
 }

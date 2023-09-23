@@ -225,18 +225,7 @@ double ui::canvas::scale() const {
 
 void ui::canvas::sync_to_model() {
 	auto itms = items();
-	if (itms.isEmpty()) { 
-		//TODO
-		/*
-		auto& sandbox = view().main_window().sandbox();
-		for (auto node : sandbox.nodes()) {
-			addItem(new ui::node_item(node.get(), scale()));
-		}
-		for (auto bone : sandbox.bones()) {
-			addItem(new ui::bone_item(bone.get(), scale()));
-		}
-		*/
-	}
+	
     auto is_non_null = [](auto* p) {return p; };
     for (auto* child : itms | rv::transform(to_stick_man) | rv::filter(is_non_null)) {
         child->sync_to_model();
@@ -539,6 +528,21 @@ std::vector<std::string> ui::canvas_manager::tab_names() const {
 std::string ui::canvas_manager::tab_name(const canvas& canv) const {
     int index = this->indexOf(&canv.view());
     return (index >= 0) ? tabText(index).toStdString() : "";
+}
+
+void ui::canvas_manager::sync_to_model() {
+    auto& canv = active_canvas();
+    canv.clear();
+    auto& sandbox = canv.tool_mgr().main_window().sandbox();
+    for (auto skel : sandbox.skeletons()) {
+        for (auto node : skel.get().nodes()) {
+            canv.addItem(new ui::node_item(node.get(), canv.scale()));
+        }
+        for (auto bone : skel.get().bones()) {
+            canv.addItem(new ui::bone_item(bone.get(), canv.scale()));
+        }
+    }
+    emit contents_changed();
 }
 
 std::vector<ui::canvas*> ui::canvas_manager::canvases() {

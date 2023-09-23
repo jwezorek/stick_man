@@ -26,22 +26,25 @@ namespace sm {
 		friend class world;
 
 	private:
+
+        using nodes_tbl = std::unordered_map<std::string, node*>;
+        using bones_tbl = std::unordered_map<std::string, bone*>;
+
 		world& owner_;
 		std::string name_;
-		node_ref root_;
+		maybe_node_ref root_;
 		std::any user_data_;
-		std::unordered_map<std::string, node*> nodes_;
-		std::unordered_map<std::string, bone*> bones_;
+        nodes_tbl nodes_;
+		bones_tbl bones_;
         std::vector<std::string> tags_;
 
-        result from_json(const nlohmann::json&, world& w);
-        nlohmann::json to_json() const;
-
 	protected:
-
+        skeleton(world& w);
 		skeleton(world& w, const std::string& name, double x, double y);
 		void on_new_bone(sm::bone& bone);
 		void set_name(const std::string& str);
+        result from_json(world& w, const nlohmann::json&);
+        nlohmann::json to_json() const;
 
 	public:
 		std::string name() const;
@@ -85,15 +88,19 @@ namespace sm {
     class world {
 		friend class skeleton;
     private:
+        using skeleton_tbl = std::unordered_map<std::string, std::unique_ptr<skeleton>>;
 		
 		std::vector<std::unique_ptr<node>> nodes_;
 		std::vector<std::unique_ptr<bone>> bones_;
-		std::unordered_map<std::string, std::unique_ptr<skeleton>> skeletons_;
+        skeleton_tbl skeletons_;
 
+        node_ref create_node(skeleton& parent, const std::string& name, double x, double y);
 		node_ref create_node(skeleton& parent, double x, double y);
+        expected_bone create_bone_in_skeleton(const std::string& bone_name, node& u, node& v);
 
     public:
 		world();
+        void clear();
 		skeleton_ref create_skeleton(double x, double y);
 		expected_skeleton skeleton(const std::string& name);
 
