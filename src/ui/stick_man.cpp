@@ -44,7 +44,7 @@ ui::stick_man::stick_man(QWidget* parent) :
     addDockWidget(Qt::RightDockWidgetArea, skel_pane_);
     addDockWidget(Qt::BottomDockWidgetArea, anim_pane_);
 
-    setCentralWidget(canvases_ = new canvas_manager());
+    setCentralWidget(canvases_ = new canvas_manager(tool_mgr_));
     createMainMenu();
 	skel_pane_->init();
 	tool_mgr_.init();
@@ -64,7 +64,7 @@ void ui::stick_man::open()
 
             world_.clear();
 			world_.from_json(content.toStdString());
-			canvases().sync_to_model();
+			canvases().sync_to_model(world_);
 		} else {
 			QMessageBox::critical(this, "Error", "Could not open file.");
 		}

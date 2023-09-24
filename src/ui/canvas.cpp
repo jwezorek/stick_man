@@ -135,9 +135,9 @@ namespace {
 	}
 }
 /*------------------------------------------------------------------------------------------------*/
-//rubberBandChanged)
 
-ui::canvas::canvas(){
+ui::canvas::canvas(input_handler& inp_handler) :
+        inp_handler_(inp_handler) {
     setSceneRect(QRectF(-1500, -1500, 3000, 3000));
 }
 
@@ -199,16 +199,6 @@ void ui::canvas::focusOutEvent(QFocusEvent* focusEvent) {
         hide_status_line();
     }
 }
-
-ui::tool_manager& ui::canvas::tool_mgr() {
-    QWidget* parent = &view();
-    while (parent->parent()) {
-        parent = static_cast<QWidget*>(parent->parent());
-    }
-    auto* mw = static_cast<ui::stick_man*>(parent);
-    return mw->tool_mgr();
-}
-
 
 void ui::canvas::set_scale(double scale, std::optional<QPointF> center) {
     auto& view = this->view();
@@ -447,31 +437,31 @@ std::vector<ui::bone_item*> ui::canvas::bone_items() const {
 }
 
 void ui::canvas::keyPressEvent(QKeyEvent* event) {
-    tool_mgr().keyPressEvent(*this, event);
+    inp_handler_.keyPressEvent(*this, event);
 }
 
 void ui::canvas::keyReleaseEvent(QKeyEvent* event) {
-    tool_mgr().keyReleaseEvent(*this, event);
+    inp_handler_.keyReleaseEvent(*this, event);
 }
 
 void ui::canvas::mousePressEvent(QGraphicsSceneMouseEvent* event) {
-    tool_mgr().mousePressEvent(*this, event);
+    inp_handler_.mousePressEvent(*this, event);
 }
 
 void ui::canvas::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
-    tool_mgr().mouseMoveEvent(*this, event);
+    inp_handler_.mouseMoveEvent(*this, event);
 }
 
 void ui::canvas::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
-    tool_mgr().mouseReleaseEvent(*this, event);
+    inp_handler_.mouseReleaseEvent(*this, event);
 }
 
 void ui::canvas::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
-    tool_mgr().mouseDoubleClickEvent(*this, event);
+    inp_handler_.mouseDoubleClickEvent(*this, event);
 }
 
 void ui::canvas::wheelEvent(QGraphicsSceneWheelEvent* event) {
-    tool_mgr().wheelEvent(*this, event);
+    inp_handler_.wheelEvent(*this, event);
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -494,7 +484,9 @@ void ui::canvas_manager::disconnect_current_tab_signal() {
     disconnect(current_tab_conn_);
 }
 
-ui::canvas_manager::canvas_manager() : active_canv_(nullptr) {
+ui::canvas_manager::canvas_manager(input_handler& inp_handler) : 
+        inp_handler_(inp_handler),
+        active_canv_(nullptr) {
     setStyleSheet(
         "QTabBar::tab {"
         "    height: 28px; /* Set the height of tabs */"
@@ -542,7 +534,7 @@ ui::canvas* ui::canvas_manager::add_new_tab(QString name) {
     view->scale(1, -1);
 
     addTab(view,name);
-    canvas* canv = new ui::canvas;
+    canvas* canv = new ui::canvas(inp_handler_);
     view->setScene(canv);
     canv->init();
 
@@ -594,11 +586,10 @@ std::string ui::canvas_manager::tab_name(const canvas& canv) const {
     return (index >= 0) ? tabText(index).toStdString() : "";
 }
 
-void ui::canvas_manager::sync_to_model() {
-    auto& sandbox = active_canvas().tool_mgr().main_window().sandbox();
+void ui::canvas_manager::sync_to_model(sm::world& model) {
     disconnect_current_tab_signal();
     clear();
-    auto name_to_canvas = tab_names_from_model(sandbox) | 
+    auto name_to_canvas = tab_names_from_model(model) | 
         rv::transform(
             [this](const std::string& name)->std::unordered_map<std::string, canvas*>::value_type {
                 return { name, add_new_tab(name.c_str())};
@@ -606,7 +597,7 @@ void ui::canvas_manager::sync_to_model() {
         ) | r::to<std::unordered_map<std::string, canvas* >>();
     connect_current_tab_signal();
 
-    for (auto skel : sandbox.skeletons()) {
+    for (auto skel : model.skeletons()) {
         auto tab = tab_from_skeleton(skel.get());
         auto& canv = *name_to_canvas.at(tab);
         for (auto node : skel.get().nodes()) {

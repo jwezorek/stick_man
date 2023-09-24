@@ -24,6 +24,7 @@ namespace ui {
 
     class stick_man;
     class tool_manager;
+    class input_handler;
     class canvas_manager;
     class node_item;
     class bone_item;
@@ -54,8 +55,8 @@ namespace ui {
         double scale_ = 1.0;
         QString status_line_;
         selection_set selection_;
+        input_handler& inp_handler_;
 
-        tool_manager& tool_mgr();
         void sync_selection();
         QGraphicsView& view();
         const QGraphicsView& view() const;
@@ -76,7 +77,7 @@ namespace ui {
 
     public:
 
-        canvas();
+        canvas(input_handler& inp_handler);
         void init();
         node_item* top_node(const QPointF& pt) const;
         abstract_canvas_item* top_item(const QPointF& pt) const;
@@ -127,6 +128,7 @@ namespace ui {
         QGraphicsView& active_view() const;
         canvas* active_canv_;
         QMetaObject::Connection current_tab_conn_;
+        input_handler& inp_handler_;
 
         static std::string tab_from_skeleton(const sm::skeleton& skel);
         static std::vector<std::string> tab_names_from_model(const sm::world& w);
@@ -135,10 +137,10 @@ namespace ui {
         void disconnect_current_tab_signal();
 
     public:
-        canvas_manager();
-        void clear();
-        canvas& active_canvas() const;
+        canvas_manager(input_handler& inp_handler);
+        void clear();;
         void center_active_view();
+        canvas& active_canvas() const;
         canvas* add_new_tab(QString name);
         canvas* canvas_from_skeleton(sm::skeleton& skel);
         canvas* canvas_from_tab(const std::string& tab_name);
@@ -147,7 +149,7 @@ namespace ui {
         void set_active_canvas(const canvas& c);
         std::vector<std::string> tab_names() const;
         std::string tab_name(const canvas& canv) const;
-        void sync_to_model();
+        void sync_to_model(sm::world& model);
     signals:
         void active_canvas_changed(ui::canvas& old_canv, ui::canvas& canv);
         void selection_changed();
