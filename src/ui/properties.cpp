@@ -124,8 +124,8 @@ namespace {
 
 	// TODO: the following has bad computational complexity
 	// maybe do this in one pass if it is ever an issue.
-	// (the way it is now it is like O(n * V * E) where n is the number
-	// of selected bones and V and E are the avergae numbers on vertices 
+	// (the way it is now it is like O(n * (V + E)) where n is the number
+	// of selected bones and V and E are the number of vertices 
 	// and edges in skeletons because each call to set_world_rotation
 	// is doing a traversal of the skeleton dowwnstream of the bone)
 

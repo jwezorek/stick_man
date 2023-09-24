@@ -140,6 +140,8 @@ namespace ui {
         canvas& active_canvas() const;
         void center_active_view();
         canvas* add_new_tab(QString name);
+        canvas* canvas_from_skeleton(sm::skeleton& skel);
+        canvas* canvas_from_tab(const std::string& tab_name);
         std::vector<canvas*> canvases();
         void set_drag_mode(drag_mode dm);
         void set_active_canvas(const canvas& c);

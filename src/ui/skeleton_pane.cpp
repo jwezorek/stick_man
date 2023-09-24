@@ -204,7 +204,11 @@ void ui::skeleton_pane::sync_with_model()
 
 	auto& sandbox = main_wnd_->sandbox();
 	for (const auto& skel : sandbox.skeletons()) {
-		insert_skeleton(canvas(), tree_model, skel);
+		insert_skeleton(
+            *canvas().manager().canvas_from_skeleton(skel),
+            tree_model, 
+            skel
+        );
 	}
 
 	skeleton_tree_->clearSelection();
@@ -228,6 +232,7 @@ void ui::skeleton_pane::sync_with_model()
 void ui::skeleton_pane::handle_tree_selection_change(
 		const QItemSelection&, const QItemSelection&) {
 
+    disconnect_tree_sel_handler();
     disconnect_canv_sel_handler();
 
     auto& curr_canv = canvas();
@@ -243,23 +248,13 @@ void ui::skeleton_pane::handle_tree_selection_change(
 	}
 
 	if (selected_skel) {
+        skeleton_tree_->selectionModel()->clearSelection();
 		select_item(selected_skel, true);
-
-		auto bone_canv_items = curr_canv.bone_items();
-		for (auto* bi : bone_canv_items) {
-			if (bi->is_selected()) {
-				select_item(bi->treeview_item(), false);
-			}
-		}
-
-		auto* skel_ptr = get_treeitem_data<sm::skeleton>(selected_skel);
-		skeleton_item* skel_canv_item = nullptr;
-		if (skel_ptr->get_user_data().has_value()) {
-			skel_canv_item = &item_from_model<skeleton_item>(*skel_ptr);
-		} else {
-			skel_canv_item = curr_canv.insert_item(*skel_ptr);
-		}
-		sel_canv_items.push_back(skel_canv_item);
+		sel_canv_items.push_back(
+            &item_from_model<skeleton_item>(
+                *get_treeitem_data<sm::skeleton>(selected_skel)
+            )
+        );
 	} else {
 		for (auto* sel : selection) {
 			sm::bone* bone_ptr = get_treeitem_data<sm::bone>(sel);
@@ -277,7 +272,7 @@ void ui::skeleton_pane::handle_tree_selection_change(
 
     canvas().set_selection(sel_canv_items, true);
 	connect_canv_sel_handler();
-
+    connect_tree_sel_handler();
 }
 
 bool ui::skeleton_pane::validate_props_name_change(const std::string& new_name) {

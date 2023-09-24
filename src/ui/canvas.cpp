@@ -377,9 +377,15 @@ void ui::canvas::delete_item(abstract_canvas_item* deletee, bool emit_signals) {
 		);
 	}
 
-	removeItem(deletee->item_body());
-	removeItem(deletee->selection_frame());
-	delete deletee;
+    QGraphicsItem* body;
+    QGraphicsItem* sel_frame;
+	removeItem(body = deletee->item_body());
+	removeItem(sel_frame = deletee->selection_frame());
+    if (sel_frame && sel_frame != body) {
+        delete sel_frame;
+    }
+    delete body;
+
 
 	if (emit_signals) {
 		if (was_selected) {
@@ -545,6 +551,21 @@ ui::canvas* ui::canvas_manager::add_new_tab(QString name) {
     }
     center_active_view();
     return canv;
+}
+
+ui::canvas* ui::canvas_manager::canvas_from_skeleton(sm::skeleton& skel) {
+    auto tab = tab_from_skeleton(skel);
+    return canvas_from_tab(tab);
+}
+
+ui::canvas* ui::canvas_manager::canvas_from_tab(const std::string& tab_name) {
+    for (int i = 0; i < count(); ++i) {
+        if (tabText(i).toStdString() == tab_name) {
+            auto view = static_cast<QGraphicsView*>(widget(i));
+            return static_cast<ui::canvas*>(view->scene());
+        }
+    }
+    return nullptr;
 }
 
 QGraphicsView& ui::canvas_manager::active_view() const {
