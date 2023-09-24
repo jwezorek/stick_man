@@ -217,6 +217,9 @@ namespace ui {
 	double clamp_above(double v, double floor);
 	double clamp_below(double v, double ceiling);
 	double clamp(double v, double floor, double ceiling);
+    std::string get_prefixed_string(
+        const std::string& prefix, const std::string& str, char separator = '-'
+    );
     std::string make_unique_name(const std::vector<std::string>& used_names,
         const std::string& prefix);
 }

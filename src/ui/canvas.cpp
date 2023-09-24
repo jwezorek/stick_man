@@ -6,6 +6,7 @@
 #include "../core/sm_skeleton.h"
 #include <boost/geometry.hpp>
 #include <ranges>
+#include <unordered_map>
 #include <numbers>
 
 namespace r = std::ranges;
@@ -469,6 +470,24 @@ void ui::canvas::wheelEvent(QGraphicsSceneWheelEvent* event) {
 
 /*------------------------------------------------------------------------------------------------*/
 
+void ui::canvas_manager::connect_current_tab_signal() {
+    current_tab_conn_ = connect(this, &QTabWidget::currentChanged,
+        [this](int i) {
+            auto* canv = static_cast<canvas*>(
+                static_cast<QGraphicsView*>(widget(i))->scene()
+                );
+            auto old_active_pane = active_canv_;
+            old_active_pane->clear_selection();
+            active_canv_ = canv;
+            emit active_canvas_changed(*old_active_pane, *canv);
+        }
+    );
+}
+
+void ui::canvas_manager::disconnect_current_tab_signal() {
+    disconnect(current_tab_conn_);
+}
+
 ui::canvas_manager::canvas_manager() : active_canv_(nullptr) {
     setStyleSheet(
         "QTabBar::tab {"
@@ -476,17 +495,37 @@ ui::canvas_manager::canvas_manager() : active_canv_(nullptr) {
         "}"
     );
     active_canv_ = add_new_tab("untitled-1");
-    connect(this, &QTabWidget::currentChanged,
-        [this](int i) {
-            auto* canv = static_cast<canvas*>(
-                    static_cast<QGraphicsView*>(widget(i))->scene()
-            );
-            auto old_active_pane = active_canv_;
-            old_active_pane->clear_selection();
-            active_canv_ = canv;
-            emit active_canvas_changed(*old_active_pane, *canv );
+    connect_current_tab_signal();
+}
+
+std::string ui::canvas_manager::tab_from_skeleton(const sm::skeleton& skel) {
+    for (const auto possible_tab : skel.tags()) {
+        auto tab = ui::get_prefixed_string("tab", possible_tab, ':');
+        if (!tab.empty()) {
+            return tab;
         }
-    );
+    }
+    return {};
+}
+
+std::vector<std::string> ui::canvas_manager::tab_names_from_model(const sm::world& w) {
+    std::unordered_set<std::string> tabs;
+    for (const auto& skel : w.skeletons()) {
+        auto tab = tab_from_skeleton(skel.get());
+        if (!tab.empty()) {
+            tabs.insert(tab);
+        }
+    }
+    return tabs | r::to<std::vector<std::string>>();
+}
+
+void ui::canvas_manager::clear() {
+    active_canv_ = nullptr;
+    while (count() > 0) {
+        QWidget* widget = this->widget(0); 
+        removeTab(0);
+        delete widget; 
+    }
 }
 
 ui::canvas* ui::canvas_manager::add_new_tab(QString name) {
@@ -501,6 +540,10 @@ ui::canvas* ui::canvas_manager::add_new_tab(QString name) {
     view->setScene(canv);
     canv->init();
 
+    if (active_canv_ == nullptr) {
+        active_canv_ = canv;
+    }
+    center_active_view();
     return canv;
 }
 
@@ -531,10 +574,20 @@ std::string ui::canvas_manager::tab_name(const canvas& canv) const {
 }
 
 void ui::canvas_manager::sync_to_model() {
-    auto& canv = active_canvas();
-    canv.clear();
-    auto& sandbox = canv.tool_mgr().main_window().sandbox();
+    auto& sandbox = active_canvas().tool_mgr().main_window().sandbox();
+    disconnect_current_tab_signal();
+    clear();
+    auto name_to_canvas = tab_names_from_model(sandbox) | 
+        rv::transform(
+            [this](const std::string& name)->std::unordered_map<std::string, canvas*>::value_type {
+                return { name, add_new_tab(name.c_str())};
+            }
+        ) | r::to<std::unordered_map<std::string, canvas* >>();
+    connect_current_tab_signal();
+
     for (auto skel : sandbox.skeletons()) {
+        auto tab = tab_from_skeleton(skel.get());
+        auto& canv = *name_to_canvas.at(tab);
         for (auto node : skel.get().nodes()) {
             canv.addItem(new ui::node_item(node.get(), canv.scale()));
         }
@@ -542,6 +595,7 @@ void ui::canvas_manager::sync_to_model() {
             canv.addItem(new ui::bone_item(bone.get(), canv.scale()));
         }
     }
+
     emit contents_changed();
 }
 

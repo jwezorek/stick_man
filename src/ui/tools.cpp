@@ -128,7 +128,7 @@ void ui::add_node_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
     auto new_skeleton = sandbox.create_skeleton(pt.x(), pt.y());
     canv.insert_item(new_skeleton.get().root_node().get());
     auto tab_name = manager()->main_window().canvases().tab_name(canv);
-    new_skeleton.get().insert_tag(tab_name);
+    new_skeleton.get().insert_tag("tab:" + tab_name);
 }
 
 /*------------------------------------------------------------------------------------------------*/

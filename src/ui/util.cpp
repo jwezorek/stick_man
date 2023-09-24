@@ -23,14 +23,7 @@ namespace {
     }
 
     std::optional<int> get_prefixed_number(const std::string& prefix, const std::string& str) {
-        if (str.substr(0, prefix.size()) != prefix) {
-            return {};
-        }
-        if (str.size() < prefix.size() + 2 || str[prefix.size()] != '-') {
-            return {};
-        }
-        auto num_str_sz = str.size() - prefix.size() - 1;
-        auto num_str = str.substr(prefix.size() + 1, num_str_sz);
+        auto num_str = ui::get_prefixed_string(prefix, str);
         for (auto ch : num_str) {
             if (!std::isdigit(ch)) {
                 return {};
@@ -80,6 +73,21 @@ namespace {
     };
 
 }
+
+std::string ui::get_prefixed_string(const std::string& prefix, const std::string& str,
+        char separator) {
+    if (str.size() <= prefix.size()) {
+        return {};
+    }
+    if (str.substr(0, prefix.size()) != prefix) {
+        return {};
+    }
+    if (str.size() < prefix.size() + 2 || str[prefix.size()] != separator) {
+        return {};
+    }
+    auto num_str_sz = str.size() - prefix.size() - 1;
+    return str.substr(prefix.size() + 1, num_str_sz);
+};
 
 /*------------------------------------------------------------------------------------------------*/
 

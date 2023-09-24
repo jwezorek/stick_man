@@ -17,6 +17,7 @@ namespace sm {
     class node;
     class bone;
     class skeleton;
+    class world;
 }
 
 namespace ui {
@@ -125,8 +126,17 @@ namespace ui {
     private:
         QGraphicsView& active_view() const;
         canvas* active_canv_;
+        QMetaObject::Connection current_tab_conn_;
+
+        static std::string tab_from_skeleton(const sm::skeleton& skel);
+        static std::vector<std::string> tab_names_from_model(const sm::world& w);
+
+        void connect_current_tab_signal();
+        void disconnect_current_tab_signal();
+
     public:
         canvas_manager();
+        void clear();
         canvas& active_canvas() const;
         void center_active_view();
         canvas* add_new_tab(QString name);
