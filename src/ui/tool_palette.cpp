@@ -57,7 +57,10 @@ ui::tool_palette::tool_palette(QMainWindow* wnd) :
         auto tool = new tool_btn(id, rsrc);
         layout->addWidget(tool);
         connect(tool, &QPushButton::clicked,
-            [this, tool]() {handle_tool_click(tool); });
+            [wnd, this, tool]() {
+                handle_tool_click(static_cast<stick_man*>(wnd)->canvases(), tool);
+            }
+        );
         tool->setToolTip(name);
     }
 
@@ -85,7 +88,7 @@ ui::tool_btn* ui::tool_palette::tool_from_id(tool_id id)
     );
 }
 
-void ui::tool_palette::handle_tool_click(tool_btn* btn) {
+void ui::tool_palette::handle_tool_click(canvas_manager& canvases, tool_btn* btn) {
 
     tool_id current_tool_id = (tools_.has_current_tool()) ? 
         tools_.current_tool().id() : tool_id::none;
@@ -99,6 +102,6 @@ void ui::tool_palette::handle_tool_click(tool_btn* btn) {
     }
 
     btn->activate();
-    tools_.set_current_tool( btn->id() );
+    tools_.set_current_tool(canvases, btn->id() );
 }
 

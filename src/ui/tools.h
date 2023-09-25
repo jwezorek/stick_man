@@ -53,7 +53,7 @@ namespace ui {
         tool_manager* manager() const;
         //void set_manager(tool_manager* mgr);
         void populate_settings(tool_settings_pane* pane);
-        virtual void activate(canvas& c);
+        virtual void activate(canvas_manager& canvases);
         virtual void keyPressEvent(canvas& c, QKeyEvent* event) override;
         virtual void keyReleaseEvent(canvas& c, QKeyEvent* event) override;
         virtual void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
@@ -61,7 +61,7 @@ namespace ui {
         virtual void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         virtual void mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         virtual void wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) override;
-        virtual void deactivate(canvas& c);
+        virtual void deactivate(canvas_manager& canvases);
 		virtual void init();
         virtual QWidget* settings_widget();
 		virtual ~abstract_tool();
@@ -90,8 +90,8 @@ namespace ui {
     class pan_tool : public abstract_tool {
     public:
         pan_tool(tool_manager* mgr);
-        void activate(canvas& c) override;
-        void deactivate(canvas& c) override;
+        void activate(canvas_manager& canvases) override;
+        void deactivate(canvas_manager& canvases) override;
     };
 
     class add_node_tool : public abstract_tool {
@@ -135,7 +135,7 @@ namespace ui {
         std::span<const tool_info> tool_info() const;
         bool has_current_tool() const;
         abstract_tool& current_tool() const;
-        void set_current_tool(tool_id id);
+        void set_current_tool(canvas_manager& canvases, tool_id id);
         ui::canvas& canvas();
         stick_man& main_window();
     };

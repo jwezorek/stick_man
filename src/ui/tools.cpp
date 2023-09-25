@@ -43,7 +43,7 @@ void ui::abstract_tool::populate_settings(tool_settings_pane* pane) {
     pane->set_tool(name_, settings_widget());
 }
 
-void ui::abstract_tool::activate(canvas& c) {}
+void ui::abstract_tool::activate(canvas_manager& canvases) {}
 void ui::abstract_tool::keyPressEvent(canvas& c, QKeyEvent* event) {}
 void ui::abstract_tool::keyReleaseEvent(canvas& c, QKeyEvent* event) {}
 void ui::abstract_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
@@ -51,7 +51,7 @@ void ui::abstract_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* even
 void ui::abstract_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
 void ui::abstract_tool::mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
 void ui::abstract_tool::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {}
-void ui::abstract_tool::deactivate(canvas& c) {}
+void ui::abstract_tool::deactivate(canvas_manager& canvases) {}
 void ui::abstract_tool::init() {}
 QWidget* ui::abstract_tool::settings_widget() { return nullptr; }
 ui::abstract_tool::~abstract_tool() {}
@@ -108,12 +108,12 @@ ui::pan_tool::pan_tool(tool_manager* mgr) :
     abstract_tool(mgr, "pan", "pan_icon.png", ui::tool_id::pan) 
 {}
 
-void ui::pan_tool::deactivate(canvas& c) {
-    c.manager().set_drag_mode(ui::drag_mode::none);
+void ui::pan_tool::deactivate(canvas_manager& canvases) {
+    canvases.set_drag_mode(ui::drag_mode::none);
 }
 
-void ui::pan_tool::activate(canvas& c) {
-    c.manager().set_drag_mode(ui::drag_mode::pan);
+void ui::pan_tool::activate(canvas_manager& canvases) {
+    canvases.set_drag_mode(ui::drag_mode::pan);
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -273,18 +273,17 @@ ui::abstract_tool& ui::tool_manager::current_tool() const {
     return *tool_registry_.at(curr_item_index_);
 }
 
-void ui::tool_manager::set_current_tool(tool_id id) {
+void ui::tool_manager::set_current_tool(canvas_manager& canvases, tool_id id) {
     int new_tool_index = index_from_id(id);
     if (new_tool_index == curr_item_index_) {
         return;
     }
-    auto& canvas = main_window().canvases().active_canvas();
-    canvas.setFocus();
+    canvases.active_canvas().setFocus();
     if (has_current_tool()) {
-        current_tool().deactivate(canvas);
+        current_tool().deactivate(canvases);
     }
     curr_item_index_ = new_tool_index;
-    current_tool().activate(canvas);
+    current_tool().activate(canvases);
     auto& tool_pane = main_window_.tool_pane();
     current_tool().populate_settings(&tool_pane);
 }

@@ -160,8 +160,8 @@ void ui::selection_tool::init() {
     connect_canv_rubber_band_listener(); 
 }
 
-void ui::selection_tool::activate(canvas& canv) {
-    canv.manager().set_drag_mode(ui::drag_mode::rubber_band);
+void ui::selection_tool::activate(canvas_manager& canv_mgr) {
+    canv_mgr.set_drag_mode(ui::drag_mode::rubber_band);
     rubber_band_ = {};
 }
 
@@ -252,9 +252,8 @@ void ui::selection_tool::handle_sel_changed( const ui::canvas& canv) {
     props.set(canv);
 }
 
-void ui::selection_tool::deactivate(canvas& canv) {
-    canv.hide_status_line();
-    canv.manager().set_drag_mode(ui::drag_mode::none);
+void ui::selection_tool::deactivate(canvas_manager& canv_mgr) {
+    canv_mgr.set_drag_mode(ui::drag_mode::none);
 }
 
 QWidget* ui::selection_tool::settings_widget() {

@@ -34,13 +34,13 @@ namespace ui {
     public:
 
         selection_tool(tool_manager* mgr, ui::stick_man* main_wnd );
-        void activate(canvas& c) override;
+        void activate(canvas_manager& c) override;
 
         void keyReleaseEvent(canvas& c, QKeyEvent* event) override;
         void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void deactivate(canvas& c) override;
+        void deactivate(canvas_manager& c) override;
         QWidget* settings_widget() override;
 		void init() override;
     };
