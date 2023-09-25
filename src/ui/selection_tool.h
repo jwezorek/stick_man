@@ -7,29 +7,26 @@
 #include <unordered_set>
 
 /*------------------------------------------------------------------------------------------------*/
+namespace sm {
+    class world;
+}
 
 namespace ui {
 
     using selection_set = std::unordered_set<ui::abstract_canvas_item*>;
 
-	class stick_man;
+	class canvas_manager;
 
     class selection_tool : public abstract_tool {
     private:
 
         std::optional<QRectF> rubber_band_;
-        QMetaObject::Connection canv_rubber_band_conn_;
-        QMetaObject::Connection canv_sel_conn_;
-		stick_man& main_wnd_;
-
-        void connect_canv_rubber_band_listener();
-        void disconnect_canv_rubber_band_listener();
 
         void handle_click(canvas& c, QPointF pt, bool shift_down, bool alt_down);
         void handle_drag(canvas& c, QRectF rect, bool shift_down, bool alt_down);
     public:
 
-        selection_tool(ui::stick_man* main_wnd );
+        selection_tool();
         void activate(canvas_manager& c) override;
 
         void keyReleaseEvent(canvas& c, QKeyEvent* event) override;
@@ -38,7 +35,7 @@ namespace ui {
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void deactivate(canvas_manager& c) override;
         QWidget* settings_widget() override;
-		void init() override;
+		void init(canvas_manager& canvases, sm::world& model) override;
     };
 
 }

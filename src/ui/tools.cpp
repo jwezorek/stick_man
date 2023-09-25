@@ -47,7 +47,7 @@ void ui::abstract_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* e
 void ui::abstract_tool::mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
 void ui::abstract_tool::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {}
 void ui::abstract_tool::deactivate(canvas_manager& canvases) {}
-void ui::abstract_tool::init() {}
+void ui::abstract_tool::init(canvas_manager&, sm::world&) {}
 QWidget* ui::abstract_tool::settings_widget() { return nullptr; }
 ui::abstract_tool::~abstract_tool() {}
 
@@ -113,14 +113,18 @@ void ui::pan_tool::activate(canvas_manager& canvases) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::add_node_tool::add_node_tool(sm::world& model) :
-    model_( model ),
+ui::add_node_tool::add_node_tool() :
+    model_(nullptr),
     abstract_tool("add node", "add_node_icon.png", ui::tool_id::add_node) 
 {}
 
+void ui::add_node_tool::init(canvas_manager& canvases, sm::world& model) {
+    model_ = &model;
+}
+
 void ui::add_node_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     auto pt = event->scenePos();
-    auto new_skeleton = model_.create_skeleton(pt.x(), pt.y());
+    auto new_skeleton = model_->create_skeleton(pt.x(), pt.y());
 
     auto tab_name = canv.tab_name();
     new_skeleton.get().insert_tag("tab:" + tab_name);
@@ -141,10 +145,14 @@ void ui::add_bone_tool::init_rubber_band(canvas& c) {
     }
 }
 
-ui::add_bone_tool::add_bone_tool(sm::world& model) :
-        model_(model),
+ui::add_bone_tool::add_bone_tool() :
+        model_(nullptr),
         rubber_band_(nullptr),
     abstract_tool("add bone", "add_bone_icon.png", ui::tool_id::add_bone) {
+}
+
+void ui::add_bone_tool::init(canvas_manager& canvases, sm::world& model) {
+    model_ = &model;
 }
 
 void ui::add_bone_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
@@ -172,7 +180,7 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
 			canv.delete_item(skel_itm, false);
 		}
 
-        auto bone = model_.create_bone({}, parent_node->model(), child_node->model());
+        auto bone = model_->create_bone({}, parent_node->model(), child_node->model());
         if (bone) {
 			canv.insert_item(bone->get());
 			canv.sync_to_model();
@@ -184,19 +192,19 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::tool_manager::tool_manager(stick_man* sm) :
+ui::tool_manager::tool_manager() :
         curr_item_index_(-1){
     tool_registry_.emplace_back(std::make_unique<ui::pan_tool>());
     tool_registry_.emplace_back(std::make_unique<ui::zoom_tool>());
-    tool_registry_.emplace_back(std::make_unique<ui::selection_tool>(sm));
+    tool_registry_.emplace_back(std::make_unique<ui::selection_tool>());
     tool_registry_.emplace_back(std::make_unique<ui::move_tool>());
-    tool_registry_.emplace_back(std::make_unique<ui::add_node_tool>(sm->sandbox()));
-    tool_registry_.emplace_back(std::make_unique<ui::add_bone_tool>(sm->sandbox()));
+    tool_registry_.emplace_back(std::make_unique<ui::add_node_tool>());
+    tool_registry_.emplace_back(std::make_unique<ui::add_bone_tool>());
 }
 
-void ui::tool_manager::init() {
+void ui::tool_manager::init(canvas_manager& canvases, sm::world& model) {
 	for (auto& tool : tool_registry_) {
-		tool->init();
+		tool->init(canvases, model);
 	}
 }
 

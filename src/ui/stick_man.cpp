@@ -31,7 +31,6 @@ ui::stick_man::stick_man(QWidget* parent) :
 		QMainWindow(parent),
 		was_shown_(false),
 		has_fully_layed_out_widgets_(false),
-		tool_mgr_(this),
 		tool_pal_(new tool_palette(this)),
 		anim_pane_(new animation_pane(this)),
 		tool_pane_(new tool_settings_pane(this)),
@@ -47,7 +46,7 @@ ui::stick_man::stick_man(QWidget* parent) :
     setCentralWidget(canvases_ = new canvas_manager(tool_mgr_));
     createMainMenu();
 	skel_pane_->init();
-	tool_mgr_.init();
+	tool_mgr_.init(*canvases_, world_);
     tool_pane_->init(tool_mgr_);
 }
 

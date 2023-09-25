@@ -10,6 +10,9 @@
 #include <functional>
 
 /*------------------------------------------------------------------------------------------------*/
+namespace sm {
+    class world;
+}
 
 namespace ui {
 
@@ -41,7 +44,7 @@ namespace ui {
     };
 
     class tool_settings_pane;
-    class stick_man;
+    class canvas_manager;
     class tool_manager;
 
     class abstract_tool : public input_handler {
@@ -60,7 +63,7 @@ namespace ui {
         virtual void mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         virtual void wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) override;
         virtual void deactivate(canvas_manager& canvases);
-		virtual void init();
+		virtual void init(canvas_manager& canvases, sm::world& model);
         virtual QWidget* settings_widget();
 		virtual ~abstract_tool();
 
@@ -92,9 +95,10 @@ namespace ui {
     };
 
     class add_node_tool : public abstract_tool {
-        sm::world& model_;
+        sm::world* model_;
     public:
-        add_node_tool(sm::world& model);
+        add_node_tool();
+        void init(canvas_manager& canvases, sm::world& model) override;
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
     };
 
@@ -102,12 +106,13 @@ namespace ui {
     private:
         QPointF origin_;
         QGraphicsLineItem* rubber_band_;
-        sm::world& model_;
+        sm::world* model_;
 
         void init_rubber_band(canvas& c);
 
     public:
-        add_bone_tool(sm::world& model);
+        add_bone_tool();
+        void init(canvas_manager& canvases, sm::world& model) override;
         void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
@@ -124,8 +129,8 @@ namespace ui {
         int index_from_id(tool_id id) const;
 
     public:
-        tool_manager(stick_man* c);
-		void init();
+        tool_manager();
+		void init(canvas_manager& canvases, sm::world& model);
         void keyPressEvent(canvas& c, QKeyEvent* event) override;
         void keyReleaseEvent(canvas& c, QKeyEvent* event) override;
         void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;

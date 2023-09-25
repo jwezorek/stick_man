@@ -119,29 +119,19 @@ namespace {
 	}
 }
 
-ui::selection_tool::selection_tool(ui::stick_man* main_wnd) :
-	main_wnd_(*main_wnd),
+ui::selection_tool::selection_tool() :
     abstract_tool("selection", "arrow_icon.png", ui::tool_id::selection) {
-
 }
 
-void ui::selection_tool::connect_canv_rubber_band_listener() {
-    canv_rubber_band_conn_ = main_wnd_.connect(
-        &main_wnd_.canvases(), &canvas_manager::rubber_band_change,
+void ui::selection_tool::init(canvas_manager& canvases, sm::world& model) {
+    canvases.connect(
+        &canvases, &canvas_manager::rubber_band_change,
         [&](QRect rbr, QPointF from, QPointF to) {
             if (from != QPointF{ 0, 0 }) {
                 rubber_band_ = points_to_rect(from, to);
             }
         }
     );
-}
-
-void ui::selection_tool::disconnect_canv_rubber_band_listener() {
-    main_wnd_.disconnect(canv_rubber_band_conn_);
-}
-
-void ui::selection_tool::init() {
-    connect_canv_rubber_band_listener(); 
 }
 
 void ui::selection_tool::activate(canvas_manager& canv_mgr) {
