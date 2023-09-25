@@ -115,7 +115,7 @@ namespace ui {
         void show_status_line(const QString& txt);
         void hide_status_line();
         void filter_selection(std::function<bool(abstract_canvas_item*)> filter);
-        void delete_item(abstract_canvas_item* item, bool emit_signals);
+        void delete_item(sm::world& world, abstract_canvas_item* item, bool emit_signals);
         QPointF from_global_to_canvas(const QPoint& pt);
         std::string tab_name() const;
         const canvas_manager& manager() const;
@@ -140,7 +140,7 @@ namespace ui {
 
     public:
         canvas_manager(input_handler& inp_handler);
-        void clear();;
+        void clear();
         void center_active_view();
         canvas& active_canvas() const;
         canvas* add_new_tab(QString name);
@@ -155,7 +155,7 @@ namespace ui {
     signals:
         void active_canvas_changed(ui::canvas& old_canv, ui::canvas& canv);
         void selection_changed(ui::canvas& canv);
-        void contents_changed();
+        void contents_changed(sm::world& model);
         void rubber_band_change(ui::canvas& canv, QRect rbr, QPointF from, QPointF to);
     };
 

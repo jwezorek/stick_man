@@ -177,7 +177,7 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
 		auto skel_v = child_node->model().owner();
 		if (skel_v.get().get_user_data().has_value()) {
 			ui::skeleton_item* skel_itm = &item_from_model<skeleton_item>(skel_v.get());
-			canv.delete_item(skel_itm, false);
+			canv.delete_item(*model_, skel_itm, false);
 		}
 
         auto bone = model_->create_bone({}, parent_node->model(), child_node->model());

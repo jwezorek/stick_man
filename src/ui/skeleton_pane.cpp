@@ -194,7 +194,7 @@ void ui::skeleton_pane::expand_selected_items() {
 	}
 }
 
-void ui::skeleton_pane::sync_with_model()
+void ui::skeleton_pane::sync_with_model(sm::world& model)
 {
 	disconnect_tree_sel_handler();
 
@@ -202,8 +202,7 @@ void ui::skeleton_pane::sync_with_model()
 	QStandardItemModel* tree_model = static_cast<QStandardItemModel*>(skeleton_tree_->model());
 	tree_model->clear();
 
-	auto& sandbox = main_wnd_->sandbox();
-	for (const auto& skel : sandbox.skeletons()) {
+	for (const auto& skel : model.skeletons()) {
 		insert_skeleton(
             *canvas().manager().canvas_from_skeleton(skel),
             tree_model, 

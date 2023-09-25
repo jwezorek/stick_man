@@ -247,14 +247,14 @@ bool ui::canvas::is_status_line_visible() const {
 ui::node_item* ui::canvas::insert_item(sm::node& node) {
 	ui::node_item* ni;
 	addItem(ni = new node_item(node, 1.0 / scale()));
-	emit manager().contents_changed();
+	emit manager().contents_changed(node.owner().get().owner().get());
 	return ni;
 }
 
 ui::bone_item* ui::canvas::insert_item(sm::bone& bone) {
 	ui::bone_item* bi;
 	addItem(bi = new bone_item(bone, 1.0 / scale()));
-	emit manager().contents_changed();
+	emit manager().contents_changed(bone.owner().get().owner().get());
 	return bi;
 }
 
@@ -357,7 +357,7 @@ void ui::canvas::filter_selection(std::function<bool(abstract_canvas_item*)> fil
 	selection_ = sel;
 }
 
-void ui::canvas::delete_item(abstract_canvas_item* deletee, bool emit_signals) {
+void ui::canvas::delete_item(sm::world& world, abstract_canvas_item* deletee, bool emit_signals) {
 	bool was_selected = deletee->is_selected();
 	if (was_selected) {
 		filter_selection(
@@ -381,7 +381,7 @@ void ui::canvas::delete_item(abstract_canvas_item* deletee, bool emit_signals) {
 		if (was_selected) {
 			emit manager().selection_changed(*this);
 		}
-		emit manager().contents_changed();
+		emit manager().contents_changed(world);
 	}
 }
 
@@ -617,7 +617,7 @@ void ui::canvas_manager::sync_to_model(sm::world& model) {
         }
     }
 
-    emit contents_changed();
+    emit contents_changed(model);
 }
 
 std::vector<ui::canvas*> ui::canvas_manager::canvases() {
