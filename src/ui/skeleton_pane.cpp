@@ -338,8 +338,6 @@ ui::skeleton_pane::skeleton_pane(ui::stick_man* mw) :
 
     setTitleBarWidget( custom_title_bar("skeleton view") );
 
-	auto& tool_mgr = main_wnd_->tool_mgr();
-
 	QWidget* contents = new QWidget();
 	auto column = new QVBoxLayout(contents);
 	column->addWidget(skeleton_tree_ = create_skeleton_tree());
@@ -415,20 +413,9 @@ void ui::skeleton_pane::disconnect_canv_sel_handler() {
 	disconnect(canv_sel_conn_);
 }
 
-void ui::skeleton_pane::init() {
+void ui::skeleton_pane::init(canvas_manager& canvases) {
 	
-	sel_properties_->init();
-
-    /*
-    connect(&main_wnd_->canvases(), & canvas_manager::active_canvas_changed,
-        [this](ui::canvas& canv) {
-            disconnect_canv_cont_handler();
-            disconnect_canv_sel_handler();
-            connect_canv_cont_handler();
-            connect_canv_sel_handler();
-        }
-    );
-    */
+	sel_properties_->init(canvases);
 
     connect_canv_cont_handler();
 	connect_canv_sel_handler();
@@ -480,7 +467,7 @@ void ui::skeleton_pane::handle_tree_change(QStandardItem* item) {
 		);
 
 	if (success) {
-		emit canvas().manager().selection_changed();
+		emit canvas().manager().selection_changed(canvas());
 	}
 }
 

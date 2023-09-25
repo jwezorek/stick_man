@@ -126,7 +126,7 @@ ui::selection_tool::selection_tool() :
 void ui::selection_tool::init(canvas_manager& canvases, sm::world& model) {
     canvases.connect(
         &canvases, &canvas_manager::rubber_band_change,
-        [&](QRect rbr, QPointF from, QPointF to) {
+        [&](canvas& canv, QRect rbr, QPointF from, QPointF to) {
             if (from != QPointF{ 0, 0 }) {
                 rubber_band_ = points_to_rect(from, to);
             }

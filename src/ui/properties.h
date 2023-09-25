@@ -3,9 +3,12 @@
 #include <QtWidgets>
 #include <unordered_map>
 
+/*------------------------------------------------------------------------------------------------*/
+
 namespace ui {
 
 	class stick_man;
+    class canvas_manager;
 	class canvas;
 
 	enum class selection_type {
@@ -42,15 +45,14 @@ namespace ui {
 	};
 
 	class selection_properties : public QStackedWidget {
-		stick_man* main_wnd_;
 		std::unordered_map<selection_type, abstract_properties_widget*> props_;
 
-        void handle_selection_changed();
+        void handle_selection_changed(canvas& canv);
 
 	public:
 		selection_properties(stick_man* mnd_wnd);
 		abstract_properties_widget* current_props() const;
 		void set(const ui::canvas& canv);
-		void init();
+		void init(canvas_manager& canvases);
 	};
 }

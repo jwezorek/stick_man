@@ -45,7 +45,7 @@ ui::stick_man::stick_man(QWidget* parent) :
 
     setCentralWidget(canvases_ = new canvas_manager(tool_mgr_));
     createMainMenu();
-	skel_pane_->init();
+	skel_pane_->init(*canvases_);
 	tool_mgr_.init(*canvases_, world_);
     tool_pane_->init(tool_mgr_);
 }

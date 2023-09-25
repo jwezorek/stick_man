@@ -759,7 +759,6 @@ void ui::single_or_multi_props_widget::set_selection(const ui::canvas& canv) {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::selection_properties::selection_properties(ui::stick_man* mw) :
-		main_wnd_(mw),
 		props_{
 			{selection_type::none, new no_properties(mw, this)},
 			{selection_type::node, new node_properties(mw, this)},
@@ -790,19 +789,17 @@ void ui::selection_properties::set(const ui::canvas& canv) {
 	}
 }
 
-void ui::selection_properties::handle_selection_changed() {
-    auto& canv = main_wnd_->canvases().active_canvas();
+void ui::selection_properties::handle_selection_changed(canvas& canv) {
     set(canv);
 }
 
-void ui::selection_properties::init()
+void ui::selection_properties::init(canvas_manager& canvases)
 {
     for (const auto& [key, prop_box] : props_) {
         prop_box->init();
     }
-    set(main_wnd_->canvases().active_canvas());
-
-    connect(&main_wnd_->canvases(), &canvas_manager::selection_changed,
+    set(canvases.active_canvas());
+    connect(&canvases, &canvas_manager::selection_changed,
         this,
         &selection_properties::handle_selection_changed
     );

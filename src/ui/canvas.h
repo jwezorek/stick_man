@@ -154,9 +154,9 @@ namespace ui {
         void sync_to_model(sm::world& model);
     signals:
         void active_canvas_changed(ui::canvas& old_canv, ui::canvas& canv);
-        void selection_changed();
+        void selection_changed(ui::canvas& canv);
         void contents_changed();
-        void rubber_band_change(QRect rbr, QPointF from, QPointF to);
+        void rubber_band_change(ui::canvas& canv, QRect rbr, QPointF from, QPointF to);
     };
 
     using model_variant = std::variant<std::reference_wrapper<sm::skeleton>,

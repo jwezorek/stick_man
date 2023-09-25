@@ -144,7 +144,7 @@ ui::canvas::canvas(input_handler& inp_handler) :
 void ui::canvas::init() {
     connect(&view(), &QGraphicsView::rubberBandChanged,
         [this](QRect rbr, QPointF from, QPointF to) {
-            emit manager().rubber_band_change(rbr, from, to);
+            emit manager().rubber_band_change(*this, rbr, from, to);
         }
     );
 }
@@ -328,7 +328,7 @@ void ui::canvas::sync_selection() {
         bool selected = selection_.contains(itm);
         itm->set_selected(selected);
     }
-    emit manager().selection_changed();
+    emit manager().selection_changed(*this);
 }
 
 QGraphicsView& ui::canvas::view() {
@@ -379,7 +379,7 @@ void ui::canvas::delete_item(abstract_canvas_item* deletee, bool emit_signals) {
 
 	if (emit_signals) {
 		if (was_selected) {
-			emit manager().selection_changed();
+			emit manager().selection_changed(*this);
 		}
 		emit manager().contents_changed();
 	}
