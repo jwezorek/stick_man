@@ -341,7 +341,13 @@ ui::skeleton_pane::skeleton_pane(ui::stick_man* mw) :
 	QWidget* contents = new QWidget();
 	auto column = new QVBoxLayout(contents);
 	column->addWidget(skeleton_tree_ = create_skeleton_tree());
-	column->addWidget(sel_properties_ = new selection_properties(mw));
+	column->addWidget(sel_properties_ = new selection_properties(
+            [mw]()->ui::canvas& {
+                return mw->canvases().active_canvas();
+            },
+            this
+        )
+    );
     setWidget(contents);
 
 	connect_tree_change_handler();

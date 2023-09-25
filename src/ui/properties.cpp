@@ -158,15 +158,17 @@ namespace {
 
 	class no_properties : public ui::abstract_properties_widget {
 	public:
-		no_properties(ui::stick_man* mw, QWidget* parent) : abstract_properties_widget(mw, parent, "no selection") {}
+		no_properties(const ui::current_canvas_fn& fn,
+            ui::selection_properties* parent) : 
+                abstract_properties_widget(fn, parent, "no selection") {}
 		void set_selection(const ui::canvas& canv) override {}
 	};
 
 	class skeleton_properties : public ui::abstract_properties_widget {
 		ui::labeled_field* name_;
 	public:
-		skeleton_properties(ui::stick_man* mw, QWidget* parent) :
-			abstract_properties_widget(mw, parent, "skeleton selection") {}
+		skeleton_properties(const ui::current_canvas_fn& fn, ui::selection_properties* parent) :
+			abstract_properties_widget(fn, parent, "skeleton selection") {}
 
 		void populate() override {
 			layout_->addWidget(
@@ -175,13 +177,13 @@ namespace {
 			name_->set_color(QColor("yellow"));
 			name_->value()->set_validator(
 				[this](const std::string& new_name)->bool {
-					return main_wnd_->skel_pane().validate_props_name_change(new_name);
+					return parent_->skel_pane().validate_props_name_change(new_name);
 				}
 			);
 
 			connect(name_->value(), &ui::string_edit::value_changed,
 				[this]() {
-					main_wnd_->skel_pane().handle_props_name_change(
+					parent_->skel_pane().handle_props_name_change(
 						name_->value()->text().toStdString()
 					);
 				}
@@ -196,7 +198,7 @@ namespace {
 
 	class node_position_tab : public ui::tabbed_values {
 	private:
-		ui::stick_man* main_wnd_;
+        ui::current_canvas_fn get_curr_canv_;
 
 		static sm::point origin_by_tab(int tab_index, const sm::node& selected_node) {
 			if (tab_index == 1) {
@@ -214,7 +216,7 @@ namespace {
 		}
 
 		double to_nth_tab(int n, int field, double val) override {
-			auto selected_nodes = main_wnd_->canvases().active_canvas().selected_nodes();
+			auto selected_nodes = get_curr_canv_().selected_nodes();
 			if (selected_nodes.size() != 1 || n == 0) {
 				return val;
 			}
@@ -228,7 +230,7 @@ namespace {
 		}
 
 		double from_nth_tab(int n, int field, double val) override {
-			auto selected_nodes = main_wnd_->canvases().active_canvas().selected_nodes();
+			auto selected_nodes = get_curr_canv_().selected_nodes();
 			if (selected_nodes.size() != 1 || n == 0) {
 				return val;
 			}
@@ -242,14 +244,14 @@ namespace {
 		}
 
 	public:
-		node_position_tab(ui::stick_man* main_wnd) :
+		node_position_tab(const ui::current_canvas_fn& fn) :
+            get_curr_canv_(fn),
 			ui::tabbed_values(nullptr,
 					{ "world", "skeleton", "parent" }, {
 						{"x", 0.0, -1500.0, 1500.0},
 						{"y", 0.0, -1500.0, 1500.0}
 					}, 135
-			),
-			main_wnd_(main_wnd)
+			)
 		{}
 	};
 
@@ -262,9 +264,9 @@ namespace {
 		}
 
 	public:
-		node_properties(ui::stick_man* mw, QWidget* parent) :
+		node_properties(const ui::current_canvas_fn& fn, ui::selection_properties* parent) :
 			single_or_multi_props_widget(
-				mw,
+				fn,
 				parent,
 				"selected nodes"
 			),
@@ -278,23 +280,23 @@ namespace {
 			name_->set_color(QColor("yellow"));
 			name_->value()->set_validator(
 				[this](const std::string& new_name)->bool {
-					return main_wnd_->skel_pane().validate_props_name_change(new_name);
+					return parent_->skel_pane().validate_props_name_change(new_name);
 				}
 			);
 
 			connect(name_->value(), &ui::string_edit::value_changed,
 				[this]() {
-					main_wnd_->skel_pane().handle_props_name_change(
+                    parent_->skel_pane().handle_props_name_change(
 						name_->value()->text().toStdString()
 					);
 				}
 			);
 
-			layout_->addWidget(positions_ = new node_position_tab( main_wnd_ ));
+			layout_->addWidget(positions_ = new node_position_tab(get_current_canv_));
 
 			connect(positions_, &ui::tabbed_values::value_changed,
 				[this](int field) {
-					auto& canv = main_wnd_->canvases().active_canvas();
+					auto& canv = get_current_canv_();
 					auto v = positions_->value(field);
 					if (field == 0) {
 						canv.transform_selection(
@@ -455,9 +457,10 @@ namespace {
 		}
 	};
 
-	std::function<void()> make_select_node_fn(ui::stick_man& mw, bool parent_node) {
-		return [&mw, parent_node]() {
-			auto& canv = mw.canvases().active_canvas();
+	std::function<void()> make_select_node_fn(const ui::current_canvas_fn& get_current_canv, 
+            bool parent_node) {
+		return [get_current_canv, parent_node]() {
+			auto& canv = get_current_canv();
 			auto bones = canv.selected_bones();
 			if (bones.size() != 1) {
 				return;
@@ -472,10 +475,10 @@ namespace {
 
 	class rotation_tab : public ui::tabbed_values {
 	private:
-		ui::stick_man* main_wnd_;
+		ui::current_canvas_fn get_current_canv_;
 
 		double convert_to_or_from_parent_coords(double val, bool to_parent) {
-			auto bone_selection = main_wnd_->canvases().active_canvas().selected_bones();
+			auto bone_selection = get_current_canv_().selected_bones();
 			if (bone_selection.size() != 1) {
 				return val;
 			}
@@ -491,13 +494,13 @@ namespace {
 		}
 
 	public:
-		rotation_tab(ui::stick_man* mw) :
+		rotation_tab(const ui::current_canvas_fn& get_current_canv) :
+            get_current_canv_(get_current_canv),
 			ui::tabbed_values(nullptr,
 				{"world", "parent"}, {
 					{"rotation", 0.0, -180.0, 180.0}
 				}, 100
-			),
-			main_wnd_(mw) 
+			)
 		{}
 
 		double to_nth_tab(int tab, int, double val) override {
@@ -535,13 +538,13 @@ namespace {
 			else {
 				constraint_box_->clear();
 			}
-			canvas().sync_to_model();
+			get_current_canv_().sync_to_model();
 		}
 
 	public:
-		bone_properties(ui::stick_man* mw, QWidget* parent) :
+		bone_properties(const ui::current_canvas_fn& fn, ui::selection_properties* parent) :
 			single_or_multi_props_widget(
-				mw,
+				fn,
 				parent,
 				"selected bones"
 			),
@@ -562,7 +565,7 @@ namespace {
 			name_->set_color(QColor("yellow"));
 			name_->value()->set_validator(
 				[this](const std::string& new_name)->bool {
-					return main_wnd_->skel_pane().validate_props_name_change(new_name);
+					return parent_->skel_pane().validate_props_name_change(new_name);
 				}
 			);
 
@@ -580,11 +583,13 @@ namespace {
 				length_ = new ui::labeled_numeric_val("length", 0.0, 0.0, 1500.0)
 			);
 
-			layout_->addWidget(rotation_ = new rotation_tab(main_wnd_));
+			layout_->addWidget(rotation_ = new rotation_tab(get_current_canv_));
 
 
 			constraint_btn_ = new QPushButton();
-			layout_->addWidget(constraint_box_ = new rot_constraint_box(constraint_btn_, canvas()));
+			layout_->addWidget(constraint_box_ = new rot_constraint_box(
+                constraint_btn_, get_current_canv_())
+            );
 			layout_->addWidget(constraint_btn_);
 
 			connect(constraint_btn_, &QPushButton::clicked,
@@ -592,29 +597,29 @@ namespace {
 
 			connect(name_->value(), &ui::string_edit::value_changed,
 				[this]() {
-					main_wnd_->skel_pane().handle_props_name_change(
+					parent_->skel_pane().handle_props_name_change(
 						name_->value()->text().toStdString()
 					);
 				}
 			);
 
 			connect(u_->hyperlink(), &QPushButton::clicked,
-				make_select_node_fn(*main_wnd_, true)
+				make_select_node_fn(get_current_canv_, true)
 			);
 			connect(v_->hyperlink(), &QPushButton::clicked,
-				make_select_node_fn(*main_wnd_, false)
+				make_select_node_fn(get_current_canv_, false)
 			);
 
 			connect(length_->num_edit(), &ui::number_edit::value_changed,
                 [this](double val) {
-                    auto& canv = main_wnd_->canvases().active_canvas();
+                    auto& canv = get_current_canv_();
                     set_bone_length(canv, val);
                 }
 			);
 			connect(rotation_, &ui::tabbed_values::value_changed,
 				[this](int) {
 					auto rot = rotation_->value(0);
-					set_selected_bone_rotation( *main_wnd_, ui::degrees_to_radians(*rot) );
+					//set_selected_bone_rotation( *main_wnd_, ui::degrees_to_radians(*rot) );
 				}
 			);
 		}
@@ -679,17 +684,17 @@ namespace {
 		node_properties* nodes_;
 		bone_properties* bones_;
 	public:
-		mixed_properties(ui::stick_man* mw, QWidget* parent) :
-			abstract_properties_widget(mw, parent, "") {
+		mixed_properties(const ui::current_canvas_fn& fn, ui::selection_properties* parent) :
+			abstract_properties_widget(fn, parent, "") {
 		}
 
 		void populate() override {
 			layout_->addWidget(
-				nodes_ = new node_properties(main_wnd_, this)
+				nodes_ = new node_properties(get_current_canv_, parent_)
 			);
 			layout_->addWidget( ui::horz_separator() );
 			layout_->addWidget(
-				bones_ = new bone_properties(main_wnd_, this)
+				bones_ = new bone_properties(get_current_canv_, parent_)
 			);
 			nodes_->populate();
 			bones_->populate();
@@ -711,10 +716,12 @@ namespace {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::abstract_properties_widget::abstract_properties_widget(ui::stick_man* mw, 
-			QWidget* parent, QString title) :
+ui::abstract_properties_widget::abstract_properties_widget(
+            const current_canvas_fn& fn,
+            selection_properties* parent, QString title) :
 		QWidget(parent),
-		main_wnd_(mw),
+        get_current_canv_(fn),
+        parent_(parent),
 		title_(nullptr),
 		layout_(new QVBoxLayout(this)) {
 	layout_->addWidget(title_ = new QLabel(title));
@@ -734,17 +741,13 @@ void ui::abstract_properties_widget::populate() {
 
 }
 
-ui::canvas& ui::abstract_properties_widget::canvas() {
-    return main_wnd_->canvases().active_canvas();
-}
-
 void ui::abstract_properties_widget::lose_selection() {}
 
 /*------------------------------------------------------------------------------------------------*/
 
 ui::single_or_multi_props_widget::single_or_multi_props_widget(
-		ui::stick_man* mw, QWidget* parent, QString title) :
-	abstract_properties_widget(mw, parent, title)
+        const current_canvas_fn& fn, selection_properties* parent, QString title) :
+	abstract_properties_widget(fn, parent, title)
 {}
 
 void ui::single_or_multi_props_widget::set_selection(const ui::canvas& canv) {
@@ -758,13 +761,14 @@ void ui::single_or_multi_props_widget::set_selection(const ui::canvas& canv) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::selection_properties::selection_properties(ui::stick_man* mw) :
+ui::selection_properties::selection_properties(const current_canvas_fn& fn, skeleton_pane* sp) :
+        skel_pane_(sp),
 		props_{
-			{selection_type::none, new no_properties(mw, this)},
-			{selection_type::node, new node_properties(mw, this)},
-			{selection_type::bone, new bone_properties(mw, this)},
-			{selection_type::skeleton, new skeleton_properties(mw, this)},
-			{selection_type::mixed, new mixed_properties(mw, this)}
+			{selection_type::none, new no_properties(fn, this)},
+			{selection_type::node, new node_properties(fn, this)},
+			{selection_type::bone, new bone_properties(fn, this)},
+			{selection_type::skeleton, new skeleton_properties(fn, this)},
+			{selection_type::mixed, new mixed_properties(fn, this)}
 		} {
 	for (const auto& [key, prop_box] : props_) {
 		addWidget(prop_box);
@@ -803,4 +807,8 @@ void ui::selection_properties::init(canvas_manager& canvases)
         this,
         &selection_properties::handle_selection_changed
     );
+}
+
+ui::skeleton_pane& ui::selection_properties::skel_pane() {
+    return *skel_pane_;
 }
