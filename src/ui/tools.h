@@ -113,10 +113,12 @@ namespace ui {
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
     };
 
-    class tool_manager : public input_handler {
+    class tool_manager : public QObject, public input_handler  {
+
+        Q_OBJECT
+
     private:
         std::vector<std::unique_ptr<ui::abstract_tool>> tool_registry_;
-        stick_man& main_window_;
         int curr_item_index_;
 
         int index_from_id(tool_id id) const;
@@ -135,6 +137,8 @@ namespace ui {
         bool has_current_tool() const;
         abstract_tool& current_tool() const;
         void set_current_tool(canvas_manager& canvases, tool_id id);
+    signals:
+        void current_tool_changed(abstract_tool& new_tool);
     };
 
 }

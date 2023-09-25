@@ -48,6 +48,7 @@ ui::stick_man::stick_man(QWidget* parent) :
     createMainMenu();
 	skel_pane_->init();
 	tool_mgr_.init();
+    tool_pane_->init(tool_mgr_);
 }
 
 void ui::stick_man::open()

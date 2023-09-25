@@ -1,4 +1,5 @@
 #include "tool_settings_pane.h"
+#include "tools.h"
 #include "util.h"
 
 /*------------------------------------------------------------------------------------------------*/
@@ -11,8 +12,6 @@ ui::tool_settings_pane::tool_settings_pane(QMainWindow* wnd) :
     QDockWidget(tr(""), wnd) {
 
     setTitleBarWidget( custom_title_bar("tool") );
-
-    
 }
 
 void ui::tool_settings_pane::set_tool(QString tool_name, QWidget* contents) {
@@ -28,4 +27,14 @@ void ui::tool_settings_pane::set_tool(QString tool_name, QWidget* contents) {
     if (contents) {
         contents->show();
     }
+}
+
+void ui::tool_settings_pane::on_current_tool_changed(abstract_tool& tool) {
+    tool.populate_settings(this);
+}
+
+void ui::tool_settings_pane::init(tool_manager& tool_mgr) {
+    connect(&tool_mgr, &tool_manager::current_tool_changed,
+        this, &tool_settings_pane::on_current_tool_changed
+    );
 }

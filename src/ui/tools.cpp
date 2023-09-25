@@ -185,11 +185,10 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
 /*------------------------------------------------------------------------------------------------*/
 
 ui::tool_manager::tool_manager(stick_man* sm) :
-        main_window_(*sm),
         curr_item_index_(-1){
     tool_registry_.emplace_back(std::make_unique<ui::pan_tool>());
     tool_registry_.emplace_back(std::make_unique<ui::zoom_tool>());
-    tool_registry_.emplace_back(std::make_unique<ui::selection_tool>(&main_window_));
+    tool_registry_.emplace_back(std::make_unique<ui::selection_tool>(sm));
     tool_registry_.emplace_back(std::make_unique<ui::move_tool>());
     tool_registry_.emplace_back(std::make_unique<ui::add_node_tool>(sm->sandbox()));
     tool_registry_.emplace_back(std::make_unique<ui::add_bone_tool>(sm->sandbox()));
@@ -277,8 +276,8 @@ void ui::tool_manager::set_current_tool(canvas_manager& canvases, tool_id id) {
     }
     curr_item_index_ = new_tool_index;
     current_tool().activate(canvases);
-    auto& tool_pane = main_window_.tool_pane();
-    current_tool().populate_settings(&tool_pane);
+
+    emit current_tool_changed(current_tool());
 }
 
 int ui::tool_manager::index_from_id(tool_id id) const {
