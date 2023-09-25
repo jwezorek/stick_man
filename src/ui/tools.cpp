@@ -16,8 +16,7 @@ namespace rv = std::ranges::views;
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::abstract_tool::abstract_tool(tool_manager* mgr, QString name, QString rsrc, tool_id id) :
-    mgr_(mgr),
+ui::abstract_tool::abstract_tool(QString name, QString rsrc, tool_id id) :
     name_(name),
     rsrc_(rsrc),
     id_(id) {
@@ -33,10 +32,6 @@ QString ui::abstract_tool::name() const {
 
 QString ui::abstract_tool::icon_rsrc() const {
     return rsrc_;
-}
-
-ui::tool_manager* ui::abstract_tool::manager() const {
-    return mgr_;
 }
 
 void ui::abstract_tool::populate_settings(tool_settings_pane* pane) {
@@ -58,8 +53,8 @@ ui::abstract_tool::~abstract_tool() {}
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::zoom_tool::zoom_tool(tool_manager* mgr) :
-        abstract_tool(mgr, "zoom", "zoom_icon.png", ui::tool_id::zoom),
+ui::zoom_tool::zoom_tool() :
+        abstract_tool("zoom", "zoom_icon.png", ui::tool_id::zoom),
         zoom_level_(0),
         settings_(nullptr) {
 }
@@ -104,8 +99,8 @@ QWidget* ui::zoom_tool::settings_widget() {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::pan_tool::pan_tool(tool_manager* mgr) : 
-    abstract_tool(mgr, "pan", "pan_icon.png", ui::tool_id::pan) 
+ui::pan_tool::pan_tool() : 
+    abstract_tool("pan", "pan_icon.png", ui::tool_id::pan) 
 {}
 
 void ui::pan_tool::deactivate(canvas_manager& canvases) {
@@ -118,9 +113,9 @@ void ui::pan_tool::activate(canvas_manager& canvases) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::add_node_tool::add_node_tool(tool_manager* mgr, sm::world& model) :
+ui::add_node_tool::add_node_tool(sm::world& model) :
     model_( model ),
-    abstract_tool(mgr, "add node", "add_node_icon.png", ui::tool_id::add_node) 
+    abstract_tool("add node", "add_node_icon.png", ui::tool_id::add_node) 
 {}
 
 void ui::add_node_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
@@ -146,10 +141,10 @@ void ui::add_bone_tool::init_rubber_band(canvas& c) {
     }
 }
 
-ui::add_bone_tool::add_bone_tool(tool_manager* mgr, sm::world& model) :
-    model_(model),
-    rubber_band_(nullptr),
-    abstract_tool(mgr, "add bone", "add_bone_icon.png", ui::tool_id::add_bone) {
+ui::add_bone_tool::add_bone_tool(sm::world& model) :
+        model_(model),
+        rubber_band_(nullptr),
+    abstract_tool("add bone", "add_bone_icon.png", ui::tool_id::add_bone) {
 }
 
 void ui::add_bone_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
@@ -192,12 +187,12 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
 ui::tool_manager::tool_manager(stick_man* sm) :
         main_window_(*sm),
         curr_item_index_(-1){
-    tool_registry_.emplace_back(std::make_unique<ui::pan_tool>(this));
-    tool_registry_.emplace_back(std::make_unique<ui::zoom_tool>(this));
-    tool_registry_.emplace_back(std::make_unique<ui::selection_tool>(this, &main_window_));
-    tool_registry_.emplace_back(std::make_unique<ui::move_tool>(this));
-    tool_registry_.emplace_back(std::make_unique<ui::add_node_tool>(this, sm->sandbox()));
-    tool_registry_.emplace_back(std::make_unique<ui::add_bone_tool>(this, sm->sandbox()));
+    tool_registry_.emplace_back(std::make_unique<ui::pan_tool>());
+    tool_registry_.emplace_back(std::make_unique<ui::zoom_tool>());
+    tool_registry_.emplace_back(std::make_unique<ui::selection_tool>(&main_window_));
+    tool_registry_.emplace_back(std::make_unique<ui::move_tool>());
+    tool_registry_.emplace_back(std::make_unique<ui::add_node_tool>(sm->sandbox()));
+    tool_registry_.emplace_back(std::make_unique<ui::add_bone_tool>(sm->sandbox()));
 }
 
 void ui::tool_manager::init() {

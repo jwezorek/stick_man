@@ -119,9 +119,9 @@ namespace {
 	}
 }
 
-ui::selection_tool::selection_tool(tool_manager* mgr, ui::stick_man* main_wnd) :
+ui::selection_tool::selection_tool(ui::stick_man* main_wnd) :
 	main_wnd_(*main_wnd),
-    abstract_tool(mgr, "selection", "arrow_icon.png", ui::tool_id::selection) {
+    abstract_tool("selection", "arrow_icon.png", ui::tool_id::selection) {
 
 }
 

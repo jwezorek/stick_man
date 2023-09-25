@@ -33,7 +33,7 @@ namespace ui {
 
     public:
 
-        selection_tool(tool_manager* mgr, ui::stick_man* main_wnd );
+        selection_tool(ui::stick_man* main_wnd );
         void activate(canvas_manager& c) override;
 
         void keyReleaseEvent(canvas& c, QKeyEvent* event) override;

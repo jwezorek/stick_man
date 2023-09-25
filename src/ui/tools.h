@@ -46,12 +46,10 @@ namespace ui {
 
     class abstract_tool : public input_handler {
     public:
-        abstract_tool(tool_manager* mgr, QString name, QString rsrc, tool_id id);
+        abstract_tool(QString name, QString rsrc, tool_id id);
         tool_id id() const;
         QString name() const;
         QString icon_rsrc() const;
-        tool_manager* manager() const;
-        //void set_manager(tool_manager* mgr);
         void populate_settings(tool_settings_pane* pane);
         virtual void activate(canvas_manager& canvases);
         virtual void keyPressEvent(canvas& c, QKeyEvent* event) override;
@@ -70,7 +68,6 @@ namespace ui {
         tool_id id_;
         QString name_;
         QString rsrc_;
-        tool_manager* mgr_;
     };
 
     class zoom_tool : public abstract_tool {
@@ -82,14 +79,14 @@ namespace ui {
 
 
     public:
-        zoom_tool(tool_manager* mgr);
+        zoom_tool();
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         virtual QWidget* settings_widget() override;
     };
 
     class pan_tool : public abstract_tool {
     public:
-        pan_tool(tool_manager* mgr);
+        pan_tool();
         void activate(canvas_manager& canvases) override;
         void deactivate(canvas_manager& canvases) override;
     };
@@ -97,7 +94,7 @@ namespace ui {
     class add_node_tool : public abstract_tool {
         sm::world& model_;
     public:
-        add_node_tool(tool_manager* mgr, sm::world& model);
+        add_node_tool(sm::world& model);
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
     };
 
@@ -110,7 +107,7 @@ namespace ui {
         void init_rubber_band(canvas& c);
 
     public:
-        add_bone_tool(tool_manager* mgr, sm::world& model);
+        add_bone_tool(sm::world& model);
         void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;

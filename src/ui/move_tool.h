@@ -20,7 +20,7 @@ namespace ui {
             void set(canvas& canvas, QKeyEvent* event);
         };
 
-        move_tool(tool_manager* mgr);
+        move_tool();
         void keyPressEvent(canvas& c, QKeyEvent* event) override;
         void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
