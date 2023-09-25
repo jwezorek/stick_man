@@ -399,9 +399,18 @@ void ui::canvas::hide_status_line() {
     update();
 }
 
+const ui::canvas_manager& ui::canvas::manager() const {
+    auto unconst_this = const_cast<ui::canvas*>(this);
+    return unconst_this->manager();
+}
+
 ui::canvas_manager& ui::canvas::manager() {
     auto* parent = view().parent()->parent();
     return *static_cast<ui::canvas_manager*>(parent);
+}
+
+std::string ui::canvas::tab_name() const {
+    return manager().tab_name(*this);
 }
 
 /*------------------------------------------------------------------------------------------------*/

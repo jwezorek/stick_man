@@ -95,8 +95,9 @@ namespace ui {
     };
 
     class add_node_tool : public abstract_tool {
+        sm::world& model_;
     public:
-        add_node_tool(tool_manager* mgr);
+        add_node_tool(tool_manager* mgr, sm::world& model);
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
     };
 
@@ -104,11 +105,12 @@ namespace ui {
     private:
         QPointF origin_;
         QGraphicsLineItem* rubber_band_;
+        sm::world& model_;
 
         void init_rubber_band(canvas& c);
 
     public:
-        add_bone_tool(tool_manager* mgr);
+        add_bone_tool(tool_manager* mgr, sm::world& model);
         void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
@@ -136,8 +138,6 @@ namespace ui {
         bool has_current_tool() const;
         abstract_tool& current_tool() const;
         void set_current_tool(canvas_manager& canvases, tool_id id);
-        ui::canvas& canvas();
-        stick_man& main_window();
     };
 
 }

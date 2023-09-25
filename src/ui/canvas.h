@@ -117,6 +117,8 @@ namespace ui {
         void filter_selection(std::function<bool(abstract_canvas_item*)> filter);
         void delete_item(abstract_canvas_item* item, bool emit_signals);
         QPointF from_global_to_canvas(const QPoint& pt);
+        std::string tab_name() const;
+        const canvas_manager& manager() const;
         canvas_manager& manager();
     };
 

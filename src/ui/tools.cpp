@@ -118,20 +118,19 @@ void ui::pan_tool::activate(canvas_manager& canvases) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::add_node_tool::add_node_tool(tool_manager* mgr) :
+ui::add_node_tool::add_node_tool(tool_manager* mgr, sm::world& model) :
+    model_( model ),
     abstract_tool(mgr, "add node", "add_node_icon.png", ui::tool_id::add_node) 
 {}
 
 void ui::add_node_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     auto pt = event->scenePos();
-    auto& sandbox = manager()->main_window().sandbox();
-    auto new_skeleton = sandbox.create_skeleton(pt.x(), pt.y());
+    auto new_skeleton = model_.create_skeleton(pt.x(), pt.y());
 
-    auto tab_name = manager()->main_window().canvases().tab_name(canv);
+    auto tab_name = canv.tab_name();
     new_skeleton.get().insert_tag("tab:" + tab_name);
 
     canv.insert_item(new_skeleton.get().root_node().get());
-    
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -147,7 +146,8 @@ void ui::add_bone_tool::init_rubber_band(canvas& c) {
     }
 }
 
-ui::add_bone_tool::add_bone_tool(tool_manager* mgr) :
+ui::add_bone_tool::add_bone_tool(tool_manager* mgr, sm::world& model) :
+    model_(model),
     rubber_band_(nullptr),
     abstract_tool(mgr, "add bone", "add_bone_icon.png", ui::tool_id::add_bone) {
 }
@@ -171,15 +171,13 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
 
 	
     if (parent_node && child_node && parent_node != child_node) {
-        auto& sandbox = manager()->main_window().sandbox();
-		
 		auto skel_v = child_node->model().owner();
 		if (skel_v.get().get_user_data().has_value()) {
 			ui::skeleton_item* skel_itm = &item_from_model<skeleton_item>(skel_v.get());
 			canv.delete_item(skel_itm, false);
 		}
 
-        auto bone = sandbox.create_bone({}, parent_node->model(), child_node->model());
+        auto bone = model_.create_bone({}, parent_node->model(), child_node->model());
         if (bone) {
 			canv.insert_item(bone->get());
 			canv.sync_to_model();
@@ -198,8 +196,8 @@ ui::tool_manager::tool_manager(stick_man* sm) :
     tool_registry_.emplace_back(std::make_unique<ui::zoom_tool>(this));
     tool_registry_.emplace_back(std::make_unique<ui::selection_tool>(this, &main_window_));
     tool_registry_.emplace_back(std::make_unique<ui::move_tool>(this));
-    tool_registry_.emplace_back(std::make_unique<ui::add_node_tool>(this));
-    tool_registry_.emplace_back(std::make_unique<ui::add_bone_tool>(this));
+    tool_registry_.emplace_back(std::make_unique<ui::add_node_tool>(this, sm->sandbox()));
+    tool_registry_.emplace_back(std::make_unique<ui::add_bone_tool>(this, sm->sandbox()));
 }
 
 void ui::tool_manager::init() {
@@ -286,14 +284,6 @@ void ui::tool_manager::set_current_tool(canvas_manager& canvases, tool_id id) {
     current_tool().activate(canvases);
     auto& tool_pane = main_window_.tool_pane();
     current_tool().populate_settings(&tool_pane);
-}
-
-ui::canvas& ui::tool_manager::canvas() {
-    return main_window_.canvases().active_canvas();
-}
-
-ui::stick_man& ui::tool_manager::main_window() {
-    return main_window_;
 }
 
 int ui::tool_manager::index_from_id(tool_id id) const {
