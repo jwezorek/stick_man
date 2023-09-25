@@ -790,10 +790,20 @@ void ui::selection_properties::set(const ui::canvas& canv) {
 	}
 }
 
+void ui::selection_properties::handle_selection_changed() {
+    auto& canv = main_wnd_->canvases().active_canvas();
+    set(canv);
+}
+
 void ui::selection_properties::init()
 {
-	for (const auto& [key, prop_box] : props_) {
-		prop_box->init();
-	}
-	set(main_wnd_->canvases().active_canvas());
+    for (const auto& [key, prop_box] : props_) {
+        prop_box->init();
+    }
+    set(main_wnd_->canvases().active_canvas());
+
+    connect(&main_wnd_->canvases(), &canvas_manager::selection_changed,
+        this,
+        &selection_properties::handle_selection_changed
+    );
 }

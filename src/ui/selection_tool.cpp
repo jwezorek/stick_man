@@ -136,27 +136,11 @@ void ui::selection_tool::connect_canv_rubber_band_listener() {
     );
 }
 
-void ui::selection_tool::connect_canv_sel_listener() {
-    canv_sel_conn_ = main_wnd_.connect(&main_wnd_.canvases(), &canvas_manager::selection_changed,
-        [this]() {
-            auto& canv = main_wnd_.canvases().active_canvas();
-            const auto& sel = canv.selection();
-            this->handle_sel_changed(canv);
-        }
-    );
-}
-
 void ui::selection_tool::disconnect_canv_rubber_band_listener() {
     main_wnd_.disconnect(canv_rubber_band_conn_);
 }
 
-void ui::selection_tool::disconnect_canv_sel_listener() {
-    main_wnd_.disconnect(canv_sel_conn_);
-}
-
 void ui::selection_tool::init() {
-	auto& canv = main_wnd_.canvases().active_canvas();
-    connect_canv_sel_listener();
     connect_canv_rubber_band_listener(); 
 }
 
@@ -245,11 +229,6 @@ void ui::selection_tool::handle_drag(canvas& canv, QRectF rect, bool shift_down,
     }
 
     canv.set_selection( clicked_items, true );
-}
-
-void ui::selection_tool::handle_sel_changed( const ui::canvas& canv) {
-	auto& props = main_wnd_.skel_pane().sel_properties();
-    props.set(canv);
 }
 
 void ui::selection_tool::deactivate(canvas_manager& canv_mgr) {

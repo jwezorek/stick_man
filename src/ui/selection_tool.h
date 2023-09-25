@@ -23,14 +23,10 @@ namespace ui {
 		stick_man& main_wnd_;
 
         void connect_canv_rubber_band_listener();
-        void connect_canv_sel_listener();
         void disconnect_canv_rubber_band_listener();
-        void disconnect_canv_sel_listener();
 
         void handle_click(canvas& c, QPointF pt, bool shift_down, bool alt_down);
         void handle_drag(canvas& c, QRectF rect, bool shift_down, bool alt_down);
-        void handle_sel_changed(const canvas& canv);
-
     public:
 
         selection_tool(ui::stick_man* main_wnd );

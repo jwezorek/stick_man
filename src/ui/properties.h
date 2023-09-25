@@ -44,6 +44,9 @@ namespace ui {
 	class selection_properties : public QStackedWidget {
 		stick_man* main_wnd_;
 		std::unordered_map<selection_type, abstract_properties_widget*> props_;
+
+        void handle_selection_changed();
+
 	public:
 		selection_properties(stick_man* mnd_wnd);
 		abstract_properties_widget* current_props() const;
