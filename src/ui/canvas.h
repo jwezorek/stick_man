@@ -1,5 +1,6 @@
 #pragma once
 
+#include "util.h"
 #include <QWidget>
 #include <QtWidgets>
 #include <QGraphicsScene>
@@ -85,6 +86,8 @@ namespace ui {
         std::vector<node_item*> root_node_items() const;
         std::vector<node_item*> node_items() const;
         std::vector<bone_item*> bone_items() const;
+        std::vector<skeleton_item*> skeleton_items() const;
+
         void set_scale(double scale, std::optional<QPointF> pt = {});
         double scale() const;
         void sync_to_model();
@@ -92,14 +95,15 @@ namespace ui {
         const selection_set& selection() const;
         //sel_type selection_type() const;
 
-        ui::skeleton_item* selected_skeleton() const;
-        std::vector<ui::bone_item*> selected_bones() const;
-        std::vector<ui::node_item*> selected_nodes() const;
+        skeleton_item* selected_skeleton() const;
+        std::vector<bone_item*> selected_bones() const;
+        std::vector<node_item*> selected_nodes() const;
+
         bool is_status_line_visible() const;
 
-        ui::node_item* insert_item(sm::node& node);
-        ui::bone_item* insert_item(sm::bone& bone);
-        ui::skeleton_item* insert_item(sm::skeleton& skel);
+        node_item* insert_item(sm::node& node);
+        bone_item* insert_item(sm::bone& bone);
+        skeleton_item* insert_item(sm::skeleton& skel);
 
         void transform_selection(item_transform trans);
         void transform_selection(node_transform trans);

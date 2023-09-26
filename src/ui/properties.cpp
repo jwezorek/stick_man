@@ -122,23 +122,28 @@ namespace {
 		canv.sync_to_model();
 	}
 
-	// TODO: the following has bad computational complexity
-	// maybe do this in one pass if it is ever an issue.
+	// TODO: the following has bad computational complexity.
+	// Maybe do this in one pass if it is ever an issue.
 	// (the way it is now it is like O(n * (V + E)) where n is the number
 	// of selected bones and V and E are the number of vertices 
-	// and edges in skeletons because each call to set_world_rotation
-	// is doing a traversal of the skeleton dowwnstream of the bone)
+	// and edges in skeletons on the active canvas because each call to 
+    // set_world_rotation is doing a traversal of the skeleton dowwnstream 
+    // of the bone)
 
-	void set_selected_bone_rotation(ui::stick_man& main_window, double theta) {
-        auto& canv = main_window.canvases().active_canvas();
+	void set_selected_bone_rotation(ui::canvas& canv, double theta) {
+
+        // order the bones in reverse topological order
+        // and then call set_world_rotation on them...
+
 		auto bone_items = canv.selected_bones();
 		std::unordered_set<sm::bone*> selected = ui::to_model_ptrs( rv::all(bone_items) ) |
 			r::to< std::unordered_set<sm::bone*>>();
 		std::vector<sm::bone*> ordered_bones;
-		auto& world = main_window.sandbox();
+        auto skeletons = canv.skeleton_items();
 		
-		for (auto skel : world.skeletons()) {
-			sm::visit_bones(skel.get().root_node().get(),
+		for (auto skel_item : skeletons) {
+            auto& skel = skel_item->model();
+			sm::visit_bones(skel.root_node().get(),
 				[&](auto& bone)->bool {
 					if (selected.contains(&bone)) {
 						ordered_bones.push_back(&bone);
@@ -619,7 +624,7 @@ namespace {
 			connect(rotation_, &ui::tabbed_values::value_changed,
 				[this](int) {
 					auto rot = rotation_->value(0);
-					//set_selected_bone_rotation( *main_wnd_, ui::degrees_to_radians(*rot) );
+					set_selected_bone_rotation( get_current_canv_(), ui::degrees_to_radians(*rot) );
 				}
 			);
 		}

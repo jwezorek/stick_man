@@ -445,6 +445,10 @@ std::vector<ui::bone_item*> ui::canvas::bone_items() const {
     return to_vector_of_type<bone_item>(items());
 }
 
+std::vector<ui::skeleton_item*> ui::canvas::skeleton_items() const {
+    return to_vector_of_type<skeleton_item>(items());
+}
+
 void ui::canvas::keyPressEvent(QKeyEvent* event) {
     inp_handler_.keyPressEvent(*this, event);
 }
