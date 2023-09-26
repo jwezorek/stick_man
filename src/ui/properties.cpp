@@ -9,6 +9,7 @@
 #include <ranges>
 #include <functional>
 #include <numbers>
+#include <qdebug.h>
 
 using namespace std::placeholders;
 namespace r = std::ranges;
@@ -122,18 +123,15 @@ namespace {
 		canv.sync_to_model();
 	}
 
-	// TODO: the following has bad computational complexity.
-	// Maybe do this in one pass if it is ever an issue.
-	// (the way it is now it is like O(n * (V + E)) where n is the number
-	// of selected bones and V and E are the number of vertices 
-	// and edges in skeletons on the active canvas because each call to 
-    // set_world_rotation is doing a traversal of the skeleton dowwnstream 
-    // of the bone)
+	// TODO: the following has bad computational complexity. Maybe do this in one pass
+    // if it is ever an issue. (the way it is now it is like O(n * (V + E)) where n is 
+    // the number of selected bones and V and E are the number of nodes and bones in 
+    // skeletons on the active canvas because each call to set_world_rotation is doing 
+    // a traversal of the skeleton dowwnstream of the bone.)
 
 	void set_selected_bone_rotation(ui::canvas& canv, double theta) {
 
-        // order the bones in reverse topological order
-        // and then call set_world_rotation on them...
+        // sort bones into topological order and then set world rotation...
 
 		auto bone_items = canv.selected_bones();
 		std::unordered_set<sm::bone*> selected = ui::to_model_ptrs( rv::all(bone_items) ) |
@@ -153,7 +151,6 @@ namespace {
 			);
 		}
 
-		r::reverse(ordered_bones);
 		for (auto* bone : ordered_bones) {
 			bone->set_world_rotation(theta);
 		}

@@ -377,7 +377,7 @@ void ui::number_edit::handle_done_editing() {
     if (value() != old_val_) {
         emit value_changed(*value());
     }
-    old_val_ = {};
+    old_val_ = value();
 }
 
 void ui::number_edit::keyPressEvent(QKeyEvent* e) {
