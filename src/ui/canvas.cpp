@@ -494,6 +494,7 @@ void ui::canvas_manager::disconnect_current_tab_signal() {
 }
 
 ui::canvas_manager::canvas_manager(input_handler& inp_handler) : 
+        drag_mode_(drag_mode::none),
         inp_handler_(inp_handler),
         active_canv_(nullptr) {
     setStyleSheet(
@@ -546,6 +547,7 @@ ui::canvas* ui::canvas_manager::add_new_tab(QString name) {
     canvas* canv = new ui::canvas(inp_handler_);
     view->setScene(canv);
     canv->init();
+    canv->set_drag_mode(drag_mode_);
 
     if (active_canv_ == nullptr) {
         active_canv_ = canv;
@@ -632,6 +634,7 @@ std::vector<ui::canvas*> ui::canvas_manager::canvases() {
 }
 
 void ui::canvas_manager::set_drag_mode(drag_mode dm) {
+    drag_mode_ = dm;
     for (auto* canv : canvases()) {
         canv->set_drag_mode(dm);
     }

@@ -131,6 +131,7 @@ namespace ui {
         canvas* active_canv_;
         QMetaObject::Connection current_tab_conn_;
         input_handler& inp_handler_;
+        drag_mode drag_mode_;
 
         static std::string tab_from_skeleton(const sm::skeleton& skel);
         static std::vector<std::string> tab_names_from_model(const sm::world& w);

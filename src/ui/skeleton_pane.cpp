@@ -265,7 +265,7 @@ void ui::skeleton_pane::handle_tree_selection_change(
     if (!sel_canv_items.empty()) {
         auto& sel_canv = *sel_canv_items.front()->canvas(); 
         if (&sel_canv != &curr_canv) {
-            main_wnd_->canvases().set_active_canvas(sel_canv);
+            canvases_->set_active_canvas(sel_canv);
         }
     }
 
@@ -332,7 +332,7 @@ void ui::skeleton_pane::handle_props_name_change(const std::string& new_name) {
 }
 
 ui::skeleton_pane::skeleton_pane(ui::stick_man* mw) :
-		main_wnd_(mw),
+        canvases_(nullptr),
 		QDockWidget(tr(""), mw) {
 
     setTitleBarWidget( custom_title_bar("skeleton view") );
@@ -419,7 +419,7 @@ void ui::skeleton_pane::disconnect_canv_sel_handler() {
 }
 
 void ui::skeleton_pane::init(canvas_manager& canvases) {
-	
+    canvases_ = &canvases;
 	sel_properties_->init(canvases);
 
     connect_canv_cont_handler();
@@ -493,7 +493,7 @@ std::vector<QStandardItem*> ui::skeleton_pane::selected_items() const {
 }
 
 ui::canvas& ui::skeleton_pane::canvas() {
-	return main_wnd_->canvases().active_canvas();
+	return canvases_->active_canvas();
 }
 
 void ui::skeleton_pane::connect_tree_change_handler() {

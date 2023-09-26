@@ -15,8 +15,7 @@ namespace ui {
     class canvas_manager;
 
     class skeleton_pane : public QDockWidget {
-
-		stick_man* main_wnd_;
+        canvas_manager* canvases_;
 		QTreeView* skeleton_tree_;
 		selection_properties* sel_properties_;
 
