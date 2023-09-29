@@ -5,6 +5,8 @@
 #include <optional>
 #include <vector>
 #include <functional>
+#include <ranges>
+#include <memory>
 
 namespace sm {
 
@@ -95,5 +97,30 @@ namespace sm {
 	using expected_bone = std::expected<bone_ref, result>;
 	using expected_node = std::expected<node_ref, result>;
 	using expected_skeleton = std::expected<skeleton_ref, result>;
+
+    namespace detail {
+        template <typename T> 
+        class enable_protected_make_unique {
+        protected:
+            template <typename... Args>
+            static std::unique_ptr<T> make_unique(Args &&... args) {
+                class make_unique_enabler : public T {
+                public:
+                    make_unique_enabler(Args &&... args) :
+                        T(std::forward<Args>(args)...) {}
+                };
+                return std::make_unique<make_unique_enabler>(std::forward<Args>(args)...);
+            }
+        };
+
+        template<typename T>
+        auto to_range_view(auto& tbl) {
+            return tbl | std::ranges::views::transform(
+                [](auto& pair)->T {
+                    return *pair.second;
+                }
+            );
+        }
+    }
 	
 }

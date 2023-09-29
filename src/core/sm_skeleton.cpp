@@ -724,6 +724,33 @@ namespace {
 		);
 		return bones;
 	}
+
+    void dfs_aux(node_or_bone root, sm::node_visitor visit_node, sm::bone_visitor visit_bone,
+            bool just_downstream) {
+        std::stack<node_or_bone> stack;
+        std::unordered_set<uint64_t> visited;
+        node_or_bone_visitor visitor(visit_node, visit_bone);
+        node_or_bone_neighbors_visitor neighbors_visitor(just_downstream);
+        stack.push(root);
+
+        while (!stack.empty()) {
+            auto item = stack.top();
+            stack.pop();
+            auto id = get_id(item);
+            if (visited.contains(id)) {
+                continue;
+            }
+            auto result = std::visit(visitor, item);
+            visited.insert(id);
+            if (!result) {
+                return;
+            }
+            auto neighbors = std::visit(neighbors_visitor, item);
+            for (const auto& neighbor : neighbors) {
+                stack.push(neighbor);
+            }
+        }
+    }
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -1030,31 +1057,14 @@ std::string sm::world::to_json() const {
     return stick_man.dump(4);
 }
 
-void sm::dfs(node& j1, node_visitor visit_node, bone_visitor visit_bone,
+void sm::dfs(node& root, node_visitor visit_node, bone_visitor visit_bone,
         bool just_downstream) {
-    std::stack<node_or_bone> stack;
-    std::unordered_set<uint64_t> visited;
-    node_or_bone_visitor visitor(visit_node, visit_bone);
-    node_or_bone_neighbors_visitor neighbors_visitor(just_downstream);
-    stack.push(std::ref(j1));
+    dfs_aux(std::ref(root), visit_node, visit_bone, just_downstream);
+}
 
-    while (!stack.empty()) {
-        auto item = stack.top();
-        stack.pop();
-        auto id = get_id(item);
-        if (visited.contains(id)) {
-            continue;
-        }
-        auto result = std::visit(visitor, item);
-        visited.insert(id);
-        if (!result) {
-            return;
-        }
-        auto neighbors = std::visit(neighbors_visitor, item);
-        for (const auto& neighbor : neighbors) {
-            stack.push(neighbor);
-        }
-    }
+void sm::dfs(bone& root, node_visitor visit_node, bone_visitor visit_bone,
+    bool just_downstream) {
+    dfs_aux(std::ref(root), visit_node, visit_bone, just_downstream);
 }
 
 void sm::visit_nodes(node& j, node_visitor visit_node) {

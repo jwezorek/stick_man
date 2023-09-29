@@ -12,30 +12,6 @@
 
 namespace sm {
 
-	namespace detail {
-		template <typename T> class enable_protected_make_unique {
-		protected:
-			template <typename... Args>
-			static std::unique_ptr<T> make_unique(Args &&... args) {
-				class make_unique_enabler : public T {
-				public:
-					make_unique_enabler(Args &&... args) :
-						T(std::forward<Args>(args)...) {}
-				};
-				return std::make_unique<make_unique_enabler>(std::forward<Args>(args)...);
-			}
-		};
-
-		template<typename T>
-		auto to_range_view(auto& tbl) {
-			return tbl | std::ranges::views::transform(
-				[](auto& pair)->T {
-					return *pair.second;
-				}
-			);
-		}
-	}
-
 	class node : public detail::enable_protected_make_unique<node> {
 		friend class world;
 		friend class bone;

@@ -119,7 +119,9 @@ namespace sm {
 	using node_visitor = std::function<bool(node&)>;
 	using bone_visitor = std::function<bool(bone&)>;
 
-    void dfs(node& j1, node_visitor visit_node = {}, bone_visitor visit_bone = {},
+    void dfs(node& root, node_visitor visit_node = {}, bone_visitor visit_bone = {},
+        bool just_downstream = false);
+    void dfs(bone& root, node_visitor visit_node = {}, bone_visitor visit_bone = {},
         bool just_downstream = false);
 
     void visit_nodes(node& j, node_visitor visit_node);

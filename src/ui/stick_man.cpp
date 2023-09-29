@@ -5,6 +5,7 @@
 #include "tool_settings_pane.h"
 #include "canvas_item.h"
 #include "util.h"
+#include "clipboard.h"
 #include <QtWidgets>
 
 #ifdef Q_OS_WIN
