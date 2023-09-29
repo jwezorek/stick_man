@@ -5,6 +5,8 @@
 #include "tools.h"
 #include "../core/sm_skeleton.h"
 
+/*------------------------------------------------------------------------------------------------*/
+
 namespace ui {
 
     class tool_palette;
@@ -23,6 +25,13 @@ namespace ui {
 		void save();
 		void save_as();
 		void exit();
+
+        void do_undo();
+        void do_redo();
+        void do_cut();
+        void do_copy();
+        void do_paste();
+
         void insert_new_tab();
 
         tool_manager& tool_mgr();
@@ -33,6 +42,10 @@ namespace ui {
 
     private:
 
+        void insert_file_menu();
+        void insert_edit_menu();
+        void insert_project_menu();
+        void insert_view_menu();
         void createMainMenu();
 		void showEvent(QShowEvent* event) override;
 		void resizeEvent(QResizeEvent* event) override;

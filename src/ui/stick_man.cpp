@@ -144,41 +144,106 @@ ui::canvas_manager& ui::stick_man::canvases() {
     return *canvases_;
 }
 
-void ui::stick_man::createMainMenu()
-{
+
+void ui::stick_man::insert_file_menu() {
     auto file_menu = menuBar()->addMenu(tr("&File"));
-    QAction* actionOpen  = new QAction(tr("Open stick man"), this);
-	QAction* actionSave  = new QAction(tr("Save stick man"), this);
-	QAction* actionSaveAs = new QAction(tr("Save as..."), this);
-	QAction* actionExit  = new QAction(tr("Exit"), this);
+    QAction* actionOpen = new QAction(tr("Open stick man"), this);
+    QAction* actionSave = new QAction(tr("Save stick man"), this);
+    QAction* actionSaveAs = new QAction(tr("Save as..."), this);
+    QAction* actionExit = new QAction(tr("Exit"), this);
 
-    file_menu->addAction(actionOpen  );
-	file_menu->addAction(actionSave  );
-	file_menu->addAction(actionSaveAs);
-	file_menu->addSeparator();
-	file_menu->addAction(actionExit  );
+    file_menu->addAction(actionOpen);
+    file_menu->addAction(actionSave);
+    file_menu->addAction(actionSaveAs);
+    file_menu->addSeparator();
+    file_menu->addAction(actionExit);
 
-	QFontMetrics metrics(file_menu->font());
-	int maxWidth = metrics.horizontalAdvance(actionSaveAs->text()) + 20; 
-	file_menu->setMinimumWidth(maxWidth);
+    QFontMetrics metrics(file_menu->font());
+    int maxWidth = metrics.horizontalAdvance(actionSaveAs->text()) + 20;
+    file_menu->setMinimumWidth(maxWidth);
 
-	connect(actionOpen  , &QAction::triggered, this, &stick_man::open  );
-	connect(actionSave  , &QAction::triggered, this, &stick_man::save  );
-	connect(actionSaveAs, &QAction::triggered, this, &stick_man::save_as);
-	connect(actionExit  , &QAction::triggered, this, &stick_man::exit  );
+    connect(actionOpen, &QAction::triggered, this, &stick_man::open);
+    connect(actionSave, &QAction::triggered, this, &stick_man::save);
+    connect(actionSaveAs, &QAction::triggered, this, &stick_man::save_as);
+    connect(actionExit, &QAction::triggered, this, &stick_man::exit);
+}
 
-    auto edit_menu = menuBar()->addMenu(tr("Edit"));
-    QAction* edit_action = new QAction(tr("foo"), this);
-    edit_menu->addAction(edit_action);
+void ui::stick_man::do_undo() {
 
+}
+
+void ui::stick_man::do_redo() {
+
+}
+
+void ui::stick_man::do_cut() {
+
+}
+
+void ui::stick_man::do_copy() {
+
+}
+
+void ui::stick_man::do_paste() {
+
+}
+
+void ui::stick_man::insert_edit_menu() {
+
+    QAction* undo_action = new QAction("Undo", this);
+    undo_action->setShortcut(QKeySequence::Undo);
+    connect(undo_action, &QAction::triggered, this, &stick_man::do_undo);
+
+    QAction* redo_action = new QAction("Redo", this);
+    redo_action->setShortcut(QKeySequence::Redo);
+    connect(redo_action, &QAction::triggered, this, &stick_man::do_redo);
+
+    QAction* cut_action = new QAction("Cut", this);
+    cut_action->setShortcut(QKeySequence::Cut);
+    connect(cut_action, &QAction::triggered, this, &stick_man::do_cut);
+
+    QAction* copy_action = new QAction("Copy", this);
+    copy_action->setShortcut(QKeySequence::Copy);
+    connect(copy_action, &QAction::triggered, this, &stick_man::do_copy);
+
+    QAction* paste_action = new QAction("Paste", this);
+    paste_action->setShortcut(QKeySequence::Paste);
+    connect(paste_action, &QAction::triggered, this, &stick_man::do_paste);
+
+    QMenu* edit_menu = menuBar()->addMenu("Edit");
+
+    edit_menu->addAction(undo_action);
+    edit_menu->addAction(redo_action);
+    edit_menu->addSeparator();
+    edit_menu->addAction(cut_action);
+    edit_menu->addAction(copy_action);
+    edit_menu->addAction(paste_action);
+}
+
+void ui::stick_man::insert_view_menu() {
+    auto view_menu = menuBar()->addMenu(tr("View"));
+    QAction* view_action = new QAction(tr("foo"), this);
+    view_menu->addAction(view_action);
+}
+
+void ui::stick_man::insert_project_menu() {
     auto project_menu = menuBar()->addMenu(tr("Project"));
     QAction* new_tab_action = new QAction(tr("Insert new skeleton tab"), this);
     project_menu->addAction(new_tab_action);
     connect(new_tab_action, &QAction::triggered, this, &stick_man::insert_new_tab);
+}
 
-    auto view_menu = menuBar()->addMenu(tr("View"));
-    QAction* view_action = new QAction(tr("foo"), this);
-    view_menu->addAction(view_action);
+void ui::stick_man::createMainMenu()
+{
+    insert_file_menu();
+    insert_edit_menu();
+    insert_project_menu();
+    insert_view_menu();
+
+    QString styleSheet = 
+        "QMenu::separator { background-color: palette(light); color: palette(light); }";
+    menuBar()->setStyleSheet(styleSheet);
+
 }
 
 void ui::stick_man::showEvent(QShowEvent* event) {
