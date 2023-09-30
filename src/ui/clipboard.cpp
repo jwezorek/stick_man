@@ -65,19 +65,33 @@ namespace {
             );
         }
     };
+
+    void copy_connected_component(sm::world& dest, const auto& root,
+            const bone_and_node_set& selection, bone_and_node_set& visited) {
+
+    }
+
+    std::vector<std::string> selected_skeletons(const sm::world& world,
+            const bone_and_node_set& selection) {
+        return {};
+    }
     
     std::tuple<sm::world, std::vector<std::string>> split_skeleton_into_selected_components(
             const sm::skeleton& skel, const bone_and_node_set& selection) {
-        /*
+        
         bone_and_node_set visited;
 
-        for (node_or_bone model : selection.items()) {
-
-        }
-       
         sm::world output;
-        return { std::move(output), {} };
-         */
+        for (node_or_bone itm : selection.items()) {
+            std::visit(
+                [&](auto model) {
+                    copy_connected_component(output, model.get(), selection, visited);
+                },
+                itm
+            );
+        }
+        
+        return { std::move(output), selected_skeletons(output, selection)};
     }
 }
 
