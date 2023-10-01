@@ -116,8 +116,14 @@ namespace sm {
 		auto skeletons() const { return detail::to_range_view<const_skeleton_ref>(skeletons_); }
     };
 
-	using node_visitor = std::function<bool(node&)>;
-	using bone_visitor = std::function<bool(bone&)>;
+    enum class visit_result {
+        continue_traversal,
+        terminate_branch,
+        terminate_traversal
+    };
+
+	using node_visitor = std::function<visit_result(node&)>;
+	using bone_visitor = std::function<visit_result(bone&)>;
 
     void dfs(node& root, node_visitor visit_node = {}, bone_visitor visit_bone = {},
         bool just_downstream = false);

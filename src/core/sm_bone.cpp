@@ -316,10 +316,10 @@ void sm::bone::set_world_rotation(double theta) {
 	std::unordered_map<bone*, double> rotation_tbl;
 	std::unordered_map<bone*, double> length_tbl;
 	visit_bones(*this, 
-		[&](bone& b)->bool {
+		[&](bone& b)->visit_result {
 			rotation_tbl[&b] = b.rotation();
 			length_tbl[&b] = b.scaled_length();
-			return true;
+			return visit_result::continue_traversal;
 		}
 	);
 
@@ -328,7 +328,7 @@ void sm::bone::set_world_rotation(double theta) {
 		).value_or(theta);
 
 	visit_bones(*this,
-		[&](bone& b)->bool {
+		[&](bone& b)->visit_result {
 			auto parent_rot = b.parent_bone().transform(
 					[](bone_ref br) {return br.get().world_rotation(); }
 				).value_or(0.0);
@@ -340,7 +340,7 @@ void sm::bone::set_world_rotation(double theta) {
 			b.child_node().set_world_pos(
 				transform(v, rotate_about_u)
 			);
-			return true;
+			return visit_result::continue_traversal;
 		}
 	);
 }

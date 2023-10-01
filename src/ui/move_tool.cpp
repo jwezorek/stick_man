@@ -38,12 +38,12 @@ namespace {
 
 	std::vector<sm::node_ref> pinned_nodes(sm::node& node) {
 		std::vector<sm::node_ref> pinned_nodes;
-		auto visit_node = [&pinned_nodes](sm::node& j)->bool {
+		auto visit_node = [&pinned_nodes](sm::node& j)->sm::visit_result {
 			ui::node_item& ni = ui::item_from_model<ui::node_item>(j);
 			if (ni.is_pinned()) {
 				pinned_nodes.emplace_back(j);
 			}
-			return true;
+			return sm::visit_result::continue_traversal;
 			};
 		sm::dfs(node, visit_node, {}, false);
 		return pinned_nodes;

@@ -115,9 +115,9 @@ namespace {
 		}
 
 		// the trick here is to just return the parent and children of the current bone, 
-		// not sibling bones unless this is the root. this forces a traversal in which it is impossible
-		// for an applicable rotation constraint to be relative to a bone that is not
-		// the predecessor bone.(because we do not currently support sibling constraints)
+		// not sibling bones unless this is the root. this forces a traversal in which it is 
+        // impossible for an applicable rotation constraint to be relative to a bone that is 
+        // not the predecessor bone.(because we do not currently support sibling constraints)
 
 		std::vector<sm::bone_ref> neighbor_bones(const std::unordered_set<sm::bone*>& visited) {
 			auto neighbors = current_bone().child_bones();
@@ -173,12 +173,12 @@ namespace {
                 bone_visit_(b) {
         }
 
-        bool operator()(sm::node_ref j_ref) {
-            return (node_visit_) ? node_visit_(j_ref) : true;
+        sm::visit_result operator()(sm::node_ref j_ref) {
+            return (node_visit_) ? node_visit_(j_ref) : sm::visit_result::continue_traversal;
         }
 
-        bool operator()(sm::bone_ref b_ref) {
-            return (bone_visit_) ? bone_visit_(b_ref) : true;
+        sm::visit_result operator()(sm::bone_ref b_ref) {
+            return (bone_visit_) ? bone_visit_(b_ref) : sm::visit_result::continue_traversal;
         }
     };
 
@@ -242,9 +242,9 @@ namespace {
 
     std::unordered_map<sm::bone*, bone_info> build_bone_table(sm::node& j) {
         std::unordered_map<sm::bone*, bone_info> length_tbl;
-        auto visit_bone = [&length_tbl](sm::bone& b)->bool {
+        auto visit_bone = [&length_tbl](sm::bone& b)->sm::visit_result {
 			length_tbl[&b] = { b.scaled_length(), b.world_rotation() };
-            return true;
+            return sm::visit_result::continue_traversal;
         };
         sm::dfs(j, {}, visit_bone);
         return length_tbl;
@@ -705,9 +705,9 @@ namespace {
 		std::vector<sm::node_ref> nodes;
 		sm::visit_nodes(
 			root,
-			[&](sm::node& n)->bool {
+			[&](sm::node& n)->sm::visit_result {
 				nodes.push_back(n);
-				return true;
+				return sm::visit_result::continue_traversal;
 			}
 		);
 		return nodes;
@@ -717,9 +717,9 @@ namespace {
 		std::vector<sm::bone_ref> bones;
 		sm::visit_bones(
 			root,
-			[&](sm::bone& n)->bool {
+			[&](sm::bone& n)->sm::visit_result {
 				bones.push_back(n);
-				return true;
+				return sm::visit_result::continue_traversal;
 			}
 		);
 		return bones;
@@ -740,11 +740,15 @@ namespace {
             if (visited.contains(id)) {
                 continue;
             }
+
             auto result = std::visit(visitor, item);
             visited.insert(id);
-            if (!result) {
+            if (result == sm::visit_result::terminate_traversal) {
                 return;
+            } else if (result == sm::visit_result::terminate_branch) {
+                continue;
             }
+
             auto neighbors = std::visit(neighbors_visitor, item);
             for (const auto& neighbor : neighbors) {
                 stack.push(neighbor);

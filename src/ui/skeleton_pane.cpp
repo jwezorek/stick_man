@@ -114,14 +114,14 @@ namespace{
 		root->appendRow(skel_item);
 
 		std::unordered_map<sm::bone*, QStandardItem*> bone_to_tree_item;
-		auto visit = [&](sm::bone& b)->bool {
+		auto visit = [&](sm::bone& b)->sm::visit_result {
 			auto parent = b.parent_bone();
 			QStandardItem* bone_row = make_treeitem(b);
 			QStandardItem* parent_item = 
 				(!parent) ? skel_item : bone_to_tree_item.at(&parent->get());
 			parent_item->appendRow(bone_row);
 			bone_to_tree_item[&b] = bone_row;
-			return true;
+			return sm::visit_result::continue_traversal;
 		};
 
 		sm::visit_bones(skel.get().root_node().get(), visit);

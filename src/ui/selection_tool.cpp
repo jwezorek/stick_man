@@ -72,22 +72,22 @@ namespace {
 		size_t bone_count = 0;
 		size_t node_count = 0;
 
-		auto visit_node = [&](sm::node& node)->bool {
+		auto visit_node = [&](sm::node& node)->sm::visit_result {
 			++node_count;
 			if (!node_set.contains(&node)) {
 				possibly_a_skeleton = false;
-				return false;
+				return sm::visit_result::terminate_traversal;
 			}
-			return true;
+			return sm::visit_result::continue_traversal;
 			};
 
-		auto visit_bone = [&](sm::bone& bone)->bool {
+		auto visit_bone = [&](sm::bone& bone)->sm::visit_result {
 			++bone_count;
 			if (!bone_set.contains(&bone)) {
 				possibly_a_skeleton = false;
-				return false;
+				return sm::visit_result::terminate_traversal;
 			}
-			return true;
+			return sm::visit_result::continue_traversal;
 			};
 
 		sm::dfs(**node_set.begin(), visit_node, visit_bone);

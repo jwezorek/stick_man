@@ -91,7 +91,7 @@ namespace {
 			sm::dfs(
 				root,
 				{},
-				[&](sm::bone& bone)->bool {
+				[&](sm::bone& bone)->sm::visit_result {
 					auto [rot, len] = bone_tbl.at(&bone);
 					sm::point offset = {
 						len * std::cos(rot),
@@ -99,7 +99,7 @@ namespace {
 					};
 					auto new_child_node_pos = bone.parent_node().world_pos() + offset;
 					bone.child_node().set_world_pos(new_child_node_pos);
-					return true;
+					return sm::visit_result::continue_traversal;
 				},
 				true
 			);
@@ -142,11 +142,11 @@ namespace {
 		for (auto skel_item : skeletons) {
             auto& skel = skel_item->model();
 			sm::visit_bones(skel.root_node().get(),
-				[&](auto& bone)->bool {
+				[&](auto& bone)->sm::visit_result {
 					if (selected.contains(&bone)) {
 						ordered_bones.push_back(&bone);
 					}
-					return true;
+					return sm::visit_result::continue_traversal;
 				}
 			);
 		}
