@@ -73,16 +73,22 @@ namespace sm {
 
 		template <typename T>
 		bool contains(const std::string& name) const {
-			if constexpr (std::is_same<T, sm::node>::value) {
-				return nodes_.contains(name);
-			}
-			else if constexpr (std::is_same<T, sm::bone>::value) {
-				return bones_.contains(name);
-			} else {
-				static_assert(std::is_same<T, T>::value,
-					"skeleton::can_name, unsupported type");
-			}
+            return get_by_name<T>(name).has_value();
 		}
+
+        template <typename T>
+        std::optional<std::reference_wrapper<T>> get_by_name(const std::string& name) const {
+            if constexpr (std::is_same<T, sm::node>::value) {
+                return nodes_.contains(name) ? std::ref(*nodes_.at(name)) : 
+                    std::optional<std::reference_wrapper<T>>{};
+            } else if constexpr (std::is_same<T, sm::bone>::value) {
+                return bones_.contains(name) ? std::ref(*bones_.at(name)) : 
+                    std::optional<std::reference_wrapper<T>>{};
+            } else {
+                static_assert(std::is_same<T, T>::value,
+                    "skeleton::get_by_name, unsupported type");
+            }
+        }
 	};
 
     class world {
