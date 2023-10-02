@@ -285,9 +285,9 @@ bool ui::skeleton_pane::validate_props_name_change(const std::string& new_name) 
 			using T = std::remove_cvref_t<decltype(model)>;
 			auto& owner = model.owner().get();
 			if constexpr (std::is_same<T, sm::skeleton>::value) {
-				return owner.can_name_skeleton(new_name);
+				return !owner.contains_skeleton_name(new_name);
 			} else {
-				return owner.can_name<T>(new_name);
+				return !owner.contains<T>(new_name);
 			}
 		},
 		*model_item

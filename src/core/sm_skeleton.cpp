@@ -963,12 +963,12 @@ std::vector<std::string> sm::world::skeleton_names() const {
 		r::to< std::vector<std::string>>();
 }
 
-bool sm::world::can_name_skeleton(const std::string& name) const {
-	return !skeletons_.contains(name);
+bool sm::world::contains_skeleton_name(const std::string& name) const {
+	return skeletons_.contains(name);
 }
 
 sm::result sm::world::set_name(sm::skeleton& skel, const std::string& new_name) {
-	if (!can_name_skeleton(new_name)) {
+	if (contains_skeleton_name(new_name)) {
 		return result::non_unique_name;
 	}
 

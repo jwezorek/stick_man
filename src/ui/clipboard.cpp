@@ -47,6 +47,15 @@ namespace {
             return node_map_.contains(to_void_star(n));
         }
 
+        bool contains_node_or_bone(node_or_bone nb) const {
+            return std::visit(
+                [this](auto itm_ref)->bool {
+                    return this->contains(itm_ref.get());
+                },
+                nb
+            );
+        }
+
         void insert(const sm::bone& b) {
             node_map_[to_void_star(b)] = false;
         }
@@ -66,9 +75,55 @@ namespace {
         }
     };
 
-    void copy_connected_component(sm::world& dest, const auto& root,
+    template<typename T>
+    bool world_contains(const sm::world& w, const std::string& str) {
+        for (auto skel : w.skeletons()) {
+            if (skel.get().contains<T>(str)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    void copy_connected_component(sm::world& dest, auto& root,
             const bone_and_node_set& selection, bone_and_node_set& visited) {
 
+        bool is_selected = selection.contains(std::ref(root));
+        auto is_part_of_component = [&](const auto& itm)->bool {
+                return is_selected == selection.contains(std::ref(itm));
+            };
+
+        auto node_visitor = [&](sm::node& node)->sm::visit_result {
+                if (!is_part_of_component(node)) {
+                    return sm::visit_result::terminate_branch;
+                }
+                visited.insert(node);
+
+                if (world_contains<sm::node>(dest, node.name())) {
+                    return sm::visit_result::continue_traversal;
+                }
+
+                
+
+                return sm::visit_result::continue_traversal;
+            };
+
+        auto bone_visitor = [&](sm::bone& bone)->sm::visit_result {
+                if (!is_part_of_component(bone)) {
+                    return sm::visit_result::terminate_branch;
+                }
+                visited.insert(bone);
+
+                return sm::visit_result::continue_traversal;
+            };
+
+        sm::dfs(
+            root,
+            node_visitor,
+            bone_visitor,
+            false
+        );
     }
 
     std::vector<std::string> selected_skeletons(const sm::world& world,
@@ -83,9 +138,12 @@ namespace {
 
         sm::world output;
         for (node_or_bone itm : selection.items()) {
+            if (visited.contains_node_or_bone(itm)) {
+                continue;
+            }
             std::visit(
-                [&](auto model) {
-                    copy_connected_component(output, model.get(), selection, visited);
+                [&](auto itm_ref) {
+                    copy_connected_component(output, itm_ref.get(), selection, visited);
                 },
                 itm
             );

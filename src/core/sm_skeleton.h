@@ -72,12 +72,12 @@ namespace sm {
 		const_world_ref owner() const;
 
 		template <typename T>
-		bool can_name(const std::string& name) const {
+		bool contains(const std::string& name) const {
 			if constexpr (std::is_same<T, sm::node>::value) {
-				return !nodes_.contains(name);
+				return nodes_.contains(name);
 			}
 			else if constexpr (std::is_same<T, sm::bone>::value) {
-				return !bones_.contains(name);
+				return bones_.contains(name);
 			} else {
 				static_assert(std::is_same<T, T>::value,
 					"skeleton::can_name, unsupported type");
@@ -105,7 +105,7 @@ namespace sm {
 		expected_skeleton skeleton(const std::string& name);
 
 		std::vector<std::string> skeleton_names() const;
-		bool can_name_skeleton(const std::string& name) const;
+		bool contains_skeleton_name(const std::string& name) const;
 		result set_name(sm::skeleton& skel, const std::string& new_name);
 
         expected_bone create_bone(const std::string& name, node& u, node& v);
