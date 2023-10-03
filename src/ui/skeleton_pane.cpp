@@ -337,17 +337,18 @@ ui::skeleton_pane::skeleton_pane(ui::stick_man* mw) :
 
     setTitleBarWidget( custom_title_bar("skeleton view") );
 
-	QWidget* contents = new QWidget();
-	auto column = new QVBoxLayout(contents);
-	column->addWidget(skeleton_tree_ = create_skeleton_tree());
-	column->addWidget(sel_properties_ = new selection_properties(
+	QSplitter* splitter = new QSplitter();
+    splitter->setOrientation(Qt::Vertical);
+
+    splitter->addWidget(skeleton_tree_ = create_skeleton_tree());
+    splitter->addWidget(sel_properties_ = new selection_properties(
             [mw]()->ui::canvas& {
                 return mw->canvases().active_canvas();
             },
             this
         )
     );
-    setWidget(contents);
+    setWidget(splitter);
 
 	connect_tree_change_handler();
 }
@@ -540,7 +541,6 @@ QTreeView* ui::skeleton_pane::create_skeleton_tree() {
 			}
 		 )"
 	);
-	treeView->setMaximumHeight( k_treeview_max_hgt );
 	return treeView;
 }
 

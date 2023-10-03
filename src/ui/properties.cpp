@@ -773,18 +773,32 @@ ui::selection_properties::selection_properties(const current_canvas_fn& fn, skel
 			{selection_type::mixed, new mixed_properties(fn, this)}
 		} {
 	for (const auto& [key, prop_box] : props_) {
-		addWidget(prop_box);
+        QScrollArea* scroller = new QScrollArea();
+        scroller->setWidget(prop_box);
+        scroller->setWidgetResizable(true);
+		addWidget(scroller);
 	}
 }
 
 ui::abstract_properties_widget* ui::selection_properties::current_props() const {
-	return static_cast<abstract_properties_widget*>(currentWidget());
+	return static_cast<abstract_properties_widget*>(
+        static_cast<QScrollArea*>(currentWidget())->widget()
+    );
 }
 
 void ui::selection_properties::set(const ui::canvas& canv) {
 	auto* old_props = current_props();
 
-	setCurrentWidget(props_.at(type_of_selection(canv.selection())));
+    QScrollArea* scroller = nullptr;
+    QWidget* widg = props_.at(type_of_selection(canv.selection()));
+    while (scroller == nullptr) {
+        scroller = dynamic_cast<QScrollArea*>(widg);
+        widg = widg->parentWidget();
+    }
+
+	setCurrentWidget(
+        scroller
+    );
 
 	old_props->lose_selection();
 	current_props()->set_selection(canv);
