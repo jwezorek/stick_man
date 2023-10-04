@@ -82,21 +82,23 @@ namespace sm {
 
 	using bone_ref = std::reference_wrapper<bone>;
 	using node_ref = std::reference_wrapper<node>;
-	using skeleton_ref = std::reference_wrapper<skeleton>;
+	using skel_ref = std::reference_wrapper<skeleton>;
 	using world_ref = std::reference_wrapper<world>;
 
 	using const_bone_ref = std::reference_wrapper<const bone>;
 	using const_node_ref = std::reference_wrapper<const node>;
-	using const_skeleton_ref = std::reference_wrapper<const skeleton>;
+	using const_skel_ref = std::reference_wrapper<const skeleton>;
 	using const_world_ref = std::reference_wrapper<const world>;
 	
 	using maybe_bone_ref = std::optional<bone_ref>;
 	using maybe_node_ref = std::optional<node_ref>;
+    using maybe_skeleton_ref = std::optional<skel_ref>;
 	using maybe_const_node_ref = std::optional<const_node_ref>;
 	using maybe_const_bone_ref = std::optional<const_bone_ref>;
+    using maybe_const_skel_ref = std::optional<skel_ref>;
 	using expected_bone = std::expected<bone_ref, result>;
 	using expected_node = std::expected<node_ref, result>;
-	using expected_skeleton = std::expected<skeleton_ref, result>;
+	using expected_skel = std::expected<skel_ref, result>;
 
     namespace detail {
         template <typename T> 

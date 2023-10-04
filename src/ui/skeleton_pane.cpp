@@ -66,7 +66,7 @@ namespace{
 		return qsi->data(k_model_role).value<T*>();
 	}
 
-	std::variant<sm::skeleton_ref, sm::bone_ref> get_treeitem_var(QStandardItem* qsi) {
+	std::variant<sm::skel_ref, sm::bone_ref> get_treeitem_var(QStandardItem* qsi) {
 		if (is_bone_treeitem(qsi)) {
 			auto* bone = get_treeitem_data<sm::bone>(qsi);
 			return { std::ref(*bone) };
@@ -104,7 +104,7 @@ namespace{
 		return itm;
 	}
 
-	void insert_skeleton(ui::canvas& canv, QStandardItemModel* tree, sm::skeleton_ref skel) {
+	void insert_skeleton(ui::canvas& canv, QStandardItemModel* tree, sm::skel_ref skel) {
 		
 		// traverse the graph and repopulate the treeview during the traversal 
 		// by building a hash table mapping bones to their tree items.

@@ -54,7 +54,7 @@ namespace {
 		) | r::to<std::unordered_set<U*>>();
 	}
 
-	std::optional<sm::skeleton_ref> as_skeleton(auto itms) {
+	std::optional<sm::skel_ref> as_skeleton(auto itms) {
 
 		auto node_set = items_to_model_set<ui::node_item>(itms);
 		auto bone_set = items_to_model_set<ui::bone_item>(itms);

@@ -943,13 +943,13 @@ void sm::world::clear() {
     nodes_.clear();
 }
 
-sm::skeleton_ref sm::world::create_skeleton(double x, double y) {
+sm::skel_ref sm::world::create_skeleton(double x, double y) {
 	auto new_name = unique_name("skeleton", skeleton_names());
 	skeletons_.emplace( new_name, skeleton::make_unique( *this, new_name, x, y ) );
 	return *skeletons_[new_name];
 }
 
-sm::expected_skeleton sm::world::skeleton(const std::string& name) {
+sm::expected_skel sm::world::skeleton(const std::string& name) {
 	auto iter = skeletons_.find(name);
 	if (iter == skeletons_.end()) {
 		return std::unexpected(sm::result::not_found);
@@ -978,6 +978,21 @@ sm::result sm::world::set_name(sm::skeleton& skel, const std::string& new_name) 
 	skeletons_.erase(old_name);
 
 	return result::success;
+}
+
+sm::maybe_skeleton_ref sm::world::skeleton_by_name(const std::string& name) {
+    if (!skeletons_.contains(name)) {
+        return {};
+    }
+    return *skeletons_.at(name);
+}
+
+sm::expected_skel sm::world::copy_skeleton_to(world& dest, const std::string& skel) {
+    return std::unexpected{sm::result::unknown_error};
+}
+
+sm::result sm::world::delete_skeleton(const std::string& skel) {
+    return sm::result::unknown_error;
 }
 
 sm::node_ref sm::world::create_node(sm::skeleton& parent, const std::string& name, 

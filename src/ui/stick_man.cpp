@@ -178,7 +178,7 @@ void ui::stick_man::do_redo() {
 }
 
 void ui::stick_man::do_cut() {
-
+    ui::debug(canvases_->active_canvas());
 }
 
 void ui::stick_man::do_copy() {

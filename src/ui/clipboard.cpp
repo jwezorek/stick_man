@@ -245,4 +245,5 @@ void ui::debug(canvas& canv)
     auto& skel = skel_items.front()->model();
     auto sel_set = bone_and_node_set_from_canvas(canv);
     auto [world, selected_skel_names] = split_skeleton_into_selected_components(skel, sel_set);
+    auto test = world.to_json();
 }
