@@ -12,4 +12,6 @@ namespace ui {
     QByteArray copy_selection(canvas& canv);
     void paste_selection(canvas& canv, const QByteArray& bytes);
 
+    void debug(canvas& canv);
+
 }

@@ -182,6 +182,25 @@ namespace {
         );
         return sorted;
     }
+
+    bone_and_node_set bone_and_node_set_from_canvas(ui::canvas& canv) {
+        auto sel = canv.selection();
+        bone_and_node_set set;
+        for (auto* itm : sel) {
+            auto node_ptr = dynamic_cast<ui::node_item*>(itm);
+            if (node_ptr) {
+                set.insert(node_ptr->model());
+                continue;
+            }
+            auto bone_ptr = dynamic_cast<ui::bone_item*>(itm);
+            if (bone_ptr) {
+                set.insert(bone_ptr->model());
+                continue;
+            }
+            throw std::runtime_error("bone_and_node_set_from_canvas: skeleton in selection");
+        }
+        return set;
+    }
     
     std::tuple<sm::world, std::vector<std::string>> split_skeleton_into_selected_components(
             const sm::skeleton& skel, const bone_and_node_set& selection) {
@@ -218,4 +237,12 @@ QByteArray ui::copy_selection(canvas& canv)
 
 void ui::paste_selection(canvas& canv, const QByteArray& bytes)
 {
+}
+
+void ui::debug(canvas& canv)
+{
+    std::vector<skeleton_item*> skel_items = canv.skeleton_items();
+    auto& skel = skel_items.front()->model();
+    auto sel_set = bone_and_node_set_from_canvas(canv);
+    auto [world, selected_skel_names] = split_skeleton_into_selected_components(skel, sel_set);
 }
