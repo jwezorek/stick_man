@@ -24,7 +24,8 @@ namespace sm {
 
 	class skeleton : public detail::enable_protected_make_unique<skeleton> {
 		friend class world;
-
+        friend class node;
+        friend class bone;
 	private:
 
         using nodes_tbl = std::unordered_map<std::string, node*>;
@@ -45,9 +46,13 @@ namespace sm {
 		void set_name(const std::string& str);
         result from_json(world& w, const nlohmann::json&);
         nlohmann::json to_json() const;
+        void set_root(sm::node& new_root);
+        void register_node(sm::node& new_node);
+        void register_bone(sm::bone& new_bone);
 
 	public:
 		std::string name() const;
+        bool empty() const;
 		node_ref root_node();
 		const_node_ref root_node() const;
 
@@ -93,6 +98,8 @@ namespace sm {
 
     class world {
 		friend class skeleton;
+        friend class node;
+        friend class bone;
     private:
         using skeleton_tbl = std::unordered_map<std::string, std::unique_ptr<skeleton>>;
 		
@@ -108,6 +115,7 @@ namespace sm {
 		world();
         void clear();
 		skeleton_ref create_skeleton(double x, double y);
+        expected_skeleton create_skeleton(const std::string& name);
 		expected_skeleton skeleton(const std::string& name);
 
 		std::vector<std::string> skeleton_names() const;

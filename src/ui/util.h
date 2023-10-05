@@ -222,4 +222,5 @@ namespace ui {
     );
     std::string make_unique_name(const std::vector<std::string>& used_names,
         const std::string& prefix);
+    void to_text_file(const std::string& file_path, const std::string& text);
 }

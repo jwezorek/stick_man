@@ -913,6 +913,30 @@ json sm::skeleton::to_json() const {
     };
 }
 
+void sm::skeleton::set_root(sm::node& new_root)
+{
+    root_ = std::ref(new_root);
+}
+
+
+void sm::skeleton::register_node(sm::node& new_node) {
+    if (contains<node>(new_node.name()) || &new_node.owner().get() != this) {
+        throw std::runtime_error("sm::skeleton::register_node failed");
+    }
+    nodes_[new_node.name()] = &new_node;
+}
+
+void sm::skeleton::register_bone(sm::bone& new_bone) {
+    if (contains<node>(new_bone.name()) || &new_bone.owner().get() != this) {
+        throw std::runtime_error("sm::skeleton::register_node failed");
+    }
+    bones_[new_bone.name()] = &new_bone;
+}
+
+bool sm::skeleton::empty() const {
+    return !root_.has_value();
+}
+
 void sm::skeleton::clear_tags() {
     tags_.clear();
 }
@@ -947,6 +971,17 @@ sm::skeleton_ref sm::world::create_skeleton(double x, double y) {
 	auto new_name = unique_name("skeleton", skeleton_names());
 	skeletons_.emplace( new_name, skeleton::make_unique( *this, new_name, x, y ) );
 	return *skeletons_[new_name];
+}
+
+sm::expected_skeleton sm::world::create_skeleton(const std::string& name) {
+    if (contains_skeleton_name(name)) {
+        return std::unexpected(result::non_unique_name);
+    }
+    skeletons_.emplace(name, skeleton::make_unique(*this));
+    auto& skel = *skeletons_[name];
+    skel.set_name(name);
+
+    return std::ref(skel);
 }
 
 sm::expected_skeleton sm::world::skeleton(const std::string& name) {

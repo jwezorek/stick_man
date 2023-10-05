@@ -3,6 +3,7 @@
 #include <sstream>
 #include <numbers>
 #include <ranges>
+#include <fstream>
 #include <unordered_set>
 
 /*------------------------------------------------------------------------------------------------*/
@@ -728,4 +729,15 @@ std::string ui::make_unique_name(const std::vector<std::string>& used_names,
 
     auto index = first_positive_integer_not_in_set(index_set);
     return prefix + "-" + std::to_string(index);
+}
+
+void ui::to_text_file(const std::string& file_path, const std::string& text) {
+    std::ofstream outputFile(file_path);
+
+    if (!outputFile.is_open()) {
+        throw std::runtime_error("unable to create file");
+    }
+
+    outputFile << text;
+    outputFile.close();
 }

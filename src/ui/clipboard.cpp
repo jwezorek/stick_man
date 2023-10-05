@@ -2,6 +2,7 @@
 #include "../core/sm_skeleton.h"
 #include "canvas_item.h"
 #include "canvas.h"
+#include "util.h"
 #include <tuple>
 #include <vector>
 #include <unordered_map>
@@ -75,33 +76,23 @@ namespace {
         }
     };
 
-    template<typename T>
-    bool world_contains(const sm::world& w, const std::string& str) {
-        for (auto skel : w.skeletons()) {
-            if (skel.get().contains<T>(str)) {
-                return true;
-            }
-        }
-        return false;
+    std::string make_unique_name(const std::string& base_name, const std::vector<std::string>& names) {
+        auto used_names = names | r::to<std::unordered_set<std::string>>();
+        int i = 0;
+        std::string new_name;
+        do {
+            new_name = base_name + std::to_string(++i);
+        } while (used_names.contains(new_name));
+        return new_name;
     }
 
-    std::optional<sm::node_ref> get_named_node(const sm::world& w, const std::string& str) {
-        for (auto skel : w.skeletons()) {
-            auto node = skel.get().get_by_name<sm::node>(str);
-            if (node) {
-                return node;
-            }
+    sm::skeleton* create_skeleton(sm::world& dest, const std::string& skel_name) {
+        std::string name = skel_name;
+        if (dest.contains_skeleton_name(name)) {
+            name = make_unique_name(skel_name, dest.skeleton_names());
         }
-        return {};
-    }
-
-    sm::node_ref copy_node(sm::world& dest, sm::node& node) {
-        auto pos = node.world_pos();
-        auto skel_ref = dest.create_skeleton(pos.x, pos.y);
-        auto& skel = skel_ref.get();
-        auto copy = skel.root_node();
-        skel.set_name(copy.get(), node.name());
-        return copy;
+        auto skel = dest.create_skeleton(name);
+        return &(skel->get());
     }
 
     void copy_connected_component(sm::world& dest, auto& root,
@@ -112,17 +103,19 @@ namespace {
                 return is_selected == selection.contains(std::ref(itm));
             };
 
+        sm::skeleton* dest_skel = nullptr;
         auto node_visitor = [&](sm::node& node)->sm::visit_result {
                 if (!is_part_of_component(node)) {
                     return sm::visit_result::terminate_branch;
                 }
                 copied.insert(node);
-
-                if (world_contains<sm::node>(dest, node.name())) {
-                    return sm::visit_result::continue_traversal;
+                
+                if (!dest_skel) {
+                    dest_skel = create_skeleton(dest, node.owner().get().name());
                 }
-
-                copy_node(dest, node);
+                if (!dest_skel->contains<sm::node>(node.name())) {
+                    node.copy_to(*dest_skel);
+                }
 
                 return sm::visit_result::continue_traversal;
             };
@@ -132,22 +125,15 @@ namespace {
                     return sm::visit_result::terminate_branch;
                 }
                 copied.insert(bone);
-                if (world_contains<sm::bone>(dest, bone.name())) {
-                    // this should not happen.
-                    return sm::visit_result::continue_traversal;
-                }
 
-                auto u = get_named_node(dest, bone.parent_node().name());
-                if (!u) {
-                    u = copy_node(dest, bone.parent_node());
+                if (!dest_skel) {
+                    dest_skel = create_skeleton(dest, bone.owner().get().name());
                 }
-
-                auto v = get_named_node(dest, bone.child_node().name());
-                if (!v) {
-                    v = copy_node(dest, bone.child_node());
+                if (!dest_skel->get_by_name<sm::node>(bone.parent_node().name())) {
+                    bone.parent_node().copy_to( *dest_skel );
                 }
-
-                dest.create_bone(bone.name(), u->get(), v->get());
+                bone.child_node().copy_to( *dest_skel );
+                bone.copy_to( *dest_skel );
 
                 return sm::visit_result::continue_traversal;
             };
@@ -202,26 +188,26 @@ namespace {
         return set;
     }
     
-    std::tuple<sm::world, std::vector<std::string>> split_skeleton_into_selected_components(
-            const sm::skeleton& skel, const bone_and_node_set& selection) {
+    void split_skeleton_by_selection(
+            const sm::skeleton& skel, const bone_and_node_set& selection,
+            sm::world& unselected, sm::world& selected) {
         
         bone_and_node_set copied;
         auto skeleton_pieces = topological_sort_nodes_and_bones(skel);
 
-        sm::world output;
         for (node_or_bone part : skeleton_pieces) {
             if (copied.contains_node_or_bone(part)) {
                 continue;
             }
+            auto& dest = selection.contains_node_or_bone(part) ? selected : unselected;
             std::visit(
                 [&](auto itm_ref) {
-                    copy_connected_component(output, itm_ref.get(), selection, copied);
+                    copy_connected_component(dest, itm_ref.get(), selection, copied);
                 },
                 part
             );
         }
         
-        return { std::move(output), selected_skeletons(output, selection)};
     }
 }
 
@@ -244,5 +230,9 @@ void ui::debug(canvas& canv)
     std::vector<skeleton_item*> skel_items = canv.skeleton_items();
     auto& skel = skel_items.front()->model();
     auto sel_set = bone_and_node_set_from_canvas(canv);
-    auto [world, selected_skel_names] = split_skeleton_into_selected_components(skel, sel_set);
+    sm::world unselected;
+    sm::world selected;
+    split_skeleton_by_selection(skel, sel_set, unselected, selected);
+    auto str = unselected.to_json() + "\n\n" + selected.to_json();
+    to_text_file("C:\\test\\clippy.txt", str);
 }

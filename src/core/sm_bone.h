@@ -33,6 +33,7 @@ namespace sm {
 
 	public:
 		std::string name() const;
+        expected_node copy_to(skeleton& skel) const;
 
 		maybe_bone_ref parent_bone();
 		maybe_const_bone_ref parent_bone() const;
@@ -77,6 +78,7 @@ namespace sm {
 
 	public:
 		std::string name() const;
+        expected_bone copy_to(skeleton& skel) const;
 
 		maybe_const_bone_ref parent_bone() const;
 		maybe_bone_ref parent_bone();

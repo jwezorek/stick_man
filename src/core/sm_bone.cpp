@@ -24,6 +24,22 @@ sm::node::node(skeleton& parent, const std::string& name, double x, double y) :
 	y_(y)
 {}
 
+/*
+sm::node::node(skeleton& parent, const node& other) :
+    parent_(parent)
+{
+    if (parent.contains<node>(other.name())) {
+        throw result::non_unique_name;
+    }
+    parent.owner().get().create_node(
+        parent, other.name(),
+        other.world_x(), other.world_y()
+    );
+}
+*/
+
+
+
 void sm::node::set_parent(bone& b) {
 	parent_ = std::ref(b);
 }
@@ -38,6 +54,21 @@ void sm::node::add_child(bone& b) {
 
 std::string sm::node::name() const {
 	return name_;
+}
+
+sm::expected_node sm::node::copy_to(skeleton& skel) const {
+    if (skel.contains<node>(name_)) {
+        return std::unexpected(sm::result::non_unique_name);
+    }
+    auto node = skel.owner().get().create_node(
+        skel, name_,
+        x_, y_
+    );
+    if (skel.empty()) {
+        skel.set_root(node.get());
+    }
+    skel.register_node(node.get());
+    return node;
 }
 
 sm::maybe_bone_ref sm::node::parent_bone() {
@@ -152,11 +183,11 @@ void sm::bone::set_name(const std::string& new_name) {
 	name_ = new_name;
 }
 
-sm::result sm::bone::set_rotation_constraint(double min, double max, bool relative_to_parent) {
+sm::result sm::bone::set_rotation_constraint(double start, double span, bool relative_to_parent) {
 	if (relative_to_parent && !parent_bone()) {
 		return result::no_parent;
 	}
-	rot_constraint_ = rot_constraint{ relative_to_parent, min, max };
+	rot_constraint_ = rot_constraint{ relative_to_parent, start, span };
 	return result::success;
 }
 
@@ -170,6 +201,31 @@ void sm::bone::remove_rotation_constraint() {
 
 std::string sm::bone::name() const {
 	return name_;
+}
+
+sm::expected_bone sm::bone::copy_to(skeleton& skel) const
+{
+    if (skel.contains<bone>(name_)) {
+        return std::unexpected(result::non_unique_name);
+    }
+
+    auto u = skel.get_by_name<node>(parent_node().name());
+    auto v = skel.get_by_name<node>(child_node().name());
+    if (!u || !v) {
+        return std::unexpected(result::no_parent);
+    }
+
+    auto bone = skel.owner().get().create_bone_in_skeleton(name_, u->get(), v->get());
+    if (rot_constraint_) {
+        bone->get().set_rotation_constraint(
+            rot_constraint_->start_angle,
+            rot_constraint_->span_angle,
+            rot_constraint_->relative_to_parent
+        );
+    }
+    skel.register_bone(bone->get());
+
+    return bone;
 }
 
 sm::node& sm::bone::parent_node() {
