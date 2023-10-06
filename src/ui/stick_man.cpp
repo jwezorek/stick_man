@@ -145,6 +145,10 @@ ui::canvas_manager& ui::stick_man::canvases() {
     return *canvases_;
 }
 
+void ui::stick_man::reset_world(sm::world&& new_world) {
+    world_ = std::move(new_world);
+    canvases_->sync_to_model(world_);
+}
 
 void ui::stick_man::insert_file_menu() {
     auto file_menu = menuBar()->addMenu(tr("&File"));
@@ -190,7 +194,7 @@ void ui::stick_man::do_paste() {
 }
 
 void ui::stick_man::do_delete() {
-
+    ui::delete_selection(*this);
 }
 
 void ui::stick_man::insert_edit_menu() {

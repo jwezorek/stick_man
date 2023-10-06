@@ -2,6 +2,7 @@
 #include "../core/sm_skeleton.h"
 #include "canvas_item.h"
 #include "canvas.h"
+#include "stick_man.h"
 #include "util.h"
 #include <tuple>
 #include <vector>
@@ -211,17 +212,31 @@ namespace {
     }
 }
 
-QByteArray ui::cut_selection(canvas& canv)
+QByteArray ui::cut_selection(stick_man& canv)
 {
     return QByteArray();
 }
 
-QByteArray ui::copy_selection(canvas& canv)
+QByteArray ui::copy_selection(stick_man& canv)
 {
     return QByteArray();
 }
 
-void ui::paste_selection(canvas& canv, const QByteArray& bytes)
+void ui::delete_selection(stick_man& main_wnd) {
+    auto& canv = main_wnd.canvases().active_canvas();
+    std::vector<skeleton_item*> skel_items = canv.skeleton_items();
+    auto sel_set = bone_and_node_set_from_canvas(canv);
+    sm::world unselected;
+    sm::world selected;
+    auto& skel = skel_items.front()->model();
+    split_skeleton_by_selection(skel, sel_set, unselected, selected);
+    for (auto s : unselected.skeletons()) {
+        s.get().insert_tag("tab:" + canv.tab_name());
+    }
+    main_wnd.reset_world(std::move(unselected));
+}
+
+void ui::paste_selection(stick_man& canv, const QByteArray& bytes)
 {
 }
 

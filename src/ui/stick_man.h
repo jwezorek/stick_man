@@ -41,6 +41,8 @@ namespace ui {
 		skeleton_pane& skel_pane();
         canvas_manager& canvases();
 
+        void reset_world(sm::world&& new_world);
+
     private:
 
         void insert_file_menu();
