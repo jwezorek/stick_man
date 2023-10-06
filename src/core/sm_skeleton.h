@@ -121,9 +121,6 @@ namespace sm {
 		std::vector<std::string> skeleton_names() const;
 		bool contains_skeleton_name(const std::string& name) const;
         result set_name(sm::skeleton& skel, const std::string& new_name);
-        maybe_skel_ref skeleton_by_name(const std::string& name); 
-
-
 
         expected_bone create_bone(const std::string& name, node& u, node& v);
 		result from_json(const std::string&);

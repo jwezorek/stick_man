@@ -189,6 +189,10 @@ void ui::stick_man::do_paste() {
 
 }
 
+void ui::stick_man::do_delete() {
+
+}
+
 void ui::stick_man::insert_edit_menu() {
 
     QAction* undo_action = new QAction("Undo", this);
@@ -211,6 +215,10 @@ void ui::stick_man::insert_edit_menu() {
     paste_action->setShortcut(QKeySequence::Paste);
     connect(paste_action, &QAction::triggered, this, &stick_man::do_paste);
 
+    QAction* delete_action = new QAction("Delete", this);
+    delete_action->setShortcut(QKeySequence::Delete);
+    connect(delete_action, &QAction::triggered, this, &stick_man::do_delete);
+
     QMenu* edit_menu = menuBar()->addMenu("Edit");
 
     edit_menu->addAction(undo_action);
@@ -219,6 +227,8 @@ void ui::stick_man::insert_edit_menu() {
     edit_menu->addAction(cut_action);
     edit_menu->addAction(copy_action);
     edit_menu->addAction(paste_action);
+    edit_menu->addSeparator();
+    edit_menu->addAction(delete_action);
 }
 
 void ui::stick_man::insert_view_menu() {

@@ -31,6 +31,7 @@ namespace ui {
         void do_cut();
         void do_copy();
         void do_paste();
+        void do_delete();
 
         void insert_new_tab();
 
