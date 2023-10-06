@@ -121,7 +121,7 @@ namespace sm {
 		std::vector<std::string> skeleton_names() const;
 		bool contains_skeleton_name(const std::string& name) const;
         result set_name(sm::skeleton& skel, const std::string& new_name);
-        maybe_skeleton_ref skeleton_by_name(const std::string& name); 
+        maybe_skel_ref skeleton_by_name(const std::string& name); 
 
 
 

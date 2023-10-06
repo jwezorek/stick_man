@@ -24,22 +24,6 @@ sm::node::node(skeleton& parent, const std::string& name, double x, double y) :
 	y_(y)
 {}
 
-/*
-sm::node::node(skeleton& parent, const node& other) :
-    parent_(parent)
-{
-    if (parent.contains<node>(other.name())) {
-        throw result::non_unique_name;
-    }
-    parent.owner().get().create_node(
-        parent, other.name(),
-        other.world_x(), other.world_y()
-    );
-}
-*/
-
-
-
 void sm::node::set_parent(bone& b) {
 	parent_ = std::ref(b);
 }

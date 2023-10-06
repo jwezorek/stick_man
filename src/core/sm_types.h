@@ -92,7 +92,7 @@ namespace sm {
 	
 	using maybe_bone_ref = std::optional<bone_ref>;
 	using maybe_node_ref = std::optional<node_ref>;
-    using maybe_skeleton_ref = std::optional<skel_ref>;
+    using maybe_skel_ref = std::optional<skel_ref>;
 	using maybe_const_node_ref = std::optional<const_node_ref>;
 	using maybe_const_bone_ref = std::optional<const_bone_ref>;
     using maybe_const_skel_ref = std::optional<skel_ref>;
