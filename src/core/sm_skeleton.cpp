@@ -973,7 +973,7 @@ sm::skel_ref sm::world::create_skeleton(double x, double y) {
 	return *skeletons_[new_name];
 }
 
-sm::expected_skeleton sm::world::create_skeleton(const std::string& name) {
+sm::expected_skel sm::world::create_skeleton(const std::string& name) {
     if (contains_skeleton_name(name)) {
         return std::unexpected(result::non_unique_name);
     }
@@ -984,7 +984,7 @@ sm::expected_skeleton sm::world::create_skeleton(const std::string& name) {
     return std::ref(skel);
 }
 
-sm::expected_skeleton sm::world::skeleton(const std::string& name) {
+sm::expected_skel sm::world::skeleton(const std::string& name) {
 	auto iter = skeletons_.find(name);
 	if (iter == skeletons_.end()) {
 		return std::unexpected(sm::result::not_found);
