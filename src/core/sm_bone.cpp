@@ -74,7 +74,7 @@ sm::expected_node sm::node::copy_to(skeleton& skel) const {
 sm::maybe_bone_ref sm::node::parent_bone() {
 	return std::visit(
 		overloaded{
-			[](skeleton_ref skel)->maybe_bone_ref {return {}; },
+			[](skel_ref skel)->maybe_bone_ref {return {}; },
 			[](bone_ref bone)->maybe_bone_ref { return bone; }
 		},
 		parent_
@@ -85,7 +85,7 @@ sm::maybe_bone_ref sm::node::parent_bone() {
 sm::maybe_const_bone_ref sm::node::parent_bone() const {
 	return std::visit(
 		overloaded{
-			[](skeleton_ref skel)->maybe_const_bone_ref {return {}; },
+			[](skel_ref skel)->maybe_const_bone_ref {return {}; },
 			[](bone_ref bone)->maybe_const_bone_ref { return bone; }
 		},
 		parent_
@@ -120,10 +120,10 @@ std::vector<sm::const_bone_ref> sm::node::adjacent_bones() const {
 		r::to< std::vector<sm::const_bone_ref>>();
 }
 
-sm::skeleton_ref sm::node::owner() {
+sm::skel_ref sm::node::owner() {
 	return std::visit(
 		overloaded{
-			[](skeleton_ref skel) {return skel; },
+			[](skel_ref skel) {return skel; },
 			[](bone_ref bone) {
 				return bone.get().owner();
 			}
@@ -132,7 +132,7 @@ sm::skeleton_ref sm::node::owner() {
 	);
 }
 
-sm::const_skeleton_ref sm::node::owner() const {
+sm::const_skel_ref sm::node::owner() const {
 	auto non_const_this = const_cast<sm::node*>(this);
 	return non_const_this->owner();
 }
@@ -167,7 +167,7 @@ void  sm::node::clear_user_data() {
 }
 
 bool sm::node::is_root() const {
-	return std::holds_alternative<skeleton_ref>(parent_);
+	return std::holds_alternative<skel_ref>(parent_);
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -277,11 +277,11 @@ const sm::node& sm::bone::opposite_node(const node& j) const {
 	return non_const_this->opposite_node(j);
 }
 
-sm::skeleton_ref sm::bone::owner() {
+sm::skel_ref sm::bone::owner() {
 	return parent_node().owner();
 }
 
-sm::const_skeleton_ref sm::bone::owner() const {
+sm::const_skel_ref sm::bone::owner() const {
 	return parent_node().owner();
 }
 

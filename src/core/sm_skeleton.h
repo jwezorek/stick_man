@@ -114,20 +114,23 @@ namespace sm {
     public:
 		world();
         void clear();
-		skeleton_ref create_skeleton(double x, double y);
-        expected_skeleton create_skeleton(const std::string& name);
-		expected_skeleton skeleton(const std::string& name);
+		skel_ref create_skeleton(double x, double y);
+        expected_skel create_skeleton(const std::string& name);
+		expected_skel skeleton(const std::string& name);
 
 		std::vector<std::string> skeleton_names() const;
 		bool contains_skeleton_name(const std::string& name) const;
-		result set_name(sm::skeleton& skel, const std::string& new_name);
+        result set_name(sm::skeleton& skel, const std::string& new_name);
+        maybe_skeleton_ref skeleton_by_name(const std::string& name); 
+
+
 
         expected_bone create_bone(const std::string& name, node& u, node& v);
 		result from_json(const std::string&);
 		std::string to_json() const;
 
-		auto skeletons() { return detail::to_range_view<skeleton_ref>(skeletons_); }
-		auto skeletons() const { return detail::to_range_view<const_skeleton_ref>(skeletons_); }
+		auto skeletons() { return detail::to_range_view<skel_ref>(skeletons_); }
+		auto skeletons() const { return detail::to_range_view<const_skel_ref>(skeletons_); }
     };
 
     enum class visit_result {

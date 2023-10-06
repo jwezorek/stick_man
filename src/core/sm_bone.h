@@ -20,7 +20,7 @@ namespace sm {
 		std::string name_;
 		double x_;
 		double y_;
-		std::variant<skeleton_ref, bone_ref> parent_;
+		std::variant<skel_ref, bone_ref> parent_;
 		std::vector<bone_ref> children_;
 		std::any user_data_;
 
@@ -44,8 +44,8 @@ namespace sm {
 		std::vector<const_bone_ref> adjacent_bones() const;
 		std::vector<bone_ref> adjacent_bones();
 
-		skeleton_ref owner();
-		const_skeleton_ref owner() const;
+ 		skel_ref owner();
+		const_skel_ref owner() const;
 
 		double world_x() const;
 		double world_y() const;
@@ -92,8 +92,8 @@ namespace sm {
 		const node& child_node() const;
 		const node& opposite_node(const node& j) const;
 
-		skeleton_ref owner();
-		const_skeleton_ref owner() const;
+		skel_ref owner();
+		const_skel_ref owner() const;
 
 		node& parent_node();
 		node& child_node();

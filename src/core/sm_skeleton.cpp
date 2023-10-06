@@ -967,7 +967,7 @@ void sm::world::clear() {
     nodes_.clear();
 }
 
-sm::skeleton_ref sm::world::create_skeleton(double x, double y) {
+sm::skel_ref sm::world::create_skeleton(double x, double y) {
 	auto new_name = unique_name("skeleton", skeleton_names());
 	skeletons_.emplace( new_name, skeleton::make_unique( *this, new_name, x, y ) );
 	return *skeletons_[new_name];
