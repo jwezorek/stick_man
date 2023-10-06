@@ -91,6 +91,7 @@ namespace ui {
         void set_scale(double scale, std::optional<QPointF> pt = {});
         double scale() const;
         void sync_to_model();
+        void sync_to_model(sm::world& model);
 
         const selection_set& selection() const;
         //sel_type selection_type() const;
@@ -123,7 +124,7 @@ namespace ui {
         QPointF from_global_to_canvas(const QPoint& pt);
         std::string tab_name() const;
         const canvas_manager& manager() const;
-        canvas_manager& manager();
+        canvas_manager& manager(); 
     };
 
     class canvas_manager : public QTabWidget {
@@ -137,7 +138,6 @@ namespace ui {
         input_handler& inp_handler_;
         drag_mode drag_mode_;
 
-        static std::string tab_from_skeleton(const sm::skeleton& skel);
         static std::vector<std::string> tab_names_from_model(const sm::world& w);
 
         void connect_current_tab_signal();
@@ -151,12 +151,25 @@ namespace ui {
         canvas* add_new_tab(QString name);
         canvas* canvas_from_skeleton(sm::skeleton& skel);
         canvas* canvas_from_tab(const std::string& tab_name);
-        std::vector<canvas*> canvases();
         void set_drag_mode(drag_mode dm);
         void set_active_canvas(const canvas& c);
         std::vector<std::string> tab_names() const;
         std::string tab_name(const canvas& canv) const;
         void sync_to_model(sm::world& model);
+
+        auto canvases() {
+            namespace r = std::ranges;
+            namespace rv = std::ranges::views;
+            return rv::iota(0, count()) |
+                rv::transform(
+                    [this](int i)->ui::canvas* {
+                        return static_cast<ui::canvas*>(
+                            static_cast<QGraphicsView*>(widget(i))->scene()
+                            );
+                    }
+                );
+        }
+
     signals:
         void active_canvas_changed(ui::canvas& old_canv, ui::canvas& canv);
         void selection_changed(ui::canvas& canv);

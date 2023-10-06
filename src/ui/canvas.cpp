@@ -133,6 +133,16 @@ namespace {
 	sm::bone* parent_bone(sm::bone* bone_1, sm::bone* bone_2) {
 		return (&(bone_1->parent_node()) == find_shared_node(bone_1, bone_2)) ? bone_2 : bone_1;
 	}
+
+    std::string tab_from_skeleton(const sm::skeleton& skel) {
+        for (const auto possible_tab : skel.tags()) {
+            auto tab = ui::get_prefixed_string("tab", possible_tab, ':');
+            if (!tab.empty()) {
+                return tab;
+            }
+        }
+        return {};
+    }
 }
 /*------------------------------------------------------------------------------------------------*/
 
@@ -220,6 +230,22 @@ void ui::canvas::sync_to_model() {
     auto is_non_null = [](auto* p) {return p; };
     for (auto* child : itms | rv::transform(to_stick_man) | rv::filter(is_non_null)) {
         child->sync_to_model();
+    }
+}
+
+void ui::canvas::sync_to_model(sm::world& model) {
+    clear();
+    for (auto skel : model.skeletons()) {
+        auto tab = tab_from_skeleton(skel.get());
+        if (tab != tab_name()) {
+            continue;
+        }
+        for (auto node : skel.get().nodes()) {
+            addItem(new ui::node_item(node.get(), scale()));
+        }
+        for (auto bone : skel.get().bones()) {
+            addItem(new ui::bone_item(bone.get(), scale()));
+        }
     }
 }
 
@@ -510,15 +536,7 @@ ui::canvas_manager::canvas_manager(input_handler& inp_handler) :
     connect_current_tab_signal();
 }
 
-std::string ui::canvas_manager::tab_from_skeleton(const sm::skeleton& skel) {
-    for (const auto possible_tab : skel.tags()) {
-        auto tab = ui::get_prefixed_string("tab", possible_tab, ':');
-        if (!tab.empty()) {
-            return tab;
-        }
-    }
-    return {};
-}
+
 
 std::vector<std::string> ui::canvas_manager::tab_names_from_model(const sm::world& w) {
     std::unordered_set<std::string> tabs;
@@ -612,29 +630,11 @@ void ui::canvas_manager::sync_to_model(sm::world& model) {
         ) | r::to<std::unordered_map<std::string, canvas* >>();
     connect_current_tab_signal();
 
-    for (auto skel : model.skeletons()) {
-        auto tab = tab_from_skeleton(skel.get());
-        auto& canv = *name_to_canvas.at(tab);
-        for (auto node : skel.get().nodes()) {
-            canv.addItem(new ui::node_item(node.get(), canv.scale()));
-        }
-        for (auto bone : skel.get().bones()) {
-            canv.addItem(new ui::bone_item(bone.get(), canv.scale()));
-        }
+    for (auto canv : canvases()) {
+        canv->sync_to_model(model);
     }
 
     emit contents_changed(model);
-}
-
-std::vector<ui::canvas*> ui::canvas_manager::canvases() {
-    return rv::iota(0, count()) |
-        rv::transform(
-            [this](int i)->ui::canvas* {
-                return static_cast<ui::canvas*>(
-                    static_cast<QGraphicsView*>(widget(i))->scene()
-                );
-            }
-    ) | r::to< std::vector<ui::canvas*>>();
 }
 
 void ui::canvas_manager::set_drag_mode(drag_mode dm) {
