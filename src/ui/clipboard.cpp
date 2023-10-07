@@ -102,12 +102,12 @@ namespace {
 
     std::string unique_skeleton_name(const std::string& old_name,
             const std::vector<std::string>& used_names) {
-        auto name_set = used_names | r::to<std::unordered_set<std::string>>();
-        if (!name_set.contains(old_name)) {
-            return old_name;
-        }
-        auto prefix = get_prefix(old_name);
-        return ui::make_unique_name(used_names, prefix);
+        auto is_not_unique = r::find_if( used_names, 
+                [old_name](auto&& str) {return str == old_name; }
+            ) != used_names.end();
+        return (is_not_unique) ?
+            ui::make_unique_name(used_names, get_prefix(old_name)) :
+            old_name;
     }
 
     sm::skeleton* create_skeleton(sm::world& dest, const std::string& skel_name) {
@@ -353,43 +353,66 @@ namespace {
 
         return {};
     }
+
+    QByteArray cut_selection(ui::stick_man& main_wnd) {
+        auto selection_json = cut_copy_or_delete(main_wnd, clip_operation::cut);
+        auto str = selection_json.dump(4);
+        return QByteArray(str.c_str(), str.size());
+    }
+
+    QByteArray copy_selection(ui::stick_man& main_wnd) {
+        auto selection_json = cut_copy_or_delete(main_wnd, clip_operation::copy);
+        auto str = selection_json.dump(4);
+        return QByteArray(str.c_str(), str.size());
+    }
+
+    void paste_selection(ui::stick_man& main_wnd, const QByteArray& bytes) {
+        std::string world_json_str = std::string(bytes.data());
+        sm::world clipboard_world;
+        clipboard_world.from_json(world_json_str);
+
+        auto& canvases = main_wnd.canvases();
+        auto& canv = canvases.active_canvas();
+        auto& dest_world = main_wnd.sandbox();
+
+        for (auto skel : clipboard_world.skeletons()) {
+            auto copy = skel.get().copy_to(
+                dest_world,
+                unique_skeleton_name(skel.get().name(), dest_world.skeleton_names())
+            );
+            copy->get().insert_tag("tab:" + canv.tab_name());
+        }
+        canvases.sync_to_model(dest_world, canv);
+    }
+
+    void cut_or_copy(ui::stick_man& main_wnd, bool should_cut) {
+        auto bytes = should_cut ? cut_selection(main_wnd) : copy_selection(main_wnd);
+        QClipboard* clipboard = QApplication::clipboard();
+
+        QMimeData* mime_data = new QMimeData;
+        mime_data->setData("application/x-stick_man", bytes);
+
+        clipboard->setMimeData(mime_data);
+    }
+}
+ 
+void ui::clipboard::cut(stick_man& main_wnd) {
+    cut_or_copy(main_wnd, true);
 }
 
-QByteArray ui::cut_selection(stick_man& main_wnd)
-{
-    auto selection_json = cut_copy_or_delete(main_wnd, clip_operation::cut);
-    auto str = selection_json.dump(4);
-    return QByteArray(str.c_str(), str.size());
+void ui::clipboard::copy(stick_man& main_wnd) {
+    cut_or_copy(main_wnd, false);
 }
 
-QByteArray ui::copy_selection(stick_man& main_wnd)
-{
-    auto selection_json = cut_copy_or_delete(main_wnd, clip_operation::copy);
-    auto str = selection_json.dump(4);
-    return QByteArray(str.c_str(), str.size());
+void ui::clipboard::paste(stick_man& main_wnd) {
+    QClipboard* clipboard = QApplication::clipboard();
+    const QMimeData* mimeData = clipboard->mimeData();
+    if (mimeData->hasFormat("application/x-stick_man")) {
+        QByteArray bytes = mimeData->data("application/x-stick_man");
+        paste_selection(main_wnd, bytes);
+    }
 }
 
-void ui::delete_selection(stick_man& main_wnd) {
+void ui::clipboard::del(stick_man& main_wnd) {
     cut_copy_or_delete(main_wnd, clip_operation::del);
 }
-
-void ui::paste_selection(stick_man& main_wnd, const QByteArray& bytes)
-{
-    std::string world_json_str = std::string(bytes.data());
-    sm::world clipboard_world;
-    clipboard_world.from_json(world_json_str);
-
-    auto& canvases = main_wnd.canvases();
-    auto& canv = canvases.active_canvas();
-    auto& dest_world = main_wnd.sandbox();
-
-    for (auto skel : clipboard_world.skeletons()) {
-        auto copy = skel.get().copy_to(
-            dest_world,
-            unique_skeleton_name(skel.get().name(), dest_world.skeleton_names())
-        );
-        copy->get().insert_tag("tab:" + canv.tab_name());
-    }
-    canvases.sync_to_model(dest_world, canv);
-}
-

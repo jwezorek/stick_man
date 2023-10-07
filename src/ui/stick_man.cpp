@@ -181,39 +181,6 @@ void ui::stick_man::do_redo() {
 
 }
 
-void ui::stick_man::do_cut() {
-    auto bytes = cut_selection(*this);
-    QClipboard* clipboard = QApplication::clipboard();
-
-    QMimeData* mime_data = new QMimeData;
-    mime_data->setData("application/x-stick_man", bytes);
-
-    clipboard->setMimeData(mime_data);
-}
-
-void ui::stick_man::do_copy() {
-    auto bytes = copy_selection(*this);
-    QClipboard* clipboard = QApplication::clipboard();
-
-    QMimeData* mime_data = new QMimeData;
-    mime_data->setData("application/x-stick_man", bytes);
-
-    clipboard->setMimeData(mime_data);
-}
-
-void ui::stick_man::do_paste() {
-    QClipboard* clipboard = QApplication::clipboard();
-    const QMimeData* mimeData = clipboard->mimeData();
-    if (mimeData->hasFormat("application/x-stick_man")) {
-        QByteArray bytes = mimeData->data("application/x-stick_man");
-        paste_selection(*this, bytes);
-    }
-}
-
-void ui::stick_man::do_delete() {
-    ui::delete_selection(*this);
-}
-
 void ui::stick_man::insert_edit_menu() {
 
     QAction* undo_action = new QAction("Undo", this);
@@ -226,19 +193,23 @@ void ui::stick_man::insert_edit_menu() {
 
     QAction* cut_action = new QAction("Cut", this);
     cut_action->setShortcut(QKeySequence::Cut);
-    connect(cut_action, &QAction::triggered, this, &stick_man::do_cut);
+    connect(cut_action, &QAction::triggered, 
+        [this]() {clipboard::cut(*this); });
 
     QAction* copy_action = new QAction("Copy", this);
     copy_action->setShortcut(QKeySequence::Copy);
-    connect(copy_action, &QAction::triggered, this, &stick_man::do_copy);
+    connect(copy_action, &QAction::triggered,
+        [this]() {clipboard::copy(*this); });
 
     QAction* paste_action = new QAction("Paste", this);
     paste_action->setShortcut(QKeySequence::Paste);
-    connect(paste_action, &QAction::triggered, this, &stick_man::do_paste);
+    connect(paste_action, &QAction::triggered,
+        [this]() {clipboard::paste(*this); });
 
     QAction* delete_action = new QAction("Delete", this);
     delete_action->setShortcut(QKeySequence::Delete);
-    connect(delete_action, &QAction::triggered, this, &stick_man::do_delete);
+    connect(delete_action, &QAction::triggered,
+        [this]() {clipboard::del(*this); });
 
     QMenu* edit_menu = menuBar()->addMenu("Edit");
 
