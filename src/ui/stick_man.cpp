@@ -85,7 +85,7 @@ void ui::stick_man::save_as() {
 		QFile file(filePath);
 		if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
 			QTextStream out(&file);
-			out << world_.to_json().c_str();
+			out << world_.to_json_str().c_str();
 			file.close();
 		} else {
 			QMessageBox::critical(this, "Error", "Bad pathname.");
@@ -182,17 +182,32 @@ void ui::stick_man::do_redo() {
 }
 
 void ui::stick_man::do_cut() {
-    ui::debug(canvases_->active_canvas());
+    auto bytes = cut_selection(*this);
+    QClipboard* clipboard = QApplication::clipboard();
+
+    QMimeData* mime_data = new QMimeData;
+    mime_data->setData("application/x-stick_man", bytes);
+
+    clipboard->setMimeData(mime_data);
 }
 
 void ui::stick_man::do_copy() {
-    auto skel = canvases_->active_canvas().skeleton_items();
-    int aaa;
-    aaa = 5;
+    auto bytes = copy_selection(*this);
+    QClipboard* clipboard = QApplication::clipboard();
+
+    QMimeData* mime_data = new QMimeData;
+    mime_data->setData("application/x-stick_man", bytes);
+
+    clipboard->setMimeData(mime_data);
 }
 
 void ui::stick_man::do_paste() {
-
+    QClipboard* clipboard = QApplication::clipboard();
+    const QMimeData* mimeData = clipboard->mimeData();
+    if (mimeData->hasFormat("application/x-stick_man")) {
+        QByteArray bytes = mimeData->data("application/x-stick_man");
+        paste_selection(*this, bytes);
+    }
 }
 
 void ui::stick_man::do_delete() {

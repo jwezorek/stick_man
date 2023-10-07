@@ -14,6 +14,4 @@ namespace ui {
     void delete_selection(stick_man& canv);
     void paste_selection(stick_man& canv, const QByteArray& bytes);
 
-    void debug(canvas& canv);
-
 }

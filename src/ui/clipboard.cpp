@@ -1,5 +1,6 @@
 #include "clipboard.h"
 #include "../core/sm_skeleton.h"
+#include "../core/json.hpp"
 #include "canvas_item.h"
 #include "canvas.h"
 #include "stick_man.h"
@@ -15,6 +16,7 @@
 
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
+using json = nlohmann::json;
 
 namespace {
 
@@ -136,7 +138,8 @@ namespace {
                     dest_skel = create_skeleton(dest, node.owner().get().name());
                 }
                 if (!dest_skel->contains<sm::node>(node.name())) {
-                    node.copy_to(*dest_skel);
+                    bool is_root = dest_skel->empty();
+                    auto copy = node.copy_to(*dest_skel);
                 }
 
                 return sm::visit_result::continue_traversal;
@@ -199,6 +202,11 @@ namespace {
         return selected_skels;
     }
 
+    // returns the pieces of the "relavent skeleton set", the set of skeletons that are
+    // either selected or contain at least one node or bone that is selected, such that
+    // pieces are topologically ordered per skeleton. Internal pieces of selected whole
+    // skeletons are not returned, just the an item for the whole skeleton.
+
     std::vector<std::tuple<ui::skeleton_piece, bool>> skeleton_pieces_in_topological_order(
             ui::canvas& canv, const std::unordered_set<sm::skeleton*>& relavent_skel_set) {
 
@@ -243,6 +251,9 @@ namespace {
 
         return pieces_and_sel_state;
     }
+
+    // given a set of skeletons generates separate skeletons for each connected component
+    // of selected-ness or deselected-ness. 
 
     std::tuple<sm::world, sm::world> split_skeletons_by_selection( 
             ui::canvas& canv, const std::unordered_set<sm::skeleton*>& relavent_skel_set) {
@@ -305,53 +316,80 @@ namespace {
                 }
             ) | r::to<std::unordered_set<sm::skeleton*>>();
     }
+
+    enum class clip_operation {
+        cut, copy, del
+    };
+
+    json cut_copy_or_delete(ui::stick_man& main_wnd, clip_operation op) {
+        auto& world = main_wnd.sandbox();
+        auto& canv = main_wnd.canvases().active_canvas();
+        auto relavent_skels = relavent_skeleton_set(canv);
+
+        auto [unselected, selected] = split_skeletons_by_selection(canv, relavent_skels);
+
+        if (op == clip_operation::cut || op == clip_operation::del) {
+            canv.clear();
+            for (sm::skeleton* skel : relavent_skels) {
+                world.delete_skeleton(skel->name());
+            }
+
+            for (auto skel : unselected.skeletons()) {
+                auto copy = skel.get().copy_to(
+                    world,
+                    unique_skeleton_name(skel.get().name(), world.skeleton_names())
+                );
+                copy->get().insert_tag("tab:" + canv.tab_name());
+            }
+            main_wnd.canvases().sync_to_model(main_wnd.sandbox(), canv);
+        }
+
+        if (op == clip_operation::cut || op == clip_operation::copy) {
+            for (auto skel : selected.skeletons()) {
+                skel.get().clear_tags();
+            }
+            return selected.to_json();
+        }
+
+        return {};
+    }
 }
 
-QByteArray ui::cut_selection(stick_man& canv)
+QByteArray ui::cut_selection(stick_man& main_wnd)
 {
-    return QByteArray();
+    auto selection_json = cut_copy_or_delete(main_wnd, clip_operation::cut);
+    auto str = selection_json.dump(4);
+    return QByteArray(str.c_str(), str.size());
 }
 
-QByteArray ui::copy_selection(stick_man& canv)
+QByteArray ui::copy_selection(stick_man& main_wnd)
 {
-    return QByteArray();
+    auto selection_json = cut_copy_or_delete(main_wnd, clip_operation::copy);
+    auto str = selection_json.dump(4);
+    return QByteArray(str.c_str(), str.size());
 }
 
 void ui::delete_selection(stick_man& main_wnd) {
-    auto& world = main_wnd.sandbox();
-    auto& canv = main_wnd.canvases().active_canvas();
-    auto relavent_skels = relavent_skeleton_set( canv );
+    cut_copy_or_delete(main_wnd, clip_operation::del);
+}
 
-    auto [unselected, selected] = split_skeletons_by_selection(canv, relavent_skels);
-    canv.clear();
-    for (sm::skeleton* skel : relavent_skels) {
-        world.delete_skeleton(skel->name());
-    }
-    
-    for (auto skel : unselected.skeletons()) {
+void ui::paste_selection(stick_man& main_wnd, const QByteArray& bytes)
+{
+    std::string world_json_str = std::string(bytes.data());
+    sm::world clipboard_world;
+    clipboard_world.from_json(world_json_str);
+
+    auto& canvases = main_wnd.canvases();
+    auto& canv = canvases.active_canvas();
+    auto& dest_world = main_wnd.sandbox();
+
+    for (auto skel : clipboard_world.skeletons()) {
         auto copy = skel.get().copy_to(
-            world,
-            unique_skeleton_name(skel.get().name(), world.skeleton_names())
+            dest_world,
+            unique_skeleton_name(skel.get().name(), dest_world.skeleton_names())
         );
         copy->get().insert_tag("tab:" + canv.tab_name());
     }
-    main_wnd.canvases().sync_to_model(main_wnd.sandbox(), canv);
+    canvases.sync_to_model(dest_world, canv);
 }
 
-void ui::paste_selection(stick_man& canv, const QByteArray& bytes)
-{
-}
-
-void ui::debug(canvas& canv)
-{
-    /*
-    std::vector<skeleton_item*> skel_items = canv.skeleton_items();
-    auto& skel = skel_items.front()->model();
-    auto sel_set = bone_and_node_set_from_canvas(canv);
-    sm::world unselected;
-    sm::world selected;
-    split_skeleton_by_selection(skel, sel_set, unselected, selected);
-    auto str = unselected.to_json() + "\n\n" + selected.to_json();
-    to_text_file("C:\\test\\clippy.txt", str);
-    */
-}

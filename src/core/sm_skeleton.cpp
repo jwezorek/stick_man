@@ -942,6 +942,9 @@ void sm::skeleton::register_node(sm::node& new_node) {
         throw std::runtime_error("sm::skeleton::register_node failed");
     }
     nodes_[new_node.name()] = &new_node;
+    if (!root_) {
+        root_ = new_node;
+    }
 }
 
 void sm::skeleton::register_bone(sm::bone& new_bone) {
@@ -1064,7 +1067,8 @@ sm::result sm::world::delete_skeleton(const std::string& skel_name) {
         }
     );
 
-    skeletons_.erase(skel_name);
+    skeletons_.erase(skel_name); 
+    return sm::result::success;
 }
 
 std::vector<std::string> sm::world::skeleton_names() const {
@@ -1136,8 +1140,6 @@ std::expected<sm::bone_ref, sm::result> sm::world::create_bone(
     return *bones_.back();
 }
 
-
-
 sm::result sm::world::from_json(const std::string& json_str) {
 
 	try {
@@ -1157,18 +1159,22 @@ sm::result sm::world::from_json(const std::string& json_str) {
 	return sm::result::success;
 }
 
-std::string sm::world::to_json() const {
-	auto skeleton_json = skeletons_ | rv::transform(
-            [](const auto& pair)->const sm::skeleton* {
-                return pair.second.get();
-            }
-        ) | rv::transform( &sm::skeleton::to_json ) | r::to<json>();
+std::string sm::world::to_json_str() const {
+    return to_json().dump(4);
+}
+
+json sm::world::to_json() const {
+    auto skeleton_json = skeletons_ | rv::transform(
+        [](const auto& pair)->const sm::skeleton* {
+            return pair.second.get();
+        }
+    ) | rv::transform(&sm::skeleton::to_json) | r::to<json>();
 
     json stick_man = {
         {"version", 0.0},
         {"skeletons", skeleton_json}
     };
-    return stick_man.dump(4);
+    return stick_man;
 }
 
 void sm::dfs(node& root, node_visitor visit_node, bone_visitor visit_bone,

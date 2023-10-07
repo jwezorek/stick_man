@@ -126,7 +126,8 @@ namespace sm {
 
         expected_bone create_bone(const std::string& name, node& u, node& v);
 		result from_json(const std::string&);
-		std::string to_json() const;
+		std::string to_json_str() const;
+        nlohmann::json to_json() const;
 
 		auto skeletons() { return detail::to_range_view<skel_ref>(skeletons_); }
 		auto skeletons() const { return detail::to_range_view<const_skel_ref>(skeletons_); }
