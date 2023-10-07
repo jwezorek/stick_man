@@ -11,6 +11,7 @@
 #include <functional>
 #include <variant>
 #include <optional>
+#include <ranges>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -83,6 +84,7 @@ namespace ui {
         node_item* top_node(const QPointF& pt) const;
         abstract_canvas_item* top_item(const QPointF& pt) const;
         std::vector<abstract_canvas_item*> items_in_rect(const QRectF& pt) const;
+        std::vector<abstract_canvas_item*> canvas_items() const;
         std::vector<node_item*> root_node_items() const;
         std::vector<node_item*> node_items() const;
         std::vector<bone_item*> bone_items() const;
@@ -156,6 +158,7 @@ namespace ui {
         std::vector<std::string> tab_names() const;
         std::string tab_name(const canvas& canv) const;
         void sync_to_model(sm::world& model);
+        void sync_to_model(sm::world& model, canvas& canv);
 
         auto canvases() {
             namespace r = std::ranges;

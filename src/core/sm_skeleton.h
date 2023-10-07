@@ -59,10 +59,10 @@ namespace sm {
 		std::any get_user_data() const;
 		void set_user_data(std::any data);
 		void clear_user_data();
+        expected_skel copy_to(world& w, const std::string& new_name = "");
 
 		result set_name(bone& bone, const std::string& new_name);
 		result set_name(node& node, const std::string& new_name);
-
 		
 		auto nodes() { return detail::to_range_view<node_ref>(nodes_); }
 		auto bones() { return detail::to_range_view<bone_ref>(bones_); }
@@ -117,6 +117,8 @@ namespace sm {
 		skel_ref create_skeleton(double x, double y);
         expected_skel create_skeleton(const std::string& name);
 		expected_skel skeleton(const std::string& name);
+
+        result delete_skeleton(const std::string& skel_name);
 
 		std::vector<std::string> skeleton_names() const;
 		bool contains_skeleton_name(const std::string& name) const;

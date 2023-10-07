@@ -186,7 +186,9 @@ void ui::stick_man::do_cut() {
 }
 
 void ui::stick_man::do_copy() {
-
+    auto skel = canvases_->active_canvas().skeleton_items();
+    int aaa;
+    aaa = 5;
 }
 
 void ui::stick_man::do_paste() {

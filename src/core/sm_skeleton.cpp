@@ -826,6 +826,21 @@ void sm::skeleton::clear_user_data() {
 	user_data_.reset();
 }
 
+sm::expected_skel sm::skeleton::copy_to(world& other_world, const std::string& new_name) {
+    auto name = (new_name.empty()) ? name_ : new_name;
+    auto new_skel = other_world.create_skeleton(name);
+    if (!new_skel) {
+        return new_skel;
+    }
+    for (auto node : nodes()) {
+        node.get().copy_to(*new_skel);
+    }
+    for (auto bone : bones()) {
+        bone.get().copy_to(*new_skel);
+    }
+    return new_skel;
+}
+
 sm::result sm::skeleton::set_name(bone& bone, const std::string& new_name) {
 	if (bones_.contains(new_name)) {
 		return result::non_unique_name;
@@ -990,6 +1005,63 @@ sm::expected_skel sm::world::skeleton(const std::string& name) {
 		return std::unexpected(sm::result::not_found);
 	}
 	return *iter->second;
+}
+
+template<typename T>
+void delete_ptrs_if(std::vector<std::unique_ptr<T>>& vec, std::function<bool(const T&)> predicate) {
+    vec.erase(
+        std::remove_if(
+            vec.begin(), vec.end(), 
+            [&](const std::unique_ptr<T>& item) {
+                return predicate(*item);
+            }
+        ), 
+        vec.end()
+    );
+}
+
+sm::result sm::world::delete_skeleton(const std::string& skel_name) {
+    auto skel_ref = this->skeleton(skel_name);
+    if (!skel_ref) {
+        return sm::result::not_found;
+    }
+    auto& skel = skel_ref->get();
+
+    auto bone_set = bones_ |
+        rv::transform(
+            [](const auto& bone_ptr)->bone* {
+                return bone_ptr.get();
+            }
+        ) |  rv::filter(
+            [&skel](const sm::bone* e)->bool {
+                return &e->owner().get() == &skel;
+            }
+        ) | r::to<std::unordered_set<const bone*>>();
+
+    auto node_set = nodes_ |
+        rv::transform(
+            [](const auto& node_ptr)->node* {
+                return node_ptr.get();
+            }
+        ) | rv::filter(
+            [&skel](const sm::node* n)->bool {
+                return &n->owner().get() == &skel;
+            }
+        ) | r::to<std::unordered_set<const node*>>();
+
+    delete_ptrs_if<sm::bone>(bones_,
+        [&bone_set](const sm::bone& e)->bool {
+            return bone_set.contains(&e);
+        }
+    );
+
+    delete_ptrs_if<sm::node>(nodes_,
+        [&node_set](const sm::node& v)->bool {
+            return node_set.contains(&v);
+        }
+    );
+
+    skeletons_.erase(skel_name);
 }
 
 std::vector<std::string> sm::world::skeleton_names() const {

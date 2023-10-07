@@ -341,9 +341,13 @@ void ui::canvas::clear_selection() {
 }
 
 void ui::canvas::clear() {
-	QList<QGraphicsItem*> itemList = this->items();
-	for (QGraphicsItem* item : itemList) {
-		this->removeItem(item);
+    selection_.clear();
+    auto items = canvas_items();
+	for (auto* item : items) {
+        if (item->selection_frame()) {
+            this->removeItem(item->selection_frame());
+        }
+        this->removeItem(item->item_body());
 		delete item;
 	}
 }
@@ -451,6 +455,10 @@ ui::abstract_canvas_item* ui::canvas::top_item(const QPointF& pt) const {
 
 std::vector<ui::abstract_canvas_item*> ui::canvas::items_in_rect(const QRectF& r) const {
     return to_vector_of_type<ui::abstract_canvas_item>(items(r));
+}
+
+std::vector<ui::abstract_canvas_item*> ui::canvas::canvas_items() const {
+    return to_vector_of_type<ui::abstract_canvas_item>(items());
 }
 
 std::vector<ui::node_item*> ui::canvas::root_node_items() const {
@@ -634,6 +642,11 @@ void ui::canvas_manager::sync_to_model(sm::world& model) {
         canv->sync_to_model(model);
     }
 
+    emit contents_changed(model);
+}
+
+void ui::canvas_manager::sync_to_model(sm::world& model, canvas& canv) {
+    canv.sync_to_model(model);
     emit contents_changed(model);
 }
 
