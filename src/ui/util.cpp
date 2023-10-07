@@ -25,11 +25,16 @@ namespace {
 
     std::optional<int> get_prefixed_number(const std::string& prefix, const std::string& str) {
         auto num_str = ui::get_prefixed_string(prefix, str);
+        if (num_str.empty()) {
+            return {};
+        }
+
         for (auto ch : num_str) {
             if (!std::isdigit(ch)) {
                 return {};
             }
         }
+
         return std::stoi(num_str);
     }
 

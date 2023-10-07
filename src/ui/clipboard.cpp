@@ -10,7 +10,7 @@
 #include <variant>
 #include <ranges>
 #include <memory>
-
+#include <sstream>
 /*------------------------------------------------------------------------------------------------*/
 
 namespace r = std::ranges;
@@ -75,10 +75,43 @@ namespace {
         }
     };
 
+    std::string get_prefix(const std::string& name) {
+        if (!name.contains('-')) {
+            return name;
+        }
+        int n = static_cast<int>(name.size());
+        int i;
+        bool at_least_one_digit = false;
+        for (i = n - 1; i >= 0; --i) {
+            if (!std::isdigit(name[i])) {
+                break;
+            } else {
+                at_least_one_digit = true;
+            }
+        }
+        if (!at_least_one_digit || i < 0) {
+            return name;
+        }
+        if (name[i] != '-') {
+            return name;
+        }
+        return name.substr(0, i);
+    }
+
+    std::string unique_skeleton_name(const std::string& old_name,
+            const std::vector<std::string>& used_names) {
+        auto name_set = used_names | r::to<std::unordered_set<std::string>>();
+        if (!name_set.contains(old_name)) {
+            return old_name;
+        }
+        auto prefix = get_prefix(old_name);
+        return ui::make_unique_name(used_names, prefix);
+    }
+
     sm::skeleton* create_skeleton(sm::world& dest, const std::string& skel_name) {
         std::string name = skel_name;
         if (dest.contains_skeleton_name(name)) {
-            name = ui::make_unique_name(dest.skeleton_names(), "skeleton");
+            name = unique_skeleton_name(name, dest.skeleton_names());
         }
         auto skel = dest.create_skeleton(name);
         return &(skel->get());
@@ -235,14 +268,12 @@ namespace {
                 overload{
                     [&](sm::skel_ref skel) {
                         copied.insert(skel);
-                        auto new_skel = skel.get().copy_to(dest_world);
+                        auto new_skel = skel.get().copy_to(
+                            dest_world,
+                            unique_skeleton_name(skel.get().name(), dest_world.skeleton_names())
+                        );
                         if (!new_skel) {
-                            new_skel = skel.get().copy_to(dest_world,
-                                ui::make_unique_name(dest_world.skeleton_names(), "skeleton")
-                            );
-                            if (!new_skel) {
-                                throw std::runtime_error("unable to make new skeleton");
-                            }
+                            throw std::runtime_error("unable to make new skeleton");
                         }
                     },
                     [&](auto node_or_bone) {
@@ -298,13 +329,10 @@ void ui::delete_selection(stick_man& main_wnd) {
     }
     
     for (auto skel : unselected.skeletons()) {
-        auto copy = skel.get().copy_to(world);
-        if (!copy) {
-            auto new_name = make_unique_name(
-                main_wnd.sandbox().skeleton_names(), "skeleton"
-            );
-            copy = skel.get().copy_to(world, new_name);
-        }
+        auto copy = skel.get().copy_to(
+            world,
+            unique_skeleton_name(skel.get().name(), world.skeleton_names())
+        );
         copy->get().insert_tag("tab:" + canv.tab_name());
     }
     main_wnd.canvases().sync_to_model(main_wnd.sandbox(), canv);
