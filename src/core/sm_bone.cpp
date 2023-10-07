@@ -48,9 +48,6 @@ sm::expected_node sm::node::copy_to(skeleton& skel) const {
         skel, name_,
         x_, y_
     );
-    if (skel.empty()) {
-        skel.set_root(node.get());
-    }
     skel.register_node(node.get());
     return node;
 }

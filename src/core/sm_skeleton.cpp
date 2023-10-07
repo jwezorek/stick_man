@@ -833,7 +833,10 @@ sm::expected_skel sm::skeleton::copy_to(world& other_world, const std::string& n
         return new_skel;
     }
     for (auto node : nodes()) {
-        node.get().copy_to(*new_skel);
+        auto new_node = node.get().copy_to(*new_skel);
+        if (node.get().is_root()) {
+            new_skel->get().set_root(new_node->get());
+        }
     }
     for (auto bone : bones()) {
         bone.get().copy_to(*new_skel);
