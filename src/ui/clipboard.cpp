@@ -180,6 +180,9 @@ namespace {
 
         for (auto skel_item : canv.skeleton_items()) {
             auto& skel = skel_item->model();
+            if (selected_skeletons.contains(&skel)) {
+                continue;
+            }
             sm::dfs(
                 skel.root_node(),
                 [&](sm::node& node)->sm::visit_result {
