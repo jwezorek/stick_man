@@ -193,6 +193,11 @@ QGraphicsItem* ui::skeleton_item::item_body() {
 	return this;
 }
 
+ui::skeleton_piece ui::skeleton_item::to_skeleton_piece() {
+    auto& skel = model();
+    return std::ref(skel);
+}
+
 ui::skeleton_item::skeleton_item(sm::skeleton& skel, double scale) :
 		has_stick_man_model<ui::skeleton_item, sm::skeleton&>(skel)  {
 	setPen(QPen(Qt::cyan, 3, Qt::DotLine));
@@ -268,6 +273,11 @@ QGraphicsItem* ui::node_item::item_body() {
 	return this;
 }
 
+ui::skeleton_piece ui::node_item::to_skeleton_piece() {
+    auto& node = model();
+    return std::ref(node);
+}
+
 /*------------------------------------------------------------------------------------------------*/
 
 ui::bone_item::bone_item(sm::bone& bone, double scale) :
@@ -316,6 +326,11 @@ void ui::bone_item::sync_rotation_constraint_to_model() {
 	} else {
 		rot_constraint_->hide();
 	}
+}
+
+ui::skeleton_piece ui::bone_item::to_skeleton_piece() {
+    auto& bone = model();
+    return std::ref(bone);
 }
 
 void ui::bone_item::sync_item_to_model() {

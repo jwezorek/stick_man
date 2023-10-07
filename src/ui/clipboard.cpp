@@ -20,11 +20,9 @@ namespace {
 
     template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
 
-    using skeleton_piece = std::variant<sm::node_ref, sm::bone_ref, sm::skel_ref>;
-
     class skeleton_piece_set {
         //TODO: make this const correct...
-        std::unordered_map<void*, skeleton_piece> impl_;
+        std::unordered_map<void*, ui::skeleton_piece> impl_;
 
         template<typename T>
         static void* to_void_star(const T& v) {
@@ -38,11 +36,11 @@ namespace {
 
         bool contains(auto& p) const {
             return contains(
-                skeleton_piece{ std::ref(p) }
+                ui::skeleton_piece{ std::ref(p) }
             );
         }
 
-        bool contains(skeleton_piece sp) const {
+        bool contains(ui::skeleton_piece sp) const {
             return std::visit(
                 [this](auto itm_ref)->bool {
                     return impl_.contains(to_void_star(itm_ref.get()));
@@ -51,7 +49,7 @@ namespace {
             );
         }
 
-        void insert(skeleton_piece piece) {
+        void insert(ui::skeleton_piece piece) {
             std::visit(
                 [&](auto itm) {
                     impl_.insert(
@@ -63,14 +61,14 @@ namespace {
         }
 
         void insert_range(auto rng) {
-            for (skeleton_piece piece : rng) {
+            for (ui::skeleton_piece piece : rng) {
                 insert(piece);
             }
         }
 
         auto items() const {
             return impl_ | rv::transform(
-                [](const auto& pair)->skeleton_piece {
+                [](const auto& pair)->ui::skeleton_piece {
                     return pair.second;
                 }
             );
@@ -168,21 +166,28 @@ namespace {
         return selected_skels;
     }
 
-    std::vector<std::tuple<skeleton_piece, bool>> skeleton_pieces_in_topological_order(ui::canvas& canv) {
+    std::vector<std::tuple<ui::skeleton_piece, bool>> skeleton_pieces_in_topological_order(
+            ui::canvas& canv, const std::unordered_set<sm::skeleton*>& relavent_skel_set) {
 
         auto selected_skeletons = get_selected_skeletons(canv);
         auto pieces_and_sel_state = selected_skeletons |
             rv::transform(
-                [](sm::skeleton* p)->std::tuple<skeleton_piece, bool> {
+                [](sm::skeleton* p)->std::tuple<ui::skeleton_piece, bool> {
                     return { std::ref(*p), true };
                 }
-            ) | r::to<std::vector<std::tuple<skeleton_piece, bool>>>();
+            ) | r::to<std::vector<std::tuple<ui::skeleton_piece, bool>>>();
 
         for (auto skel_item : canv.skeleton_items()) {
             auto& skel = skel_item->model();
+
             if (selected_skeletons.contains(&skel)) {
                 continue;
             }
+
+            if (!relavent_skel_set.contains(&skel)) {
+                continue;
+            }
+
             sm::dfs(
                 skel.root_node(),
                 [&](sm::node& node)->sm::visit_result {
@@ -206,8 +211,9 @@ namespace {
         return pieces_and_sel_state;
     }
 
-    std::tuple<sm::world, sm::world> split_canvas_by_selection( ui::canvas& canv) {
-        auto pieces = skeleton_pieces_in_topological_order(canv);
+    std::tuple<sm::world, sm::world> split_skeletons_by_selection( 
+            ui::canvas& canv, const std::unordered_set<sm::skeleton*>& relavent_skel_set) {
+        auto pieces = skeleton_pieces_in_topological_order(canv, relavent_skel_set);
 
         skeleton_piece_set selection_set;
         for (auto [piece, is_selected] : pieces) {
@@ -249,18 +255,24 @@ namespace {
         return { std::move(unselected), std::move(selected) };
     }
 
-    void clear_canvas(ui::canvas& canv, sm::world& world) {
-        auto skeletons_on_canvas = canv.skeleton_items() |
+    std::unordered_set<sm::skeleton*> relavent_skeleton_set(ui::canvas& canv) {
+        return canv.selection() |
             rv::transform(
-                [](ui::skeleton_item* si) {
-                    return si->model().name();
+                [](ui::abstract_canvas_item* itm)->sm::skeleton* {
+                    return std::visit(
+                        overload{
+                            [](sm::skel_ref skel)->sm::skeleton* {
+                                return &skel.get();
+                            },
+                            [](auto node_or_bone)->sm::skeleton* {
+                                auto skel = node_or_bone.get().owner();
+                                return &skel.get();
+                            }
+                        },
+                        itm->to_skeleton_piece()
+                    );
                 }
-        ) | r::to<std::vector<std::string>>();
-        canv.clear();
-
-        for (auto skel_name : skeletons_on_canvas) {
-            world.delete_skeleton(skel_name);
-        }
+            ) | r::to<std::unordered_set<sm::skeleton*>>();
     }
 }
 
@@ -277,8 +289,13 @@ QByteArray ui::copy_selection(stick_man& canv)
 void ui::delete_selection(stick_man& main_wnd) {
     auto& world = main_wnd.sandbox();
     auto& canv = main_wnd.canvases().active_canvas();
-    auto [unselected, selected] = split_canvas_by_selection(canv);
-    clear_canvas(canv, world);
+    auto relavent_skels = relavent_skeleton_set( canv );
+
+    auto [unselected, selected] = split_skeletons_by_selection(canv, relavent_skels);
+    canv.clear();
+    for (sm::skeleton* skel : relavent_skels) {
+        world.delete_skeleton(skel->name());
+    }
     
     for (auto skel : unselected.skeletons()) {
         auto copy = skel.get().copy_to(world);
