@@ -204,7 +204,12 @@ void ui::stick_man::insert_edit_menu() {
     QAction* paste_action = new QAction("Paste", this);
     paste_action->setShortcut(QKeySequence::Paste);
     connect(paste_action, &QAction::triggered,
-        [this]() {clipboard::paste(*this); });
+        [this]() {clipboard::paste(*this, false); });
+
+    QAction* paste_in_place_action = new QAction("Paste in place", this);
+    paste_in_place_action->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
+    connect(paste_in_place_action, &QAction::triggered,
+        [this]() {clipboard::paste(*this, true); });
 
     QAction* delete_action = new QAction("Delete", this);
     delete_action->setShortcut(QKeySequence::Delete);
@@ -219,6 +224,7 @@ void ui::stick_man::insert_edit_menu() {
     edit_menu->addAction(cut_action);
     edit_menu->addAction(copy_action);
     edit_menu->addAction(paste_action);
+    edit_menu->addAction(paste_in_place_action);
     edit_menu->addSeparator();
     edit_menu->addAction(delete_action);
 }

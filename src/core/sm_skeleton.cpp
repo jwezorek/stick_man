@@ -978,6 +978,12 @@ sm::const_world_ref sm::skeleton::owner() const {
 	return owner_;
 }
 
+void sm::skeleton::apply(matrix& mat) {
+    for (auto node : nodes()) {
+        node.get().apply(mat);
+    }
+}
+
 /*------------------------------------------------------------------------------------------------*/
 
 sm::world::world() {}
@@ -1175,6 +1181,12 @@ json sm::world::to_json() const {
         {"skeletons", skeleton_json}
     };
     return stick_man;
+}
+
+void sm::world::apply(matrix& mat) {
+    for (auto skel : skeletons()) {
+        skel.get().apply(mat);
+    }
 }
 
 void sm::dfs(node& root, node_visitor visit_node, bone_visitor visit_bone,

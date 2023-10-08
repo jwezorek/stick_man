@@ -81,6 +81,8 @@ namespace sm {
             return get_by_name<T>(name).has_value();
 		}
 
+        void apply(matrix& mat);
+
         template <typename T>
         std::optional<std::reference_wrapper<T>> get_by_name(const std::string& name) const {
             if constexpr (std::is_same<T, sm::node>::value) {
@@ -128,6 +130,7 @@ namespace sm {
 		result from_json(const std::string&);
 		std::string to_json_str() const;
         nlohmann::json to_json() const;
+        void apply(matrix& mat);
 
 		auto skeletons() { return detail::to_range_view<skel_ref>(skeletons_); }
 		auto skeletons() const { return detail::to_range_view<const_skel_ref>(skeletons_); }

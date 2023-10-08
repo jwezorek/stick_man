@@ -8,6 +8,7 @@
 #include <ranges>
 #include <unordered_map>
 #include <numbers>
+#include <QCursor>
 
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
@@ -437,6 +438,20 @@ const ui::canvas_manager& ui::canvas::manager() const {
 ui::canvas_manager& ui::canvas::manager() {
     auto* parent = view().parent()->parent();
     return *static_cast<ui::canvas_manager*>(parent);
+}
+
+std::optional<sm::point> ui::canvas::cursor_pos() const {
+    auto& view = this->view();
+    auto pt = view.mapToScene(view.mapFromGlobal(QCursor::pos()));
+    QRectF canvas_view_bounds = QRectF(
+        view.mapToScene(0, 0), 
+        view.mapToScene(view.viewport()->width(), view.viewport()->height())
+    );
+    if (canvas_view_bounds.contains(pt)) {
+        return ui::from_qt_pt(pt);
+    } else {
+        return {};
+    }
 }
 
 std::string ui::canvas::tab_name() const {

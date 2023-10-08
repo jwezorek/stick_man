@@ -131,6 +131,12 @@ void sm::node::set_world_pos(const point& pt) {
 	y_ = pt.y;
 }
 
+void sm::node::apply(matrix& mat) {
+    set_world_pos(
+        transform(world_pos(), mat)
+    );
+}
+
 sm::point sm::node::world_pos() const {
 	return { x_, y_ };
 }

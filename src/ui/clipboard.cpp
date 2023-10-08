@@ -11,6 +11,7 @@
 #include <variant>
 #include <ranges>
 #include <memory>
+#include <limits>
 #include <sstream>
 /*------------------------------------------------------------------------------------------------*/
 
@@ -23,7 +24,6 @@ namespace {
     template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
 
     class skeleton_piece_set {
-        //TODO: make this const correct...
         std::unordered_map<void*, ui::skeleton_piece> impl_;
 
         template<typename T>
@@ -202,10 +202,9 @@ namespace {
         return selected_skels;
     }
 
-    // returns the pieces of the "relavent skeleton set", the set of skeletons that are
-    // either selected or contain at least one node or bone that is selected, such that
-    // pieces are topologically ordered per skeleton. Internal pieces of selected whole
-    // skeletons are not returned, just the an item for the whole skeleton.
+    // returns the pieces of the skeletons in a given set such that pieces are topologically 
+    // ordered per skeleton. Internal pieces of selected whole skeletons are not returned, 
+    // just the an item for the whole skeleton.
 
     std::vector<std::tuple<ui::skeleton_piece, bool>> skeleton_pieces_in_topological_order(
             ui::canvas& canv, const std::unordered_set<sm::skeleton*>& relavent_skel_set) {
@@ -252,12 +251,15 @@ namespace {
         return pieces_and_sel_state;
     }
 
-    // given a set of skeletons generates separate skeletons for each connected component
-    // of selected-ness or deselected-ness. 
+    // given a set of skeletons generate separate skeletons for each connected component
+    // of selected-ness or deselected-ness of the skeletons' nodes and bones. Since you
+    // cannot have a bone without its two nodes existing this will make duplicate
+    // nodes for connected components trees with raw bones for leaves, but this is what 
+    // we want. This is what representing arbitrary selections as skeletons entails. 
 
     std::tuple<sm::world, sm::world> split_skeletons_by_selection( 
-            ui::canvas& canv, const std::unordered_set<sm::skeleton*>& relavent_skel_set) {
-        auto pieces = skeleton_pieces_in_topological_order(canv, relavent_skel_set);
+            ui::canvas& canv, const std::unordered_set<sm::skeleton*>& skel_set) {
+        auto pieces = skeleton_pieces_in_topological_order(canv, skel_set);
 
         skeleton_piece_set selection_set;
         for (auto [piece, is_selected] : pieces) {
@@ -297,6 +299,9 @@ namespace {
         return { std::move(unselected), std::move(selected) };
     }
 
+    // returns the the set of skeletons that are either selected or contain at least one 
+    // node or bone that is selected, 
+
     std::unordered_set<sm::skeleton*> relavent_skeleton_set(ui::canvas& canv) {
         return canv.selection() |
             rv::transform(
@@ -317,18 +322,19 @@ namespace {
             ) | r::to<std::unordered_set<sm::skeleton*>>();
     }
 
-    enum class clip_operation {
+    // operations that involve doing something with the current selection
+    enum class selection_operation {
         cut, copy, del
     };
 
-    json cut_copy_or_delete(ui::stick_man& main_wnd, clip_operation op) {
+    json perform_op_on_selection(ui::stick_man& main_wnd, selection_operation op) {
         auto& world = main_wnd.sandbox();
         auto& canv = main_wnd.canvases().active_canvas();
         auto relavent_skels = relavent_skeleton_set(canv);
 
         auto [unselected, selected] = split_skeletons_by_selection(canv, relavent_skels);
 
-        if (op == clip_operation::cut || op == clip_operation::del) {
+        if (op == selection_operation::cut || op == selection_operation::del) {
             canv.clear();
             for (sm::skeleton* skel : relavent_skels) {
                 world.delete_skeleton(skel->name());
@@ -344,7 +350,7 @@ namespace {
             main_wnd.canvases().sync_to_model(main_wnd.sandbox(), canv);
         }
 
-        if (op == clip_operation::cut || op == clip_operation::copy) {
+        if (op == selection_operation::cut || op == selection_operation::copy) {
             for (auto skel : selected.skeletons()) {
                 skel.get().clear_tags();
             }
@@ -355,18 +361,38 @@ namespace {
     }
 
     QByteArray cut_selection(ui::stick_man& main_wnd) {
-        auto selection_json = cut_copy_or_delete(main_wnd, clip_operation::cut);
+        auto selection_json = perform_op_on_selection(main_wnd, selection_operation::cut);
         auto str = selection_json.dump(4);
         return QByteArray(str.c_str(), str.size());
     }
 
     QByteArray copy_selection(ui::stick_man& main_wnd) {
-        auto selection_json = cut_copy_or_delete(main_wnd, clip_operation::copy);
+        auto selection_json = perform_op_on_selection(main_wnd, selection_operation::copy);
         auto str = selection_json.dump(4);
         return QByteArray(str.c_str(), str.size());
     }
 
-    void paste_selection(ui::stick_man& main_wnd, const QByteArray& bytes) {
+    std::optional<sm::matrix> paste_matrix(std::optional<sm::point> target,const sm::world& world) {
+        if (!target) {
+            return {};
+        }
+        sm::point lower_left = {
+            std::numeric_limits<double>::max(),
+            std::numeric_limits<double>::max()
+        };
+
+        auto pts = world.skeletons() |
+            rv::transform([](auto s) {return s.get().root_node().get().world_pos(); });
+        for (auto pt : pts) {
+            if (pt.y < lower_left.y || (pt.y == lower_left.y && pt.x < lower_left.x)) {
+                lower_left = pt;
+            }
+        }
+        return sm::translation_matrix(*target - lower_left);
+    }
+
+    void paste_selection(ui::stick_man& main_wnd, const QByteArray& bytes, bool in_place) {
+        qDebug() << "here";
         std::string world_json_str = std::string(bytes.data());
         sm::world clipboard_world;
         clipboard_world.from_json(world_json_str);
@@ -375,6 +401,13 @@ namespace {
         auto& canv = canvases.active_canvas();
         auto& dest_world = main_wnd.sandbox();
 
+        auto dest_mat = (!in_place) ? 
+            paste_matrix(canv.cursor_pos(), clipboard_world) :
+            std::optional<sm::matrix>{};
+        if (dest_mat) {
+            clipboard_world.apply( *dest_mat );
+        }
+
         for (auto skel : clipboard_world.skeletons()) {
             auto copy = skel.get().copy_to(
                 dest_world,
@@ -382,6 +415,9 @@ namespace {
             );
             copy->get().insert_tag("tab:" + canv.tab_name());
         }
+        
+
+
         canvases.sync_to_model(dest_world, canv);
     }
 
@@ -404,15 +440,15 @@ void ui::clipboard::copy(stick_man& main_wnd) {
     cut_or_copy(main_wnd, false);
 }
 
-void ui::clipboard::paste(stick_man& main_wnd) {
+void ui::clipboard::paste(stick_man& main_wnd, bool in_place) {
     QClipboard* clipboard = QApplication::clipboard();
     const QMimeData* mimeData = clipboard->mimeData();
     if (mimeData->hasFormat("application/x-stick_man")) {
         QByteArray bytes = mimeData->data("application/x-stick_man");
-        paste_selection(main_wnd, bytes);
+        paste_selection(main_wnd, bytes, in_place);
     }
 }
 
 void ui::clipboard::del(stick_man& main_wnd) {
-    cut_copy_or_delete(main_wnd, clip_operation::del);
+    perform_op_on_selection(main_wnd, selection_operation::del);
 }

@@ -9,7 +9,7 @@ namespace ui {
     namespace clipboard {
         void cut(stick_man& main_wnd);
         void copy(stick_man& main_wnd);
-        void paste(stick_man& main_wnd);
+        void paste(stick_man& main_wnd, bool in_place);
         void del(stick_man& main_wnd);
     }
 

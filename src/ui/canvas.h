@@ -127,6 +127,7 @@ namespace ui {
         std::string tab_name() const;
         const canvas_manager& manager() const;
         canvas_manager& manager(); 
+        std::optional<sm::point> cursor_pos() const;
     };
 
     class canvas_manager : public QTabWidget {
