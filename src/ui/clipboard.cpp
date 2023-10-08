@@ -23,6 +23,8 @@ namespace {
 
     template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
 
+    static const QByteArray k_stickman_mime_type = "application/x-stick_man";
+
     class skeleton_piece_set {
         std::unordered_map<void*, ui::skeleton_piece> impl_;
 
@@ -414,8 +416,6 @@ namespace {
             );
             copy->get().insert_tag("tab:" + canv.tab_name());
         }
-        
-
 
         canvases.sync_to_model(dest_world, canv);
     }
@@ -425,7 +425,7 @@ namespace {
         QClipboard* clipboard = QApplication::clipboard();
 
         QMimeData* mime_data = new QMimeData;
-        mime_data->setData("application/x-stick_man", bytes);
+        mime_data->setData(k_stickman_mime_type, bytes);
 
         clipboard->setMimeData(mime_data);
     }
@@ -442,8 +442,8 @@ void ui::clipboard::copy(stick_man& main_wnd) {
 void ui::clipboard::paste(stick_man& main_wnd, bool in_place) {
     QClipboard* clipboard = QApplication::clipboard();
     const QMimeData* mimeData = clipboard->mimeData();
-    if (mimeData->hasFormat("application/x-stick_man")) {
-        QByteArray bytes = mimeData->data("application/x-stick_man");
+    if (mimeData->hasFormat(k_stickman_mime_type)) {
+        QByteArray bytes = mimeData->data(k_stickman_mime_type);
         paste_selection(main_wnd, bytes, in_place);
     }
 }
