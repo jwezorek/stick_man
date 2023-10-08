@@ -357,14 +357,8 @@ namespace {
         return {};
     }
 
-    QByteArray cut_selection(ui::stick_man& main_wnd) {
-        auto selection_json = perform_op_on_selection(main_wnd, selection_operation::cut);
-        auto str = selection_json.dump(4);
-        return QByteArray(str.c_str(), str.size());
-    }
-
-    QByteArray copy_selection(ui::stick_man& main_wnd) {
-        auto selection_json = perform_op_on_selection(main_wnd, selection_operation::copy);
+    QByteArray cut_or_copy_selection(ui::stick_man& main_wnd, selection_operation op) {
+        auto selection_json = perform_op_on_selection(main_wnd, op);
         auto str = selection_json.dump(4);
         return QByteArray(str.c_str(), str.size());
     }
@@ -416,11 +410,16 @@ namespace {
     }
 
     void cut_or_copy(ui::stick_man& main_wnd, bool should_cut) {
-        auto bytes = should_cut ? cut_selection(main_wnd) : copy_selection(main_wnd);
         QClipboard* clipboard = QApplication::clipboard();
 
         QMimeData* mime_data = new QMimeData;
-        mime_data->setData(k_stickman_mime_type, bytes);
+        mime_data->setData(
+            k_stickman_mime_type, 
+            cut_or_copy_selection(
+                main_wnd,
+                should_cut ? selection_operation::cut : selection_operation::copy
+            )
+        );
 
         clipboard->setMimeData(mime_data);
     }
