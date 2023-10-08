@@ -35,8 +35,8 @@ namespace ui {
 		canvas* canvas() const;
 		bool is_selected() const;
 		void set_selected(bool selected);
-        virtual skel_piece to_skeleton_piece() = 0;
-        virtual const_skel_piece to_skeleton_piece() const;
+        skel_piece to_skeleton_piece();
+        virtual const_skel_piece to_skeleton_piece() const = 0;
 		virtual ~abstract_canvas_item();
 	};
 
@@ -50,6 +50,7 @@ namespace ui {
 			model.set_user_data(std::ref(*derived));
 		}
 		U& model() { return model_; }
+        const U& model() const { return model_; }
 		virtual ~has_stick_man_model() {
 			model_.set_user_data(std::any{});
 		}
@@ -73,7 +74,7 @@ namespace ui {
 		QGraphicsItem* create_selection_frame() const override;
 		bool is_selection_frame_only() const override;
 		QGraphicsItem* item_body() override;
-        skel_piece to_skeleton_piece() override;
+        const_skel_piece to_skeleton_piece() const override;
 
 	public:
 		using model_type = sm::skeleton;
@@ -89,7 +90,7 @@ namespace ui {
 		QGraphicsItem* create_selection_frame() const override;
 		bool is_selection_frame_only() const override;
 	    QGraphicsItem* item_body() override;
-        skel_piece to_skeleton_piece() override;
+        const_skel_piece to_skeleton_piece() const override;
 
 		bool is_pinned_;
 	public:
@@ -116,7 +117,7 @@ namespace ui {
 		bool is_selection_frame_only() const override;
 		QGraphicsItem* item_body() override;
 		void sync_rotation_constraint_to_model();
-        skel_piece to_skeleton_piece() override;
+        const_skel_piece to_skeleton_piece() const override;
 
 	public:
 		using model_type = sm::bone;
