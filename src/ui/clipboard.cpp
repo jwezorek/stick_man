@@ -13,6 +13,7 @@
 #include <memory>
 #include <limits>
 #include <sstream>
+
 /*------------------------------------------------------------------------------------------------*/
 
 namespace r = std::ranges;
@@ -209,7 +210,7 @@ namespace {
     // just the an item for the whole skeleton.
 
     std::vector<std::tuple<ui::skeleton_piece, bool>> skeleton_pieces_in_topological_order(
-            ui::canvas& canv, const std::unordered_set<sm::skeleton*>& relavent_skel_set) {
+            ui::canvas& canv, const std::unordered_set<sm::skeleton*>& skel_set) {
 
         auto selected_skeletons = get_selected_skeletons(canv);
         auto pieces_and_sel_state = selected_skeletons |
@@ -219,19 +220,13 @@ namespace {
                 }
             ) | r::to<std::vector<std::tuple<ui::skeleton_piece, bool>>>();
 
-        for (auto skel_item : canv.skeleton_items()) {
-            auto& skel = skel_item->model();
-
-            if (selected_skeletons.contains(&skel)) {
-                continue;
-            }
-
-            if (!relavent_skel_set.contains(&skel)) {
+        for (auto skel_ptr : skel_set) {
+            if (selected_skeletons.contains(skel_ptr)) {
                 continue;
             }
 
             sm::dfs(
-                skel.root_node(),
+                skel_ptr->root_node(),
                 [&](sm::node& node)->sm::visit_result {
                     auto& ni = ui::item_from_model<ui::node_item>(node);
                     pieces_and_sel_state.emplace_back(

@@ -106,7 +106,7 @@ namespace{
 
 	void insert_skeleton(ui::canvas& canv, QStandardItemModel* tree, sm::skel_ref skel) {
 		
-		// traverse the graph and repopulate the treeview during the traversal 
+		// traverse the skeleton graph and repopulate the treeview during the traversal 
 		// by building a hash table mapping bones to their tree items.
 
 		QStandardItem* root = tree->invisibleRootItem();
