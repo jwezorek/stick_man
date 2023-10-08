@@ -28,7 +28,8 @@ namespace {
 	constexpr double k_tolerance = 0.005;
 	constexpr int k_max_iter = 100;
 
-    using node_or_bone = std::variant<sm::bone_ref, sm::node_ref>;
+    template<typename V, typename E>
+    using node_or_bone = std::variant<std::reference_wrapper<V>, std::reference_wrapper<E>>;
 
 	// The core of the implementation of the FABRIK ik algorithm is a DFS over the bones in the
 	// skeleton. At any step in the algorithm the current bone along with its predecessor in the
@@ -36,14 +37,14 @@ namespace {
 	// fabrik item class models such a neighborhood.
 
 	class fabrik_item {
-		node_or_bone pred_;
+		node_or_bone<sm::node, sm::bone> pred_;
 		sm::bone_ref current_;
 		sm::node* current_node_;
 		mutable sm::node* pred_node_;
 
 	public:
 
-		fabrik_item(node_or_bone p, sm::bone_ref b) :
+		fabrik_item(node_or_bone<sm::node, sm::bone> p, sm::bone_ref b) :
 			pred_{ p }, 
 			current_{ b },
 			current_node_(nullptr),
@@ -53,8 +54,8 @@ namespace {
 		fabrik_item(sm::bone& b) :
 			pred_{ 
 				(b.parent_bone()) ? 
-					node_or_bone{*b.parent_bone()} :
-					node_or_bone{b.parent_node()}
+                    node_or_bone<sm::node, sm::bone>{*b.parent_bone()} :
+                    node_or_bone<sm::node, sm::bone>{b.parent_node()}
 			},
 			current_{ b },
 			current_node_(nullptr),
@@ -163,25 +164,30 @@ namespace {
 		}
 	}
 
+    template <typename T>
+    using visitor_fn = std::function<sm::visit_result(T&)>;
+
+    template <typename V, typename E>
     class node_or_bone_visitor {
-        sm::node_visitor node_visit_;
-        sm::bone_visitor bone_visit_;
+        visitor_fn<V> node_visit_;
+        visitor_fn<E> bone_visit_;
 
     public:
-        node_or_bone_visitor(const sm::node_visitor& j, sm::bone_visitor& b) :
+        node_or_bone_visitor(const visitor_fn<V>& j, visitor_fn<E>& b) :
                 node_visit_(j),
                 bone_visit_(b) {
         }
 
-        sm::visit_result operator()(sm::node_ref j_ref) {
+        sm::visit_result operator()(std::reference_wrapper<V> j_ref) {
             return (node_visit_) ? node_visit_(j_ref) : sm::visit_result::continue_traversal;
         }
 
-        sm::visit_result operator()(sm::bone_ref b_ref) {
+        sm::visit_result operator()(std::reference_wrapper<E> b_ref) {
             return (bone_visit_) ? bone_visit_(b_ref) : sm::visit_result::continue_traversal;
         }
     };
 
+    template<typename V, typename E>
     class node_or_bone_neighbors_visitor {
         bool downstream_;
     public:
@@ -189,14 +195,14 @@ namespace {
             downstream_(downstream)
         {}
 
-        std::vector<node_or_bone> operator()(sm::node_ref j_ref) {
+        std::vector<node_or_bone<V,E>> operator()(std::reference_wrapper<V> j_ref) {
             auto& node = j_ref.get();
             auto neighbors = node.child_bones() |
                 rv::transform(
-                    [](sm::bone_ref child)->node_or_bone {
+                    [](auto child)->node_or_bone<V, E> {
                         return child;
                     }
-                ) | r::to<std::vector<node_or_bone>>();
+                ) | r::to<std::vector<node_or_bone<V,E>>>();
             if (!downstream_) {
                 if (node.parent_bone().has_value()) {
                     neighbors.push_back(node.parent_bone().value());
@@ -205,9 +211,9 @@ namespace {
             return neighbors;
         }
 
-        std::vector<node_or_bone> operator()(sm::bone_ref b_ref) {
+        std::vector<node_or_bone<V, E>> operator()(std::reference_wrapper<E> b_ref) {
             auto& bone = b_ref.get();
-            std::vector<node_or_bone> neighbors;
+            std::vector<node_or_bone<V, E>> neighbors;
             if (!downstream_) {
                 neighbors.push_back(std::ref(bone.parent_node()));
             }
@@ -216,11 +222,14 @@ namespace {
         }
     };
 
-    uint64_t get_id(const node_or_bone& var) {
+    template<typename V, typename E>
+    uint64_t get_id(const node_or_bone<V,E>& var) {
         auto ptr = std::visit(
-            [](auto val_ref)->void* {
+            []<typename T>(std::reference_wrapper<T> val_ref)->void* {
                 auto& val = val_ref.get();
-                return reinterpret_cast<void*>(&val);
+                return reinterpret_cast<void*>(
+                    const_cast<std::remove_cv<T>::type*>(&val)
+                );
             },
             var
         );
@@ -725,12 +734,13 @@ namespace {
 		return bones;
 	}
 
-    void dfs_aux(node_or_bone root, sm::node_visitor visit_node, sm::bone_visitor visit_bone,
+    template<typename V, typename E>
+    void dfs_aux(node_or_bone<V,E> root, visitor_fn<V> visit_node, visitor_fn<E> visit_bone,
             bool just_downstream) {
-        std::stack<node_or_bone> stack;
+        std::stack<node_or_bone<V, E>> stack;
         std::unordered_set<uint64_t> visited;
-        node_or_bone_visitor visitor(visit_node, visit_bone);
-        node_or_bone_neighbors_visitor neighbors_visitor(just_downstream);
+        node_or_bone_visitor<V,E> visitor(visit_node, visit_bone);
+        node_or_bone_neighbors_visitor<V,E> neighbors_visitor(just_downstream);
         stack.push(root);
 
         while (!stack.empty()) {
@@ -826,7 +836,7 @@ void sm::skeleton::clear_user_data() {
 	user_data_.reset();
 }
 
-sm::expected_skel sm::skeleton::copy_to(world& other_world, const std::string& new_name) {
+sm::expected_skel sm::skeleton::copy_to(world& other_world, const std::string& new_name) const {
     auto name = (new_name.empty()) ? name_ : new_name;
     auto new_skel = other_world.create_skeleton(name);
     if (!new_skel) {
@@ -1191,12 +1201,22 @@ void sm::world::apply(matrix& mat) {
 
 void sm::dfs(node& root, node_visitor visit_node, bone_visitor visit_bone,
         bool just_downstream) {
-    dfs_aux(std::ref(root), visit_node, visit_bone, just_downstream);
+    dfs_aux<sm::node,sm::bone>(std::ref(root), visit_node, visit_bone, just_downstream);
 }
 
 void sm::dfs(bone& root, node_visitor visit_node, bone_visitor visit_bone,
     bool just_downstream) {
-    dfs_aux(std::ref(root), visit_node, visit_bone, just_downstream);
+    dfs_aux<sm::node, sm::bone>(std::ref(root), visit_node, visit_bone, just_downstream);
+}
+
+void sm::dfs(const node& root, const_node_visitor visit_node,
+        const_bone_visitor visit_bone, bool just_downstream) {
+    dfs_aux<const sm::node, const sm::bone>(std::ref(root), visit_node, visit_bone, just_downstream);
+}
+
+void sm::dfs(const bone& root, const_node_visitor visit_node,
+        const_bone_visitor visit_bone, bool just_downstream) {
+    dfs_aux<const sm::node, const sm::bone>(std::ref(root), visit_node, visit_bone, just_downstream);
 }
 
 void sm::visit_nodes(node& j, node_visitor visit_node) {

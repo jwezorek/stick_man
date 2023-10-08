@@ -59,7 +59,7 @@ namespace sm {
 		std::any get_user_data() const;
 		void set_user_data(std::any data);
 		void clear_user_data();
-        expected_skel copy_to(world& w, const std::string& new_name = "");
+        expected_skel copy_to(world& w, const std::string& new_name = "") const;
 
 		result set_name(bone& bone, const std::string& new_name);
 		result set_name(node& node, const std::string& new_name);
@@ -144,11 +144,17 @@ namespace sm {
 
 	using node_visitor = std::function<visit_result(node&)>;
 	using bone_visitor = std::function<visit_result(bone&)>;
+    using const_node_visitor = std::function<visit_result(const node&)>;
+    using const_bone_visitor = std::function<visit_result(const bone&)>;
 
     void dfs(node& root, node_visitor visit_node = {}, bone_visitor visit_bone = {},
         bool just_downstream = false);
     void dfs(bone& root, node_visitor visit_node = {}, bone_visitor visit_bone = {},
         bool just_downstream = false);
+    void dfs(const node& root, const_node_visitor visit_node = {}, 
+        const_bone_visitor visit_bone = {},  bool just_downstream = false);
+    void dfs(const bone& root, const_node_visitor visit_node = {}, 
+        const_bone_visitor visit_bone = {}, bool just_downstream = false);
 
     void visit_nodes(node& j, node_visitor visit_node);
 	void visit_bones(node& j, bone_visitor visit_node);
