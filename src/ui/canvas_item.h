@@ -13,7 +13,9 @@ namespace ui {
 
 	class canvas;
 
-    using skeleton_piece = std::variant<sm::node_ref, sm::bone_ref, sm::skel_ref>;
+    using const_skel_piece = 
+        std::variant<sm::const_node_ref, sm::const_bone_ref, sm::const_skel_ref>;
+    using skel_piece = std::variant<sm::node_ref, sm::bone_ref, sm::skel_ref>;
 
 	class abstract_canvas_item {
 		friend class canvas;
@@ -33,7 +35,8 @@ namespace ui {
 		canvas* canvas() const;
 		bool is_selected() const;
 		void set_selected(bool selected);
-        virtual skeleton_piece to_skeleton_piece() = 0;
+        virtual skel_piece to_skeleton_piece() = 0;
+        virtual const_skel_piece to_skeleton_piece() const;
 		virtual ~abstract_canvas_item();
 	};
 
@@ -70,7 +73,7 @@ namespace ui {
 		QGraphicsItem* create_selection_frame() const override;
 		bool is_selection_frame_only() const override;
 		QGraphicsItem* item_body() override;
-        skeleton_piece to_skeleton_piece() override;
+        skel_piece to_skeleton_piece() override;
 
 	public:
 		using model_type = sm::skeleton;
@@ -86,7 +89,7 @@ namespace ui {
 		QGraphicsItem* create_selection_frame() const override;
 		bool is_selection_frame_only() const override;
 	    QGraphicsItem* item_body() override;
-        skeleton_piece to_skeleton_piece() override;
+        skel_piece to_skeleton_piece() override;
 
 		bool is_pinned_;
 	public:
@@ -113,7 +116,7 @@ namespace ui {
 		bool is_selection_frame_only() const override;
 		QGraphicsItem* item_body() override;
 		void sync_rotation_constraint_to_model();
-        skeleton_piece to_skeleton_piece() override;
+        skel_piece to_skeleton_piece() override;
 
 	public:
 		using model_type = sm::bone;

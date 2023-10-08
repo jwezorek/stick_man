@@ -27,7 +27,7 @@ namespace {
     static const QByteArray k_stickman_mime_type = "application/x-stick_man";
 
     class skeleton_piece_set {
-        std::unordered_map<void*, ui::skeleton_piece> impl_;
+        std::unordered_set<void*> impl_;
 
         template<typename T>
         static void* to_void_star(const T& v) {
@@ -41,11 +41,11 @@ namespace {
 
         bool contains(auto& p) const {
             return contains(
-                ui::skeleton_piece{ std::ref(p) }
+                ui::skel_piece{ std::ref(p) }
             );
         }
 
-        bool contains(ui::skeleton_piece sp) const {
+        bool contains(ui::skel_piece sp) const {
             return std::visit(
                 [this](auto itm_ref)->bool {
                     return impl_.contains(to_void_star(itm_ref.get()));
@@ -54,11 +54,11 @@ namespace {
             );
         }
 
-        void insert(ui::skeleton_piece piece) {
+        void insert(ui::skel_piece piece) {
             std::visit(
                 [&](auto itm) {
                     impl_.insert(
-                        {to_void_star(itm.get()), piece }
+                        to_void_star(itm.get())
                     );
                 },
                 piece
@@ -66,17 +66,9 @@ namespace {
         }
 
         void insert_range(auto rng) {
-            for (ui::skeleton_piece piece : rng) {
+            for (ui::skel_piece piece : rng) {
                 insert(piece);
             }
-        }
-
-        auto items() const {
-            return impl_ | rv::transform(
-                [](const auto& pair)->ui::skeleton_piece {
-                    return pair.second;
-                }
-            );
         }
     };
 
@@ -209,16 +201,16 @@ namespace {
     // ordered per skeleton. Internal pieces of selected whole skeletons are not returned, 
     // just the an item for the whole skeleton.
 
-    std::vector<std::tuple<ui::skeleton_piece, bool>> skeleton_pieces_in_topological_order(
+    std::vector<std::tuple<ui::skel_piece, bool>> skeleton_pieces_in_topological_order(
             ui::canvas& canv, const std::unordered_set<sm::skeleton*>& skel_set) {
 
         auto selected_skeletons = get_selected_skeletons(canv);
         auto pieces_and_sel_state = selected_skeletons |
             rv::transform(
-                [](sm::skeleton* p)->std::tuple<ui::skeleton_piece, bool> {
+                [](sm::skeleton* p)->std::tuple<ui::skel_piece, bool> {
                     return { std::ref(*p), true };
                 }
-            ) | r::to<std::vector<std::tuple<ui::skeleton_piece, bool>>>();
+            ) | r::to<std::vector<std::tuple<ui::skel_piece, bool>>>();
 
         for (auto skel_ptr : skel_set) {
             if (selected_skeletons.contains(skel_ptr)) {

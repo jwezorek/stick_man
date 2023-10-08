@@ -137,6 +137,15 @@ void ui::abstract_canvas_item::set_selected(bool selected) {
 	}
 }
 
+ui::const_skel_piece ui::abstract_canvas_item::to_skeleton_piece() const {
+    return std::visit(
+        [](auto p)->const_skel_piece {
+            return p.get();
+        },
+        const_cast<abstract_canvas_item*>(this)->to_skeleton_piece()
+    );
+}
+
 ui::abstract_canvas_item::~abstract_canvas_item() {
 	if (selection_frame_) {
 		delete selection_frame_;
@@ -193,7 +202,7 @@ QGraphicsItem* ui::skeleton_item::item_body() {
 	return this;
 }
 
-ui::skeleton_piece ui::skeleton_item::to_skeleton_piece() {
+ui::skel_piece ui::skeleton_item::to_skeleton_piece() {
     auto& skel = model();
     return std::ref(skel);
 }
@@ -273,7 +282,7 @@ QGraphicsItem* ui::node_item::item_body() {
 	return this;
 }
 
-ui::skeleton_piece ui::node_item::to_skeleton_piece() {
+ui::skel_piece ui::node_item::to_skeleton_piece() {
     auto& node = model();
     return std::ref(node);
 }
@@ -328,7 +337,7 @@ void ui::bone_item::sync_rotation_constraint_to_model() {
 	}
 }
 
-ui::skeleton_piece ui::bone_item::to_skeleton_piece() {
+ui::skel_piece ui::bone_item::to_skeleton_piece() {
     auto& bone = model();
     return std::ref(bone);
 }
