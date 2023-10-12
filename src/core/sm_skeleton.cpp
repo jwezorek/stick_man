@@ -1022,11 +1022,20 @@ sm::expected_skel sm::world::create_skeleton(const std::string& name) {
 }
 
 sm::expected_skel sm::world::skeleton(const std::string& name) {
-	auto iter = skeletons_.find(name);
-	if (iter == skeletons_.end()) {
-		return std::unexpected(sm::result::not_found);
-	}
-	return *iter->second;
+    auto const_this = const_cast<const world*>(this);
+    auto skel = const_this->skeleton(name);
+    if (!skel) {
+        return std::unexpected(skel.error());
+    }
+    return std::ref(const_cast<sm::skeleton&>(skel->get()));
+}
+
+sm::expected_const_skel sm::world::skeleton(const std::string& name) const {
+    auto iter = skeletons_.find(name);
+    if (iter == skeletons_.end()) {
+        return std::unexpected(sm::result::not_found);
+    }
+    return *iter->second;
 }
 
 template<typename T>

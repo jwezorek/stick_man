@@ -309,7 +309,7 @@ namespace {
     };
 
     json perform_op_on_selection(ui::stick_man& main_wnd, selection_operation op) {
-        auto& world = main_wnd.sandbox();
+        auto& world = main_wnd.project().world();
         auto& canv = main_wnd.canvases().active_canvas();
         auto relavent_skels = relavent_skeleton_set(canv);
 
@@ -328,7 +328,7 @@ namespace {
                 );
                 copy->get().insert_tag("tab:" + canv.tab_name());
             }
-            main_wnd.canvases().sync_to_model(main_wnd.sandbox(), canv);
+            main_wnd.canvases().sync_to_model(main_wnd.project().world(), canv);
         }
 
         if (op == selection_operation::cut || op == selection_operation::copy) {
@@ -373,7 +373,7 @@ namespace {
 
         auto& canvases = main_wnd.canvases();
         auto& canv = canvases.active_canvas();
-        auto& dest_world = main_wnd.sandbox();
+        auto& dest_world = main_wnd.project().world();
 
         auto dest_mat = (!in_place) ? 
             paste_matrix(canv.cursor_pos(), clipboard_world) :

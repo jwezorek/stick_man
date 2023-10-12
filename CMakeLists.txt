@@ -37,6 +37,7 @@ add_executable(stick_man
     src/ui/properties.cpp
     src/ui/clipboard.h
     src/ui/clipboard.cpp
+    src/ui/project.cpp
 )
 
 target_link_libraries(stick_man PRIVATE Qt6::Widgets  Eigen3::Eigen)

@@ -119,6 +119,7 @@ namespace sm {
 		skel_ref create_skeleton(double x, double y);
         expected_skel create_skeleton(const std::string& name);
 		expected_skel skeleton(const std::string& name);
+        expected_const_skel skeleton(const std::string& name) const;
 
         result delete_skeleton(const std::string& skel_name);
 

@@ -99,6 +99,7 @@ namespace sm {
 	using expected_bone = std::expected<bone_ref, result>;
 	using expected_node = std::expected<node_ref, result>;
 	using expected_skel = std::expected<skel_ref, result>;
+    using expected_const_skel = std::expected<const_skel_ref, result>;
 
     namespace detail {
         template <typename T> 

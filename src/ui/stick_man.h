@@ -3,7 +3,7 @@
 #include <QtWidgets/QMainWindow>
 #include "canvas.h"
 #include "tools.h"
-#include "../core/sm_skeleton.h"
+#include "project.h"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -32,12 +32,10 @@ namespace ui {
         void insert_new_tab();
 
         tool_manager& tool_mgr();
-        sm::world& sandbox();
+        project& project();
         tool_settings_pane& tool_pane();
 		skeleton_pane& skel_pane();
         canvas_manager& canvases();
-
-        void reset_world(sm::world&& new_world);
 
     private:
 
@@ -55,7 +53,7 @@ namespace ui {
         tool_settings_pane* tool_pane_;
 		skeleton_pane* skel_pane_;
         canvas_manager* canvases_;
-        sm::world world_;
+        ui::project project_;
 		bool was_shown_;
 		bool has_fully_layed_out_widgets_;
     };

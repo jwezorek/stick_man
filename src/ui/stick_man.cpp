@@ -47,7 +47,7 @@ ui::stick_man::stick_man(QWidget* parent) :
     setCentralWidget(canvases_ = new canvas_manager(tool_mgr_));
     createMainMenu();
 	skel_pane_->init(*canvases_);
-	tool_mgr_.init(*canvases_, world_);
+	tool_mgr_.init(*canvases_, project_.world());
     tool_pane_->init(tool_mgr_);
 }
 
@@ -63,9 +63,9 @@ void ui::stick_man::open()
 			QString content = in.readAll();
 			file.close();
 
-            world_.clear();
-			world_.from_json(content.toStdString());
-			canvases().sync_to_model(world_);
+            project_.clear();
+            project_.from_json(content.toStdString());
+			canvases().sync_to_model(project_.world());
 		} else {
 			QMessageBox::critical(this, "Error", "Could not open file.");
 		}
@@ -85,7 +85,7 @@ void ui::stick_man::save_as() {
 		QFile file(filePath);
 		if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
 			QTextStream out(&file);
-			out << world_.to_json_str().c_str();
+			out << project_.to_json().c_str();
 			file.close();
 		} else {
 			QMessageBox::critical(this, "Error", "Bad pathname.");
@@ -128,8 +128,8 @@ ui::tool_manager& ui::stick_man::tool_mgr() {
     return tool_mgr_;
 }
 
-sm::world& ui::stick_man::sandbox() {
-    return world_;
+ui::project& ui::stick_man::project() {
+    return project_;
 }
 
 ui::tool_settings_pane& ui::stick_man::tool_pane() {
@@ -143,11 +143,6 @@ ui::skeleton_pane& ui::stick_man::skel_pane() {
 
 ui::canvas_manager& ui::stick_man::canvases() {
     return *canvases_;
-}
-
-void ui::stick_man::reset_world(sm::world&& new_world) {
-    world_ = std::move(new_world);
-    canvases_->sync_to_model(world_);
 }
 
 void ui::stick_man::insert_file_menu() {
