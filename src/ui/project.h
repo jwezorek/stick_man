@@ -58,6 +58,10 @@ namespace ui {
 
         std::string to_json() const;
         void from_json(const std::string& str);
+
+    signals:
+
+        void contents_changed(project& model);
     };
 
 }

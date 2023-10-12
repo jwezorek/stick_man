@@ -5,6 +5,7 @@
 #include "tools.h"
 #include "tools.h"
 #include "stick_man.h"
+#include "project.h"
 #include "../core/sm_bone.h"
 #include "../core/sm_skeleton.h"
 #include "../core/sm_skeleton.h"
@@ -194,7 +195,7 @@ void ui::skeleton_pane::expand_selected_items() {
 	}
 }
 
-void ui::skeleton_pane::sync_with_model(sm::world& model)
+void ui::skeleton_pane::sync_with_model(project& model)
 {
 	disconnect_tree_sel_handler();
 
@@ -202,7 +203,7 @@ void ui::skeleton_pane::sync_with_model(sm::world& model)
 	QStandardItemModel* tree_model = static_cast<QStandardItemModel*>(skeleton_tree_->model());
 	tree_model->clear();
 
-	for (const auto& skel : model.skeletons()) {
+	for (const auto& skel : model.world().skeletons()) {
 		insert_skeleton(
             *canvas().manager().canvas_from_skeleton(skel),
             tree_model, 
@@ -333,6 +334,7 @@ void ui::skeleton_pane::handle_props_name_change(const std::string& new_name) {
 
 ui::skeleton_pane::skeleton_pane(ui::stick_man* mw) :
         canvases_(nullptr),
+        project_(nullptr),
 		QDockWidget(tr(""), mw) {
 
     setTitleBarWidget( custom_title_bar("skeleton view") );
@@ -399,7 +401,7 @@ void ui::skeleton_pane::select_item(QStandardItem* item, bool select = true) {
 }
 
 void ui::skeleton_pane::connect_canv_cont_handler() {
-    canv_content_conn_ = connect(&canvas().manager(), &ui::canvas_manager::contents_changed,
+    canv_content_conn_ = connect(project_, &project::contents_changed,
         this, &ui::skeleton_pane::sync_with_model
     );
 }
@@ -419,7 +421,8 @@ void ui::skeleton_pane::disconnect_canv_sel_handler() {
 	disconnect(canv_sel_conn_);
 }
 
-void ui::skeleton_pane::init(canvas_manager& canvases) {
+void ui::skeleton_pane::init(canvas_manager& canvases, project& proj) {
+    project_ = &proj;
     canvases_ = &canvases;
 	sel_properties_->init(canvases);
 

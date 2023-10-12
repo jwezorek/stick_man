@@ -6,6 +6,7 @@
 #include "util.h"
 #include "stick_man.h"
 #include "canvas_item.h"
+#include "project.h"
 #include <QGraphicsScene>
 #include <array>
 #include <functional>
@@ -47,7 +48,7 @@ void ui::abstract_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* e
 void ui::abstract_tool::mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
 void ui::abstract_tool::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {}
 void ui::abstract_tool::deactivate(canvas_manager& canvases) {}
-void ui::abstract_tool::init(canvas_manager&, sm::world&) {}
+void ui::abstract_tool::init(canvas_manager&, project&) {}
 QWidget* ui::abstract_tool::settings_widget() { return nullptr; }
 ui::abstract_tool::~abstract_tool() {}
 
@@ -118,18 +119,19 @@ ui::add_node_tool::add_node_tool() :
     abstract_tool("add node", "add_node_icon.png", ui::tool_id::add_node) 
 {}
 
-void ui::add_node_tool::init(canvas_manager& canvases, sm::world& model) {
+void ui::add_node_tool::init(canvas_manager& canvases, project& model) {
     model_ = &model;
 }
 
 void ui::add_node_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
     auto pt = event->scenePos();
-    auto new_skeleton = model_->create_skeleton(pt.x(), pt.y());
+    auto new_skeleton = model_->world().create_skeleton(pt.x(), pt.y());
 
     auto tab_name = canv.tab_name();
     new_skeleton.get().insert_tag("tab:" + tab_name);
 
     canv.insert_item(new_skeleton.get().root_node().get());
+    emit model_->contents_changed(*model_);
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -151,7 +153,7 @@ ui::add_bone_tool::add_bone_tool() :
     abstract_tool("add bone", "add_bone_icon.png", ui::tool_id::add_bone) {
 }
 
-void ui::add_bone_tool::init(canvas_manager& canvases, sm::world& model) {
+void ui::add_bone_tool::init(canvas_manager& canvases, project& model) {
     model_ = &model;
 }
 
@@ -177,16 +179,17 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
 		auto skel_v = child_node->model().owner();
 		if (skel_v.get().get_user_data().has_value()) {
 			ui::skeleton_item* skel_itm = &item_from_model<skeleton_item>(skel_v.get());
-			canv.delete_item(*model_, skel_itm, false);
+			canv.delete_item(model_->world(), skel_itm, false);
 		}
 
-        auto bone = model_->create_bone({}, parent_node->model(), child_node->model());
+        auto bone = model_->world().create_bone({}, parent_node->model(), child_node->model());
         if (bone) {
 			canv.insert_item(bone->get());
 			canv.sync_to_model();
         } else {
             auto error = bone.error();
         }
+        emit model_->contents_changed(*model_);
     }
 }
 
@@ -202,7 +205,7 @@ ui::tool_manager::tool_manager() :
     tool_registry_.emplace_back(std::make_unique<ui::add_bone_tool>());
 }
 
-void ui::tool_manager::init(canvas_manager& canvases, sm::world& model) {
+void ui::tool_manager::init(canvas_manager& canvases, project& model) {
 	for (auto& tool : tool_registry_) {
 		tool->init(canvases, model);
 	}

@@ -274,14 +274,12 @@ bool ui::canvas::is_status_line_visible() const {
 ui::node_item* ui::canvas::insert_item(sm::node& node) {
 	ui::node_item* ni;
 	addItem(ni = new node_item(node, 1.0 / scale()));
-	emit manager().contents_changed(node.owner().get().owner().get());
 	return ni;
 }
 
 ui::bone_item* ui::canvas::insert_item(sm::bone& bone) {
 	ui::bone_item* bi;
 	addItem(bi = new bone_item(bone, 1.0 / scale()));
-	emit manager().contents_changed(bone.owner().get().owner().get());
 	return bi;
 }
 
@@ -412,7 +410,6 @@ void ui::canvas::delete_item(sm::world& world, abstract_canvas_item* deletee, bo
 		if (was_selected) {
 			emit manager().selection_changed(*this);
 		}
-		emit manager().contents_changed(world);
 	}
 }
 
@@ -642,10 +639,10 @@ std::string ui::canvas_manager::tab_name(const canvas& canv) const {
     return (index >= 0) ? tabText(index).toStdString() : "";
 }
 
-void ui::canvas_manager::sync_to_model(sm::world& model) {
+void ui::canvas_manager::sync_to_model(project& model) {
     disconnect_current_tab_signal();
     clear();
-    auto name_to_canvas = tab_names_from_model(model) | 
+    auto name_to_canvas = model.tabs() | 
         rv::transform(
             [this](const std::string& name)->std::unordered_map<std::string, canvas*>::value_type {
                 return { name, add_new_tab(name.c_str())};
@@ -654,15 +651,15 @@ void ui::canvas_manager::sync_to_model(sm::world& model) {
     connect_current_tab_signal();
 
     for (auto canv : canvases()) {
-        canv->sync_to_model(model);
+        canv->sync_to_model(model.world());
     }
 
-    emit contents_changed(model);
+    emit model.contents_changed(model);
 }
 
-void ui::canvas_manager::sync_to_model(sm::world& model, canvas& canv) {
-    canv.sync_to_model(model);
-    emit contents_changed(model);
+void ui::canvas_manager::sync_to_model(project& model, canvas& canv) {
+    canv.sync_to_model(model.world());
+    emit model.contents_changed(model);
 }
 
 void ui::canvas_manager::set_drag_mode(drag_mode dm) {

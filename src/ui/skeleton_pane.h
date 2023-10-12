@@ -13,9 +13,11 @@ namespace ui {
 	class tool_manager;
 	class stick_man;
     class canvas_manager;
+    class project;
 
     class skeleton_pane : public QDockWidget {
         canvas_manager* canvases_;
+        project* project_;
 		QTreeView* skeleton_tree_;
 		selection_properties* sel_properties_;
 
@@ -38,7 +40,7 @@ namespace ui {
 		void connect_tree_change_handler();
 		void disconnect_tree_change_handler();
 
-		void sync_with_model(sm::world& model);
+		void sync_with_model(project& model);
 		void handle_canv_sel_change();
 		void handle_tree_change(QStandardItem* item);
 		void handle_tree_selection_change(const QItemSelection&, const QItemSelection&);
@@ -54,7 +56,7 @@ namespace ui {
 
         skeleton_pane(ui::stick_man* mgr);
 		selection_properties& sel_properties();
-		void init(canvas_manager& canvases);
+		void init(canvas_manager& canvases, project& proj);
 		bool validate_props_name_change(const std::string& new_name);
 		void handle_props_name_change(const std::string& new_name);
     };

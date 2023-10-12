@@ -7,15 +7,13 @@
 #include <unordered_set>
 
 /*------------------------------------------------------------------------------------------------*/
-namespace sm {
-    class world;
-}
 
 namespace ui {
 
     using selection_set = std::unordered_set<ui::abstract_canvas_item*>;
 
 	class canvas_manager;
+    class project;
 
     class selection_tool : public abstract_tool {
     private:
@@ -35,7 +33,7 @@ namespace ui {
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void deactivate(canvas_manager& c) override;
         QWidget* settings_widget() override;
-		void init(canvas_manager& canvases, sm::world& model) override;
+		void init(canvas_manager& canvases, project& model) override;
     };
 
 }

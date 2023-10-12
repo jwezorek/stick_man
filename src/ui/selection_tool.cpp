@@ -123,7 +123,7 @@ ui::selection_tool::selection_tool() :
     abstract_tool("selection", "arrow_icon.png", ui::tool_id::selection) {
 }
 
-void ui::selection_tool::init(canvas_manager& canvases, sm::world& model) {
+void ui::selection_tool::init(canvas_manager& canvases, project& model) {
     canvases.connect(
         &canvases, &canvas_manager::rubber_band_change,
         [&](canvas& canv, QRect rbr, QPointF from, QPointF to) {

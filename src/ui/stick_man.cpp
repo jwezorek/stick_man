@@ -46,8 +46,8 @@ ui::stick_man::stick_man(QWidget* parent) :
 
     setCentralWidget(canvases_ = new canvas_manager(tool_mgr_));
     createMainMenu();
-	skel_pane_->init(*canvases_);
-	tool_mgr_.init(*canvases_, project_.world());
+	skel_pane_->init(*canvases_, project_);
+	tool_mgr_.init(*canvases_, project_);
     tool_pane_->init(tool_mgr_);
 }
 
@@ -65,7 +65,7 @@ void ui::stick_man::open()
 
             project_.clear();
             project_.from_json(content.toStdString());
-			canvases().sync_to_model(project_.world());
+			canvases().sync_to_model(project_);
 		} else {
 			QMessageBox::critical(this, "Error", "Could not open file.");
 		}

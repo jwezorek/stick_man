@@ -32,6 +32,7 @@ namespace ui {
     class bone_item;
     class skeleton_item;
     class abstract_canvas_item;
+    class project;
 
     using selection_set = std::unordered_set<ui::abstract_canvas_item*>;
 
@@ -158,8 +159,8 @@ namespace ui {
         void set_active_canvas(const canvas& c);
         std::vector<std::string> tab_names() const;
         std::string tab_name(const canvas& canv) const;
-        void sync_to_model(sm::world& model);
-        void sync_to_model(sm::world& model, canvas& canv);
+        void sync_to_model(project& model);
+        void sync_to_model(project& model, canvas& canv);
 
         auto canvases() {
             namespace r = std::ranges;
@@ -177,7 +178,6 @@ namespace ui {
     signals:
         void active_canvas_changed(ui::canvas& old_canv, ui::canvas& canv);
         void selection_changed(ui::canvas& canv);
-        void contents_changed(sm::world& model);
         void rubber_band_change(ui::canvas& canv, QRect rbr, QPointF from, QPointF to);
     };
 

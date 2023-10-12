@@ -328,7 +328,7 @@ namespace {
                 );
                 copy->get().insert_tag("tab:" + canv.tab_name());
             }
-            main_wnd.canvases().sync_to_model(main_wnd.project().world(), canv);
+            main_wnd.canvases().sync_to_model(main_wnd.project(), canv);
         }
 
         if (op == selection_operation::cut || op == selection_operation::copy) {
@@ -390,7 +390,7 @@ namespace {
             copy->get().insert_tag("tab:" + canv.tab_name());
         }
 
-        canvases.sync_to_model(dest_world, canv);
+        canvases.sync_to_model(main_wnd.project(), canv);
     }
 
     void cut_or_copy(ui::stick_man& main_wnd, bool should_cut) {
