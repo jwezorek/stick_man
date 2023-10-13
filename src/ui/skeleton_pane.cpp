@@ -8,7 +8,6 @@
 #include "project.h"
 #include "../core/sm_bone.h"
 #include "../core/sm_skeleton.h"
-#include "../core/sm_skeleton.h"
 #include <numbers>
 #include <ranges>
 #include <unordered_map>

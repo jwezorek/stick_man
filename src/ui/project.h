@@ -32,6 +32,9 @@ namespace ui {
             return tabs_ | rv::transform([](auto&& p) {return p.first; });
         }
 
+        bool has_tab(const std::string& str) const;
+        bool add_new_tab(const std::string& name);
+
         std::span<const std::string> skel_names_on_tab(std::string_view name) const;
 
         auto skeletons_on_tab(std::string_view name) const {
@@ -58,9 +61,12 @@ namespace ui {
 
         std::string to_json() const;
         void from_json(const std::string& str);
+        void add_bone(sm::node& u, sm::node& v);
 
     signals:
-
+        void new_tab_added(const std::string& name);
+        void pre_new_bone_added(sm::node& u, sm::node& v);
+        void new_bone_added(sm::bone& bone);
         void contents_changed(project& model);
     };
 

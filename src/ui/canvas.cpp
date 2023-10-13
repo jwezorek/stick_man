@@ -3,6 +3,7 @@
 #include "stick_man.h"
 #include "tools.h"
 #include "util.h"
+#include "project.h"
 #include "../core/sm_skeleton.h"
 #include <boost/geometry.hpp>
 #include <ranges>
@@ -143,6 +144,19 @@ namespace {
             }
         }
         return {};
+    }
+
+    ui::skeleton_item* named_skeleton_item(ui::canvas& canv, const std::string& str) {
+        auto skels = canv.skeleton_items();
+        auto iter = r::find_if(skels,
+            [str](auto* skel)->bool {
+                return str == skel->model().name();
+            }
+        );
+        if (iter == skels.end()) {
+            return nullptr;
+        }
+        return *iter;
     }
 }
 /*------------------------------------------------------------------------------------------------*/
@@ -386,7 +400,7 @@ void ui::canvas::filter_selection(std::function<bool(abstract_canvas_item*)> fil
 	selection_ = sel;
 }
 
-void ui::canvas::delete_item(sm::world& world, abstract_canvas_item* deletee, bool emit_signals) {
+void ui::canvas::delete_item(abstract_canvas_item* deletee, bool emit_signals) {
 	bool was_selected = deletee->is_selected();
 	if (was_selected) {
 		filter_selection(
@@ -552,11 +566,15 @@ ui::canvas_manager::canvas_manager(input_handler& inp_handler) :
         "    height: 28px; /* Set the height of tabs */"
         "}"
     );
-    active_canv_ = add_new_tab("untitled-1");
+    add_new_tab("untitled");
     connect_current_tab_signal();
 }
 
-
+void ui::canvas_manager::init(project& proj) {
+    connect(&proj, &project::new_tab_added, this, &canvas_manager::add_new_tab);
+    connect(&proj, &project::pre_new_bone_added, this, &canvas_manager::prepare_to_add_bone);
+    connect(&proj, &project::new_bone_added, this, &canvas_manager::add_new_bone);
+}
 
 std::vector<std::string> ui::canvas_manager::tab_names_from_model(const sm::world& w) {
     std::unordered_set<std::string> tabs;
@@ -578,14 +596,14 @@ void ui::canvas_manager::clear() {
     }
 }
 
-ui::canvas* ui::canvas_manager::add_new_tab(QString name) {
+void ui::canvas_manager::add_new_tab(const std::string& name) {
     QGraphicsView* view = new QGraphicsView();
 
     view->setRenderHint(QPainter::Antialiasing, true);
     view->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
     view->scale(1, -1);
 
-    addTab(view,name);
+    addTab(view, name.c_str());
     canvas* canv = new ui::canvas(inp_handler_);
     view->setScene(canv);
     canv->init();
@@ -595,7 +613,21 @@ ui::canvas* ui::canvas_manager::add_new_tab(QString name) {
         active_canv_ = canv;
     }
     center_active_view();
-    return canv;
+}
+
+void ui::canvas_manager::prepare_to_add_bone(sm::node& u, sm::node& v) {
+    auto& canv = active_canvas();
+    auto* deletee = named_skeleton_item(canv, v.owner().get().name());
+    if (deletee) {
+        canv.delete_item(deletee, false);
+    }
+}
+
+void ui::canvas_manager::add_new_bone(sm::bone& bone)
+{
+    auto& canv = active_canvas();
+    canv.insert_item(bone);
+    canv.sync_to_model();
 }
 
 ui::canvas* ui::canvas_manager::canvas_from_skeleton(sm::skeleton& skel) {
@@ -645,7 +677,8 @@ void ui::canvas_manager::sync_to_model(project& model) {
     auto name_to_canvas = model.tabs() | 
         rv::transform(
             [this](const std::string& name)->std::unordered_map<std::string, canvas*>::value_type {
-                return { name, add_new_tab(name.c_str())};
+                add_new_tab(name.c_str());
+                return { name, canvas_from_tab(name)};
             }
         ) | r::to<std::unordered_map<std::string, canvas* >>();
     connect_current_tab_signal();

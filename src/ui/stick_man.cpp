@@ -16,6 +16,9 @@
 
 /*------------------------------------------------------------------------------------------------*/
 
+namespace r = std::ranges;
+namespace rv = std::ranges::views;
+
 namespace {
 
     void setDarkTitleBar(WId window) {
@@ -46,6 +49,7 @@ ui::stick_man::stick_man(QWidget* parent) :
 
     setCentralWidget(canvases_ = new canvas_manager(tool_mgr_));
     createMainMenu();
+    canvases_->init(project_);
 	skel_pane_->init(*canvases_, project_);
 	tool_mgr_.init(*canvases_, project_);
     tool_pane_->init(tool_mgr_);
@@ -119,9 +123,14 @@ void ui::stick_man::exit() {
 }
 
 void ui::stick_man::insert_new_tab() {
-    auto tab_names = canvases_->tab_names();
-    auto new_name = make_unique_name(tab_names, "untitled");
-    canvases_->add_new_tab(new_name.c_str());
+    auto valid_tab_name = [this](const std::string& str)->bool {
+            return !project_.has_tab(str);
+        };
+    auto new_tab_name = query_for_valid_string(this, valid_tab_name, "New tab", "New tab name");
+    if (new_tab_name.empty()) {
+        return;
+    }
+    project_.add_new_tab(new_tab_name);
 }
 
 ui::tool_manager& ui::stick_man::tool_mgr() {

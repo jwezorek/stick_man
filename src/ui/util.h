@@ -223,4 +223,7 @@ namespace ui {
     std::string make_unique_name(const std::vector<std::string>& used_names,
         const std::string& prefix);
     void to_text_file(const std::string& file_path, const std::string& text);
+
+    std::string query_for_valid_string(QWidget* parent, const std::function<bool(const std::string&)>& predicate,
+        const std::string& title, const std::string& prompt);
 }

@@ -746,3 +746,48 @@ void ui::to_text_file(const std::string& file_path, const std::string& text) {
     outputFile << text;
     outputFile.close();
 }
+
+std::string ui::query_for_valid_string(QWidget* parent, 
+        const std::function<bool(const std::string&)>& predicate,
+        const std::string& title,
+        const std::string& prompt) {
+    QDialog dialog(parent);
+    dialog.setWindowTitle(title.c_str());
+
+    // Create widgets for the dialog
+    QFormLayout layout(&dialog);
+    QLineEdit lineEdit;
+    QPushButton okButton("OK");
+    QPushButton cancelButton("Cancel");
+
+    // Add widgets to the layout
+    layout.addRow(prompt.c_str(), &lineEdit);
+    layout.addRow(&okButton, &cancelButton);
+
+    // Connect "OK" button to the slot that checks the predicate
+    QObject::connect(&okButton, &QPushButton::clicked, [&]() {
+        const std::string userInput = lineEdit.text().toStdString();
+        if (predicate(userInput)) {
+            dialog.accept(); // Close the dialog with QDialog::Accepted result
+        }
+        else {
+            // Handle case where the predicate is not satisfied (you can display an error message here)
+        }
+        });
+
+    // Connect "Cancel" button to reject the dialog
+    QObject::connect(&cancelButton, &QPushButton::clicked, [&]() {
+        dialog.reject(); // Close the dialog with QDialog::Rejected result
+        });
+
+    // Enable/disable "OK" button based on the predicate
+    QObject::connect(&lineEdit, &QLineEdit::textChanged, [&](const QString& text) {
+        okButton.setEnabled(predicate(text.toStdString()));
+        });
+
+    // Show the dialog and wait for user input
+    const int result = dialog.exec();
+    return (result == QDialog::Accepted) ?
+        lineEdit.text().toStdString() :
+        std::string{};
+}

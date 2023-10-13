@@ -173,23 +173,9 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
     auto pt = event->scenePos();
     auto parent_node = canv.top_node(origin_);
     auto child_node = canv.top_node(event->scenePos());
-
 	
     if (parent_node && child_node && parent_node != child_node) {
-		auto skel_v = child_node->model().owner();
-		if (skel_v.get().get_user_data().has_value()) {
-			ui::skeleton_item* skel_itm = &item_from_model<skeleton_item>(skel_v.get());
-			canv.delete_item(model_->world(), skel_itm, false);
-		}
-
-        auto bone = model_->world().create_bone({}, parent_node->model(), child_node->model());
-        if (bone) {
-			canv.insert_item(bone->get());
-			canv.sync_to_model();
-        } else {
-            auto error = bone.error();
-        }
-        emit model_->contents_changed(*model_);
+        model_->add_bone(parent_node->model(), child_node->model());
     }
 }
 

@@ -123,7 +123,7 @@ namespace ui {
         void show_status_line(const QString& txt);
         void hide_status_line();
         void filter_selection(std::function<bool(abstract_canvas_item*)> filter);
-        void delete_item(sm::world& world, abstract_canvas_item* item, bool emit_signals);
+        void delete_item(abstract_canvas_item* item, bool emit_signals);
         QPointF from_global_to_canvas(const QPoint& pt);
         std::string tab_name() const;
         const canvas_manager& manager() const;
@@ -146,13 +146,16 @@ namespace ui {
 
         void connect_current_tab_signal();
         void disconnect_current_tab_signal();
+        void add_new_tab(const std::string& name);
+        void prepare_to_add_bone(sm::node& u, sm::node& v);
+        void add_new_bone(sm::bone& bone);
 
     public:
         canvas_manager(input_handler& inp_handler);
+        void init(project& proj);
         void clear();
         void center_active_view();
         canvas& active_canvas() const;
-        canvas* add_new_tab(QString name);
         canvas* canvas_from_skeleton(sm::skeleton& skel);
         canvas* canvas_from_tab(const std::string& tab_name);
         void set_drag_mode(drag_mode dm);
