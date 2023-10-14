@@ -102,10 +102,22 @@ std::string ui::project::to_json() const {
 }
 
 void ui::project::from_json(const std::string& str) {
+    clear();
     try {
         json proj = json::parse(str);
-        tabs_ = tabs_from_json(proj["tabs"]);
-        world_.from_json(proj["world"]);
+        auto new_tabs = tabs_from_json(proj["tabs"]);
+        sm::world new_world;
+        auto result = new_world.from_json(proj["world"]);
+
+        if (result != sm::result::success) {
+            throw result;
+        }
+
+        tabs_ = new_tabs;
+        world_ = std::move(new_world);
+
+        emit new_project_opened( *this );
+        emit contents_changed( *this );
     } catch (...) {
         throw std::runtime_error("bad project json");
     };

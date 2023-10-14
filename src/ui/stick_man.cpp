@@ -67,9 +67,7 @@ void ui::stick_man::open()
 			QString content = in.readAll();
 			file.close();
 
-            project_.clear();
             project_.from_json(content.toStdString());
-			canvases().sync_to_model(project_);
 		} else {
 			QMessageBox::critical(this, "Error", "Could not open file.");
 		}

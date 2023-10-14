@@ -64,8 +64,7 @@ namespace ui {
         QGraphicsView& view();
         const QGraphicsView& view() const;
         void set_drag_mode(drag_mode dm);
-
-    protected:
+        void set_contents(const std::vector<sm::skel_ref>& contents);
 
         void keyPressEvent(QKeyEvent* event) override;
         void keyReleaseEvent(QKeyEvent* event) override;
@@ -94,7 +93,6 @@ namespace ui {
         void set_scale(double scale, std::optional<QPointF> pt = {});
         double scale() const;
         void sync_to_model();
-        void set_contents(const std::vector<sm::skel_ref>& contents);
 
         const selection_set& selection() const;
         //sel_type selection_type() const;
@@ -148,6 +146,7 @@ namespace ui {
         void prepare_to_add_bone(sm::node& u, sm::node& v);
         void add_new_bone(sm::bone& bone);
         void add_new_skeleton(sm::skel_ref skel);
+        void set_contents(project& model);
 
     public:
         canvas_manager(input_handler& inp_handler);
@@ -160,7 +159,6 @@ namespace ui {
         void set_active_canvas(const canvas& c);
         std::vector<std::string> tab_names() const;
         std::string tab_name(const canvas& canv) const;
-        void sync_to_model(project& model);
 
         auto canvases() {
             namespace r = std::ranges;

@@ -567,6 +567,7 @@ void ui::canvas_manager::init(project& proj) {
     connect(&proj, &project::pre_new_bone_added, this, &canvas_manager::prepare_to_add_bone);
     connect(&proj, &project::new_bone_added, this, &canvas_manager::add_new_bone);
     connect(&proj, &project::new_skeleton_added, this, &canvas_manager::add_new_skeleton);
+    connect(&proj, &project::new_project_opened, this, &canvas_manager::set_contents);
 }
 
 void ui::canvas_manager::clear() {
@@ -656,7 +657,7 @@ std::string ui::canvas_manager::tab_name(const canvas& canv) const {
     return (index >= 0) ? tabText(index).toStdString() : "";
 }
 
-void ui::canvas_manager::sync_to_model(project& model) {
+void ui::canvas_manager::set_contents(project& model) {
 
     // clear the old tabs and create new ones based on what is in the project
     disconnect_current_tab_signal();
@@ -672,9 +673,7 @@ void ui::canvas_manager::sync_to_model(project& model) {
             model.skeletons_on_tab(tab) | r::to<std::vector<sm::skel_ref>>()
         );
     }
-    
-    // clear/repopulate the skeleton pane.
-    emit model.contents_changed(model);
+
 }
 
 void ui::canvas_manager::set_drag_mode(drag_mode dm) {
