@@ -94,7 +94,7 @@ namespace ui {
         void set_scale(double scale, std::optional<QPointF> pt = {});
         double scale() const;
         void sync_to_model();
-        void sync_to_model(sm::world& model);
+        void set_contents(const std::vector<sm::skel_ref>& contents);
 
         const selection_set& selection() const;
         //sel_type selection_type() const;
@@ -142,8 +142,6 @@ namespace ui {
         input_handler& inp_handler_;
         drag_mode drag_mode_;
 
-        static std::vector<std::string> tab_names_from_model(const sm::world& w);
-
         void connect_current_tab_signal();
         void disconnect_current_tab_signal();
         void add_new_tab(const std::string& name);
@@ -163,7 +161,6 @@ namespace ui {
         std::vector<std::string> tab_names() const;
         std::string tab_name(const canvas& canv) const;
         void sync_to_model(project& model);
-        void sync_to_model(project& model, canvas& canv);
 
         auto canvases() {
             namespace r = std::ranges;

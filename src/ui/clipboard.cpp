@@ -326,15 +326,11 @@ namespace {
                     world,
                     unique_skeleton_name(skel.get().name(), world.skeleton_names())
                 );
-                copy->get().insert_tag("tab:" + canv.tab_name());
             }
-            main_wnd.canvases().sync_to_model(main_wnd.project(), canv);
+            //main_wnd.canvases().sync_to_model(main_wnd.project(), canv);
         }
 
         if (op == selection_operation::cut || op == selection_operation::copy) {
-            for (auto skel : selected.skeletons()) {
-                skel.get().clear_tags();
-            }
             return selected.to_json();
         }
 
@@ -387,10 +383,9 @@ namespace {
                 dest_world,
                 unique_skeleton_name(skel.get().name(), dest_world.skeleton_names())
             );
-            copy->get().insert_tag("tab:" + canv.tab_name());
         }
 
-        canvases.sync_to_model(main_wnd.project(), canv);
+        //canvases.sync_to_model(main_wnd.project(), canv);
     }
 
     void cut_or_copy(ui::stick_man& main_wnd, bool should_cut) {

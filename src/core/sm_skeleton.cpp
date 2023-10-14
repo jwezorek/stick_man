@@ -914,7 +914,6 @@ sm::result sm::skeleton::from_json(sm::world& w, const json& jobj) {
         ) | r::to<bones_tbl>();
 
     root_ = *nodes_.at(jobj["root"]);
-    tags_ = jobj["tags"] | r::to<std::vector<std::string>>();
 
 	return sm::result::success;
 }
@@ -934,8 +933,7 @@ json sm::skeleton::to_json() const {
 
     return  {
         {"name", name_},
-        {"tags", tags_ | r::to<json>()},
-        {"nodes" , nodes},
+        {"nodes", nodes},
         {"bones", bones},
         {"root", root_node().get().name()}
     };
@@ -966,18 +964,6 @@ void sm::skeleton::register_bone(sm::bone& new_bone) {
 
 bool sm::skeleton::empty() const {
     return !root_.has_value();
-}
-
-void sm::skeleton::clear_tags() {
-    tags_.clear();
-}
-
-const std::vector<std::string>& sm::skeleton::tags() const {
-    return tags_;
-}
-
-void sm::skeleton::insert_tag(const std::string& tag) {
-    tags_.push_back(tag);
 }
 
 sm::world_ref sm::skeleton::owner() {

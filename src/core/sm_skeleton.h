@@ -37,7 +37,6 @@ namespace sm {
 		std::any user_data_;
         nodes_tbl nodes_;
 		bones_tbl bones_;
-        std::vector<std::string> tags_;
 
 	protected:
         skeleton(world& w);
@@ -68,10 +67,6 @@ namespace sm {
 		auto bones() { return detail::to_range_view<bone_ref>(bones_); }
 		auto nodes() const { return detail::to_range_view<const_node_ref>(nodes_); }
 		auto bones() const { return detail::to_range_view<const_bone_ref>(bones_); }
-
-        void clear_tags();
-        const std::vector<std::string>& tags() const;
-        void insert_tag(const std::string& tag);
 
 		world_ref owner();
 		const_world_ref owner() const;

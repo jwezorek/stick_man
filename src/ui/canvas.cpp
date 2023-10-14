@@ -136,16 +136,6 @@ namespace {
 		return (&(bone_1->parent_node()) == find_shared_node(bone_1, bone_2)) ? bone_2 : bone_1;
 	}
 
-    std::string tab_from_skeleton(const sm::skeleton& skel) {
-        for (const auto possible_tab : skel.tags()) {
-            auto tab = ui::get_prefixed_string("tab", possible_tab, ':');
-            if (!tab.empty()) {
-                return tab;
-            }
-        }
-        return {};
-    }
-
     ui::skeleton_item* named_skeleton_item(ui::canvas& canv, const std::string& str) {
         auto skels = canv.skeleton_items();
         auto iter = r::find_if(skels,
@@ -248,13 +238,9 @@ void ui::canvas::sync_to_model() {
     }
 }
 
-void ui::canvas::sync_to_model(sm::world& model) {
+void ui::canvas::set_contents(const std::vector<sm::skel_ref>& contents) {
     clear();
-    for (auto skel : model.skeletons()) {
-        auto tab = tab_from_skeleton(skel.get());
-        if (tab != tab_name()) {
-            continue;
-        }
+    for (auto skel : contents) {
         for (auto node : skel.get().nodes()) {
             addItem(new ui::node_item(node.get(), scale()));
         }
@@ -577,17 +563,6 @@ void ui::canvas_manager::init(project& proj) {
     connect(&proj, &project::new_skeleton_added, this, &canvas_manager::add_new_skeleton);
 }
 
-std::vector<std::string> ui::canvas_manager::tab_names_from_model(const sm::world& w) {
-    std::unordered_set<std::string> tabs;
-    for (const auto& skel : w.skeletons()) {
-        auto tab = tab_from_skeleton(skel.get());
-        if (!tab.empty()) {
-            tabs.insert(tab);
-        }
-    }
-    return tabs | r::to<std::vector<std::string>>();
-}
-
 void ui::canvas_manager::clear() {
     active_canv_ = nullptr;
     while (count() > 0) {
@@ -635,7 +610,6 @@ void ui::canvas_manager::add_new_skeleton(sm::skel_ref skel_ref) {
     auto tab_name = canv.tab_name();
 
     auto& skel = skel_ref.get();
-    skel.insert_tag("tab:" + tab_name);
     canv.insert_item(skel.root_node().get());
     canv.insert_item(skel);
 }
@@ -687,16 +661,13 @@ void ui::canvas_manager::sync_to_model(project& model) {
             }
         ) | r::to<std::unordered_map<std::string, canvas* >>();
     connect_current_tab_signal();
-
-    for (auto canv : canvases()) {
-        canv->sync_to_model(model.world());
+    
+    for (auto tab : model.tabs()) {
+        auto* canv = canvas_from_tab(tab);
+        auto skels = model.skeletons_on_tab(tab) | r::to<std::vector<sm::skel_ref>>();
+        canv->set_contents(skels);
     }
-
-    emit model.contents_changed(model);
-}
-
-void ui::canvas_manager::sync_to_model(project& model, canvas& canv) {
-    canv.sync_to_model(model.world());
+    
     emit model.contents_changed(model);
 }
 
