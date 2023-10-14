@@ -637,11 +637,7 @@ void ui::canvas_manager::add_new_skeleton(sm::skel_ref skel_ref) {
     auto& skel = skel_ref.get();
     skel.insert_tag("tab:" + tab_name);
     canv.insert_item(skel.root_node().get());
-}
-
-ui::canvas* ui::canvas_manager::canvas_from_skeleton(sm::skeleton& skel) {
-    auto tab = tab_from_skeleton(skel);
-    return canvas_from_tab(tab);
+    canv.insert_item(skel);
 }
 
 ui::canvas* ui::canvas_manager::canvas_from_tab(const std::string& tab_name) {

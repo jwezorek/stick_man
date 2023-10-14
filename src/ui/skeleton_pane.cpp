@@ -92,25 +92,24 @@ namespace{
 		return itm;
 	}
 
-	QStandardItem* make_treeitem(ui::canvas& canv, sm::skeleton& skel) {
-		auto* itm = new QStandardItem(skel.name().c_str());
+	QStandardItem* make_treeitem(sm::skeleton& skel) {
 
+		auto* itm = new QStandardItem(skel.name().c_str());
 		ui::skeleton_item* canv_item = nullptr;
-		canv_item = (ui::has_canvas_item(skel)) ?
-			 &ui::item_from_model<ui::skeleton_item>(skel):
-			 canv.insert_item(skel);
+        canv_item = &ui::item_from_model<ui::skeleton_item>(skel);
 		set_treeitem_data(itm, skel);
 		canv_item->set_treeview_item(itm);
+
 		return itm;
 	}
 
-	void insert_skeleton(ui::canvas& canv, QStandardItemModel* tree, sm::skel_ref skel) {
+	void insert_skeleton(QStandardItemModel* tree, sm::skel_ref skel) {
 		
 		// traverse the skeleton graph and repopulate the treeview during the traversal 
 		// by building a hash table mapping bones to their tree items.
 
 		QStandardItem* root = tree->invisibleRootItem();
-		QStandardItem* skel_item = make_treeitem(canv, skel.get());
+		QStandardItem* skel_item = make_treeitem(skel.get());
 		root->appendRow(skel_item);
 
 		std::unordered_map<sm::bone*, QStandardItem*> bone_to_tree_item;
@@ -203,11 +202,7 @@ void ui::skeleton_pane::sync_with_model(project& model)
 	tree_model->clear();
 
 	for (const auto& skel : model.world().skeletons()) {
-		insert_skeleton(
-            *canvas().manager().canvas_from_skeleton(skel),
-            tree_model, 
-            skel
-        );
+		insert_skeleton( tree_model, skel );
 	}
 
 	skeleton_tree_->clearSelection();
