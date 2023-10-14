@@ -1010,6 +1010,10 @@ sm::skel_ref sm::world::create_skeleton(double x, double y) {
 	return *skeletons_[new_name];
 }
 
+sm::skel_ref sm::world::create_skeleton(const point& pt) {
+    return create_skeleton(pt.x, pt.y);
+}
+
 sm::expected_skel sm::world::create_skeleton(const std::string& name) {
     if (contains_skeleton_name(name)) {
         return std::unexpected(result::non_unique_name);

@@ -574,6 +574,7 @@ void ui::canvas_manager::init(project& proj) {
     connect(&proj, &project::new_tab_added, this, &canvas_manager::add_new_tab);
     connect(&proj, &project::pre_new_bone_added, this, &canvas_manager::prepare_to_add_bone);
     connect(&proj, &project::new_bone_added, this, &canvas_manager::add_new_bone);
+    connect(&proj, &project::new_skeleton_added, this, &canvas_manager::add_new_skeleton);
 }
 
 std::vector<std::string> ui::canvas_manager::tab_names_from_model(const sm::world& w) {
@@ -623,11 +624,19 @@ void ui::canvas_manager::prepare_to_add_bone(sm::node& u, sm::node& v) {
     }
 }
 
-void ui::canvas_manager::add_new_bone(sm::bone& bone)
-{
+void ui::canvas_manager::add_new_bone(sm::bone& bone) {
     auto& canv = active_canvas();
     canv.insert_item(bone);
     canv.sync_to_model();
+}
+
+void ui::canvas_manager::add_new_skeleton(sm::skel_ref skel_ref) {
+    auto& canv = active_canvas();
+    auto tab_name = canv.tab_name();
+
+    auto& skel = skel_ref.get();
+    skel.insert_tag("tab:" + tab_name);
+    canv.insert_item(skel.root_node().get());
 }
 
 ui::canvas* ui::canvas_manager::canvas_from_skeleton(sm::skeleton& skel) {

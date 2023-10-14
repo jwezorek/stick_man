@@ -84,8 +84,12 @@ std::string ui::project::to_json() const {
 void ui::project::from_json(const std::string& str) {
 }
 
-void ui::project::add_bone(sm::node& u, sm::node& v)
-{
+void ui::project::add_bone(sm::node& u, sm::node& v) {
+
+    if (&u.owner().get() == &v.owner().get()) {
+        return;
+    }
+
     emit pre_new_bone_added(u, v);
 
     auto bone = world_.create_bone({}, u, v);
@@ -95,5 +99,11 @@ void ui::project::add_bone(sm::node& u, sm::node& v)
         throw std::runtime_error("ui::project::add_bone");
     }
 
+    emit contents_changed(*this);
+}
+
+void ui::project::add_new_skeleton_root(sm::point loc) {
+    auto skel = world_.create_skeleton(loc);
+    emit new_skeleton_added(skel);
     emit contents_changed(*this);
 }

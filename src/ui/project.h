@@ -62,11 +62,13 @@ namespace ui {
         std::string to_json() const;
         void from_json(const std::string& str);
         void add_bone(sm::node& u, sm::node& v);
+        void add_new_skeleton_root(sm::point loc);
 
     signals:
         void new_tab_added(const std::string& name);
         void pre_new_bone_added(sm::node& u, sm::node& v);
         void new_bone_added(sm::bone& bone);
+        void new_skeleton_added(sm::skel_ref skel);
         void contents_changed(project& model);
     };
 

@@ -149,6 +149,7 @@ namespace ui {
         void add_new_tab(const std::string& name);
         void prepare_to_add_bone(sm::node& u, sm::node& v);
         void add_new_bone(sm::bone& bone);
+        void add_new_skeleton(sm::skel_ref skel);
 
     public:
         canvas_manager(input_handler& inp_handler);

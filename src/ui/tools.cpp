@@ -124,14 +124,7 @@ void ui::add_node_tool::init(canvas_manager& canvases, project& model) {
 }
 
 void ui::add_node_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
-    auto pt = event->scenePos();
-    auto new_skeleton = model_->world().create_skeleton(pt.x(), pt.y());
-
-    auto tab_name = canv.tab_name();
-    new_skeleton.get().insert_tag("tab:" + tab_name);
-
-    canv.insert_item(new_skeleton.get().root_node().get());
-    emit model_->contents_changed(*model_);
+    model_->add_new_skeleton_root(from_qt_pt(event->scenePos()));
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -174,9 +167,11 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
     auto parent_node = canv.top_node(origin_);
     auto child_node = canv.top_node(event->scenePos());
 	
-    if (parent_node && child_node && parent_node != child_node) {
-        model_->add_bone(parent_node->model(), child_node->model());
+    if (!parent_node || !child_node || parent_node == child_node) {
+        return;
     }
+
+    model_->add_bone(parent_node->model(), child_node->model());
 }
 
 /*------------------------------------------------------------------------------------------------*/
