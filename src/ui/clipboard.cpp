@@ -365,7 +365,7 @@ namespace {
     void paste_selection(ui::stick_man& main_wnd, const QByteArray& bytes, bool in_place) {
         std::string world_json_str = std::string(bytes.data());
         sm::world clipboard_world;
-        clipboard_world.from_json(world_json_str);
+        clipboard_world.from_json_str(world_json_str);
 
         auto& canvases = main_wnd.canvases();
         auto& canv = canvases.active_canvas();

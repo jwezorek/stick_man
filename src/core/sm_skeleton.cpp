@@ -1155,10 +1155,19 @@ std::expected<sm::bone_ref, sm::result> sm::world::create_bone(
     return *bones_.back();
 }
 
-sm::result sm::world::from_json(const std::string& json_str) {
+sm::result sm::world::from_json_str(const std::string& str) {
+    try {
+        auto js = json::parse(str);
+        return from_json(js);
+    } catch (...) {
+        return sm::result::invalid_json;
+    }
+    return sm::result::success;
+}
 
+sm::result sm::world::from_json(const json& stick_man)
+{
 	try {
-		json stick_man = json::parse(json_str);
 		skeletons_ = stick_man["skeletons"] |
 			rv::transform(
 				[this](const json& jobj)->skeleton_tbl::value_type {

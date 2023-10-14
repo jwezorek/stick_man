@@ -239,15 +239,21 @@ void ui::canvas::sync_to_model() {
 }
 
 void ui::canvas::set_contents(const std::vector<sm::skel_ref>& contents) {
+
     clear();
-    for (auto skel : contents) {
-        for (auto node : skel.get().nodes()) {
+    for (auto skel_ref : contents) {
+        auto& skel = skel_ref.get();
+        insert_item(skel);
+
+        for (auto node : skel.nodes()) {
             addItem(new ui::node_item(node.get(), scale()));
         }
-        for (auto bone : skel.get().bones()) {
+
+        for (auto bone : skel.bones()) {
             addItem(new ui::bone_item(bone.get(), scale()));
         }
     }
+
 }
 
 const ui::selection_set&  ui::canvas::selection() const {
@@ -651,23 +657,23 @@ std::string ui::canvas_manager::tab_name(const canvas& canv) const {
 }
 
 void ui::canvas_manager::sync_to_model(project& model) {
+
+    // clear the old tabs and create new ones based on what is in the project
     disconnect_current_tab_signal();
     clear();
-    auto name_to_canvas = model.tabs() | 
-        rv::transform(
-            [this](const std::string& name)->std::unordered_map<std::string, canvas*>::value_type {
-                add_new_tab(name.c_str());
-                return { name, canvas_from_tab(name)};
-            }
-        ) | r::to<std::unordered_map<std::string, canvas* >>();
+    for (auto tab_name : model.tabs()) {
+        add_new_tab( tab_name.c_str() );
+    }
     connect_current_tab_signal();
     
+    // set their contents...
     for (auto tab : model.tabs()) {
-        auto* canv = canvas_from_tab(tab);
-        auto skels = model.skeletons_on_tab(tab) | r::to<std::vector<sm::skel_ref>>();
-        canv->set_contents(skels);
+        canvas_from_tab(tab)->set_contents(
+            model.skeletons_on_tab(tab) | r::to<std::vector<sm::skel_ref>>()
+        );
     }
     
+    // clear/repopulate the skeleton pane.
     emit model.contents_changed(model);
 }
 

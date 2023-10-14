@@ -26,6 +26,13 @@ namespace {
         ) | r::to<json>();
     }
 
+    std::unordered_map<std::string, std::vector<std::string>> tabs_from_json(const json& tabs_json) {
+        std::unordered_map<std::string, std::vector<std::string>> tabs;
+        for (const auto json_pair : tabs_json) {
+            tabs[json_pair["tab"]] = json_pair["skeletons"] | r::to<std::vector<std::string>>();
+        }
+        return tabs;
+    }
     std::vector<std::string> skeleton_named_on_canvas(const ui::canvas& canv) {
         auto skels = canv.skeleton_items();
         return ui::to_model_ptrs(rv::all(skels)) |
@@ -95,6 +102,13 @@ std::string ui::project::to_json() const {
 }
 
 void ui::project::from_json(const std::string& str) {
+    try {
+        json proj = json::parse(str);
+        tabs_ = tabs_from_json(proj["tabs"]);
+        world_.from_json(proj["world"]);
+    } catch (...) {
+        throw std::runtime_error("bad project json");
+    };
 }
 
 void ui::project::add_bone(const std::string& tab, sm::node& u, sm::node& v) {
