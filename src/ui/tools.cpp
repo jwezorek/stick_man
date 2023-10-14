@@ -124,7 +124,7 @@ void ui::add_node_tool::init(canvas_manager& canvases, project& model) {
 }
 
 void ui::add_node_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
-    model_->add_new_skeleton_root(from_qt_pt(event->scenePos()));
+    model_->add_new_skeleton_root(canv.tab_name(), from_qt_pt(event->scenePos()));
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -171,7 +171,7 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
         return;
     }
 
-    model_->add_bone(parent_node->model(), child_node->model());
+    model_->add_bone(canv.tab_name(), parent_node->model(), child_node->model());
 }
 
 /*------------------------------------------------------------------------------------------------*/

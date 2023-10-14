@@ -20,6 +20,8 @@ namespace ui {
         std::unordered_map<std::string, std::vector<std::string>> tabs_;
         sm::world world_;
 
+        void delete_skeleton_from_tab(const std::string& tab, const std::string& skel);
+
     public:
         project();
 
@@ -61,8 +63,8 @@ namespace ui {
 
         std::string to_json() const;
         void from_json(const std::string& str);
-        void add_bone(sm::node& u, sm::node& v);
-        void add_new_skeleton_root(sm::point loc);
+        void add_bone(const std::string& tab, sm::node& u, sm::node& v);
+        void add_new_skeleton_root(const std::string& tab, sm::point loc);
 
     signals:
         void new_tab_added(const std::string& name);
