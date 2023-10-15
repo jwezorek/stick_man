@@ -201,7 +201,6 @@ std::string ui::project::canvas_name_from_skeleton(const std::string& skel) cons
 void ui::project::replace_skeletons(const std::string& canvas_name,
         const std::vector<std::string>& replacees,
         const std::vector<sm::skel_ref>& replacements) {
-    //emit pre_refresh_canvas(canvas_name);
 
     for (auto replacee : replacees) {
         if (canvas_name_from_skeleton(replacee) != canvas_name) {
