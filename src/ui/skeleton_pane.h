@@ -40,7 +40,7 @@ namespace ui {
 		void connect_tree_change_handler();
 		void disconnect_tree_change_handler();
 
-		void sync_with_model(project& model);
+		void sync_with_model(sm::world& model);
 		void handle_canv_sel_change();
 		void handle_tree_change(QStandardItem* item);
 		void handle_tree_selection_change(const QItemSelection&, const QItemSelection&);

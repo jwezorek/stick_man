@@ -610,6 +610,8 @@ void ui::canvas_manager::add_new_bone(sm::bone& bone) {
     auto& canv = active_canvas();
     canv.insert_item(bone);
     canv.sync_to_model();
+
+    emit canvas_refresh(bone.owner().get().owner().get());
 }
 
 void ui::canvas_manager::add_new_skeleton(sm::skel_ref skel_ref) {
@@ -619,6 +621,8 @@ void ui::canvas_manager::add_new_skeleton(sm::skel_ref skel_ref) {
     auto& skel = skel_ref.get();
     canv.insert_item(skel.root_node().get());
     canv.insert_item(skel);
+
+    emit canvas_refresh(skel.owner().get());
 }
 
 ui::canvas* ui::canvas_manager::canvas_from_tab(const std::string& tab_name) {
@@ -673,7 +677,7 @@ void ui::canvas_manager::set_contents(project& model) {
             model.skeletons_on_tab(tab) | r::to<std::vector<sm::skel_ref>>()
         );
     }
-
+    emit canvas_refresh(model.world());
 }
 
 void ui::canvas_manager::set_drag_mode(drag_mode dm) {

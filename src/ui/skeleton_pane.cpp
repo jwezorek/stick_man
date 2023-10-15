@@ -193,7 +193,7 @@ void ui::skeleton_pane::expand_selected_items() {
 	}
 }
 
-void ui::skeleton_pane::sync_with_model(project& model)
+void ui::skeleton_pane::sync_with_model(sm::world& model)
 {
 	disconnect_tree_sel_handler();
 
@@ -201,7 +201,7 @@ void ui::skeleton_pane::sync_with_model(project& model)
 	QStandardItemModel* tree_model = static_cast<QStandardItemModel*>(skeleton_tree_->model());
 	tree_model->clear();
 
-	for (const auto& skel : model.world().skeletons()) {
+	for (const auto& skel : model.skeletons()) {
 		insert_skeleton( tree_model, skel );
 	}
 
@@ -395,7 +395,7 @@ void ui::skeleton_pane::select_item(QStandardItem* item, bool select = true) {
 }
 
 void ui::skeleton_pane::connect_canv_cont_handler() {
-    canv_content_conn_ = connect(project_, &project::contents_changed,
+    canv_content_conn_ = connect(canvases_, &canvas_manager::canvas_refresh,
         this, &ui::skeleton_pane::sync_with_model
     );
 }

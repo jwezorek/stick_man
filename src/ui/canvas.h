@@ -177,6 +177,7 @@ namespace ui {
         void active_canvas_changed(ui::canvas& old_canv, ui::canvas& canv);
         void selection_changed(ui::canvas& canv);
         void rubber_band_change(ui::canvas& canv, QRect rbr, QPointF from, QPointF to);
+        void canvas_refresh(sm::world& proj);
     };
 
     using model_variant = std::variant<std::reference_wrapper<sm::skeleton>,

@@ -136,8 +136,6 @@ bool ui::project::from_json(const std::string& str) {
     world_ = std::move(std::get<1>(*comps));
 
     emit new_project_opened(*this);
-    emit contents_changed(*this);
-
     return true;
 }
 
@@ -156,13 +154,10 @@ void ui::project::add_bone(const std::string& tab, sm::node& u, sm::node& v) {
     } else {
         throw std::runtime_error("ui::project::add_bone");
     }
-
-    emit contents_changed(*this);
 }
 
 void ui::project::add_new_skeleton_root(const std::string& tab, sm::point loc) {
     auto skel = world_.create_skeleton(loc);
     tabs_[tab].push_back(skel.get().name());
     emit new_skeleton_added(skel);
-    emit contents_changed(*this);
 }

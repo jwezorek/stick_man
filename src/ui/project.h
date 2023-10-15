@@ -74,7 +74,6 @@ namespace ui {
         void new_bone_added(sm::bone& bone);
         void new_project_opened(project& model);
         void new_skeleton_added(sm::skel_ref skel);
-        void contents_changed(project& model);
     };
 
 }
