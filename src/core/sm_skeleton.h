@@ -113,6 +113,9 @@ namespace sm {
 		world();
         world(world&& other);
         world& operator=(world&& other);
+        world(const world& other) = delete;
+        world& operator=(const world& other) = delete;
+        ~world() = default;
 
         void clear();
 		skel_ref create_skeleton(double x, double y);
