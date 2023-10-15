@@ -568,7 +568,7 @@ void ui::canvas_manager::init(project& proj) {
     connect(&proj, &project::new_bone_added, this, &canvas_manager::add_new_bone);
     connect(&proj, &project::new_skeleton_added, this, &canvas_manager::add_new_skeleton);
     connect(&proj, &project::new_project_opened, this, &canvas_manager::set_contents);
-    connect(&proj, &project::pre_refresh_canvas, this, &canvas_manager::clear_canvas);
+    //connect(&proj, &project::pre_refresh_canvas, this, &canvas_manager::clear_canvas);
     connect(&proj, &project::refresh_canvas, this, &canvas_manager::set_contents_of_canvas);
 }
 
@@ -613,7 +613,8 @@ void ui::canvas_manager::add_new_bone(sm::bone& bone) {
     canv.insert_item(bone);
     canv.sync_to_model();
 
-    emit canvas_refresh(bone.owner().get().owner().get());
+    auto& world = bone.owner().get().owner().get();
+    emit canvas_refresh(world);
 }
 
 void ui::canvas_manager::add_new_skeleton(sm::skel_ref skel_ref) {

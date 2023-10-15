@@ -31,7 +31,7 @@ namespace sm {
         using nodes_tbl = std::unordered_map<std::string, node*>;
         using bones_tbl = std::unordered_map<std::string, bone*>;
 
-		world& owner_;
+		world_ref owner_;
 		std::string name_;
 		maybe_node_ref root_;
 		std::any user_data_;
@@ -48,6 +48,7 @@ namespace sm {
         void set_root(sm::node& new_root);
         void register_node(sm::node& new_node);
         void register_bone(sm::bone& new_bone);
+        void set_owner(world& owner);
 
 	public:
 		std::string name() const;
@@ -110,6 +111,9 @@ namespace sm {
 
     public:
 		world();
+        world(world&& other);
+        world& operator=(world&& other);
+
         void clear();
 		skel_ref create_skeleton(double x, double y);
         skel_ref create_skeleton(const point& pt);

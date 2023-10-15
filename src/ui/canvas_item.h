@@ -52,7 +52,7 @@ namespace ui {
 		U& model() { return model_; }
         const U& model() const { return model_; }
 		virtual ~has_stick_man_model() {
-			model_.set_user_data(std::any{});
+			//model_.set_user_data(std::any{});
 		}
 	};
 

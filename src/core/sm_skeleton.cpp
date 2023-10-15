@@ -944,6 +944,10 @@ void sm::skeleton::set_root(sm::node& new_root)
     root_ = std::ref(new_root);
 }
 
+void sm::skeleton::set_owner(sm::world& owner)
+{
+    owner_ = owner;
+}
 
 void sm::skeleton::register_node(sm::node& new_node) {
     if (contains<node>(new_node.name()) || &new_node.owner().get() != this) {
@@ -983,6 +987,21 @@ void sm::skeleton::apply(matrix& mat) {
 /*------------------------------------------------------------------------------------------------*/
 
 sm::world::world() {}
+
+sm::world::world(sm::world&& other) {
+    *this = std::move(other);
+}
+
+sm::world& sm::world::operator=(world&& other) {
+    skeletons_ = std::move(other.skeletons_);
+    bones_ = std::move(other.bones_);
+    nodes_ = std::move(other.nodes_);
+
+    for (auto& pair : skeletons_) {
+        pair.second->set_owner(*this);
+    }
+    return *this;
+}
 
 void sm::world::clear() {
     skeletons_.clear();
