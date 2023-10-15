@@ -332,7 +332,6 @@ namespace {
 
         auto& canvases = main_wnd.canvases();
         auto& canv = canvases.active_canvas();
-        auto& dest_world = main_wnd.project().world();
 
         auto dest_mat = (!in_place) ? 
             paste_matrix(canv.cursor_pos(), clipboard_world) :
@@ -341,14 +340,12 @@ namespace {
             clipboard_world.apply( *dest_mat );
         }
 
-        for (auto skel : clipboard_world.skeletons()) {
-            auto copy = skel.get().copy_to(
-                dest_world,
-                ui::unique_skeleton_name(skel.get().name(), dest_world.skeleton_names())
-            );
-        }
-
-        //canvases.sync_to_model(main_wnd.project(), canv);
+        auto& project = main_wnd.project();
+        project.replace_skeletons(
+            canv.tab_name(),
+            {},
+            clipboard_world.skeletons() | r::to<std::vector<sm::skel_ref>>()
+        );
     }
 
     void cut_or_copy(ui::stick_man& main_wnd, bool should_cut) {
