@@ -67,7 +67,10 @@ void ui::stick_man::open()
 			QString content = in.readAll();
 			file.close();
 
-            project_.from_json(content.toStdString());
+            auto success = project_.from_json(content.toStdString()); 
+            if (!success) {
+                QMessageBox::critical(this, "Error", "Error opening file.");
+            }
 		} else {
 			QMessageBox::critical(this, "Error", "Could not open file.");
 		}

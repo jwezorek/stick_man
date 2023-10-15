@@ -4,6 +4,8 @@
 #include "../core/sm_skeleton.h"
 #include "../core/json.hpp"
 #include <ranges>
+#include <optional>
+#include <tuple>
 
 using json = nlohmann::json;
 namespace r = std::ranges;
@@ -12,8 +14,9 @@ namespace rv = std::ranges::views;
 /*------------------------------------------------------------------------------------------------*/
 
 namespace {
+
     json tabs_to_json(const std::unordered_map<std::string, std::vector<std::string>>& tabs) {
-        return tabs | 
+        return tabs |
             rv::transform(
                 [](const auto& item)->json {
                     const auto& [key, val] = item;
@@ -33,6 +36,26 @@ namespace {
         }
         return tabs;
     }
+
+    std::optional<std::tuple<ui::tab_table, sm::world>> json_to_project_components(const std::string& str) {
+        try {
+
+            json proj = json::parse(str);
+            auto new_tabs = tabs_from_json(proj["tabs"]);
+            sm::world new_world;
+            auto result = new_world.from_json(proj["world"]);
+
+            if (result != sm::result::success) {
+                throw result;
+            }
+
+            return { {new_tabs, std::move(new_world) } };
+
+        } catch (...) {
+            return {};
+        };
+    }
+
     std::vector<std::string> skeleton_named_on_canvas(const ui::canvas& canv) {
         auto skels = canv.skeleton_items();
         return ui::to_model_ptrs(rv::all(skels)) |
@@ -101,26 +124,21 @@ std::string ui::project::to_json() const {
     return stick_man_project.dump(4);
 }
 
-void ui::project::from_json(const std::string& str) {
+bool ui::project::from_json(const std::string& str) {
+
+    auto comps = json_to_project_components(str);
+    if (!comps) {
+        return false;
+    }
+
     clear();
-    try {
-        json proj = json::parse(str);
-        auto new_tabs = tabs_from_json(proj["tabs"]);
-        sm::world new_world;
-        auto result = new_world.from_json(proj["world"]);
+    tabs_ = std::get<0>(*comps);
+    world_ = std::move(std::get<1>(*comps));
 
-        if (result != sm::result::success) {
-            throw result;
-        }
+    emit new_project_opened(*this);
+    emit contents_changed(*this);
 
-        tabs_ = new_tabs;
-        world_ = std::move(new_world);
-
-        emit new_project_opened( *this );
-        emit contents_changed( *this );
-    } catch (...) {
-        throw std::runtime_error("bad project json");
-    };
+    return true;
 }
 
 void ui::project::add_bone(const std::string& tab, sm::node& u, sm::node& v) {
