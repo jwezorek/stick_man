@@ -147,6 +147,8 @@ namespace ui {
         void add_new_bone(sm::bone& bone);
         void add_new_skeleton(sm::skel_ref skel);
         void set_contents(project& model);
+        void set_contents_of_canvas(project& model, const std::string& canvas);
+        void clear_canvas(const std::string& canv);
 
     public:
         canvas_manager(input_handler& inp_handler);

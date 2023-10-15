@@ -65,6 +65,32 @@ namespace {
                 }
             ) | r::to<std::vector<std::string>>();
     }
+
+    std::string get_prefix(const std::string& name) {
+        if (!name.contains('-')) {
+            return name;
+        }
+        int n = static_cast<int>(name.size());
+        int i;
+        bool at_least_one_digit = false;
+        for (i = n - 1; i >= 0; --i) {
+            if (!std::isdigit(name[i])) {
+                break;
+            }
+            else {
+                at_least_one_digit = true;
+            }
+        }
+        if (!at_least_one_digit || i < 0) {
+            return name;
+        }
+        if (name[i] != '-') {
+            return name;
+        }
+        return name.substr(0, i);
+    }
+
+    
 }
 
 void ui::project::delete_skeleton_from_tab(const std::string& tab, const std::string& skel) {
@@ -160,4 +186,48 @@ void ui::project::add_new_skeleton_root(const std::string& tab, sm::point loc) {
     auto skel = world_.create_skeleton(loc);
     tabs_[tab].push_back(skel.get().name());
     emit new_skeleton_added(skel);
+}
+
+//TODO: maintain a skeleton -> canvas table...
+std::string ui::project::canvas_name_from_skeleton(const std::string& skel) const {
+    for (const auto& [canv_name, skels] : tabs_) {
+        for (auto skel_name : skels) {
+            if (skel == skel_name) {
+                return canv_name;
+            }
+        }
+    }
+    return {};
+}
+
+void ui::project::replace_skeletons(const std::string& canvas_name,
+        const std::vector<std::string>& replacees,
+        const std::vector<sm::skel_ref>& replacements) {
+    emit pre_refresh_canvas(canvas_name);
+
+    for (auto replacee : replacees) {
+        if (canvas_name_from_skeleton(replacee) != canvas_name) {
+            throw std::runtime_error("replace_skeletons must be called on a single canvas");
+        }
+        delete_skeleton_from_tab(canvas_name, replacee);
+        world_.delete_skeleton(replacee);
+
+    }
+    for (auto replacement : replacements) {
+        auto& skel = replacement.get();
+        auto new_skel = skel.copy_to(world_, unique_skeleton_name(skel.name(), world_.skeleton_names()));
+        tabs_[canvas_name].push_back(new_skel->get().name());
+    }
+
+    emit refresh_canvas(*this, canvas_name);
+}
+
+std::string ui::unique_skeleton_name(const std::string& old_name,
+    const std::vector<std::string>& used_names) {
+    auto is_not_unique = r::find_if(used_names,
+        [old_name](auto&& str) {return str == old_name; }
+    ) != used_names.end();
+    return (is_not_unique) ?
+        ui::make_unique_name(used_names, get_prefix(old_name)) :
+        old_name;
 }

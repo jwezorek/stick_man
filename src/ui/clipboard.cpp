@@ -3,6 +3,7 @@
 #include "../core/json.hpp"
 #include "canvas_item.h"
 #include "canvas.h"
+#include "project.h"
 #include "stick_man.h"
 #include "util.h"
 #include <tuple>
@@ -64,43 +65,10 @@ namespace {
         }
     };
 
-    std::string get_prefix(const std::string& name) {
-        if (!name.contains('-')) {
-            return name;
-        }
-        int n = static_cast<int>(name.size());
-        int i;
-        bool at_least_one_digit = false;
-        for (i = n - 1; i >= 0; --i) {
-            if (!std::isdigit(name[i])) {
-                break;
-            } else {
-                at_least_one_digit = true;
-            }
-        }
-        if (!at_least_one_digit || i < 0) {
-            return name;
-        }
-        if (name[i] != '-') {
-            return name;
-        }
-        return name.substr(0, i);
-    }
-
-    std::string unique_skeleton_name(const std::string& old_name,
-            const std::vector<std::string>& used_names) {
-        auto is_not_unique = r::find_if( used_names, 
-                [old_name](auto&& str) {return str == old_name; }
-            ) != used_names.end();
-        return (is_not_unique) ?
-            ui::make_unique_name(used_names, get_prefix(old_name)) :
-            old_name;
-    }
-
     sm::skeleton* create_skeleton(sm::world& dest, const std::string& skel_name) {
         std::string name = skel_name;
         if (dest.contains_skeleton_name(name)) {
-            name = unique_skeleton_name(name, dest.skeleton_names());
+            name = ui::unique_skeleton_name(name, dest.skeleton_names());
         }
         auto skel = dest.create_skeleton(name);
         return &(skel->get());
@@ -264,7 +232,7 @@ namespace {
                         copied.insert(skel);
                         auto new_skel = skel.get().copy_to(
                             dest_world,
-                            unique_skeleton_name(skel.get().name(), dest_world.skeleton_names())
+                            ui::unique_skeleton_name(skel.get().name(), dest_world.skeleton_names())
                         );
                         if (!new_skel) {
                             throw std::runtime_error("unable to make new skeleton");
@@ -309,25 +277,20 @@ namespace {
     };
 
     json perform_op_on_selection(ui::stick_man& main_wnd, selection_operation op) {
-        auto& world = main_wnd.project().world();
+        auto& project = main_wnd.project();
         auto& canv = main_wnd.canvases().active_canvas();
         auto relavent_skels = relavent_skeleton_set(canv);
 
         auto [unselected, selected] = split_skeletons_by_selection(canv, relavent_skels);
 
         if (op == selection_operation::cut || op == selection_operation::del) {
-            canv.clear();
-            for (const sm::skeleton* skel : relavent_skels) {
-                world.delete_skeleton(skel->name());
-            }
-
-            for (auto skel : unselected.skeletons()) {
-                auto copy = skel.get().copy_to(
-                    world,
-                    unique_skeleton_name(skel.get().name(), world.skeleton_names())
-                );
-            }
-            //main_wnd.canvases().sync_to_model(main_wnd.project(), canv);
+            auto replacees = relavent_skels | rv::transform(
+                    [](const auto* skel) {
+                        return skel->name();
+                    }
+                ) | r::to<std::vector<std::string>>();
+            auto replacements = unselected.skeletons() | r::to<std::vector<sm::skel_ref>>();
+            project.replace_skeletons(canv.tab_name(), replacees, replacements);
         }
 
         if (op == selection_operation::cut || op == selection_operation::copy) {
@@ -381,7 +344,7 @@ namespace {
         for (auto skel : clipboard_world.skeletons()) {
             auto copy = skel.get().copy_to(
                 dest_world,
-                unique_skeleton_name(skel.get().name(), dest_world.skeleton_names())
+                ui::unique_skeleton_name(skel.get().name(), dest_world.skeleton_names())
             );
         }
 

@@ -67,6 +67,10 @@ namespace ui {
         bool from_json(const std::string& str);
         void add_bone(const std::string& tab, sm::node& u, sm::node& v);
         void add_new_skeleton_root(const std::string& tab, sm::point loc);
+        void replace_skeletons(const std::string& canvas_name, 
+            const std::vector<std::string>& replacees,
+            const std::vector<sm::skel_ref>& replacements);
+        std::string canvas_name_from_skeleton(const std::string& skel) const;
 
     signals:
         void new_tab_added(const std::string& name);
@@ -74,6 +78,9 @@ namespace ui {
         void new_bone_added(sm::bone& bone);
         void new_project_opened(project& model);
         void new_skeleton_added(sm::skel_ref skel);
+        void pre_refresh_canvas(const std::string& canvas);
+        void refresh_canvas(project& model, const std::string& canvas);
     };
 
+    std::string unique_skeleton_name(const std::string& old_name, const std::vector<std::string>& used_names);
 }

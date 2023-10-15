@@ -568,6 +568,8 @@ void ui::canvas_manager::init(project& proj) {
     connect(&proj, &project::new_bone_added, this, &canvas_manager::add_new_bone);
     connect(&proj, &project::new_skeleton_added, this, &canvas_manager::add_new_skeleton);
     connect(&proj, &project::new_project_opened, this, &canvas_manager::set_contents);
+    connect(&proj, &project::pre_refresh_canvas, this, &canvas_manager::clear_canvas);
+    connect(&proj, &project::refresh_canvas, this, &canvas_manager::set_contents_of_canvas);
 }
 
 void ui::canvas_manager::clear() {
@@ -678,6 +680,23 @@ void ui::canvas_manager::set_contents(project& model) {
         );
     }
     emit canvas_refresh(model.world());
+}
+
+void ui::canvas_manager::set_contents_of_canvas(project& model, const std::string& canvas ) {
+    auto* canv = canvas_from_tab(canvas);
+    if (!canv) {
+        return;
+    }
+
+    auto new_contents = model.skeletons_on_tab(canvas) | r::to<std::vector<sm::skel_ref>>();
+    canv->set_contents(new_contents);
+
+    emit canvas_refresh(model.world());
+}
+
+void ui::canvas_manager::clear_canvas(const std::string& canv)
+{
+    canvas_from_tab(canv)->clear();
 }
 
 void ui::canvas_manager::set_drag_mode(drag_mode dm) {
