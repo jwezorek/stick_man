@@ -198,6 +198,23 @@ std::string ui::project::canvas_name_from_skeleton(const std::string& skel) cons
     return {};
 }
 
+bool ui::project::rename(skel_piece piece_var, const std::string& new_name)
+{
+    auto result = std::visit(
+        [&](auto ref)->sm::result {
+            auto& piece = ref.get();
+            auto& owner = piece.owner().get();
+            return owner.set_name(piece, new_name);
+        },
+        piece_var
+    );
+    if (result == sm::result::success) {
+        emit name_changed(piece_var, new_name);
+        return true;
+    }
+    return false;
+}
+
 void ui::project::replace_skeletons(const std::string& canvas_name,
         const std::vector<std::string>& replacees,
         const std::vector<sm::skel_ref>& replacements) {

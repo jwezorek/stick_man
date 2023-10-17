@@ -718,18 +718,18 @@ void ui::canvas_manager::set_active_canvas(const canvas& c) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-std::optional<ui::model_variant> ui::selected_single_model(const ui::canvas& canv) {
+std::optional<ui::skel_piece> ui::selected_single_model(const ui::canvas& canv) {
 	auto* skel_item = canv.selected_skeleton();
 	if (skel_item) {
-		return model_variant{ std::ref(skel_item->model()) };
+		return skel_piece{ std::ref(skel_item->model()) };
 	}
 	auto bones = canv.selected_bones();
 	auto nodes = canv.selected_nodes();
 	if (bones.size() == 1 && nodes.empty()) {
-		return model_variant{ std::ref(bones.front()->model()) };
+		return skel_piece{ std::ref(bones.front()->model()) };
 	}
 	if (nodes.size() == 1 && bones.empty()) {
-		return model_variant{ std::ref(nodes.front()->model()) };
+		return skel_piece{ std::ref(nodes.front()->model()) };
 	}
 	return {};
 }

@@ -13,6 +13,10 @@ namespace ui {
 
     class canvas_manager;
 
+    using const_skel_piece =
+        std::variant<sm::const_node_ref, sm::const_bone_ref, sm::const_skel_ref>;
+    using skel_piece = std::variant<sm::node_ref, sm::bone_ref, sm::skel_ref>;
+
     using tab_table = std::unordered_map<std::string, std::vector<std::string>>;
 
     class project : public QObject {
@@ -71,6 +75,7 @@ namespace ui {
             const std::vector<std::string>& replacees,
             const std::vector<sm::skel_ref>& replacements);
         std::string canvas_name_from_skeleton(const std::string& skel) const;
+        bool rename(skel_piece piece, const std::string& new_name);
 
     signals:
         void new_tab_added(const std::string& name);
@@ -79,6 +84,7 @@ namespace ui {
         void new_project_opened(project& model);
         void new_skeleton_added(sm::skel_ref skel);
         void refresh_canvas(project& model, const std::string& canvas);
+        void name_changed(skel_piece piece, const std::string& new_name);
     };
 
     std::string unique_skeleton_name(const std::string& old_name, const std::vector<std::string>& used_names);

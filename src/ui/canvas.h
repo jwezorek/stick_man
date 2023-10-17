@@ -1,6 +1,7 @@
 #pragma once
 
 #include "util.h"
+#include "project.h"
 #include <QWidget>
 #include <QtWidgets>
 #include <QGraphicsScene>
@@ -182,8 +183,5 @@ namespace ui {
         void canvas_refresh(sm::world& proj);
     };
 
-    using model_variant = std::variant<std::reference_wrapper<sm::skeleton>,
-        std::reference_wrapper<sm::node>,
-        std::reference_wrapper<sm::bone>>;
-    std::optional<model_variant> selected_single_model(const ui::canvas& canv);
+    std::optional<ui::skel_piece> selected_single_model(const ui::canvas& canv);
 }
