@@ -4,6 +4,7 @@
 #include "util.h"
 #include "stick_man.h"
 #include "skeleton_pane.h"
+#include "project.h"
 #include <unordered_map>
 #include <unordered_set>
 #include <ranges>
@@ -172,7 +173,7 @@ namespace {
 		skeleton_properties(const ui::current_canvas_fn& fn, ui::selection_properties* parent) :
 			abstract_properties_widget(fn, parent, "skeleton selection") {}
 
-		void populate() override {
+		void populate(ui::project& proj) override {
 			layout_->addWidget(
 				name_ = new ui::labeled_field("   name", "")
 			);
@@ -183,12 +184,15 @@ namespace {
 				}
 			);
 
-			connect(name_->value(), &ui::string_edit::value_changed,
-				[this]() {
-					parent_->skel_pane().handle_props_name_change(
-						name_->value()->text().toStdString()
-					);
-				}
+            connect(&proj, &ui::project::name_changed,
+                [this](ui::skel_piece piece, const std::string& new_name) {
+                    handle_rename(piece, name_->value(), new_name);
+                }
+            );
+
+			connect(
+                name_->value(), &ui::string_edit::value_changed, 
+                this, &skeleton_properties::do_property_name_change
 			);
 		}
 
@@ -275,7 +279,7 @@ namespace {
 			positions_{} {
 		}
 
-		void populate() override {
+		void populate(ui::project& proj) override {
 			layout_->addWidget(
 				name_ = new ui::labeled_field("   name", "")
 			);
@@ -287,11 +291,7 @@ namespace {
 			);
 
 			connect(name_->value(), &ui::string_edit::value_changed,
-				[this]() {
-                    parent_->skel_pane().handle_props_name_change(
-						name_->value()->text().toStdString()
-					);
-				}
+                this, &node_properties::do_property_name_change
 			);
 
 			layout_->addWidget(positions_ = new node_position_tab(get_current_canv_));
@@ -560,7 +560,7 @@ namespace {
 			nodes_(nullptr) {
 		}
 
-		void populate() override {
+		void populate(ui::project& proj) override {
 			layout_->addWidget(
 				name_ = new ui::labeled_field("   name", "")
 			);
@@ -597,12 +597,14 @@ namespace {
 			connect(constraint_btn_, &QPushButton::clicked,
 				this, &bone_properties::add_or_delete_constraint);
 
+            connect(&proj, &ui::project::name_changed,
+                [this](ui::skel_piece piece, const std::string& new_name) {
+                    handle_rename(piece, name_->value(), new_name);
+                }
+            );
+
 			connect(name_->value(), &ui::string_edit::value_changed,
-				[this]() {
-					parent_->skel_pane().handle_props_name_change(
-						name_->value()->text().toStdString()
-					);
-				}
+                this, &bone_properties::do_property_name_change
 			);
 
 			connect(u_->hyperlink(), &QPushButton::clicked,
@@ -690,7 +692,7 @@ namespace {
 			abstract_properties_widget(fn, parent, "") {
 		}
 
-		void populate() override {
+		void populate(ui::project& proj) override {
 			layout_->addWidget(
 				nodes_ = new node_properties(get_current_canv_, parent_)
 			);
@@ -698,8 +700,8 @@ namespace {
 			layout_->addWidget(
 				bones_ = new bone_properties(get_current_canv_, parent_)
 			);
-			nodes_->populate();
-			bones_->populate();
+			nodes_->populate(proj);
+			bones_->populate(proj);
 			nodes_->show();
 			bones_->show();
 		}
@@ -730,16 +732,39 @@ ui::abstract_properties_widget::abstract_properties_widget(
 	hide();
 }
 
+void ui::abstract_properties_widget::do_property_name_change(const std::string& new_name) {
+    auto maybe_piece = selected_single_model(get_current_canv_());
+    if (!maybe_piece) {
+        return;
+    }
+    proj_->rename(*maybe_piece, new_name);
+}
+
+void ui::abstract_properties_widget::handle_rename(ui::skel_piece p, ui::string_edit* name_edit, const std::string& new_name)
+{
+    auto maybe_piece = selected_single_model(get_current_canv_());
+    if (!maybe_piece) {
+        return;
+    }
+    if (!identical_pieces(*maybe_piece, p)) {
+        return;
+    }
+    if (name_edit->text().toStdString() != new_name) {
+        name_edit->setText(new_name.c_str());
+    }
+}
+
 void ui::abstract_properties_widget::set_title(QString title) {
 	title_->setText(title);
 }
 
-void ui::abstract_properties_widget::init() {
-	populate();
+void ui::abstract_properties_widget::init(project& proj) {
+	populate(proj);
 	layout_->addStretch();
+    proj_ = &proj;
 }
 
-void ui::abstract_properties_widget::populate() {
+void ui::abstract_properties_widget::populate(project& proj) {
 
 }
 
@@ -813,10 +838,10 @@ void ui::selection_properties::handle_selection_changed(canvas& canv) {
     set(canv);
 }
 
-void ui::selection_properties::init(canvas_manager& canvases)
+void ui::selection_properties::init(canvas_manager& canvases, project& proj)
 {
     for (const auto& [key, prop_box] : props_) {
-        prop_box->init();
+        prop_box->init(proj);
     }
     set(canvases.active_canvas());
     connect(&canvases, &canvas_manager::selection_changed,

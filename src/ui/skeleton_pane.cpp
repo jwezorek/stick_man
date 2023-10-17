@@ -16,6 +16,7 @@
 #include <variant>
 #include <type_traits>
 #include <qDebug>
+#include <stack>
 
 using namespace std::placeholders;
 namespace r = std::ranges;
@@ -66,7 +67,7 @@ namespace{
 		return qsi->data(k_model_role).value<T*>();
 	}
 
-	std::variant<sm::skel_ref, sm::bone_ref> get_treeitem_var(QStandardItem* qsi) {
+	ui::skel_piece get_treeitem_var(QStandardItem* qsi) {
 		if (is_bone_treeitem(qsi)) {
 			auto* bone = get_treeitem_data<sm::bone>(qsi);
 			return { std::ref(*bone) };
@@ -269,6 +270,42 @@ void ui::skeleton_pane::handle_tree_selection_change(
     connect_tree_sel_handler();
 }
 
+void ui::skeleton_pane::traverse_tree_items(const std::function<void(QStandardItem*)>& callback_visitor) {
+    auto& model = *(static_cast<QStandardItemModel*>(skeleton_tree_->model()));
+
+    auto visit_item = [&](this auto&& self, QStandardItem* itm)->void {
+        callback_visitor(itm);
+        if (itm->hasChildren()) {
+            for (int subrow = 0; subrow < itm->rowCount(); ++subrow) {
+                QStandardItem* subItem = itm->child(subrow);
+                self(subItem);
+            }
+        }
+    };
+
+    for (int row = 0; row < model.rowCount(); ++row) {
+        QStandardItem* item = model.item(row);
+        visit_item(item);
+    }
+}
+
+void ui::skeleton_pane::handle_rename(skel_piece piece, const std::string& new_name) {
+    if (std::holds_alternative<sm::node_ref>(piece)) {
+        return;
+    }
+    traverse_tree_items(
+        [&](QStandardItem* itm)->void {
+            auto itm_piece = get_treeitem_var(itm);
+            if (identical_pieces(piece, itm_piece)) {
+                auto curr_name = itm->text().toStdString();
+                if (curr_name != new_name) {
+                    itm->setText(new_name.c_str());
+                }
+            }
+        }
+    );
+}
+
 bool ui::skeleton_pane::validate_props_name_change(const std::string& new_name) {
 	auto model_item = selected_single_model(canvas());
 	if (!model_item) {
@@ -287,43 +324,6 @@ bool ui::skeleton_pane::validate_props_name_change(const std::string& new_name) 
 		},
 		*model_item
 	);
-}
-
-void ui::skeleton_pane::handle_props_name_change(const std::string& new_name) {
-
-	// change the name in the model...
-	auto model_item = selected_single_model(canvas());
-	if (!model_item) {
-		return;
-	}
-
-	auto result = std::visit(
-		[new_name](auto model_ref)->sm::result {
-			auto& model = model_ref.get();
-			auto& skel = model.owner().get();
-			return skel.set_name(model, new_name);
-		},
-		*model_item
-	);
-
-	// then update the skeleton treeview if this is a bone or a skeleton...
-
-	disconnect_tree_change_handler();
-	std::visit(
-		[new_name](auto model_ref) {
-			auto& model = model_ref.get();
-			using item_type = 
-				typename item_for_model<std::remove_cvref_t<decltype(model)>>::type;
-			item_type& item = item_from_model<item_type>(model);
-			auto* tv_holder = dynamic_cast<has_treeview_item*>(&item);
-			if (tv_holder) {
-				QStandardItem* tree_item = tv_holder->treeview_item();
-				tree_item->setText(new_name.c_str());
-			}
-		},
-		*model_item
-	);
-	connect_tree_change_handler();
 }
 
 ui::skeleton_pane::skeleton_pane(ui::stick_man* mw) :
@@ -418,11 +418,13 @@ void ui::skeleton_pane::disconnect_canv_sel_handler() {
 void ui::skeleton_pane::init(canvas_manager& canvases, project& proj) {
     project_ = &proj;
     canvases_ = &canvases;
-	sel_properties_->init(canvases);
+	sel_properties_->init(canvases, proj);
 
     connect_canv_cont_handler();
 	connect_canv_sel_handler();
 	connect_tree_sel_handler();
+
+    connect(project_, &project::name_changed, this, &skeleton_pane::handle_rename);
 }
 
 void ui::skeleton_pane::select_items(const std::vector<QStandardItem*>& items, bool emit_signal) {
@@ -454,24 +456,12 @@ void ui::skeleton_pane::handle_canv_sel_change() {
 }
 
 void ui::skeleton_pane::handle_tree_change(QStandardItem* item) {
-	auto success = std::visit(
-		[item](auto model_ref)->bool {
-			auto& model = model_ref.get();
-			auto old_name = model.name();
-			auto& owner = model.owner().get();
-			auto result = owner.set_name(model, item->text().toStdString());
-			if (result != sm::result::success) {
-				item->setText(old_name.c_str());
-				return false;
-			}
-			return true;
-		},
-		get_treeitem_var(item)
-		);
-
-	if (success) {
-		emit canvas().manager().selection_changed(canvas());
-	}
+    auto piece = get_treeitem_var(item);
+    auto old_name = std::visit([](auto p) {return p.get().name(); }, piece);
+    auto result = project_->rename(piece, item->text().toStdString());
+    if (!result) {
+        item->setText(old_name.c_str());
+    }
 }
 
 std::vector<QStandardItem*> ui::skeleton_pane::selected_items() const {

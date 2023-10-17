@@ -245,3 +245,18 @@ std::string ui::unique_skeleton_name(const std::string& old_name,
         ui::make_unique_name(used_names, get_prefix(old_name)) :
         old_name;
 }
+
+bool ui::identical_pieces(ui::skel_piece p1, ui::skel_piece p2) {
+    auto to_void_star = [](ui::skel_piece sp) {
+        return std::visit(
+            [](auto& p)->void* {
+                return &p.get();
+            },
+            sp
+        );
+        };
+    auto ptr1 = to_void_star(p1);
+    auto ptr2 = to_void_star(p2);
+
+    return ptr1 == ptr2;
+}

@@ -5,6 +5,7 @@
 #include <QtWidgets>
 #include "../core/sm_types.h"
 #include "properties.h"
+#include <functional>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -44,6 +45,8 @@ namespace ui {
 		void handle_canv_sel_change();
 		void handle_tree_change(QStandardItem* item);
 		void handle_tree_selection_change(const QItemSelection&, const QItemSelection&);
+        void handle_rename(skel_piece piece, const std::string& new_name);
+        void traverse_tree_items(const std::function<void(QStandardItem*)>& visitor);
 
 		QTreeView* create_skeleton_tree();
 		std::vector<QStandardItem*> selected_items() const;
@@ -58,7 +61,7 @@ namespace ui {
 		selection_properties& sel_properties();
 		void init(canvas_manager& canvases, project& proj);
 		bool validate_props_name_change(const std::string& new_name);
-		void handle_props_name_change(const std::string& new_name);
+		
     };
 
 }

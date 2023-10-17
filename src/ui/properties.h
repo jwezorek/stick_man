@@ -3,6 +3,8 @@
 #include <QtWidgets>
 #include <unordered_map>
 #include <functional>
+#include "util.h"
+#include "project.h"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -12,6 +14,7 @@ namespace ui {
     class canvas_manager;
 	class canvas;
     class skeleton_pane;
+    class project;
 
 	enum class selection_type {
 		none = 0,
@@ -31,13 +34,17 @@ namespace ui {
 		QLabel* title_;
         current_canvas_fn get_current_canv_;
         selection_properties* parent_;
+        project* proj_;
+
+        void do_property_name_change(const std::string& new_name);
+        void handle_rename(ui::skel_piece p, ui::string_edit* name_edit, const std::string& new_name);
 
 	public:
 		abstract_properties_widget(const current_canvas_fn& fn, 
             selection_properties* parent, QString title);
 		void set_title(QString title);
-		void init();
-		virtual void populate();
+		void init(project& proj);
+		virtual void populate(project& proj);
 		virtual void set_selection(const ui::canvas& canv) = 0;
 		virtual void lose_selection();
 	};
@@ -62,7 +69,7 @@ namespace ui {
 		selection_properties(const current_canvas_fn& fn, skeleton_pane* pane);
 		abstract_properties_widget* current_props() const;
 		void set(const ui::canvas& canv);
-		void init(canvas_manager& canvases);
+		void init(canvas_manager& canvases, project& proj);
         skeleton_pane& skel_pane();
 	};
 }
