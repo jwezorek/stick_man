@@ -568,8 +568,15 @@ void ui::canvas_manager::init(project& proj) {
     connect(&proj, &project::new_bone_added, this, &canvas_manager::add_new_bone);
     connect(&proj, &project::new_skeleton_added, this, &canvas_manager::add_new_skeleton);
     connect(&proj, &project::new_project_opened, this, &canvas_manager::set_contents);
-    //connect(&proj, &project::pre_refresh_canvas, this, &canvas_manager::clear_canvas);
-    connect(&proj, &project::refresh_canvas, this, &canvas_manager::set_contents_of_canvas);
+    connect(&proj, &project::refresh_canvas, 
+        [this](project& model, const std::string& canvas, bool clear) {
+            if (clear) {
+                set_contents_of_canvas(model, canvas);
+            } else {
+                canvas_from_tab(canvas)->sync_to_model();
+            }
+        }
+    );
 }
 
 void ui::canvas_manager::clear() {

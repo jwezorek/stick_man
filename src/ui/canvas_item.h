@@ -150,7 +150,7 @@ namespace ui {
 		return model_obj.get_user_data().has_value();
 	}
 	
-	auto to_model_ptrs(auto items) {
+	auto to_model_ptrs(auto&& items) {
 		return items | std::ranges::views::transform(
 			[](auto* item) {
 				return &item->model();

@@ -56,16 +56,6 @@ namespace {
         };
     }
 
-    std::vector<std::string> skeleton_named_on_canvas(const ui::canvas& canv) {
-        auto skels = canv.skeleton_items();
-        return ui::to_model_ptrs(rv::all(skels)) |
-            rv::transform(
-                [](sm::skeleton* skel)->std::string {
-                    return skel->name();
-                }
-            ) | r::to<std::vector<std::string>>();
-    }
-
     std::string get_prefix(const std::string& name) {
         if (!name.contains('-')) {
             return name;
@@ -215,6 +205,34 @@ bool ui::project::rename(skel_piece piece_var, const std::string& new_name)
     return false;
 }
 
+void ui::project::transform(const std::vector<sm::node_ref>& nodes,
+        const std::function<void(sm::node&)>& fn) {
+    if (nodes.empty()) {
+        return;
+    }
+    for (auto node : nodes) {
+        fn(node.get());
+    }
+    auto canv = canvas_name_from_skeleton(
+        nodes.front().get().owner().get().name()
+    );
+    emit refresh_canvas(*this, canv, false);
+}
+
+void ui::project::transform(const std::vector<sm::bone_ref>& bones,
+        const std::function<void(sm::bone&)>& fn) {
+    if (bones.empty()) {
+        return;
+    }
+    for (auto bone : bones) {
+        fn(bone.get());
+    }
+    auto canv = canvas_name_from_skeleton(
+        bones.front().get().owner().get().name()
+    );
+    emit refresh_canvas(*this, canv, false);
+}
+
 void ui::project::replace_skeletons(const std::string& canvas_name,
         const std::vector<std::string>& replacees,
         const std::vector<sm::skel_ref>& replacements) {
@@ -233,7 +251,7 @@ void ui::project::replace_skeletons(const std::string& canvas_name,
         tabs_[canvas_name].push_back(new_skel->get().name());
     }
 
-    emit refresh_canvas(*this, canvas_name);
+    emit refresh_canvas(*this, canvas_name, true);
 }
 
 std::string ui::unique_skeleton_name(const std::string& old_name,

@@ -135,7 +135,7 @@ namespace {
         // sort bones into topological order and then set world rotation...
 
 		auto bone_items = canv.selected_bones();
-		std::unordered_set<sm::bone*> selected = ui::to_model_ptrs( rv::all(bone_items) ) |
+		std::unordered_set<sm::bone*> selected = ui::to_model_ptrs( bone_items ) |
 			r::to< std::unordered_set<sm::bone*>>();
 		std::vector<sm::bone*> ordered_bones;
         auto skeletons = canv.skeleton_items();
@@ -300,21 +300,24 @@ namespace {
 				[this](int field) {
 					auto& canv = get_current_canv_();
 					auto v = positions_->value(field);
+                    auto sel = ui::to_model_ptrs(canv.selected_nodes()) |
+                        rv::transform([](auto* ptr)->sm::node_ref {return std::ref(*ptr); }) |
+                        r::to<std::vector<sm::node_ref>>();
 					if (field == 0) {
-						canv.transform_selection(
-							[v](ui::node_item* ni) {
-								auto y = ni->model().world_y();
-								ni->model().set_world_pos(sm::point(*v, y));
-							}
-						);
+                        proj_->transform(sel,
+                            [&](sm::node& node) {
+                                auto y = node.world_y();
+                                node.set_world_pos(sm::point(*v, y));
+                            }
+                        );
 					} else {
-						canv.transform_selection(
-							[v](ui::node_item* ni) {
-								auto x = ni->model().world_x();
-								ni->model().set_world_pos(sm::point(x, *v));
-							}
-						);
-					}
+                        proj_->transform(sel,
+                            [&](sm::node& node) {
+                                auto x = node.world_x();
+                                node.set_world_pos(sm::point(x, *v));
+                            }
+                        );
+					} 
 					canv.sync_to_model();
 				}
 			);
