@@ -387,3 +387,26 @@ void sm::bone::set_world_rotation(double theta) {
 		}
 	);
 }
+
+void sm::bone::set_length(double len) {
+    std::unordered_map<bone*, std::tuple<double,double>> bone_to_len_and_rot;
+    std::vector<bone*> topo_order;
+    dfs(*this, {},
+        [&](sm::bone& bone)->visit_result {
+            bone_to_len_and_rot[&bone] = { bone.length(), bone.world_rotation() };
+            topo_order.push_back(&bone);
+            return visit_result::continue_traversal;
+        },
+        true
+    );
+    bone_to_len_and_rot[this] = { len, world_rotation() };
+    for (auto* bone : topo_order) {
+        auto [len, rot] = bone_to_len_and_rot.at(bone);
+        sm::point offset = {
+            len * std::cos(rot),
+            len * std::sin(rot)
+        };
+        auto new_child_node_pos = bone->parent_node().world_pos() + offset;
+        bone->child_node().set_world_pos(new_child_node_pos);
+    }
+}

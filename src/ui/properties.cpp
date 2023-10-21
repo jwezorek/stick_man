@@ -12,6 +12,8 @@
 #include <numbers>
 #include <qdebug.h>
 
+/*------------------------------------------------------------------------------------------------*/
+
 using namespace std::placeholders;
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
@@ -70,43 +72,7 @@ namespace {
 			std::optional<double>{first_val} : std::optional<double>{};
 	}
 
-	struct bone_info {
-		double rotation;
-		double length;
-	};
-
-	void set_bone_length(ui::canvas& canv, double new_length) {
-		using bone_table_t = std::unordered_map<sm::bone*, bone_info>;
-		auto bone_items = canv.bone_items();
-		auto bone_tbl = to_model_objects(bone_items) |
-			rv::transform(
-				[new_length](sm::bone& bone)->bone_table_t::value_type {
-					auto& itm = ui::item_from_model<ui::bone_item>(bone);
-					auto length = itm.is_selected() ? new_length : bone.scaled_length();
-					return { &bone,bone_info{bone.world_rotation(), length} };
-				}
-		) | r::to<bone_table_t>();
-
-		auto root_node_items = canv.root_node_items();
-		for (auto& root : to_model_objects(root_node_items)) {
-			sm::dfs(
-				root,
-				{},
-				[&](sm::bone& bone)->sm::visit_result {
-					auto [rot, len] = bone_tbl.at(&bone);
-					sm::point offset = {
-						len * std::cos(rot),
-						len * std::sin(rot)
-					};
-					auto new_child_node_pos = bone.parent_node().world_pos() + offset;
-					bone.child_node().set_world_pos(new_child_node_pos);
-					return sm::visit_result::continue_traversal;
-				},
-				true
-			);
-		}
-		canv.sync_to_model();
-	}
+	
 
 	void set_rot_constraints(ui::canvas& canv, bool is_parent_relative, double start, double span) {
 		auto bone_items = canv.selected_bones();
@@ -124,39 +90,46 @@ namespace {
 		canv.sync_to_model();
 	}
 
-	// TODO: the following has bad computational complexity. Maybe do this in one pass
-    // if it is ever an issue. (the way it is now it is like O(n * (V + E)) where n is 
-    // the number of selected bones and V and E are the number of nodes and bones in 
-    // skeletons on the active canvas because each call to set_world_rotation is doing 
-    // a traversal of the skeleton dowwnstream of the bone.)
+    std::vector<sm::bone_ref> topological_sort_selected_bones(ui::canvas& canv) {
+        auto bone_items = canv.selected_bones();
+        std::unordered_set<sm::bone*> selected = ui::to_model_ptrs(bone_items) |
+            r::to< std::unordered_set<sm::bone*>>();
+        std::vector<sm::bone_ref> ordered_bones;
+        auto skeletons = canv.skeleton_items();
 
-	void set_selected_bone_rotation(ui::canvas& canv, double theta) {
+        for (auto skel_item : skeletons) {
+            auto& skel = skel_item->model();
+            sm::visit_bones(skel.root_node().get(),
+                [&](auto& bone)->sm::visit_result {
+                    if (selected.contains(&bone)) {
+                        ordered_bones.push_back(bone);
+                    }
+                    return sm::visit_result::continue_traversal;
+                }
+            );
+        }
+
+        return ordered_bones;
+    }
+
+    void set_selected_bone_length(ui::project& proj, ui::canvas& canv, double new_length) {
+        proj.transform(
+            topological_sort_selected_bones(canv),
+            [new_length](sm::bone_ref bone) {
+                bone.get().set_length(new_length);
+            }
+        );
+    }
+
+	void set_selected_bone_rotation(ui::project& proj, ui::canvas& canv, double theta) {
 
         // sort bones into topological order and then set world rotation...
-
-		auto bone_items = canv.selected_bones();
-		std::unordered_set<sm::bone*> selected = ui::to_model_ptrs( bone_items ) |
-			r::to< std::unordered_set<sm::bone*>>();
-		std::vector<sm::bone*> ordered_bones;
-        auto skeletons = canv.skeleton_items();
-		
-		for (auto skel_item : skeletons) {
-            auto& skel = skel_item->model();
-			sm::visit_bones(skel.root_node().get(),
-				[&](auto& bone)->sm::visit_result {
-					if (selected.contains(&bone)) {
-						ordered_bones.push_back(&bone);
-					}
-					return sm::visit_result::continue_traversal;
-				}
-			);
-		}
-
-		for (auto* bone : ordered_bones) {
-			bone->set_world_rotation(theta);
-		}
-
-		canv.sync_to_model();
+        proj.transform(
+            topological_sort_selected_bones(canv),
+            [theta](sm::bone_ref bone) {
+                bone.get().set_world_rotation(theta);
+            }
+        );
 	}
 
 	class no_properties : public ui::abstract_properties_widget {
@@ -618,15 +591,19 @@ namespace {
 			);
 
 			connect(length_->num_edit(), &ui::number_edit::value_changed,
-                [this](double val) {
+                [this, &proj](double val) {
                     auto& canv = get_current_canv_();
-                    set_bone_length(canv, val);
+                    set_selected_bone_length(proj, canv, val);
                 }
 			);
 			connect(rotation_, &ui::tabbed_values::value_changed,
-				[this](int) {
+				[this, &proj](int) {
 					auto rot = rotation_->value(0);
-					set_selected_bone_rotation( get_current_canv_(), ui::degrees_to_radians(*rot) );
+					set_selected_bone_rotation( 
+                        proj, 
+                        get_current_canv_(), 
+                        ui::degrees_to_radians(*rot) 
+                    );
 				}
 			);
 		}

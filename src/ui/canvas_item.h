@@ -150,6 +150,8 @@ namespace ui {
 		return model_obj.get_user_data().has_value();
 	}
 	
+    // items are a view of canvas_item pointers of some type.
+    // returns a view of sm::node, sm::bone, or sm::skeleton pointers. 
 	auto to_model_ptrs(auto&& items) {
 		return items | std::ranges::views::transform(
 			[](auto* item) {
