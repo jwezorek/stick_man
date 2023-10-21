@@ -72,22 +72,22 @@ namespace {
 			std::optional<double>{first_val} : std::optional<double>{};
 	}
 
-	
-
-	void set_rot_constraints(ui::canvas& canv, bool is_parent_relative, double start, double span) {
-		auto bone_items = canv.selected_bones();
-		for (auto& bone : to_model_objects(bone_items)) {
-			bone.set_rotation_constraint(start, span, is_parent_relative);
-		}
-		canv.sync_to_model();
+	void set_rot_constraints(ui::project& proj, ui::canvas& canv, bool is_parent_relative, double start, double span) {
+        proj.transform(
+            to_model_refs(canv.selected_bones()) | r::to<std::vector<sm::bone_ref>>(),
+            [&](sm::bone& bone) {
+                bone.set_rotation_constraint(start, span, is_parent_relative);
+            }
+        );
 	}
 
-	void remove_rot_constraints(ui::canvas& canv) {
-		auto bone_items = canv.selected_bones();
-		for (auto& bone : to_model_objects(bone_items)) {
-			bone.remove_rotation_constraint();
-		}
-		canv.sync_to_model();
+	void remove_rot_constraints(ui::project& proj, ui::canvas& canv) {
+        proj.transform(
+            to_model_refs(canv.selected_bones()) | r::to<std::vector<sm::bone_ref>>(),
+            [](sm::bone& bone) {
+                bone.remove_rotation_constraint();
+            }
+        );
 	}
 
     std::vector<sm::bone_ref> topological_sort_selected_bones(ui::canvas& canv) {
@@ -334,6 +334,7 @@ namespace {
 		ui::labeled_numeric_val* span_angle_;
 		QComboBox* mode_;
 		ui::canvas& canv_;
+        ui::project& proj_;
 
 		bool is_constraint_relative_to_parent() const {
 			return mode_->currentIndex() == 0;
@@ -353,17 +354,17 @@ namespace {
 			return ui::degrees_to_radians(*span_angle_->num_edit()->value());
 		}
 
-		void set_constraint_angle(ui::canvas& canv, double val, bool is_start_angle) {
+		void set_constraint_angle(ui::project& proj, ui::canvas& canv, double val, bool is_start_angle) {
 			auto theta = ui::degrees_to_radians(val);
 			auto start_angle = is_start_angle ? theta : constraint_start_angle();
 			auto span_angle = is_start_angle ? constraint_span_angle() : theta;
-			set_rot_constraints(canv,
+			set_rot_constraints(proj, canv,
 				is_constraint_relative_to_parent(), start_angle, span_angle);
 			canv.sync_to_model();
 		}
 
-		void set_constraint_mode(ui::canvas& canv, bool relative_to_parent) {
-			set_rot_constraints(canv,
+		void set_constraint_mode(ui::project& proj, ui::canvas& canv, bool relative_to_parent) {
+			set_rot_constraints(proj, canv,
 				relative_to_parent, constraint_start_angle(), constraint_span_angle()
 			);
 			canv.sync_to_model();
@@ -382,12 +383,13 @@ namespace {
 		}
 
 	public:
-		rot_constraint_box(QPushButton* btn, ui::canvas& canv) :
-			btn_(btn),
-			start_angle_(nullptr),
-			span_angle_(nullptr),
-			mode_(nullptr),
-			canv_(canv) {
+		rot_constraint_box(QPushButton* btn, ui::canvas& canv, ui::project& proj) :
+			    btn_(btn),
+			    start_angle_(nullptr),
+			    span_angle_(nullptr),
+			    mode_(nullptr),
+			    canv_(canv),
+                proj_(proj) {
 			this->setTitle("rotation constraint");
 			btn_->setText("add rotation constraint");
 			auto* layout = new QVBoxLayout();
@@ -401,20 +403,20 @@ namespace {
 			this->hide();
 
 			connect(start_angle_->num_edit(), &ui::number_edit::value_changed,
-				[this, &canv](double v) {
-					set_constraint_angle(canv, v, true);
+				[this](double v) {
+					set_constraint_angle(proj_, canv_, v, true);
 				}
 			);
 
 			connect(span_angle_->num_edit(), &ui::number_edit::value_changed,
-				[this, &canv](double v) {
-					set_constraint_angle(canv, v, false);
+				[this](double v) {
+					set_constraint_angle(proj_, canv_, v, false);
 				}
 			);
 
 			connect(mode_, &QComboBox::currentIndexChanged,
-				[this, &canv](int new_index) {
-					set_constraint_mode(canv, new_index == 0);
+				[this](int new_index) {
+					set_constraint_mode(proj_, canv_, new_index == 0);
 				}
 			);
 		}
@@ -423,15 +425,7 @@ namespace {
 			start_angle_->num_edit()->set_value(ui::radians_to_degrees(start));
 			span_angle_->num_edit()->set_value(ui::radians_to_degrees(span));
 			mode_->setCurrentIndex(parent_relative ? 0 : 1);
-
-			set_rot_constraints(canv_, parent_relative, start, span);
-
 			show();
-		}
-
-		void clear() {
-			remove_rot_constraints(canv_);
-			hide();
 		}
 	};
 
@@ -506,15 +500,17 @@ namespace {
 		rot_constraint_box* constraint_box_;
 		QPushButton* constraint_btn_;
 
-		void add_or_delete_constraint() {
+		void add_or_delete_constraint(ui::project& proj, ui::canvas& canv) {
 			bool is_adding = !constraint_box_->isVisible();
 			if (is_adding) {
+                set_rot_constraints(proj, canv, true,
+                    k_default_rot_constraint_min, k_default_rot_constraint_span);
 				constraint_box_->set(
 					true, k_default_rot_constraint_min, k_default_rot_constraint_span
 				);
-			}
-			else {
-				constraint_box_->clear();
+			} else {
+                remove_rot_constraints(proj, canv);
+                constraint_box_->hide();
 			}
 			get_current_canv_().sync_to_model();
 		}
@@ -566,12 +562,15 @@ namespace {
 
 			constraint_btn_ = new QPushButton();
 			layout_->addWidget(constraint_box_ = new rot_constraint_box(
-                constraint_btn_, get_current_canv_())
+                constraint_btn_, get_current_canv_(), proj)
             );
 			layout_->addWidget(constraint_btn_);
 
-			connect(constraint_btn_, &QPushButton::clicked,
-				this, &bone_properties::add_or_delete_constraint);
+            connect(constraint_btn_, &QPushButton::clicked,
+                [&]() {
+                    add_or_delete_constraint(proj, get_current_canv_());
+                }
+            );
 
             connect(&proj, &ui::project::name_changed,
                 [this](ui::skel_piece piece, const std::string& new_name) {

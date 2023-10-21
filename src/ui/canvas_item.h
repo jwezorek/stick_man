@@ -159,4 +159,14 @@ namespace ui {
 			}
 		);
 	}
+
+    // items are a view of canvas_item pointers of some type.
+    // returns a view of sm::node_ref, sm::bone_ref, or sm::skel_ref references. 
+    auto to_model_refs(auto&& items) {
+        return items | std::ranges::views::transform(
+            [](auto* item) {
+                return std::ref(item->model());
+            }
+        );
+    }
 }
