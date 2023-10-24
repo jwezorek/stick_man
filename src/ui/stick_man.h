@@ -46,6 +46,7 @@ namespace ui {
         void createMainMenu();
 		void showEvent(QShowEvent* event) override;
 		void resizeEvent(QResizeEvent* event) override;
+        void update_undo_and_redo(bool can_redo, bool can_undo);
 
         tool_manager tool_mgr_;
         tool_palette* tool_pal_;
@@ -56,6 +57,8 @@ namespace ui {
         ui::project project_;
 		bool was_shown_;
 		bool has_fully_layed_out_widgets_;
+        QAction* undo_action_;
+        QAction* redo_action_;
     };
 
 }

@@ -179,22 +179,22 @@ void ui::stick_man::insert_file_menu() {
 }
 
 void ui::stick_man::do_undo() {
-
+    project_.undo();
 }
 
 void ui::stick_man::do_redo() {
-
+    project_.redo();
 }
 
 void ui::stick_man::insert_edit_menu() {
 
-    QAction* undo_action = new QAction("Undo", this);
-    undo_action->setShortcut(QKeySequence::Undo);
-    connect(undo_action, &QAction::triggered, this, &stick_man::do_undo);
+    undo_action_ = new QAction("Undo", this);
+    undo_action_->setShortcut(QKeySequence::Undo);
+    connect(undo_action_, &QAction::triggered, this, &stick_man::do_undo);
 
-    QAction* redo_action = new QAction("Redo", this);
-    redo_action->setShortcut(QKeySequence::Redo);
-    connect(redo_action, &QAction::triggered, this, &stick_man::do_redo);
+    redo_action_ = new QAction("Redo", this);
+    redo_action_->setShortcut(QKeySequence::Redo);
+    connect(redo_action_, &QAction::triggered, this, &stick_man::do_redo);
 
     QAction* cut_action = new QAction("Cut", this);
     cut_action->setShortcut(QKeySequence::Cut);
@@ -223,8 +223,8 @@ void ui::stick_man::insert_edit_menu() {
 
     QMenu* edit_menu = menuBar()->addMenu("Edit");
 
-    edit_menu->addAction(undo_action);
-    edit_menu->addAction(redo_action);
+    edit_menu->addAction(undo_action_);
+    edit_menu->addAction(redo_action_);
     edit_menu->addSeparator();
     edit_menu->addAction(cut_action);
     edit_menu->addAction(copy_action);
@@ -232,6 +232,15 @@ void ui::stick_man::insert_edit_menu() {
     edit_menu->addAction(paste_in_place_action);
     edit_menu->addSeparator();
     edit_menu->addAction(delete_action);
+
+    connect(&project_, &project::refresh_undo_redo_state, this, &stick_man::update_undo_and_redo);
+    redo_action_->setEnabled(false);
+    undo_action_->setEnabled(false);
+}
+
+void ui::stick_man::update_undo_and_redo(bool can_redo, bool can_undo) {
+    redo_action_->setEnabled(can_redo);
+    undo_action_->setEnabled(can_undo);
 }
 
 void ui::stick_man::insert_view_menu() {
@@ -254,8 +263,9 @@ void ui::stick_man::createMainMenu()
     insert_project_menu();
     insert_view_menu();
 
-    QString styleSheet = 
-        "QMenu::separator { background-color: palette(light); color: palette(light); }";
+    QString styleSheet =
+        "QMenu::separator { background-color: #7f7f7f; color: gray; }"
+        "QMenu::item:disabled{ color: gray; background-color: #353535 }";
     menuBar()->setStyleSheet(styleSheet);
 
 }

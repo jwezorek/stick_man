@@ -7,6 +7,8 @@
 #include <unordered_map>
 #include <span>
 #include <string_view>
+#include <memory>
+#include <stack>
 #include "../core/sm_skeleton.h"
 
 namespace ui {
@@ -18,15 +20,28 @@ namespace ui {
     using skel_piece = std::variant<sm::node_ref, sm::bone_ref, sm::skel_ref>;
 
     using tab_table = std::unordered_map<std::string, std::vector<std::string>>;
+    
+    class project;
+    struct command {
+        std::function<void(project&)> redo;
+        std::function<void(project&)> undo;
+    };
 
     class project : public QObject {
 
+        friend class commands;
+
         Q_OBJECT
 
-            tab_table tabs_;
+        tab_table tabs_;
         sm::world world_;
 
+        std::stack<command> redo_stack_;
+        std::stack<command> undo_stack_;
+
         void delete_skeleton_from_tab(const std::string& tab, const std::string& skel);
+        void clear_redo_stack();
+        void execute_command(const command& cmd);
 
     public:
         project();
@@ -34,6 +49,11 @@ namespace ui {
         const sm::world& world() const;
         sm::world& world();
         void clear();
+
+        void undo();
+        void redo();
+        bool can_undo() const;
+        bool can_redo() const;
 
         auto tabs() const {
             namespace rv = std::ranges::views;
@@ -88,6 +108,7 @@ namespace ui {
         void new_skeleton_added(sm::skel_ref skel);
         void refresh_canvas(project& model, const std::string& canvas, bool clear);
         void name_changed(skel_piece piece, const std::string& new_name);
+        void refresh_undo_redo_state(bool, bool);
     };
 
     std::string unique_skeleton_name(const std::string& old_name, const std::vector<std::string>& used_names);

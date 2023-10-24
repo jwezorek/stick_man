@@ -81,6 +81,36 @@ namespace {
     }
 }
 
+namespace ui {
+    class commands {
+    public:
+
+        struct create_node_state {
+            std::string tab_name;
+            std::string skeleton;
+            sm::point loc;
+        };
+
+        static ui::command make_create_node_command(const std::string& tab, const sm::point& pt) {
+            auto state = std::make_shared<create_node_state>(tab, "", pt);
+
+            return {
+                [state](ui::project& proj) {
+                    auto skel = proj.world_.create_skeleton(state->loc);
+                    state->skeleton = skel.get().name();
+                    proj.tabs_[state->tab_name].push_back(skel.get().name());
+                    emit proj.new_skeleton_added(skel);
+                },
+                [state](ui::project& proj) {
+                    proj.delete_skeleton_from_tab(state->tab_name, state->skeleton);
+                    proj.world_.delete_skeleton(state->skeleton);
+                    emit proj.refresh_canvas(proj, state->tab_name, true);
+                }
+            };
+        }
+    };
+}
+
 void ui::project::delete_skeleton_from_tab(const std::string& tab, const std::string& skel) {
     auto iter_tab = tabs_.find(tab);
     if (iter_tab == tabs_.end()) {
@@ -92,6 +122,17 @@ void ui::project::delete_skeleton_from_tab(const std::string& tab, const std::st
         return;
     }
     skel_group.erase(iter_skel);
+}
+
+void ui::project::clear_redo_stack() {
+    redo_stack_ = {};
+}
+
+void ui::project::execute_command(const command& cmd) {
+    clear_redo_stack();
+    cmd.redo(*this);
+    undo_stack_.push(cmd);
+    emit refresh_undo_redo_state(can_redo(), can_undo());
 }
 
 ui::project::project()
@@ -108,6 +149,40 @@ sm::world& ui::project::world() {
 void ui::project::clear() {
     tabs_.clear();
     world_.clear();
+    redo_stack_ = {};
+    undo_stack_ = {};
+}
+
+void ui::project::undo() {
+    if (!can_undo()) {
+        return;
+    }
+    auto cmd = undo_stack_.top();
+    undo_stack_.pop();
+    cmd.undo(*this);
+    redo_stack_.push(cmd);
+
+    emit refresh_undo_redo_state(can_redo(), can_undo());
+}
+
+void ui::project::redo() {
+    if (!can_redo()) {
+        return;
+    }
+    auto cmd = redo_stack_.top();
+    redo_stack_.pop();
+    cmd.redo(*this);
+    undo_stack_.push(cmd);
+
+    emit refresh_undo_redo_state(can_redo(), can_undo());
+}
+
+bool ui::project::can_undo() const {
+    return !undo_stack_.empty();
+}
+
+bool ui::project::can_redo() const {
+    return !redo_stack_.empty();
 }
 
 bool ui::project::has_tab(const std::string& str) const {
@@ -171,9 +246,9 @@ void ui::project::add_bone(const std::string& tab, sm::node& u, sm::node& v) {
 }
 
 void ui::project::add_new_skeleton_root(const std::string& tab, sm::point loc) {
-    auto skel = world_.create_skeleton(loc);
-    tabs_[tab].push_back(skel.get().name());
-    emit new_skeleton_added(skel);
+    execute_command(
+        commands::make_create_node_command(tab, loc)
+    );
 }
 
 //TODO: maintain a skeleton -> canvas table...
