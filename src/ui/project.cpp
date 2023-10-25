@@ -37,7 +37,8 @@ namespace {
         return tabs;
     }
 
-    std::optional<std::tuple<ui::tab_table, sm::world>> json_to_project_components(const std::string& str) {
+    std::optional<std::tuple<ui::tab_table, sm::world>> json_to_project_components(
+            const std::string& str) {
         try {
 
             json proj = json::parse(str);
@@ -85,6 +86,30 @@ namespace ui {
     class commands {
     public:
 
+        struct skel_piece_handle {
+            std::string skel_name;
+            std::string piece_name;
+        };
+
+        template<typename T>
+        static std::expected<std::reference_wrapper<T>, sm::result> from_handle(
+                ui::project& proj, const skel_piece_handle& hnd) {
+            auto skel = proj.world_.skeleton(hnd.skel_name);
+            if (!skel) {
+                return std::unexpected(skel.error());
+            }
+            auto maybe_piece = skel->get().get_by_name<T>(hnd.piece_name);
+            if (!maybe_piece) {
+                return std::unexpected(sm::result::not_found);
+            }
+            return *maybe_piece;
+        }
+
+        static skel_piece_handle to_handle(auto& piece) {
+            auto skel_name = piece.owner().get().name();
+            return { skel_name, piece.name() };
+        }
+
         struct create_node_state {
             std::string tab_name;
             std::string skeleton;
@@ -102,16 +127,69 @@ namespace ui {
                     emit proj.new_skeleton_added(skel);
                 },
                 [state](ui::project& proj) {
-                    proj.delete_skeleton_from_tab(state->tab_name, state->skeleton);
+                    proj.delete_skeleton_name_from_canvas_table(
+                        state->tab_name, state->skeleton
+                    );
                     proj.world_.delete_skeleton(state->skeleton);
                     emit proj.refresh_canvas(proj, state->tab_name, true);
+                }
+            };
+        }
+
+        struct add_node_state {
+            std::string canvas_name;
+            skel_piece_handle u_hnd;
+            skel_piece_handle v_hnd;
+            sm::world original;
+            std::string merged;
+
+            add_node_state(const std::string& cn, sm::node& u, sm::node& v) :
+                canvas_name(cn), u_hnd(to_handle(u)), v_hnd(to_handle(v))
+            {}
+        };
+
+        static ui::command make_add_bone_command(const std::string& tab, sm::node& u, sm::node& v) {
+            auto state = std::make_shared<add_node_state>(tab, u, v);
+            return {
+                [state](ui::project& proj) {
+                    auto& u = from_handle<sm::node>(proj, state->u_hnd)->get();
+                    auto& v = from_handle<sm::node>(proj, state->v_hnd)->get();
+
+                    if (&u.owner().get() == &v.owner().get()) {
+                        return;
+                    }
+
+                    auto& skel_u = u.owner().get();
+                    auto& skel_v = v.owner().get();
+                    skel_u.copy_to(state->original);
+                    skel_v.copy_to(state->original);
+
+                    emit proj.pre_new_bone_added(u, v);
+                    proj.delete_skeleton_name_from_canvas_table(
+                        state->canvas_name, v.owner().get().name()
+                    );
+
+                    auto bone = proj.world_.create_bone({}, u, v);
+                    if (bone) {
+                        state->merged = bone->get().owner().get().name();
+                        emit proj.new_bone_added(bone->get());
+                    } else {
+                        throw std::runtime_error("ui::project::add_bone");
+                    }
+                },
+                [state](ui::project& proj) {
+                    proj.replace_skeletons(state->canvas_name,
+                        {state->merged},
+                        state->original.skeletons() | r::to<std::vector<sm::skel_ref>>()
+                    );
                 }
             };
         }
     };
 }
 
-void ui::project::delete_skeleton_from_tab(const std::string& tab, const std::string& skel) {
+void ui::project::delete_skeleton_name_from_canvas_table(
+        const std::string& tab, const std::string& skel) {
     auto iter_tab = tabs_.find(tab);
     if (iter_tab == tabs_.end()) {
         return;
@@ -230,19 +308,9 @@ bool ui::project::from_json(const std::string& str) {
 
 void ui::project::add_bone(const std::string& tab, sm::node& u, sm::node& v) {
 
-    if (&u.owner().get() == &v.owner().get()) {
-        return;
-    }
-    
-    emit pre_new_bone_added(u, v);
-    delete_skeleton_from_tab(tab, v.owner().get().name());
-
-    auto bone = world_.create_bone({}, u, v);
-    if (bone) {
-        emit new_bone_added(bone->get());
-    } else {
-        throw std::runtime_error("ui::project::add_bone");
-    }
+    execute_command(
+        commands::make_add_bone_command(tab, u, v)
+    );
 }
 
 void ui::project::add_new_skeleton_root(const std::string& tab, sm::point loc) {
@@ -316,7 +384,7 @@ void ui::project::replace_skeletons(const std::string& canvas_name,
         if (canvas_name_from_skeleton(replacee) != canvas_name) {
             throw std::runtime_error("replace_skeletons must be called on a single canvas");
         }
-        delete_skeleton_from_tab(canvas_name, replacee);
+        delete_skeleton_name_from_canvas_table(canvas_name, replacee);
         world_.delete_skeleton(replacee);
 
     }

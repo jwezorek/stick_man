@@ -10,6 +10,7 @@
 #include <memory>
 #include <stack>
 #include "../core/sm_skeleton.h"
+/*------------------------------------------------------------------------------------------------*/
 
 namespace ui {
 
@@ -27,6 +28,8 @@ namespace ui {
         std::function<void(project&)> undo;
     };
 
+
+
     class project : public QObject {
 
         friend class commands;
@@ -39,7 +42,7 @@ namespace ui {
         std::stack<command> redo_stack_;
         std::stack<command> undo_stack_;
 
-        void delete_skeleton_from_tab(const std::string& tab, const std::string& skel);
+        void delete_skeleton_name_from_canvas_table(const std::string& tab, const std::string& skel);
         void clear_redo_stack();
         void execute_command(const command& cmd);
 
