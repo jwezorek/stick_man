@@ -15,6 +15,8 @@ namespace rv = std::ranges::views;
 
 namespace {
 
+    template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
+
     json tabs_to_json(const std::unordered_map<std::string, std::vector<std::string>>& tabs) {
         return tabs |
             rv::transform(
@@ -91,13 +93,14 @@ namespace ui {
             std::string piece_name;
         };
 
-        template<typename T>
+        template<sm::is_node_or_bone T>
         static std::expected<std::reference_wrapper<T>, sm::result> from_handle(
                 ui::project& proj, const skel_piece_handle& hnd) {
             auto skel = proj.world_.skeleton(hnd.skel_name);
             if (!skel) {
                 return std::unexpected(skel.error());
             }
+
             auto maybe_piece = skel->get().get_by_name<T>(hnd.piece_name);
             if (!maybe_piece) {
                 return std::unexpected(sm::result::not_found);
@@ -105,9 +108,28 @@ namespace ui {
             return *maybe_piece;
         }
 
-        static skel_piece_handle to_handle(auto& piece) {
+        static sm::expected_skel from_handle(ui::project& proj, const skel_piece_handle& hnd) {
+            return proj.world_.skeleton(hnd.skel_name);
+        }
+
+        static skel_piece_handle to_handle( sm::is_node_or_bone_ref auto& piece) {
             auto skel_name = piece.owner().get().name();
             return { skel_name, piece.name() };
+        }
+
+        static skel_piece_handle to_handle(const ui::skel_piece& piece) {
+            return std::visit(
+                overload{
+                    [](sm::is_node_or_bone_ref auto node_or_bone)->skel_piece_handle {
+                        return to_handle(node_or_bone.get());
+                    } ,
+                    [](sm::skel_ref itm)->skel_piece_handle {
+                        auto& skel = itm.get();
+                        return {skel.name(), {}};
+                    }
+                },
+                piece
+            );
         }
 
         struct create_node_state {
@@ -337,7 +359,7 @@ std::string ui::project::canvas_name_from_skeleton(const std::string& skel) cons
     return {};
 }
 
-bool ui::project::rename(skel_piece piece_var, const std::string& new_name)
+bool ui::project::rename_aux(skel_piece piece_var, const std::string& new_name)
 {
     auto result = std::visit(
         [&](auto ref)->sm::result {
@@ -351,6 +373,10 @@ bool ui::project::rename(skel_piece piece_var, const std::string& new_name)
         emit name_changed(piece_var, new_name);
         return true;
     }
+    return false;
+}
+
+bool ui::project::rename(skel_piece piece, const std::string& new_name) {
     return false;
 }
 

@@ -127,5 +127,15 @@ namespace sm {
             );
         }
     }
-	
+
+    template <typename T>
+    concept is_node_or_bone = std::same_as<T, sm::node> || std::same_as<T, sm::bone>;
+
+    template <typename T>
+    concept is_node_or_bone_ref = std::same_as<T, sm::node_ref> || std::same_as<T, sm::bone_ref>;
+
+    template <typename T>
+    concept is_skel_piece = std::same_as<T, sm::node> ||
+        std::same_as<T, sm::bone> ||
+        std::same_as<T, sm::skeleton>;
 }

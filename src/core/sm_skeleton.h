@@ -72,14 +72,14 @@ namespace sm {
 		world_ref owner();
 		const_world_ref owner() const;
 
-		template <typename T>
+		template <is_node_or_bone T>
 		bool contains(const std::string& name) const {
             return get_by_name<T>(name).has_value();
 		}
 
         void apply(matrix& mat);
 
-        template <typename T>
+        template <is_node_or_bone T>
         std::optional<std::reference_wrapper<T>> get_by_name(const std::string& name) const {
             if constexpr (std::is_same<T, sm::node>::value) {
                 return nodes_.contains(name) ? std::ref(*nodes_.at(name)) : 

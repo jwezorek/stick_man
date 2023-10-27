@@ -43,6 +43,7 @@ namespace ui {
         void delete_skeleton_name_from_canvas_table(const std::string& tab, const std::string& skel);
         void clear_redo_stack();
         void execute_command(const command& cmd);
+        bool rename_aux(skel_piece piece, const std::string& new_name);
 
     public:
         project();
@@ -92,12 +93,14 @@ namespace ui {
         bool from_json(const std::string& str);
         void add_bone(const std::string& tab, sm::node& u, sm::node& v);
         void add_new_skeleton_root(const std::string& tab, sm::point loc);
+        bool rename(skel_piece piece, const std::string& new_name);
+
+
         void replace_skeletons(const std::string& canvas_name, 
             const std::vector<std::string>& replacees,
             const std::vector<sm::skel_ref>& replacements,
             bool rename = true);
         std::string canvas_name_from_skeleton(const std::string& skel) const;
-        bool rename(skel_piece piece, const std::string& new_name);
         void transform(const std::vector<sm::node_ref>& nodes, 
             const std::function<void(sm::node&)>& fn);
         void transform(const std::vector<sm::bone_ref>& nodes,
