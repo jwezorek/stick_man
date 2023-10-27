@@ -28,8 +28,6 @@ namespace ui {
         std::function<void(project&)> undo;
     };
 
-
-
     class project : public QObject {
 
         friend class commands;
@@ -96,7 +94,8 @@ namespace ui {
         void add_new_skeleton_root(const std::string& tab, sm::point loc);
         void replace_skeletons(const std::string& canvas_name, 
             const std::vector<std::string>& replacees,
-            const std::vector<sm::skel_ref>& replacements);
+            const std::vector<sm::skel_ref>& replacements,
+            bool rename = true);
         std::string canvas_name_from_skeleton(const std::string& skel) const;
         bool rename(skel_piece piece, const std::string& new_name);
         void transform(const std::vector<sm::node_ref>& nodes, 

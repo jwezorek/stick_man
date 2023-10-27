@@ -11,6 +11,7 @@
 #include <functional>
 #include <tuple>
 #include <span>
+#include <map>
 
 using namespace std::placeholders;
 
@@ -660,10 +661,10 @@ namespace {
 
 	template<typename T>
 	auto to_name_table(auto itms) {
-		using name_table_t = std::unordered_map<T*, std::string>;
+		using name_table_t = std::multimap<std::string, T*>;
 		return itms | rv::transform(
 				[](auto r)->name_table_t::value_type {
-					return { &r.get(), r.get().name() };
+					return { r.get().name(), &r.get() };
 				}
 			) | r::to<name_table_t>();
 	}
@@ -694,17 +695,17 @@ namespace {
 	}
 
 	template<typename T>
-	std::unordered_map<T*, std::string> get_unique_names(std::unordered_map<T*, std::string> tbl) {
+	std::vector<std::pair<std::string,T*>> get_unique_names(const std::multimap<std::string, T*>& tbl) {
 		std::unordered_map<std::string, int> names;
-		std::unordered_map<T*, std::string> output;
-		for (const auto& [ptr, name] : tbl) {
-			auto new_name = normalize_name(name);
-			auto index = names[new_name]++;
-			if (index > 0) {
-				output[ptr] = new_name + "-" + std::to_string(index);
-			} else {
-				output[ptr] = new_name;
-			}
+        std::vector<std::pair<std::string, T*>> output;
+
+		for (const auto& [name, ptr] : tbl) {
+			auto new_name_base = normalize_name(name);
+			auto index = names[new_name_base]++;
+            auto new_name = (index > 0) ?
+                new_name_base + "-" + std::to_string(index) :
+                new_name_base;
+            output.emplace_back(new_name, ptr);
 		}
 		return output;
 	}
@@ -785,27 +786,31 @@ void sm::skeleton::on_new_bone(sm::bone& b) {
 	auto nodes = to_name_table<sm::node>(nodes_from_traversal(root_node()));
 	auto bones = to_name_table<sm::bone>(bones_from_traversal(root_node()));
 
-	for (auto& node_name : nodes) {
-		if (node_name.first != &root_node().get() && node_name.second == "root") {
-			node_name.second = "node-0";
-		}
-	}
+    auto iter = r::find_if(nodes,
+            [this](const auto& pair)->bool {
+                return pair.second != &root_node().get() && pair.first == "root";
+            }
+        );
+    if (iter != nodes.end()) {
+        auto* node = iter->second;
+        nodes.erase(iter);
+        nodes.insert({ "node-0", node });
+    }
 
 	nodes_.clear();
 	bones_.clear();
 
-	nodes = get_unique_names(nodes);
-	for (const auto& [ptr, name] : nodes) {
+	auto new_node_names = get_unique_names(nodes);
+	for (const auto& [name, ptr] : new_node_names) {
 		ptr->set_name(name);
 		nodes_[name] = ptr;
 	}
 
-	bones = get_unique_names(bones);
-	for (const auto& [ptr, name] : bones) {
+	auto new_bone_names = get_unique_names(bones);
+	for (const auto& [name,ptr] : new_bone_names) {
 		ptr->set_name(name);
 		bones_[name] = ptr;
 	}
-
 }
 
 std::string sm::skeleton::name() const {

@@ -161,8 +161,12 @@ namespace ui {
 
                     auto& skel_u = u.owner().get();
                     auto& skel_v = v.owner().get();
-                    skel_u.copy_to(state->original);
-                    skel_v.copy_to(state->original);
+                    auto new_u = skel_u.copy_to(state->original);
+                    auto new_v = skel_v.copy_to(state->original);
+
+                    if (!new_u || !new_v) {
+                        throw std::runtime_error("ui::command make_add_bone_command");
+                    }
 
                     emit proj.pre_new_bone_added(u, v);
                     proj.delete_skeleton_name_from_canvas_table(
@@ -180,8 +184,10 @@ namespace ui {
                 [state](ui::project& proj) {
                     proj.replace_skeletons(state->canvas_name,
                         {state->merged},
-                        state->original.skeletons() | r::to<std::vector<sm::skel_ref>>()
+                        state->original.skeletons() | r::to<std::vector<sm::skel_ref>>(),
+                        false
                     );
+                    state->original.clear();
                 }
             };
         }
@@ -378,7 +384,8 @@ void ui::project::transform(const std::vector<sm::bone_ref>& bones,
 
 void ui::project::replace_skeletons(const std::string& canvas_name,
         const std::vector<std::string>& replacees,
-        const std::vector<sm::skel_ref>& replacements) {
+        const std::vector<sm::skel_ref>& replacements,
+        bool should_rename) {
 
     for (auto replacee : replacees) {
         if (canvas_name_from_skeleton(replacee) != canvas_name) {
@@ -390,7 +397,13 @@ void ui::project::replace_skeletons(const std::string& canvas_name,
     }
     for (auto replacement : replacements) {
         auto& skel = replacement.get();
-        auto new_skel = skel.copy_to(world_, unique_skeleton_name(skel.name(), world_.skeleton_names()));
+        auto new_skel = skel.copy_to(
+            world_, 
+            should_rename ? unique_skeleton_name(skel.name(), world_.skeleton_names()) : ""
+        );
+        if (!new_skel) {
+            throw std::runtime_error("ui::project::replace_skeletons");
+        }
         tabs_[canvas_name].push_back(new_skel->get().name());
     }
 
