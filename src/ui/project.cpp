@@ -112,7 +112,7 @@ namespace ui {
             return proj.world_.skeleton(hnd.skel_name);
         }
 
-        static skel_piece_handle to_handle( sm::is_node_or_bone_ref auto& piece) {
+        static skel_piece_handle to_handle( sm::is_node_or_bone auto& piece) {
             auto skel_name = piece.owner().get().name();
             return { skel_name, piece.name() };
         }
