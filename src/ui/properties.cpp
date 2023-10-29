@@ -294,6 +294,12 @@ namespace {
 					canv.sync_to_model();
 				}
 			);
+
+            connect(&proj, &ui::project::name_changed,
+                [this](ui::skel_piece piece, const std::string& new_name) {
+                    handle_rename(piece, name_->value(), new_name);
+                }
+            );
 		}
 
 		void set_selection_common(const ui::canvas& canv) {

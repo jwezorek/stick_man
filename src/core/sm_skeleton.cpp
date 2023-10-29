@@ -1025,7 +1025,7 @@ sm::skel_ref sm::world::create_skeleton(const point& pt) {
 }
 
 sm::expected_skel sm::world::create_skeleton(const std::string& name) {
-    if (contains_skeleton_name(name)) {
+    if (contains_skeleton(name)) {
         return std::unexpected(result::non_unique_name);
     }
     skeletons_.emplace(name, skeleton::make_unique(*this));
@@ -1116,12 +1116,12 @@ std::vector<std::string> sm::world::skeleton_names() const {
 		r::to< std::vector<std::string>>();
 }
 
-bool sm::world::contains_skeleton_name(const std::string& name) const {
+bool sm::world::contains_skeleton(const std::string& name) const {
 	return skeletons_.contains(name);
 }
 
 sm::result sm::world::set_name(sm::skeleton& skel, const std::string& new_name) {
-	if (contains_skeleton_name(new_name)) {
+	if (contains_skeleton(new_name)) {
 		return result::non_unique_name;
 	}
 

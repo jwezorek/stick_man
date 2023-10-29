@@ -127,7 +127,7 @@ namespace sm {
         result delete_skeleton(const std::string& skel_name);
 
 		std::vector<std::string> skeleton_names() const;
-		bool contains_skeleton_name(const std::string& name) const;
+		bool contains_skeleton(const std::string& name) const;
         result set_name(sm::skeleton& skel, const std::string& new_name);
 
         expected_bone create_bone(const std::string& name, node& u, node& v);

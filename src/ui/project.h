@@ -43,7 +43,8 @@ namespace ui {
         void delete_skeleton_name_from_canvas_table(const std::string& tab, const std::string& skel);
         void clear_redo_stack();
         void execute_command(const command& cmd);
-        bool rename_aux(skel_piece piece, const std::string& new_name);
+        void rename_aux(skel_piece piece, const std::string& new_name);
+        bool can_rename(skel_piece piece, const std::string& new_name);
 
     public:
         project();
@@ -94,7 +95,6 @@ namespace ui {
         void add_bone(const std::string& tab, sm::node& u, sm::node& v);
         void add_new_skeleton_root(const std::string& tab, sm::point loc);
         bool rename(skel_piece piece, const std::string& new_name);
-
 
         void replace_skeletons(const std::string& canvas_name, 
             const std::vector<std::string>& replacees,

@@ -67,7 +67,7 @@ namespace {
 
     sm::skeleton* create_skeleton(sm::world& dest, const std::string& skel_name) {
         std::string name = skel_name;
-        if (dest.contains_skeleton_name(name)) {
+        if (dest.contains_skeleton(name)) {
             name = ui::unique_skeleton_name(name, dest.skeleton_names());
         }
         auto skel = dest.create_skeleton(name);

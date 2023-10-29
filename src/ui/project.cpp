@@ -94,7 +94,7 @@ namespace ui {
         };
 
         template<sm::is_node_or_bone T>
-        static std::expected<std::reference_wrapper<T>, sm::result> from_handle(
+        static std::expected<std::reference_wrapper<T>, sm::result> from_handle_aux(
                 ui::project& proj, const skel_piece_handle& hnd) {
             auto skel = proj.world_.skeleton(hnd.skel_name);
             if (!skel) {
@@ -108,20 +108,33 @@ namespace ui {
             return *maybe_piece;
         }
 
-        static sm::expected_skel from_handle(ui::project& proj, const skel_piece_handle& hnd) {
+        static sm::expected_skel skel_from_handle(ui::project& proj, const skel_piece_handle& hnd) {
             return proj.world_.skeleton(hnd.skel_name);
         }
 
-        static skel_piece_handle to_handle( sm::is_node_or_bone_ref auto& piece) {
-            auto skel_name = piece.owner().get().name();
-            return { skel_name, piece.name() };
+        template<sm::is_skel_piece T>
+        static T& from_handle(ui::project& proj, const skel_piece_handle& hnd) {
+            if constexpr (std::is_same<T, sm::skeleton>::value) {
+                auto val = skel_from_handle(proj, hnd);
+                if (!val) {
+                    throw std::runtime_error("invalid handle to skeleton");
+                }
+                return val->get();
+            } else {
+                auto val = from_handle_aux<T>(proj, hnd);
+                if (!val) {
+                    throw std::runtime_error("invalid handle to node/bone");
+                }
+                return val->get();
+            }
         }
 
         static skel_piece_handle to_handle(const ui::skel_piece& piece) {
             return std::visit(
                 overload{
                     [](sm::is_node_or_bone_ref auto node_or_bone)->skel_piece_handle {
-                        return to_handle(node_or_bone.get());
+                        auto skel_name = node_or_bone.get().owner().get().name();
+                        return { skel_name, node_or_bone.get().name() };
                     } ,
                     [](sm::skel_ref itm)->skel_piece_handle {
                         auto& skel = itm.get();
@@ -174,8 +187,8 @@ namespace ui {
             auto state = std::make_shared<add_node_state>(tab, u, v);
             return {
                 [state](ui::project& proj) {
-                    auto& u = from_handle<sm::node>(proj, state->u_hnd)->get();
-                    auto& v = from_handle<sm::node>(proj, state->v_hnd)->get();
+                    auto& u = from_handle<sm::node>(proj, state->u_hnd);
+                    auto& v = from_handle<sm::node>(proj, state->v_hnd);
 
                     if (&u.owner().get() == &v.owner().get()) {
                         return;
@@ -210,6 +223,39 @@ namespace ui {
                         false
                     );
                     state->original.clear();
+                }
+            };
+        }
+
+        struct rename_state {
+            skel_piece_handle old_handle;
+            skel_piece_handle new_handle;
+        };
+
+        template<sm::is_skel_piece T>
+        static void rename(project& proj, skel_piece_handle old_hnd, skel_piece_handle new_hnd) {
+            auto& old_obj = from_handle<T>(proj, old_hnd);
+            if (! new_hnd.piece_name.empty()) {
+                proj.rename_aux(std::ref(old_obj), new_hnd.piece_name);
+            } else {
+                proj.rename_aux(std::ref(old_obj), new_hnd.skel_name);
+            }
+        }
+
+        template<sm::is_skel_piece T>
+        static ui::command make_rename_command(skel_piece piece, const std::string& new_name) {
+            auto old_handle = to_handle(piece);
+            auto new_handle = (old_handle.piece_name.empty()) ?
+                skel_piece_handle{ new_name, {} } :
+                skel_piece_handle{ old_handle.skel_name, new_name };
+            auto state = std::make_shared<rename_state>(old_handle, new_handle);
+            
+            return {
+                [state](ui::project& proj) {
+                    rename<T>(proj, state->old_handle, state->new_handle);
+                },
+                [state](ui::project& proj) {
+                    rename<T>(proj, state->new_handle, state->old_handle);
                 }
             };
         }
@@ -359,7 +405,7 @@ std::string ui::project::canvas_name_from_skeleton(const std::string& skel) cons
     return {};
 }
 
-bool ui::project::rename_aux(skel_piece piece_var, const std::string& new_name)
+void ui::project::rename_aux(skel_piece piece_var, const std::string& new_name)
 {
     auto result = std::visit(
         [&](auto ref)->sm::result {
@@ -369,15 +415,48 @@ bool ui::project::rename_aux(skel_piece piece_var, const std::string& new_name)
         },
         piece_var
     );
-    if (result == sm::result::success) {
-        emit name_changed(piece_var, new_name);
-        return true;
+    if (result != sm::result::success) {
+        throw std::runtime_error("ui::project::rename_aux");
     }
-    return false;
+    
+    emit name_changed(piece_var, new_name);
+}
+
+bool ui::project::can_rename(skel_piece piece, const std::string& new_name) {
+    return std::visit(
+        overload{
+            [new_name](sm::is_node_or_bone_ref auto node_or_bone_ref)->bool {
+                const auto& node_or_bone = node_or_bone_ref.get();
+                using value_type = std::remove_cvref_t<decltype(node_or_bone)>;
+                const auto& skel = node_or_bone.owner().get();
+                return !skel.contains<value_type>(new_name);
+            } ,
+            [new_name](sm::skel_ref itm)->bool {
+                const auto& skel = itm.get();
+                const auto& world = skel.owner().get();
+                return !world.contains_skeleton(new_name);
+            }
+        },
+        piece
+    );
 }
 
 bool ui::project::rename(skel_piece piece, const std::string& new_name) {
-    return false;
+    if (!can_rename(piece, new_name)) {
+        return false;
+    }
+
+    std::visit(
+        [this, piece, new_name](auto ref) {
+            using value_type = std::remove_cvref_t<decltype(ref.get())>;
+            execute_command(
+                commands::make_rename_command<value_type>(ref, new_name)
+            );
+        },
+        piece
+    );
+
+    return true;
 }
 
 void ui::project::transform(const std::vector<sm::node_ref>& nodes,
