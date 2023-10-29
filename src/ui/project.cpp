@@ -1,6 +1,7 @@
 #include "project.h"
 #include "canvas.h"
 #include "canvas_item.h"
+#include "commands.h"
 #include "../core/sm_skeleton.h"
 #include "../core/json.hpp"
 #include <ranges>
@@ -82,184 +83,6 @@ namespace {
         }
         return name.substr(0, i);
     }
-}
-
-namespace ui {
-    class commands {
-    public:
-
-        struct skel_piece_handle {
-            std::string skel_name;
-            std::string piece_name;
-        };
-
-        template<sm::is_node_or_bone T>
-        static std::expected<std::reference_wrapper<T>, sm::result> from_handle_aux(
-                ui::project& proj, const skel_piece_handle& hnd) {
-            auto skel = proj.world_.skeleton(hnd.skel_name);
-            if (!skel) {
-                return std::unexpected(skel.error());
-            }
-
-            auto maybe_piece = skel->get().get_by_name<T>(hnd.piece_name);
-            if (!maybe_piece) {
-                return std::unexpected(sm::result::not_found);
-            }
-            return *maybe_piece;
-        }
-
-        static sm::expected_skel skel_from_handle(ui::project& proj, const skel_piece_handle& hnd) {
-            return proj.world_.skeleton(hnd.skel_name);
-        }
-
-        template<sm::is_skel_piece T>
-        static T& from_handle(ui::project& proj, const skel_piece_handle& hnd) {
-            if constexpr (std::is_same<T, sm::skeleton>::value) {
-                auto val = skel_from_handle(proj, hnd);
-                if (!val) {
-                    throw std::runtime_error("invalid handle to skeleton");
-                }
-                return val->get();
-            } else {
-                auto val = from_handle_aux<T>(proj, hnd);
-                if (!val) {
-                    throw std::runtime_error("invalid handle to node/bone");
-                }
-                return val->get();
-            }
-        }
-
-        static skel_piece_handle to_handle(const ui::skel_piece& piece) {
-            return std::visit(
-                overload{
-                    [](sm::is_node_or_bone_ref auto node_or_bone)->skel_piece_handle {
-                        auto skel_name = node_or_bone.get().owner().get().name();
-                        return { skel_name, node_or_bone.get().name() };
-                    } ,
-                    [](sm::skel_ref itm)->skel_piece_handle {
-                        auto& skel = itm.get();
-                        return {skel.name(), {}};
-                    }
-                },
-                piece
-            );
-        }
-
-        struct create_node_state {
-            std::string tab_name;
-            std::string skeleton;
-            sm::point loc;
-        };
-
-        static ui::command make_create_node_command(const std::string& tab, const sm::point& pt) {
-            auto state = std::make_shared<create_node_state>(tab, "", pt);
-
-            return {
-                [state](ui::project& proj) {
-                    auto skel = proj.world_.create_skeleton(state->loc);
-                    state->skeleton = skel.get().name();
-                    proj.tabs_[state->tab_name].push_back(skel.get().name());
-                    emit proj.new_skeleton_added(skel);
-                },
-                [state](ui::project& proj) {
-                    proj.delete_skeleton_name_from_canvas_table(
-                        state->tab_name, state->skeleton
-                    );
-                    proj.world_.delete_skeleton(state->skeleton);
-                    emit proj.refresh_canvas(proj, state->tab_name, true);
-                }
-            };
-        }
-
-        struct add_node_state {
-            std::string canvas_name;
-            skel_piece_handle u_hnd;
-            skel_piece_handle v_hnd;
-            sm::world original;
-            std::string merged;
-
-            add_node_state(const std::string& cn, sm::node& u, sm::node& v) :
-                canvas_name(cn), u_hnd(to_handle(u)), v_hnd(to_handle(v))
-            {}
-        };
-
-        static ui::command make_add_bone_command(const std::string& tab, sm::node& u, sm::node& v) {
-            auto state = std::make_shared<add_node_state>(tab, u, v);
-            return {
-                [state](ui::project& proj) {
-                    auto& u = from_handle<sm::node>(proj, state->u_hnd);
-                    auto& v = from_handle<sm::node>(proj, state->v_hnd);
-
-                    if (&u.owner().get() == &v.owner().get()) {
-                        return;
-                    }
-
-                    auto& skel_u = u.owner().get();
-                    auto& skel_v = v.owner().get();
-                    auto new_u = skel_u.copy_to(state->original);
-                    auto new_v = skel_v.copy_to(state->original);
-
-                    if (!new_u || !new_v) {
-                        throw std::runtime_error("ui::command make_add_bone_command");
-                    }
-
-                    emit proj.pre_new_bone_added(u, v);
-                    proj.delete_skeleton_name_from_canvas_table(
-                        state->canvas_name, v.owner().get().name()
-                    );
-
-                    auto bone = proj.world_.create_bone({}, u, v);
-                    if (bone) {
-                        state->merged = bone->get().owner().get().name();
-                        emit proj.new_bone_added(bone->get());
-                    } else {
-                        throw std::runtime_error("ui::project::add_bone");
-                    }
-                },
-                [state](ui::project& proj) {
-                    proj.replace_skeletons(state->canvas_name,
-                        {state->merged},
-                        state->original.skeletons() | r::to<std::vector<sm::skel_ref>>(),
-                        false
-                    );
-                    state->original.clear();
-                }
-            };
-        }
-
-        struct rename_state {
-            skel_piece_handle old_handle;
-            skel_piece_handle new_handle;
-        };
-
-        template<sm::is_skel_piece T>
-        static void rename(project& proj, skel_piece_handle old_hnd, skel_piece_handle new_hnd) {
-            auto& old_obj = from_handle<T>(proj, old_hnd);
-            if (! new_hnd.piece_name.empty()) {
-                proj.rename_aux(std::ref(old_obj), new_hnd.piece_name);
-            } else {
-                proj.rename_aux(std::ref(old_obj), new_hnd.skel_name);
-            }
-        }
-
-        template<sm::is_skel_piece T>
-        static ui::command make_rename_command(skel_piece piece, const std::string& new_name) {
-            auto old_handle = to_handle(piece);
-            auto new_handle = (old_handle.piece_name.empty()) ?
-                skel_piece_handle{ new_name, {} } :
-                skel_piece_handle{ old_handle.skel_name, new_name };
-            auto state = std::make_shared<rename_state>(old_handle, new_handle);
-            
-            return {
-                [state](ui::project& proj) {
-                    rename<T>(proj, state->old_handle, state->new_handle);
-                },
-                [state](ui::project& proj) {
-                    rename<T>(proj, state->new_handle, state->old_handle);
-                }
-            };
-        }
-    };
 }
 
 void ui::project::delete_skeleton_name_from_canvas_table(
@@ -487,10 +310,10 @@ void ui::project::transform(const std::vector<sm::bone_ref>& bones,
     emit refresh_canvas(*this, canv, false);
 }
 
-void ui::project::replace_skeletons(const std::string& canvas_name,
+void ui::project::replace_skeletons_aux(const std::string& canvas_name,
         const std::vector<std::string>& replacees,
         const std::vector<sm::skel_ref>& replacements,
-        bool should_rename) {
+        std::vector<std::string>* new_names) {
 
     for (auto replacee : replacees) {
         if (canvas_name_from_skeleton(replacee) != canvas_name) {
@@ -500,6 +323,7 @@ void ui::project::replace_skeletons(const std::string& canvas_name,
         world_.delete_skeleton(replacee);
 
     }
+    bool should_rename = new_names != nullptr;
     for (auto replacement : replacements) {
         auto& skel = replacement.get();
         auto new_skel = skel.copy_to(
@@ -509,10 +333,21 @@ void ui::project::replace_skeletons(const std::string& canvas_name,
         if (!new_skel) {
             throw std::runtime_error("ui::project::replace_skeletons");
         }
+        if (should_rename) {
+            new_names->push_back(new_skel->get().name());
+        }
         tabs_[canvas_name].push_back(new_skel->get().name());
     }
 
     emit refresh_canvas(*this, canvas_name, true);
+}
+
+void ui::project::replace_skeletons(const std::string& canvas_name,
+        const std::vector<std::string>& replacees,
+        const std::vector<sm::skel_ref>& replacements) {
+    execute_command(
+        commands::make_replace_skeletons_command(canvas_name, replacees, replacements)
+    );
 }
 
 std::string ui::unique_skeleton_name(const std::string& old_name,
@@ -539,3 +374,4 @@ bool ui::identical_pieces(ui::skel_piece p1, ui::skel_piece p2) {
 
     return ptr1 == ptr2;
 }
+

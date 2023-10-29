@@ -45,6 +45,10 @@ namespace ui {
         void execute_command(const command& cmd);
         void rename_aux(skel_piece piece, const std::string& new_name);
         bool can_rename(skel_piece piece, const std::string& new_name);
+        void replace_skeletons_aux(const std::string& canvas_name,
+            const std::vector<std::string>& replacees,
+            const std::vector<sm::skel_ref>& replacements,
+            std::vector<std::string>* new_names_of_replacements);
 
     public:
         project();
@@ -95,11 +99,11 @@ namespace ui {
         void add_bone(const std::string& tab, sm::node& u, sm::node& v);
         void add_new_skeleton_root(const std::string& tab, sm::point loc);
         bool rename(skel_piece piece, const std::string& new_name);
-
-        void replace_skeletons(const std::string& canvas_name, 
+        void replace_skeletons(const std::string& canvas_name,
             const std::vector<std::string>& replacees,
-            const std::vector<sm::skel_ref>& replacements,
-            bool rename = true);
+            const std::vector<sm::skel_ref>& replacements
+        );
+        
         std::string canvas_name_from_skeleton(const std::string& skel) const;
         void transform(const std::vector<sm::node_ref>& nodes, 
             const std::function<void(sm::node&)>& fn);

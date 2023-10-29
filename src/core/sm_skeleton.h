@@ -118,6 +118,7 @@ namespace sm {
         ~world() = default;
 
         void clear();
+        bool empty() const;
 		skel_ref create_skeleton(double x, double y);
         skel_ref create_skeleton(const point& pt);
         expected_skel create_skeleton(const std::string& name);
