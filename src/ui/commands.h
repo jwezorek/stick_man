@@ -7,6 +7,8 @@
 #include "../core/sm_types.h" 
 #include "project.h"
 
+/*------------------------------------------------------------------------------------------------*/
+
 namespace ui {
 
     class commands {
@@ -43,8 +45,8 @@ namespace ui {
             std::string canvas_name;
             std::vector<std::string> replacee_names;
             sm::world replacees;
-            sm::world replacements; 
             std::vector<std::string> replacement_names;
+            sm::world replacements;
 
             replace_skeleton_state(const std::string& canv,
                 const std::vector<std::string>& replacees,
