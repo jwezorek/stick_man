@@ -1,4 +1,5 @@
 #include "commands.h"
+#include <boost/functional/hash.hpp>
 #include <ranges>
 
 /*------------------------------------------------------------------------------------------------*/
@@ -136,4 +137,55 @@ ui::command ui::commands::make_replace_skeletons_command(
             );
         }
     };
+}
+
+ui::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
+        const std::string& canvas_name,
+        const std::vector<sm::node_ref>& node_refs,
+        const std::function<void(sm::node&)>& fn) :
+        canvas{ canvas_name },
+        transform_nodes{ fn } {
+    for (auto node_ref : node_refs) {
+        auto& node = node_ref.get();
+        auto handle = to_handle(node_ref);
+        nodes.push_back(handle);
+        old_node_to_position[handle] = node.world_pos();
+    }
+}
+
+ui::command ui::commands::make_transform_bones_or_nodes_command(
+        const std::string& canv,
+        const std::vector<sm::node_ref>& nodes,
+        const std::function<void(sm::node&)>& fn) {
+
+    auto state = std::make_shared<trasform_nodes_and_bones_state>( canv, nodes, fn );
+    return {
+        [state](project& proj) {
+            for (auto node_hnd : state->nodes) {
+                auto& node = from_handle<sm::node>(proj, node_hnd);
+                state->transform_nodes(node);
+            }
+            emit proj.refresh_canvas(proj, state->canvas, false);
+        },
+        [state](project& proj) {
+            for (auto node_hnd : state->nodes) {
+                auto& node = from_handle<sm::node>(proj, node_hnd);
+                node.set_world_pos(state->old_node_to_position[node_hnd]);
+            }
+            emit proj.refresh_canvas(proj, state->canvas, false);
+        }
+    };
+}
+
+bool ui::commands::skel_piece_handle::operator==(const skel_piece_handle& hand) const
+{
+    return this->skel_name == hand.skel_name && this->piece_name == hand.piece_name;
+}
+
+size_t ui::commands::handle_hash::operator()(const skel_piece_handle& hand) const
+{
+    size_t seed = 0;
+    boost::hash_combine(seed, hand.skel_name);
+    boost::hash_combine(seed, hand.piece_name);
+    return seed;
 }

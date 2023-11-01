@@ -284,16 +284,12 @@ bool ui::project::rename(skel_piece piece, const std::string& new_name) {
 
 void ui::project::transform(const std::vector<sm::node_ref>& nodes,
         const std::function<void(sm::node&)>& fn) {
-    if (nodes.empty()) {
-        return;
-    }
-    for (auto node : nodes) {
-        fn(node.get());
-    }
-    auto canv = canvas_name_from_skeleton(
+    auto canvas_name = canvas_name_from_skeleton(
         nodes.front().get().owner().get().name()
     );
-    emit refresh_canvas(*this, canv, false);
+    execute_command(
+        commands::make_transform_bones_or_nodes_command(canvas_name, nodes, fn)
+    );
 }
 
 void ui::project::transform(const std::vector<sm::bone_ref>& bones,

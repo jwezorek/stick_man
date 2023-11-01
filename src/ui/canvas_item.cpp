@@ -8,15 +8,15 @@ namespace rv = std::ranges::views;
 
 namespace {
 
-	constexpr double k_node_radius = 8.0;
-	constexpr int k_node_zorder = 10;
-	constexpr double k_pin_radius = k_node_radius - 3.0;
-	constexpr double k_sel_frame_distance = 4.0;
-	constexpr double k_joint_constraint_radius = 50.0;
-	const auto k_sel_color = QColorConstants::Svg::turquoise;
-	constexpr double k_sel_thickness = 3.0;
-	constexpr int k_bone_zorder = 5;
-	constexpr int k_skel_marg = k_node_radius + 3.0;
+	constexpr auto k_node_radius = 8.0;
+	constexpr auto k_node_zorder = 10;
+	constexpr auto k_pin_radius = k_node_radius - 3.0;
+	constexpr auto k_sel_frame_distance = 4.0;
+	constexpr auto k_joint_constraint_radius = 50.0;
+    constexpr auto k_sel_color = QColorConstants::Svg::turquoise;
+	constexpr auto k_sel_thickness = 3.0;
+	constexpr auto k_bone_zorder = 5;
+	constexpr auto k_skel_marg = k_node_radius + 3.0;
 
 	QRectF scale_rect(double scale, const QRectF r) {
 		return {

@@ -6,6 +6,7 @@
 #include <variant>
 #include "../core/sm_types.h" 
 #include "project.h"
+#include <unordered_map>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -18,7 +19,17 @@ namespace ui {
         struct skel_piece_handle {
             std::string skel_name;
             std::string piece_name;
+
+            bool operator==(const skel_piece_handle& hand) const;
         };
+
+        struct handle_hash {
+            size_t operator()(const skel_piece_handle& hand) const;
+        };
+
+        template<typename T>
+        using handle_table = std::unordered_map< skel_piece_handle, T, handle_hash>;
+
 
         struct create_node_state {
             std::string tab_name;
@@ -51,6 +62,22 @@ namespace ui {
             replace_skeleton_state(const std::string& canv,
                 const std::vector<std::string>& replacees,
                 const std::vector<sm::skel_ref>& replacements);
+        };
+
+        struct trasform_nodes_and_bones_state {
+            std::string canvas;
+            std::function<void(sm::node&)> transform_nodes;
+            std::function<void(sm::bone&)> transform_bones;
+            std::vector<skel_piece_handle> nodes;
+            std::vector<skel_piece_handle> bones;
+            handle_table<sm::point> old_node_to_position;
+            handle_table<sm::rot_constraint> old_bone_to_rotcon;
+
+            trasform_nodes_and_bones_state(
+                const std::string& canvas_name,
+                const std::vector<sm::node_ref>& nodes,
+                const std::function<void(sm::node&)>& fn
+            );
         };
 
         template<sm::is_skel_piece T>
@@ -124,6 +151,11 @@ namespace ui {
             const std::string& canvas_name,
             const std::vector<std::string>& replacees,
             const std::vector<sm::skel_ref>& replacements
+        );
+        static ui::command make_transform_bones_or_nodes_command(
+            const std::string& canvas_name,
+            const std::vector<sm::node_ref>& nodes,
+            const std::function<void(sm::node&)>& fn
         );
     };
 }

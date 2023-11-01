@@ -95,6 +95,8 @@ namespace ui {
         }
 
         std::string to_json() const;
+        std::string canvas_name_from_skeleton(const std::string& skel) const;
+
         bool from_json(const std::string& str);
         void add_bone(const std::string& tab, sm::node& u, sm::node& v);
         void add_new_skeleton_root(const std::string& tab, sm::point loc);
@@ -104,7 +106,6 @@ namespace ui {
             const std::vector<sm::skel_ref>& replacements
         );
         
-        std::string canvas_name_from_skeleton(const std::string& skel) const;
         void transform(const std::vector<sm::node_ref>& nodes, 
             const std::function<void(sm::node&)>& fn);
         void transform(const std::vector<sm::bone_ref>& nodes,
