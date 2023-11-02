@@ -78,6 +78,12 @@ namespace ui {
                 const std::vector<sm::node_ref>& nodes,
                 const std::function<void(sm::node&)>& fn
             );
+
+            trasform_nodes_and_bones_state(
+                const std::string& canvas_name,
+                const std::vector<sm::bone_ref>& bones,
+                const std::function<void(sm::bone&)>& fn
+            );
         };
 
         template<sm::is_skel_piece T>
@@ -155,7 +161,9 @@ namespace ui {
         static ui::command make_transform_bones_or_nodes_command(
             const std::string& canvas_name,
             const std::vector<sm::node_ref>& nodes,
-            const std::function<void(sm::node&)>& fn
+            const std::vector<sm::bone_ref>& bones,
+            const std::function<void(sm::node&)>& nodes_fn,
+            const std::function<void(sm::bone&)>& bones_fn
         );
     };
 }

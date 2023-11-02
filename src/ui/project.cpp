@@ -288,22 +288,18 @@ void ui::project::transform(const std::vector<sm::node_ref>& nodes,
         nodes.front().get().owner().get().name()
     );
     execute_command(
-        commands::make_transform_bones_or_nodes_command(canvas_name, nodes, fn)
+        commands::make_transform_bones_or_nodes_command(canvas_name, nodes, {}, fn, {})
     );
 }
 
 void ui::project::transform(const std::vector<sm::bone_ref>& bones,
         const std::function<void(sm::bone&)>& fn) {
-    if (bones.empty()) {
-        return;
-    }
-    for (auto bone : bones) {
-        fn(bone.get());
-    }
-    auto canv = canvas_name_from_skeleton(
+    auto canvas_name = canvas_name_from_skeleton(
         bones.front().get().owner().get().name()
     );
-    emit refresh_canvas(*this, canv, false);
+    execute_command(
+        commands::make_transform_bones_or_nodes_command(canvas_name, {}, bones, {}, fn)
+    );
 }
 
 void ui::project::replace_skeletons_aux(const std::string& canvas_name,
@@ -327,7 +323,7 @@ void ui::project::replace_skeletons_aux(const std::string& canvas_name,
             should_rename ? unique_skeleton_name(skel.name(), world_.skeleton_names()) : ""
         );
         if (!new_skel) {
-            throw std::runtime_error("ui::project::replace_skeletons");
+            assert("skeleton copy failed", false);
         }
         if (should_rename) {
             new_names->push_back(new_skel->get().name());

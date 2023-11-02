@@ -1,6 +1,8 @@
 #include "commands.h"
 #include <boost/functional/hash.hpp>
 #include <ranges>
+#include <unordered_set>
+#include <cassert>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -70,10 +72,7 @@ ui::command ui::commands::make_add_bone_command(const std::string& tab, sm::node
             auto& skel_v = v.owner().get();
             auto new_u = skel_u.copy_to(state->original);
             auto new_v = skel_v.copy_to(state->original);
-
-            if (!new_u || !new_v) {
-                throw std::runtime_error("ui::command make_add_bone_command");
-            }
+            assert("skeleton copy failed", new_u && new_v);
 
             emit proj.pre_new_bone_added(u, v);
             proj.delete_skeleton_name_from_canvas_table(
@@ -81,12 +80,10 @@ ui::command ui::commands::make_add_bone_command(const std::string& tab, sm::node
             );
 
             auto bone = proj.world_.create_bone({}, u, v);
-            if (bone) {
-                state->merged = bone->get().owner().get().name();
-                emit proj.new_bone_added(bone->get());
-            } else {
-                throw std::runtime_error("ui::project::add_bone");
-            }
+            assert("create_bone failed", false);
+
+            state->merged = bone->get().owner().get().name();
+            emit proj.new_bone_added(bone->get());
         },
         [state](ui::project& proj) {
             proj.replace_skeletons_aux(state->canvas_name,
@@ -153,17 +150,63 @@ ui::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
     }
 }
 
+ui::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
+        const std::string& canvas_name,
+        const std::vector<sm::bone_ref>& bone_refs,
+        const std::function<void(sm::bone&)>& fn) :
+        canvas{ canvas_name },
+        transform_bones{ fn } {
+
+    std::unordered_set<sm::node*> node_set;
+    for (auto bone_ref : bone_refs) {
+        auto& bone = bone_ref.get();
+        auto handle = to_handle(bone_ref);
+        bones.push_back(handle);
+
+        auto rot_con = bone.rotation_constraint();
+        if (rot_con) {
+            old_bone_to_rotcon[handle] = *rot_con;
+        }
+
+        node_set.insert(&bone.parent_node());
+        node_set.insert(&bone.child_node());
+    }
+
+    for (auto* node_ptr : node_set) {
+        auto& node = *node_ptr;
+        auto handle = to_handle( std::ref(node) );
+        nodes.push_back(handle);
+        old_node_to_position[handle] = node.world_pos();
+    }
+
+}
+
 ui::command ui::commands::make_transform_bones_or_nodes_command(
         const std::string& canv,
         const std::vector<sm::node_ref>& nodes,
-        const std::function<void(sm::node&)>& fn) {
+        const std::vector<sm::bone_ref>& bones,
+        const std::function<void(sm::node&)>& nodes_fn,
+        const std::function<void(sm::bone&)>& bones_fn) {
 
-    auto state = std::make_shared<trasform_nodes_and_bones_state>( canv, nodes, fn );
+    std::shared_ptr<trasform_nodes_and_bones_state> state = (nodes_fn) ?
+        std::make_shared<trasform_nodes_and_bones_state>(canv, nodes, nodes_fn) :
+        std::make_shared<trasform_nodes_and_bones_state>(canv, bones, bones_fn);
     return {
         [state](project& proj) {
-            for (auto node_hnd : state->nodes) {
-                auto& node = from_handle<sm::node>(proj, node_hnd);
-                state->transform_nodes(node);
+            // either there is a node transformation function or
+            // a bone function but not both and not neither.
+            if (state->transform_nodes) {
+                for (auto node_hnd : state->nodes) {
+                    auto& node = from_handle<sm::node>(proj, node_hnd);
+                    state->transform_nodes(node);
+                }
+            } else if (state->transform_bones) {
+                for (auto bone_hnd : state->bones) {
+                    auto& bone = from_handle<sm::bone>(proj, bone_hnd);
+                    state->transform_bones(bone);
+                }
+            } else {
+                assert("bad call to make_transform_bones_or_nodes_command", false);
             }
             emit proj.refresh_canvas(proj, state->canvas, false);
         },
@@ -171,6 +214,13 @@ ui::command ui::commands::make_transform_bones_or_nodes_command(
             for (auto node_hnd : state->nodes) {
                 auto& node = from_handle<sm::node>(proj, node_hnd);
                 node.set_world_pos(state->old_node_to_position[node_hnd]);
+            }
+            for (auto bone_hnd : state->bones) {
+                auto& bone = from_handle<sm::bone>(proj, bone_hnd);
+                auto rot_con = state->old_bone_to_rotcon[bone_hnd];
+                bone.set_rotation_constraint(
+                    rot_con.start_angle, rot_con.span_angle, rot_con.relative_to_parent
+                );
             }
             emit proj.refresh_canvas(proj, state->canvas, false);
         }
