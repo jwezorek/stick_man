@@ -1,9 +1,9 @@
 #include "commands.h"
-#include <boost/functional/hash.hpp>
 #include <ranges>
 #include <unordered_set>
 #include <cassert>
 #include "qdebug.h"
+
 /*------------------------------------------------------------------------------------------------*/
 
 namespace r = std::ranges;
@@ -41,24 +41,8 @@ namespace {
     }
 }
 
-sm::expected_skel ui::commands::skel_from_handle(ui::project& proj, const skel_piece_handle& hnd) {
+sm::expected_skel ui::commands::skel_from_handle(ui::project& proj, const handle& hnd) {
     return proj.world_.skeleton(hnd.skel_name);
-}
-
-ui::commands::skel_piece_handle ui::commands::to_handle(const ui::skel_piece& piece) {
-    return std::visit(
-        overload{
-            [](sm::is_node_or_bone_ref auto node_or_bone)->skel_piece_handle {
-                auto skel_name = node_or_bone.get().owner().get().name();
-                return { skel_name, node_or_bone.get().name() };
-            } ,
-            [](sm::skel_ref itm)->skel_piece_handle {
-                auto& skel = itm.get();
-                return {skel.name(), {}};
-            }
-        },
-        piece
-    );
 }
 
 ui::command ui::commands::make_create_node_command(const std::string& tab, const sm::point& pt) {
@@ -81,12 +65,14 @@ ui::command ui::commands::make_create_node_command(const std::string& tab, const
     };
 }
 
-ui::commands::add_bone_state::add_bone_state(const std::string& cn, sm::node& u, sm::node& v) :
-    canvas_name(cn), u_hnd(to_handle(u)), v_hnd(to_handle(v))
-{}
+ui::commands::add_bone_state::add_bone_state(const std::string& str,
+        const handle& u_hnd, const handle& v_hnd):
+    canvas_name(str), u_hnd(u_hnd), v_hnd(v_hnd) {
+}
 
-ui::command ui::commands::make_add_bone_command(const std::string& tab, sm::node& u, sm::node& v) {
-    auto state = std::make_shared<add_bone_state>(tab, u, v);
+ui::command ui::commands::make_add_bone_command(const std::string& tab, 
+        const handle& u_hnd, const handle& v_hnd) {
+    auto state = std::make_shared<add_bone_state>(tab, u_hnd, v_hnd);
     return {
         [state](ui::project& proj) {
             auto& u = from_handle<sm::node>(proj, state->u_hnd);
@@ -259,15 +245,3 @@ ui::command ui::commands::make_transform_bones_or_nodes_command(
     };
 }
 
-bool ui::commands::skel_piece_handle::operator==(const skel_piece_handle& hand) const
-{
-    return this->skel_name == hand.skel_name && this->piece_name == hand.piece_name;
-}
-
-size_t ui::commands::handle_hash::operator()(const skel_piece_handle& hand) const
-{
-    size_t seed = 0;
-    boost::hash_combine(seed, hand.skel_name);
-    boost::hash_combine(seed, hand.piece_name);
-    return seed;
-}

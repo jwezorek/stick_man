@@ -7,6 +7,7 @@
 #include "stick_man.h"
 #include "canvas_item.h"
 #include "project.h"
+#include "handle.h"
 #include <QGraphicsScene>
 #include <array>
 #include <functional>
@@ -171,7 +172,11 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
         return;
     }
 
-    model_->add_bone(canv.tab_name(), parent_node->model(), child_node->model());
+    model_->add_bone(
+        canv.tab_name(), 
+        to_handle(parent_node->model()), 
+        to_handle(child_node->model())
+    );
 }
 
 /*------------------------------------------------------------------------------------------------*/

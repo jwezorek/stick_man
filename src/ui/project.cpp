@@ -85,6 +85,8 @@ namespace {
     }
 }
 
+/*------------------------------------------------------------------------------------------------*/
+
 void ui::project::delete_skeleton_name_from_canvas_table(
         const std::string& tab, const std::string& skel) {
     auto iter_tab = tabs_.find(tab);
@@ -203,8 +205,8 @@ bool ui::project::from_json(const std::string& str) {
     return true;
 }
 
-void ui::project::add_bone(const std::string& tab, sm::node& u, sm::node& v) {
-
+void ui::project::add_bone(const std::string& tab, 
+        const handle& u, const handle& v) {
     execute_command(
         commands::make_add_bone_command(tab, u, v)
     );

@@ -10,18 +10,16 @@
 #include <memory>
 #include <stack>
 #include "../core/sm_skeleton.h"
+#include "handle.h"
+
 /*------------------------------------------------------------------------------------------------*/
 
 namespace ui {
 
     class canvas_manager;
 
-    using const_skel_piece =
-        std::variant<sm::const_node_ref, sm::const_bone_ref, sm::const_skel_ref>;
-    using skel_piece = std::variant<sm::node_ref, sm::bone_ref, sm::skel_ref>;
-
     using tab_table = std::unordered_map<std::string, std::vector<std::string>>;
-    
+
     class project;
     struct command {
         std::function<void(project&)> redo;
@@ -98,7 +96,8 @@ namespace ui {
         std::string canvas_name_from_skeleton(const std::string& skel) const;
 
         bool from_json(const std::string& str);
-        void add_bone(const std::string& tab, sm::node& u, sm::node& v);
+        void add_bone(const std::string& tab, 
+            const handle& node_u, const handle& node_v);
         void add_new_skeleton_root(const std::string& tab, sm::point loc);
         bool rename(skel_piece piece, const std::string& new_name);
         void replace_skeletons(const std::string& canvas_name,
