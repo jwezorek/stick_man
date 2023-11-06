@@ -79,47 +79,12 @@ namespace mdl {
 
         template<sm::is_skel_piece T>
         static void rename(project& proj, handle old_hnd, handle new_hnd) {
-            auto& old_obj = from_handle<T>(proj, old_hnd);
+            auto& old_obj = old_hnd.to<T>(proj.world_);
             if (!new_hnd.piece_name.empty()) {
                 proj.rename_aux(std::ref(old_obj), new_hnd.piece_name);
             }
             else {
                 proj.rename_aux(std::ref(old_obj), new_hnd.skel_name);
-            }
-        }
-
-        template<sm::is_node_or_bone T>
-        static std::expected<std::reference_wrapper<T>, sm::result> from_handle_aux(
-            project& proj, const handle& hnd) {
-            auto skel = proj.world_.skeleton(hnd.skel_name);
-            if (!skel) {
-                return std::unexpected(skel.error());
-            }
-
-            auto maybe_piece = skel->get().get_by_name<T>(hnd.piece_name);
-            if (!maybe_piece) {
-                return std::unexpected(sm::result::not_found);
-            }
-            return *maybe_piece;
-        }
-
-        static sm::expected_skel skel_from_handle(project& proj, const handle& hnd);
-
-        template<sm::is_skel_piece T>
-        static T& from_handle(project& proj, const handle& hnd) {
-            if constexpr (std::is_same<T, sm::skeleton>::value) {
-                auto val = skel_from_handle(proj, hnd);
-                if (!val) {
-                    throw std::runtime_error("invalid handle to skeleton");
-                }
-                return val->get();
-            }
-            else {
-                auto val = from_handle_aux<T>(proj, hnd);
-                if (!val) {
-                    throw std::runtime_error("invalid handle to node/bone");
-                }
-                return val->get();
             }
         }
 

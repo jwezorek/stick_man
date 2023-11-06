@@ -3,6 +3,7 @@
 #include <variant>
 #include "../core/sm_skeleton.h"
 #include "../core/sm_bone.h"
+#include "project.h"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -13,6 +14,10 @@ namespace{
 
     template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
 
+}
+
+sm::expected_skel mdl::handle::to_skeleton(sm::world& world) {
+    return world.skeleton(skel_name);
 }
 
 bool mdl::handle::operator==(const handle& hand) const

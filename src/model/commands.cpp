@@ -41,10 +41,6 @@ namespace {
     }
 }
 
-sm::expected_skel mdl::commands::skel_from_handle(project& proj, const handle& hnd) {
-    return proj.world_.skeleton(hnd.skel_name);
-}
-
 mdl::command mdl::commands::make_create_node_command(const std::string& tab, const sm::point& pt) {
     auto state = std::make_shared<create_node_state>(tab, "", pt);
 
@@ -75,8 +71,8 @@ mdl::command mdl::commands::make_add_bone_command(const std::string& tab,
     auto state = std::make_shared<add_bone_state>(tab, u_hnd, v_hnd);
     return {
         [state](mdl::project& proj) {
-            auto& u = from_handle<sm::node>(proj, state->u_hnd);
-            auto& v = from_handle<sm::node>(proj, state->v_hnd);
+            auto& u = state->u_hnd.to<sm::node>(proj.world_);
+            auto& v = state->v_hnd.to<sm::node>(proj.world_);
 
             if (&u.owner().get() == &v.owner().get()) {
                 return;
@@ -213,12 +209,12 @@ mdl::command mdl::commands::make_transform_bones_or_nodes_command(
             // a bone function but not both and not neither.
             if (state->transform_nodes) {
                 for (auto node_hnd : state->nodes) {
-                    auto& node = from_handle<sm::node>(proj, node_hnd);
+                    auto& node = node_hnd.to<sm::node>(proj.world_);
                     state->transform_nodes(node);
                 }
             } else if (state->transform_bones) {
                 for (auto bone_hnd : state->bones) {
-                    auto& bone = from_handle<sm::bone>(proj, bone_hnd);
+                    auto& bone = bone_hnd.to<sm::bone>(proj.world_);
                     state->transform_bones(bone);
                 }
             } else {
@@ -228,11 +224,11 @@ mdl::command mdl::commands::make_transform_bones_or_nodes_command(
         },
         [state](project& proj) {
             for (auto node_hnd : state->nodes) {
-                auto& node = from_handle<sm::node>(proj, node_hnd);
+                auto& node = node_hnd.to<sm::node>(proj.world_);
                 node.set_world_pos(state->old_node_to_position[node_hnd]);
             }
             for (auto bone_hnd : state->bones) {
-                auto& bone = from_handle<sm::bone>(proj, bone_hnd);
+                auto& bone = bone_hnd.to<sm::bone>(proj.world_);
                 if (state->old_bone_to_rotcon.contains(bone_hnd)) {
                     auto rot_con = state->old_bone_to_rotcon[bone_hnd];
                     bone.set_rotation_constraint(
