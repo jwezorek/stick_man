@@ -1,6 +1,7 @@
 #include "sm_types.h"
 #include "sm_bone.h"
 #include "sm_skeleton.h"
+#include "qdebug.h"
 
 using namespace std::placeholders;
 namespace r = std::ranges;
@@ -350,9 +351,13 @@ void sm::bone::clear_user_data() {
 }
 
 void sm::bone::rotate(double theta) {
-	set_world_rotation(
-		world_rotation() + theta
+	set_rotation(
+		rotation() + theta
 	);
+}
+
+void sm::bone::set_rotation(double theta) {
+    //TODO
 }
 
 void sm::bone::set_world_rotation(double theta) {
@@ -360,29 +365,28 @@ void sm::bone::set_world_rotation(double theta) {
 	std::unordered_map<bone*, double> length_tbl;
 	visit_bones(*this, 
 		[&](bone& b)->visit_result {
-			rotation_tbl[&b] = b.rotation();
+			rotation_tbl[&b] = b.world_rotation();
 			length_tbl[&b] = b.scaled_length();
 			return visit_result::continue_traversal;
 		}
 	);
 
-	rotation_tbl[this] = parent_bone().transform(
-			[theta](bone_ref br) { return theta - br.get().world_rotation(); }
-		).value_or(theta);
+    rotation_tbl[this] = theta;
 
 	visit_bones(*this,
 		[&](bone& b)->visit_result {
-			auto parent_rot = b.parent_bone().transform(
-					[](bone_ref br) {return br.get().world_rotation(); }
-				).value_or(0.0);
-			auto theta = parent_rot + rotation_tbl.at(&b);
+
+			auto theta = rotation_tbl.at(&b);
 			theta = constrain_rotation(b, theta);
+
 			auto rotate_about_u = rotate_about_point_matrix(
 				b.parent_node().world_pos(), theta);
 			auto v = b.parent_node().world_pos() + sm::point{ length_tbl.at(&b), 0.0 };
+
 			b.child_node().set_world_pos(
 				transform(v, rotate_about_u)
 			);
+
 			return visit_result::continue_traversal;
 		}
 	);

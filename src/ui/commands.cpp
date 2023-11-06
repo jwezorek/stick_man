@@ -3,7 +3,7 @@
 #include <ranges>
 #include <unordered_set>
 #include <cassert>
-
+#include "qdebug.h"
 /*------------------------------------------------------------------------------------------------*/
 
 namespace r = std::ranges;
@@ -11,6 +11,34 @@ namespace rv = std::ranges::views;
 
 namespace {
     template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
+
+    auto find_roots(const std::unordered_set<sm::node*>& node_set) {
+        return rv::all(node_set) |
+            rv::filter(
+                [&node_set](const auto* node_ptr)->bool {
+                    auto parent = node_ptr->parent_bone();
+                    if (!parent) {
+                        return true;
+                    }
+                    sm::node& parent_node = const_cast<sm::node&>(parent->get().parent_node());
+                    return (!parent ||
+                        !node_set.contains(&parent_node));
+                }
+            );
+    }
+
+    std::unordered_set<sm::node*> downstream_envelope(const std::unordered_set<sm::node*>& node_set) {
+        std::unordered_set<sm::node*> envelope;
+        for (auto* root : find_roots(node_set)) {
+            sm::visit_nodes(*root,
+                [&envelope](sm::node& node)->sm::visit_result {
+                    envelope.insert(&node);
+                    return sm::visit_result::continue_traversal;
+                }
+            );
+        }
+        return envelope;
+    }
 }
 
 sm::expected_skel ui::commands::skel_from_handle(ui::project& proj, const skel_piece_handle& hnd) {
@@ -72,15 +100,18 @@ ui::command ui::commands::make_add_bone_command(const std::string& tab, sm::node
             auto& skel_v = v.owner().get();
             auto new_u = skel_u.copy_to(state->original);
             auto new_v = skel_v.copy_to(state->original);
-            assert("skeleton copy failed", new_u && new_v);
-
+            if (!new_u || !new_v) {
+                throw std::runtime_error("skeleton copy failed");
+            }
             emit proj.pre_new_bone_added(u, v);
             proj.delete_skeleton_name_from_canvas_table(
                 state->canvas_name, v.owner().get().name()
             );
 
             auto bone = proj.world_.create_bone({}, u, v);
-            assert("create_bone failed", false);
+            if (!bone) {
+                throw std::runtime_error("create_bone failed");
+            }
 
             state->merged = bone->get().owner().get().name();
             emit proj.new_bone_added(bone->get());
@@ -169,10 +200,9 @@ ui::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
         }
 
         node_set.insert(&bone.parent_node());
-        node_set.insert(&bone.child_node());
     }
 
-    for (auto* node_ptr : node_set) {
+    for (auto* node_ptr : downstream_envelope(node_set)) {
         auto& node = *node_ptr;
         auto handle = to_handle( std::ref(node) );
         nodes.push_back(handle);
@@ -206,7 +236,7 @@ ui::command ui::commands::make_transform_bones_or_nodes_command(
                     state->transform_bones(bone);
                 }
             } else {
-                assert("bad call to make_transform_bones_or_nodes_command", false);
+                throw std::runtime_error("bad call to make_transform_bones_or_nodes_command");
             }
             emit proj.refresh_canvas(proj, state->canvas, false);
         },
@@ -217,10 +247,12 @@ ui::command ui::commands::make_transform_bones_or_nodes_command(
             }
             for (auto bone_hnd : state->bones) {
                 auto& bone = from_handle<sm::bone>(proj, bone_hnd);
-                auto rot_con = state->old_bone_to_rotcon[bone_hnd];
-                bone.set_rotation_constraint(
-                    rot_con.start_angle, rot_con.span_angle, rot_con.relative_to_parent
-                );
+                if (state->old_bone_to_rotcon.contains(bone_hnd)) {
+                    auto rot_con = state->old_bone_to_rotcon[bone_hnd];
+                    bone.set_rotation_constraint(
+                        rot_con.start_angle, rot_con.span_angle, rot_con.relative_to_parent
+                    );
+                }
             }
             emit proj.refresh_canvas(proj, state->canvas, false);
         }

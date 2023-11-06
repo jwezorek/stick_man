@@ -352,7 +352,9 @@ void ui::canvas::clear() {
         if (item->selection_frame()) {
             this->removeItem(item->selection_frame());
         }
-        this->removeItem(item->item_body());
+        if (item->item_body()) {
+            this->removeItem(item->item_body());
+        }
 		delete item;
 	}
 }
@@ -402,10 +404,14 @@ void ui::canvas::delete_item(abstract_canvas_item* deletee, bool emit_signals) {
 		);
 	}
 
-    QGraphicsItem* body;
-    QGraphicsItem* sel_frame;
-	removeItem(body = deletee->item_body());
-	removeItem(sel_frame = deletee->selection_frame());
+    auto* body = deletee->item_body();
+    auto* sel_frame = deletee->selection_frame();
+    if (body) {
+        removeItem(body);
+    }
+    if (sel_frame) {
+        removeItem(sel_frame);
+    }
     if (sel_frame && sel_frame != body) {
         delete sel_frame;
     }

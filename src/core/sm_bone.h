@@ -121,6 +121,7 @@ namespace sm {
 
 		void rotate(double theta);
 		void set_world_rotation(double theta);
+        void set_rotation(double theta);
         void set_length(double len);
 	};
 
