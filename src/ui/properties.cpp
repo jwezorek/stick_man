@@ -5,6 +5,7 @@
 #include "stick_man.h"
 #include "skeleton_pane.h"
 #include "../model/project.h"
+#include "../model/handle.h"
 #include <unordered_map>
 #include <unordered_set>
 #include <ranges>
@@ -74,7 +75,8 @@ namespace {
 
 	void set_rot_constraints(mdl::project& proj, ui::canvas& canv, bool is_parent_relative, double start, double span) {
         proj.transform(
-            to_model_refs(canv.selected_bones()) | r::to<std::vector<sm::bone_ref>>(),
+            mdl::to_handles(to_model_ptrs(canv.selected_bones())) | 
+                r::to<std::vector<mdl::handle>>(),
             [&](sm::bone& bone) {
                 bone.set_rotation_constraint(start, span, is_parent_relative);
             }
@@ -83,18 +85,19 @@ namespace {
 
 	void remove_rot_constraints(mdl::project& proj, ui::canvas& canv) {
         proj.transform(
-            to_model_refs(canv.selected_bones()) | r::to<std::vector<sm::bone_ref>>(),
+            mdl::to_handles(to_model_ptrs(canv.selected_bones())) |
+                r::to<std::vector<mdl::handle>>(),
             [](sm::bone& bone) {
                 bone.remove_rotation_constraint();
             }
         );
 	}
 
-    std::vector<sm::bone_ref> topological_sort_selected_bones(ui::canvas& canv) {
+    std::vector<sm::bone*> topological_sort_selected_bones(ui::canvas& canv) {
         auto bone_items = canv.selected_bones();
         std::unordered_set<sm::bone*> selected = ui::to_model_ptrs(bone_items) |
             r::to< std::unordered_set<sm::bone*>>();
-        std::vector<sm::bone_ref> ordered_bones;
+        std::vector<sm::bone*> ordered_bones;
         auto skeletons = canv.skeleton_items();
 
         for (auto skel_item : skeletons) {
@@ -102,7 +105,7 @@ namespace {
             sm::visit_bones(skel.root_node().get(),
                 [&](auto& bone)->sm::visit_result {
                     if (selected.contains(&bone)) {
-                        ordered_bones.push_back(bone);
+                        ordered_bones.push_back(&bone);
                     }
                     return sm::visit_result::continue_traversal;
                 }
@@ -113,8 +116,9 @@ namespace {
     }
 
     void set_selected_bone_length(mdl::project& proj, ui::canvas& canv, double new_length) {
+        auto ordered = topological_sort_selected_bones(canv);
         proj.transform(
-            topological_sort_selected_bones(canv),
+            mdl::to_handles(rv::all(ordered)) | r::to<std::vector<mdl::handle>>(),
             [new_length](sm::bone_ref bone) {
                 bone.get().set_length(new_length);
             }
@@ -122,10 +126,10 @@ namespace {
     }
 
 	void set_selected_bone_rotation(mdl::project& proj, ui::canvas& canv, double theta) {
-
+        auto ordered = topological_sort_selected_bones(canv);
         // sort bones into topological order and then set world rotation...
         proj.transform(
-            topological_sort_selected_bones(canv),
+            mdl::to_handles(rv::all(ordered)) | r::to<std::vector<mdl::handle>>(),
             [theta](sm::bone_ref bone) {
                 bone.get().set_world_rotation(theta);
             }
@@ -273,9 +277,8 @@ namespace {
 				[this](int field) {
 					auto& canv = get_current_canv_();
 					auto v = positions_->value(field);
-                    auto sel = ui::to_model_ptrs(canv.selected_nodes()) |
-                        rv::transform([](auto* ptr)->sm::node_ref {return std::ref(*ptr); }) |
-                        r::to<std::vector<sm::node_ref>>();
+                    auto sel = mdl::to_handles(ui::to_model_ptrs(canv.selected_nodes())) |
+                        r::to<std::vector<mdl::handle>>();
 					if (field == 0) {
                         proj_->transform(sel,
                             [&](sm::node& node) {

@@ -65,14 +65,14 @@ namespace mdl {
             handle_table<sm::rot_constraint> old_bone_to_rotcon;
 
             trasform_nodes_and_bones_state(
-                const std::string& canvas_name,
-                const std::vector<sm::node_ref>& nodes,
+                project& proj,
+                const std::vector<handle>& nodes,
                 const std::function<void(sm::node&)>& fn
             );
 
             trasform_nodes_and_bones_state(
-                const std::string& canvas_name,
-                const std::vector<sm::bone_ref>& bones,
+                project& proj,
+                const std::vector<handle>& bones,
                 const std::function<void(sm::bone&)>& fn
             );
         };
@@ -115,9 +115,9 @@ namespace mdl {
             const std::vector<sm::skel_ref>& replacements
         );
         static command make_transform_bones_or_nodes_command(
-            const std::string& canvas_name,
-            const std::vector<sm::node_ref>& nodes,
-            const std::vector<sm::bone_ref>& bones,
+            project& proj,
+            const std::vector<handle>& nodes,
+            const std::vector<handle>& bones,
             const std::function<void(sm::node&)>& nodes_fn,
             const std::function<void(sm::bone&)>& bones_fn
         );

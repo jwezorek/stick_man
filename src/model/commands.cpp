@@ -150,30 +150,30 @@ mdl::command mdl::commands::make_replace_skeletons_command(
 }
 
 mdl::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
-        const std::string& canvas_name,
-        const std::vector<sm::node_ref>& node_refs,
-        const std::function<void(sm::node&)>& fn) :
-        canvas{ canvas_name },
-        transform_nodes{ fn } {
-    for (auto node_ref : node_refs) {
-        auto& node = node_ref.get();
-        auto handle = to_handle(node_ref);
+        project& proj,  const std::vector<handle>& node_hnds, const std::function<void(sm::node&)>& fn):
+            transform_nodes{ fn } {
+    for (auto handle : node_hnds) {
+        auto& node = handle.to<sm::node>(proj.world_);
+        if (canvas.empty()) {
+            canvas = proj.canvas_name_from_skeleton(node.owner().get().name());
+        }
         nodes.push_back(handle);
         old_node_to_position[handle] = node.world_pos();
     }
 }
 
 mdl::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
-        const std::string& canvas_name,
-        const std::vector<sm::bone_ref>& bone_refs,
+        project& proj,
+        const std::vector<handle>& bone_hnds,
         const std::function<void(sm::bone&)>& fn) :
-        canvas{ canvas_name },
-        transform_bones{ fn } {
+            transform_bones{ fn } {
 
     std::unordered_set<sm::node*> node_set;
-    for (auto bone_ref : bone_refs) {
-        auto& bone = bone_ref.get();
-        auto handle = to_handle(bone_ref);
+    for (auto handle : bone_hnds) {
+        auto& bone = handle.to<sm::bone>(proj.world_);
+        if (canvas.empty()) {
+            canvas = proj.canvas_name_from_skeleton(bone.owner().get().name());
+        }
         bones.push_back(handle);
 
         auto rot_con = bone.rotation_constraint();
@@ -194,15 +194,15 @@ mdl::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
 }
 
 mdl::command mdl::commands::make_transform_bones_or_nodes_command(
-        const std::string& canv,
-        const std::vector<sm::node_ref>& nodes,
-        const std::vector<sm::bone_ref>& bones,
+        project& proj,
+        const std::vector<handle>& nodes,
+        const std::vector<handle>& bones,
         const std::function<void(sm::node&)>& nodes_fn,
         const std::function<void(sm::bone&)>& bones_fn) {
 
     std::shared_ptr<trasform_nodes_and_bones_state> state = (nodes_fn) ?
-        std::make_shared<trasform_nodes_and_bones_state>(canv, nodes, nodes_fn) :
-        std::make_shared<trasform_nodes_and_bones_state>(canv, bones, bones_fn);
+        std::make_shared<trasform_nodes_and_bones_state>(proj, nodes, nodes_fn) :
+        std::make_shared<trasform_nodes_and_bones_state>(proj, bones, bones_fn);
     return {
         [state](project& proj) {
             // either there is a node transformation function or

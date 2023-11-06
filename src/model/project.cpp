@@ -284,23 +284,17 @@ bool mdl::project::rename(skel_piece piece, const std::string& new_name) {
     return true;
 }
 
-void mdl::project::transform(const std::vector<sm::node_ref>& nodes,
+void mdl::project::transform(const std::vector<handle>& nodes,
         const std::function<void(sm::node&)>& fn) {
-    auto canvas_name = canvas_name_from_skeleton(
-        nodes.front().get().owner().get().name()
-    );
     execute_command(
-        commands::make_transform_bones_or_nodes_command(canvas_name, nodes, {}, fn, {})
+        commands::make_transform_bones_or_nodes_command(*this, nodes, {}, fn, {})
     );
 }
 
-void mdl::project::transform(const std::vector<sm::bone_ref>& bones,
+void mdl::project::transform(const std::vector<handle>& bones,
         const std::function<void(sm::bone&)>& fn) {
-    auto canvas_name = canvas_name_from_skeleton(
-        bones.front().get().owner().get().name()
-    );
     execute_command(
-        commands::make_transform_bones_or_nodes_command(canvas_name, {}, bones, {}, fn)
+        commands::make_transform_bones_or_nodes_command(*this, {}, bones, {}, fn)
     );
 }
 

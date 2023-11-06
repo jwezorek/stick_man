@@ -60,4 +60,13 @@ namespace mdl {
 
     handle to_handle(const skel_piece& piece);
 
+    auto to_handles(auto ptrs) {
+        return ptrs |
+            std::ranges::views::transform(
+                [](auto* ptr)->handle {
+                    return to_handle(std::ref(*ptr));
+                }
+            );
+    }
+
 }

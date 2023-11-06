@@ -104,11 +104,11 @@ namespace mdl {
             const std::vector<std::string>& replacees,
             const std::vector<sm::skel_ref>& replacements
         );
-        
-        void transform(const std::vector<sm::node_ref>& nodes, 
+        void transform(const std::vector<handle>& nodes, 
             const std::function<void(sm::node&)>& fn);
-        void transform(const std::vector<sm::bone_ref>& nodes,
+        void transform(const std::vector<handle>& nodes,
             const std::function<void(sm::bone&)>& fn);
+
     signals:
         void new_tab_added(const std::string& name);
         void pre_new_bone_added(sm::node& u, sm::node& v);
