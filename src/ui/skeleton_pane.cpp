@@ -5,7 +5,7 @@
 #include "tools.h"
 #include "tools.h"
 #include "stick_man.h"
-#include "project.h"
+#include "../model/project.h"
 #include "../core/sm_bone.h"
 #include "../core/sm_skeleton.h"
 #include <numbers>
@@ -67,7 +67,7 @@ namespace{
 		return qsi->data(k_model_role).value<T*>();
 	}
 
-	ui::skel_piece get_treeitem_var(QStandardItem* qsi) {
+	mdl::skel_piece get_treeitem_var(QStandardItem* qsi) {
 		if (is_bone_treeitem(qsi)) {
 			auto* bone = get_treeitem_data<sm::bone>(qsi);
 			return { std::ref(*bone) };
@@ -289,14 +289,14 @@ void ui::skeleton_pane::traverse_tree_items(const std::function<void(QStandardIt
     }
 }
 
-void ui::skeleton_pane::handle_rename(skel_piece piece, const std::string& new_name) {
+void ui::skeleton_pane::handle_rename(mdl::skel_piece piece, const std::string& new_name) {
     if (std::holds_alternative<sm::node_ref>(piece)) {
         return;
     }
     traverse_tree_items(
         [&](QStandardItem* itm)->void {
             auto itm_piece = get_treeitem_var(itm);
-            if (identical_pieces(piece, itm_piece)) {
+            if (mdl::identical_pieces(piece, itm_piece)) {
                 auto curr_name = itm->text().toStdString();
                 if (curr_name != new_name) {
                     itm->setText(new_name.c_str());
@@ -415,7 +415,7 @@ void ui::skeleton_pane::disconnect_canv_sel_handler() {
 	disconnect(canv_sel_conn_);
 }
 
-void ui::skeleton_pane::init(canvas_manager& canvases, project& proj) {
+void ui::skeleton_pane::init(canvas_manager& canvases, mdl::project& proj) {
     project_ = &proj;
     canvases_ = &canvases;
 	sel_properties_->init(canvases, proj);
@@ -424,7 +424,7 @@ void ui::skeleton_pane::init(canvas_manager& canvases, project& proj) {
 	connect_canv_sel_handler();
 	connect_tree_sel_handler();
 
-    connect(project_, &project::name_changed, this, &skeleton_pane::handle_rename);
+    connect(project_, &mdl::project::name_changed, this, &skeleton_pane::handle_rename);
 }
 
 void ui::skeleton_pane::select_items(const std::vector<QStandardItem*>& items, bool emit_signal) {

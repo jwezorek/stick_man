@@ -4,7 +4,7 @@
 #include "util.h"
 #include "stick_man.h"
 #include "skeleton_pane.h"
-#include "project.h"
+#include "../model/project.h"
 #include <unordered_map>
 #include <unordered_set>
 #include <ranges>
@@ -72,7 +72,7 @@ namespace {
 			std::optional<double>{first_val} : std::optional<double>{};
 	}
 
-	void set_rot_constraints(ui::project& proj, ui::canvas& canv, bool is_parent_relative, double start, double span) {
+	void set_rot_constraints(mdl::project& proj, ui::canvas& canv, bool is_parent_relative, double start, double span) {
         proj.transform(
             to_model_refs(canv.selected_bones()) | r::to<std::vector<sm::bone_ref>>(),
             [&](sm::bone& bone) {
@@ -81,7 +81,7 @@ namespace {
         );
 	}
 
-	void remove_rot_constraints(ui::project& proj, ui::canvas& canv) {
+	void remove_rot_constraints(mdl::project& proj, ui::canvas& canv) {
         proj.transform(
             to_model_refs(canv.selected_bones()) | r::to<std::vector<sm::bone_ref>>(),
             [](sm::bone& bone) {
@@ -112,7 +112,7 @@ namespace {
         return ordered_bones;
     }
 
-    void set_selected_bone_length(ui::project& proj, ui::canvas& canv, double new_length) {
+    void set_selected_bone_length(mdl::project& proj, ui::canvas& canv, double new_length) {
         proj.transform(
             topological_sort_selected_bones(canv),
             [new_length](sm::bone_ref bone) {
@@ -121,7 +121,7 @@ namespace {
         );
     }
 
-	void set_selected_bone_rotation(ui::project& proj, ui::canvas& canv, double theta) {
+	void set_selected_bone_rotation(mdl::project& proj, ui::canvas& canv, double theta) {
 
         // sort bones into topological order and then set world rotation...
         proj.transform(
@@ -146,7 +146,7 @@ namespace {
 		skeleton_properties(const ui::current_canvas_fn& fn, ui::selection_properties* parent) :
 			abstract_properties_widget(fn, parent, "skeleton selection") {}
 
-		void populate(ui::project& proj) override {
+		void populate(mdl::project& proj) override {
 			layout_->addWidget(
 				name_ = new ui::labeled_field("   name", "")
 			);
@@ -157,8 +157,8 @@ namespace {
 				}
 			);
 
-            connect(&proj, &ui::project::name_changed,
-                [this](ui::skel_piece piece, const std::string& new_name) {
+            connect(&proj, &mdl::project::name_changed,
+                [this](mdl::skel_piece piece, const std::string& new_name) {
                     handle_rename(piece, name_->value(), new_name);
                 }
             );
@@ -252,7 +252,7 @@ namespace {
 			positions_{} {
 		}
 
-		void populate(ui::project& proj) override {
+		void populate(mdl::project& proj) override {
 			layout_->addWidget(
 				name_ = new ui::labeled_field("   name", "")
 			);
@@ -295,8 +295,8 @@ namespace {
 				}
 			);
 
-            connect(&proj, &ui::project::name_changed,
-                [this](ui::skel_piece piece, const std::string& new_name) {
+            connect(&proj, &mdl::project::name_changed,
+                [this](mdl::skel_piece piece, const std::string& new_name) {
                     handle_rename(piece, name_->value(), new_name);
                 }
             );
@@ -340,7 +340,7 @@ namespace {
 		ui::labeled_numeric_val* span_angle_;
 		QComboBox* mode_;
 		ui::canvas& canv_;
-        ui::project& proj_;
+        mdl::project& proj_;
 
 		bool is_constraint_relative_to_parent() const {
 			return mode_->currentIndex() == 0;
@@ -360,7 +360,7 @@ namespace {
 			return ui::degrees_to_radians(*span_angle_->num_edit()->value());
 		}
 
-		void set_constraint_angle(ui::project& proj, ui::canvas& canv, double val, bool is_start_angle) {
+		void set_constraint_angle(mdl::project& proj, ui::canvas& canv, double val, bool is_start_angle) {
 			auto theta = ui::degrees_to_radians(val);
 			auto start_angle = is_start_angle ? theta : constraint_start_angle();
 			auto span_angle = is_start_angle ? constraint_span_angle() : theta;
@@ -369,7 +369,7 @@ namespace {
 			canv.sync_to_model();
 		}
 
-		void set_constraint_mode(ui::project& proj, ui::canvas& canv, bool relative_to_parent) {
+		void set_constraint_mode(mdl::project& proj, ui::canvas& canv, bool relative_to_parent) {
 			set_rot_constraints(proj, canv,
 				relative_to_parent, constraint_start_angle(), constraint_span_angle()
 			);
@@ -389,7 +389,7 @@ namespace {
 		}
 
 	public:
-		rot_constraint_box(QPushButton* btn, ui::canvas& canv, ui::project& proj) :
+		rot_constraint_box(QPushButton* btn, ui::canvas& canv, mdl::project& proj) :
 			    btn_(btn),
 			    start_angle_(nullptr),
 			    span_angle_(nullptr),
@@ -506,7 +506,7 @@ namespace {
 		rot_constraint_box* constraint_box_;
 		QPushButton* constraint_btn_;
 
-		void add_or_delete_constraint(ui::project& proj, ui::canvas& canv) {
+		void add_or_delete_constraint(mdl::project& proj, ui::canvas& canv) {
 			bool is_adding = !constraint_box_->isVisible();
 			if (is_adding) {
                 set_rot_constraints(proj, canv, true,
@@ -538,7 +538,7 @@ namespace {
 			nodes_(nullptr) {
 		}
 
-		void populate(ui::project& proj) override {
+		void populate(mdl::project& proj) override {
 			layout_->addWidget(
 				name_ = new ui::labeled_field("   name", "")
 			);
@@ -578,8 +578,8 @@ namespace {
                 }
             );
 
-            connect(&proj, &ui::project::name_changed,
-                [this](ui::skel_piece piece, const std::string& new_name) {
+            connect(&proj, &mdl::project::name_changed,
+                [this](mdl::skel_piece piece, const std::string& new_name) {
                     handle_rename(piece, name_->value(), new_name);
                 }
             );
@@ -677,7 +677,7 @@ namespace {
 			abstract_properties_widget(fn, parent, "") {
 		}
 
-		void populate(ui::project& proj) override {
+		void populate(mdl::project& proj) override {
 			layout_->addWidget(
 				nodes_ = new node_properties(get_current_canv_, parent_)
 			);
@@ -725,13 +725,13 @@ void ui::abstract_properties_widget::do_property_name_change(const std::string& 
     proj_->rename(*maybe_piece, new_name);
 }
 
-void ui::abstract_properties_widget::handle_rename(ui::skel_piece p, ui::string_edit* name_edit, const std::string& new_name)
+void ui::abstract_properties_widget::handle_rename(mdl::skel_piece p, ui::string_edit* name_edit, const std::string& new_name)
 {
     auto maybe_piece = selected_single_model(get_current_canv_());
     if (!maybe_piece) {
         return;
     }
-    if (!identical_pieces(*maybe_piece, p)) {
+    if (! mdl::identical_pieces(*maybe_piece, p)) {
         return;
     }
     if (name_edit->text().toStdString() != new_name) {
@@ -743,13 +743,13 @@ void ui::abstract_properties_widget::set_title(QString title) {
 	title_->setText(title);
 }
 
-void ui::abstract_properties_widget::init(project& proj) {
+void ui::abstract_properties_widget::init(mdl::project& proj) {
 	populate(proj);
 	layout_->addStretch();
     proj_ = &proj;
 }
 
-void ui::abstract_properties_widget::populate(project& proj) {
+void ui::abstract_properties_widget::populate(mdl::project & proj) {
 
 }
 
@@ -823,7 +823,7 @@ void ui::selection_properties::handle_selection_changed(canvas& canv) {
     set(canv);
 }
 
-void ui::selection_properties::init(canvas_manager& canvases, project& proj)
+void ui::selection_properties::init(canvas_manager& canvases, mdl::project& proj)
 {
     for (const auto& [key, prop_box] : props_) {
         prop_box->init(proj);

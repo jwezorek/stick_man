@@ -3,7 +3,7 @@
 #include "stick_man.h"
 #include "tools.h"
 #include "util.h"
-#include "project.h"
+#include "../model/project.h"
 #include "../core/sm_skeleton.h"
 #include <boost/geometry.hpp>
 #include <ranges>
@@ -568,14 +568,14 @@ ui::canvas_manager::canvas_manager(input_handler& inp_handler) :
     connect_current_tab_signal();
 }
 
-void ui::canvas_manager::init(project& proj) {
-    connect(&proj, &project::new_tab_added, this, &canvas_manager::add_new_tab);
-    connect(&proj, &project::pre_new_bone_added, this, &canvas_manager::prepare_to_add_bone);
-    connect(&proj, &project::new_bone_added, this, &canvas_manager::add_new_bone);
-    connect(&proj, &project::new_skeleton_added, this, &canvas_manager::add_new_skeleton);
-    connect(&proj, &project::new_project_opened, this, &canvas_manager::set_contents);
-    connect(&proj, &project::refresh_canvas, 
-        [this](project& model, const std::string& canvas, bool clear) {
+void ui::canvas_manager::init(mdl::project& proj) {
+    connect(&proj, &mdl::project::new_tab_added, this, &canvas_manager::add_new_tab);
+    connect(&proj, &mdl::project::pre_new_bone_added, this, &canvas_manager::prepare_to_add_bone);
+    connect(&proj, &mdl::project::new_bone_added, this, &canvas_manager::add_new_bone);
+    connect(&proj, &mdl::project::new_skeleton_added, this, &canvas_manager::add_new_skeleton);
+    connect(&proj, &mdl::project::new_project_opened, this, &canvas_manager::set_contents);
+    connect(&proj, &mdl::project::refresh_canvas, 
+        [this](mdl::project& model, const std::string& canvas, bool clear) {
             if (clear) {
                 set_contents_of_canvas(model, canvas);
             } else {
@@ -677,7 +677,7 @@ std::string ui::canvas_manager::tab_name(const canvas& canv) const {
     return (index >= 0) ? tabText(index).toStdString() : "";
 }
 
-void ui::canvas_manager::set_contents(project& model) {
+void ui::canvas_manager::set_contents(mdl::project& model) {
 
     // clear the old tabs and create new ones based on what is in the project
     disconnect_current_tab_signal();
@@ -696,7 +696,7 @@ void ui::canvas_manager::set_contents(project& model) {
     emit canvas_refresh(model.world());
 }
 
-void ui::canvas_manager::set_contents_of_canvas(project& model, const std::string& canvas ) {
+void ui::canvas_manager::set_contents_of_canvas(mdl::project& model, const std::string& canvas ) {
     auto* canv = canvas_from_tab(canvas);
     if (!canv) {
         return;
@@ -731,18 +731,18 @@ void ui::canvas_manager::set_active_canvas(const canvas& c) {
 
 /*------------------------------------------------------------------------------------------------*/
 
-std::optional<ui::skel_piece> ui::selected_single_model(const ui::canvas& canv) {
+std::optional<mdl::skel_piece> ui::selected_single_model(const ui::canvas& canv) {
 	auto* skel_item = canv.selected_skeleton();
 	if (skel_item) {
-		return skel_piece{ std::ref(skel_item->model()) };
+		return mdl::skel_piece{ std::ref(skel_item->model()) };
 	}
 	auto bones = canv.selected_bones();
 	auto nodes = canv.selected_nodes();
 	if (bones.size() == 1 && nodes.empty()) {
-		return skel_piece{ std::ref(bones.front()->model()) };
+		return mdl::skel_piece{ std::ref(bones.front()->model()) };
 	}
 	if (nodes.size() == 1 && bones.empty()) {
-		return skel_piece{ std::ref(nodes.front()->model()) };
+		return mdl::skel_piece{ std::ref(nodes.front()->model()) };
 	}
 	return {};
 }

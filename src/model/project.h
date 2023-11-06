@@ -14,7 +14,7 @@
 
 /*------------------------------------------------------------------------------------------------*/
 
-namespace ui {
+namespace mdl {
 
     class canvas_manager;
 
@@ -121,5 +121,5 @@ namespace ui {
     };
 
     std::string unique_skeleton_name(const std::string& old_name, const std::vector<std::string>& used_names);
-    bool identical_pieces(skel_piece p1, skel_piece p2);
+    bool identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2);
 }

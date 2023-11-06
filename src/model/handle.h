@@ -4,7 +4,7 @@
 #include <variant>
 #include "../core/sm_types.h"
 
-namespace ui {
+namespace mdl {
 
     using const_skel_piece =
         std::variant<sm::const_node_ref, sm::const_bone_ref, sm::const_skel_ref>;
@@ -21,6 +21,6 @@ namespace ui {
         size_t operator()(const handle& hand) const;
     };
 
-    handle to_handle(const ui::skel_piece& piece);
+    handle to_handle(const skel_piece& piece);
 
 }

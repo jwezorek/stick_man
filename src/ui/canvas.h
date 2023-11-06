@@ -1,7 +1,7 @@
 #pragma once
 
 #include "util.h"
-#include "project.h"
+#include "../model/project.h"
 #include <QWidget>
 #include <QtWidgets>
 #include <QGraphicsScene>
@@ -23,6 +23,10 @@ namespace sm {
     class world;
 }
 
+namespace mdl {
+    class project;
+}
+
 namespace ui {
 
     class stick_man;
@@ -33,7 +37,6 @@ namespace ui {
     class bone_item;
     class skeleton_item;
     class abstract_canvas_item;
-    class project;
 
     using selection_set = std::unordered_set<ui::abstract_canvas_item*>;
 
@@ -147,13 +150,13 @@ namespace ui {
         void prepare_to_add_bone(sm::node& u, sm::node& v);
         void add_new_bone(sm::bone& bone);
         void add_new_skeleton(sm::skel_ref skel);
-        void set_contents(project& model);
-        void set_contents_of_canvas(project& model, const std::string& canvas);
+        void set_contents(mdl::project& model);
+        void set_contents_of_canvas(mdl::project& model, const std::string& canvas);
         void clear_canvas(const std::string& canv);
 
     public:
         canvas_manager(input_handler& inp_handler);
-        void init(project& proj);
+        void init(mdl::project& proj);
         void clear();
         void center_active_view();
         canvas& active_canvas() const;
@@ -183,5 +186,5 @@ namespace ui {
         void canvas_refresh(sm::world& proj);
     };
 
-    std::optional<ui::skel_piece> selected_single_model(const ui::canvas& canv);
+    std::optional<mdl::skel_piece> selected_single_model(const ui::canvas& canv);
 }

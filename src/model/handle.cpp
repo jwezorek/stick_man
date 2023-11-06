@@ -15,12 +15,12 @@ namespace{
 
 }
 
-bool ui::handle::operator==(const handle& hand) const
+bool mdl::handle::operator==(const handle& hand) const
 {
     return this->skel_name == hand.skel_name && this->piece_name == hand.piece_name;
 }
 
-size_t ui::handle_hash::operator()(const handle& hand) const
+size_t mdl::handle_hash::operator()(const handle& hand) const
 {
     size_t seed = 0;
     boost::hash_combine(seed, hand.skel_name);
@@ -28,7 +28,7 @@ size_t ui::handle_hash::operator()(const handle& hand) const
     return seed;
 }
 
-ui::handle ui::to_handle(const ui::skel_piece& piece) {
+mdl::handle mdl::to_handle(const mdl::skel_piece& piece) {
     return std::visit(
         overload{
             [](sm::is_node_or_bone_ref auto node_or_bone)->handle {

@@ -35,9 +35,9 @@ add_executable(stick_man
     src/main.cpp
     src/ui/properties.cpp
     src/ui/clipboard.cpp
-    src/ui/project.cpp
-    src/ui/commands.cpp
-    src/ui/handle.cpp
+    src/model/project.cpp
+    src/model/commands.cpp
+    src/model/handle.cpp
 )
 
 target_link_libraries(stick_man PRIVATE Qt6::Widgets  Eigen3::Eigen)

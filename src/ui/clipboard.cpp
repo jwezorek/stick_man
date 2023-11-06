@@ -3,7 +3,7 @@
 #include "../core/json.hpp"
 #include "canvas_item.h"
 #include "canvas.h"
-#include "project.h"
+#include "../model/project.h"
 #include "stick_man.h"
 #include "util.h"
 #include <tuple>
@@ -38,7 +38,7 @@ namespace {
     public:
         skeleton_piece_set() {};
 
-        bool contains(ui::const_skel_piece sp) const {
+        bool contains(mdl::const_skel_piece sp) const {
             return std::visit(
                 [this](auto itm_ref)->bool {
                     return impl_.contains(to_void_star(itm_ref.get()));
@@ -47,7 +47,7 @@ namespace {
             );
         }
 
-        void insert(ui::const_skel_piece piece) {
+        void insert(mdl::const_skel_piece piece) {
             std::visit(
                 [&](auto itm) {
                     impl_.insert(
@@ -59,7 +59,7 @@ namespace {
         }
 
         void insert_range(auto rng) {
-            for (ui::const_skel_piece piece : rng) {
+            for (mdl::const_skel_piece piece : rng) {
                 insert(piece);
             }
         }
@@ -68,7 +68,7 @@ namespace {
     sm::skeleton* create_skeleton(sm::world& dest, const std::string& skel_name) {
         std::string name = skel_name;
         if (dest.contains_skeleton(name)) {
-            name = ui::unique_skeleton_name(name, dest.skeleton_names());
+            name = mdl::unique_skeleton_name(name, dest.skeleton_names());
         }
         auto skel = dest.create_skeleton(name);
         return &(skel->get());
@@ -161,16 +161,16 @@ namespace {
     // ordered per skeleton. Internal pieces of selected whole skeletons are not returned, 
     // just the an item for the whole skeleton.
 
-    std::vector<std::tuple<ui::const_skel_piece, bool>> skeleton_pieces_in_topological_order(
+    std::vector<std::tuple<mdl::const_skel_piece, bool>> skeleton_pieces_in_topological_order(
             ui::canvas& canv, const std::unordered_set<const sm::skeleton*>& skel_set) {
 
         auto selected_skeletons = get_selected_skeletons(canv);
         auto pieces_and_sel_state = selected_skeletons |
             rv::transform(
-                [](const sm::skeleton* p)->std::tuple<ui::const_skel_piece, bool> {
+                [](const sm::skeleton* p)->std::tuple<mdl::const_skel_piece, bool> {
                     return { std::ref(*p), true };
                 }
-            ) | r::to<std::vector<std::tuple<ui::const_skel_piece, bool>>>();
+            ) | r::to<std::vector<std::tuple<mdl::const_skel_piece, bool>>>();
 
         for (auto skel_ptr : skel_set) {
             if (selected_skeletons.contains(skel_ptr)) {
@@ -232,7 +232,9 @@ namespace {
                         copied.insert(skel);
                         auto new_skel = skel.get().copy_to(
                             dest_world,
-                            ui::unique_skeleton_name(skel.get().name(), dest_world.skeleton_names())
+                            mdl::unique_skeleton_name(
+                                skel.get().name(), dest_world.skeleton_names()
+                            )
                         );
                         if (!new_skel) {
                             throw std::runtime_error("unable to make new skeleton");

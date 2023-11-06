@@ -8,7 +8,7 @@
 #include <ranges>
 #include <variant>
 #include "../core/sm_types.h"
-#include "project.h"
+#include "../model/project.h"
 
 namespace ui {
 
@@ -32,8 +32,8 @@ namespace ui {
 		canvas* canvas() const;
 		bool is_selected() const;
 		void set_selected(bool selected);
-        skel_piece to_skeleton_piece();
-        virtual const_skel_piece to_skeleton_piece() const = 0;
+        mdl::skel_piece to_skeleton_piece();
+        virtual mdl::const_skel_piece to_skeleton_piece() const = 0;
 		virtual ~abstract_canvas_item();
 	};
 
@@ -71,7 +71,7 @@ namespace ui {
 		QGraphicsItem* create_selection_frame() const override;
 		bool is_selection_frame_only() const override;
 		QGraphicsItem* item_body() override;
-        const_skel_piece to_skeleton_piece() const override;
+        mdl::const_skel_piece to_skeleton_piece() const override;
 
 	public:
 		using model_type = sm::skeleton;
@@ -87,7 +87,7 @@ namespace ui {
 		QGraphicsItem* create_selection_frame() const override;
 		bool is_selection_frame_only() const override;
 	    QGraphicsItem* item_body() override;
-        const_skel_piece to_skeleton_piece() const override;
+        mdl::const_skel_piece to_skeleton_piece() const override;
 
 		bool is_pinned_;
 	public:
@@ -114,7 +114,7 @@ namespace ui {
 		bool is_selection_frame_only() const override;
 		QGraphicsItem* item_body() override;
 		void sync_rotation_constraint_to_model();
-        const_skel_piece to_skeleton_piece() const override;
+        mdl::const_skel_piece to_skeleton_piece() const override;
 
 	public:
 		using model_type = sm::bone;

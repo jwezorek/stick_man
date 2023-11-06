@@ -10,7 +10,7 @@
 
 /*------------------------------------------------------------------------------------------------*/
 
-namespace ui {
+namespace mdl {
 
     class commands {
         friend class project;
@@ -90,7 +90,7 @@ namespace ui {
 
         template<sm::is_node_or_bone T>
         static std::expected<std::reference_wrapper<T>, sm::result> from_handle_aux(
-            ui::project& proj, const handle& hnd) {
+            project& proj, const handle& hnd) {
             auto skel = proj.world_.skeleton(hnd.skel_name);
             if (!skel) {
                 return std::unexpected(skel.error());
@@ -103,10 +103,10 @@ namespace ui {
             return *maybe_piece;
         }
 
-        static sm::expected_skel skel_from_handle(ui::project& proj, const handle& hnd);
+        static sm::expected_skel skel_from_handle(project& proj, const handle& hnd);
 
         template<sm::is_skel_piece T>
-        static T& from_handle(ui::project& proj, const handle& hnd) {
+        static T& from_handle(project& proj, const handle& hnd) {
             if constexpr (std::is_same<T, sm::skeleton>::value) {
                 auto val = skel_from_handle(proj, hnd);
                 if (!val) {
@@ -124,7 +124,7 @@ namespace ui {
         }
 
         template<sm::is_skel_piece T>
-        static ui::command make_rename_command(skel_piece piece, const std::string& new_name) {
+        static command make_rename_command(skel_piece piece, const std::string& new_name) {
             auto old_handle = to_handle(piece);
             auto new_handle = (old_handle.piece_name.empty()) ?
                 handle{ new_name, {} } :
@@ -132,24 +132,24 @@ namespace ui {
             auto state = std::make_shared<rename_state>(old_handle, new_handle);
 
             return {
-                [state](ui::project& proj) {
+                [state](mdl::project& proj) {
                     rename<T>(proj, state->old_handle, state->new_handle);
                 },
-                [state](ui::project& proj) {
+                [state](mdl::project& proj) {
                     rename<T>(proj, state->new_handle, state->old_handle);
                 }
             };
         }
 
-        static ui::command make_create_node_command(const std::string& tab, const sm::point& pt);
-        static ui::command make_add_bone_command(const std::string& tab,
+        static command make_create_node_command(const std::string& tab, const sm::point& pt);
+        static command make_add_bone_command(const std::string& tab,
             const handle& u_hnd, const handle& v_hnd);
-        static ui::command make_replace_skeletons_command(
+        static command make_replace_skeletons_command(
             const std::string& canvas_name,
             const std::vector<std::string>& replacees,
             const std::vector<sm::skel_ref>& replacements
         );
-        static ui::command make_transform_bones_or_nodes_command(
+        static command make_transform_bones_or_nodes_command(
             const std::string& canvas_name,
             const std::vector<sm::node_ref>& nodes,
             const std::vector<sm::bone_ref>& bones,

@@ -41,21 +41,21 @@ namespace {
     }
 }
 
-sm::expected_skel ui::commands::skel_from_handle(ui::project& proj, const handle& hnd) {
+sm::expected_skel mdl::commands::skel_from_handle(project& proj, const handle& hnd) {
     return proj.world_.skeleton(hnd.skel_name);
 }
 
-ui::command ui::commands::make_create_node_command(const std::string& tab, const sm::point& pt) {
+mdl::command mdl::commands::make_create_node_command(const std::string& tab, const sm::point& pt) {
     auto state = std::make_shared<create_node_state>(tab, "", pt);
 
     return {
-        [state](ui::project& proj) {
+        [state](mdl::project& proj) {
             auto skel = proj.world_.create_skeleton(state->loc);
             state->skeleton = skel.get().name();
             proj.tabs_[state->tab_name].push_back(skel.get().name());
             emit proj.new_skeleton_added(skel);
         },
-        [state](ui::project& proj) {
+        [state](mdl::project& proj) {
             proj.delete_skeleton_name_from_canvas_table(
                 state->tab_name, state->skeleton
             );
@@ -65,16 +65,16 @@ ui::command ui::commands::make_create_node_command(const std::string& tab, const
     };
 }
 
-ui::commands::add_bone_state::add_bone_state(const std::string& str,
+mdl::commands::add_bone_state::add_bone_state(const std::string& str,
         const handle& u_hnd, const handle& v_hnd):
     canvas_name(str), u_hnd(u_hnd), v_hnd(v_hnd) {
 }
 
-ui::command ui::commands::make_add_bone_command(const std::string& tab, 
+mdl::command mdl::commands::make_add_bone_command(const std::string& tab, 
         const handle& u_hnd, const handle& v_hnd) {
     auto state = std::make_shared<add_bone_state>(tab, u_hnd, v_hnd);
     return {
-        [state](ui::project& proj) {
+        [state](mdl::project& proj) {
             auto& u = from_handle<sm::node>(proj, state->u_hnd);
             auto& v = from_handle<sm::node>(proj, state->v_hnd);
 
@@ -102,7 +102,7 @@ ui::command ui::commands::make_add_bone_command(const std::string& tab,
             state->merged = bone->get().owner().get().name();
             emit proj.new_bone_added(bone->get());
         },
-        [state](ui::project& proj) {
+        [state](mdl::project& proj) {
             proj.replace_skeletons_aux(state->canvas_name,
                 {state->merged},
                 state->original.skeletons() | r::to<std::vector<sm::skel_ref>>(),
@@ -113,7 +113,7 @@ ui::command ui::commands::make_add_bone_command(const std::string& tab,
     };
 }
 
-ui::commands::replace_skeleton_state::replace_skeleton_state(const std::string& canv, 
+mdl::commands::replace_skeleton_state::replace_skeleton_state(const std::string& canv, 
         const std::vector<std::string>& replacees, const std::vector<sm::skel_ref>& replacers):
         canvas_name(canv),
         replacee_names(replacees) {
@@ -122,13 +122,13 @@ ui::commands::replace_skeleton_state::replace_skeleton_state(const std::string& 
     }
 }
 
-ui::command ui::commands::make_replace_skeletons_command(
+mdl::command mdl::commands::make_replace_skeletons_command(
         const std::string& canvas_name,
         const std::vector<std::string>& replacees,
         const std::vector<sm::skel_ref>& replacements) {
     auto state = std::make_shared<replace_skeleton_state>(canvas_name, replacees, replacements);
     return {
-        [state](ui::project& proj) {
+        [state](mdl::project& proj) {
             if (state->replacees.empty()) {
                 for (const auto& skel_name : state->replacee_names) {
                     proj.world_.skeleton(skel_name)->get().copy_to(state->replacees);
@@ -142,7 +142,7 @@ ui::command ui::commands::make_replace_skeletons_command(
                 &state->replacement_names
             );
         },
-        [state](ui::project& proj) {
+        [state](mdl::project& proj) {
             proj.replace_skeletons_aux(
                 state->canvas_name,
                 state->replacement_names,
@@ -153,7 +153,7 @@ ui::command ui::commands::make_replace_skeletons_command(
     };
 }
 
-ui::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
+mdl::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
         const std::string& canvas_name,
         const std::vector<sm::node_ref>& node_refs,
         const std::function<void(sm::node&)>& fn) :
@@ -167,7 +167,7 @@ ui::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
     }
 }
 
-ui::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
+mdl::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
         const std::string& canvas_name,
         const std::vector<sm::bone_ref>& bone_refs,
         const std::function<void(sm::bone&)>& fn) :
@@ -197,7 +197,7 @@ ui::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
 
 }
 
-ui::command ui::commands::make_transform_bones_or_nodes_command(
+mdl::command mdl::commands::make_transform_bones_or_nodes_command(
         const std::string& canv,
         const std::vector<sm::node_ref>& nodes,
         const std::vector<sm::bone_ref>& bones,

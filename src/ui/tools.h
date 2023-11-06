@@ -11,9 +11,11 @@
 
 /*------------------------------------------------------------------------------------------------*/
 
-namespace ui {
-
+namespace mdl {
     class project;
+}
+
+namespace ui {
 
     class input_handler {
     public:
@@ -62,7 +64,7 @@ namespace ui {
         virtual void mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         virtual void wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) override;
         virtual void deactivate(canvas_manager& canvases);
-		virtual void init(canvas_manager& canvases, project& model);
+		virtual void init(canvas_manager& canvases, mdl::project& model);
         virtual QWidget* settings_widget();
 		virtual ~abstract_tool();
 
@@ -94,10 +96,10 @@ namespace ui {
     };
 
     class add_node_tool : public abstract_tool {
-        project* model_;
+        mdl::project* model_;
     public:
         add_node_tool();
-        void init(canvas_manager& canvases, project& model) override;
+        void init(canvas_manager& canvases, mdl::project& model) override;
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
     };
 
@@ -105,13 +107,13 @@ namespace ui {
     private:
         QPointF origin_;
         QGraphicsLineItem* rubber_band_;
-        project* model_;
+        mdl::project* model_;
 
         void init_rubber_band(canvas& c);
 
     public:
         add_bone_tool();
-        void init(canvas_manager& canvases, project& model) override;
+        void init(canvas_manager& canvases, mdl::project& model) override;
         void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
@@ -129,7 +131,7 @@ namespace ui {
 
     public:
         tool_manager();
-		void init(canvas_manager& canvases, project& model);
+		void init(canvas_manager& canvases, mdl::project& model);
         void keyPressEvent(canvas& c, QKeyEvent* event) override;
         void keyReleaseEvent(canvas& c, QKeyEvent* event) override;
         void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;

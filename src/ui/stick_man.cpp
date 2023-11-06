@@ -138,7 +138,7 @@ ui::tool_manager& ui::stick_man::tool_mgr() {
     return tool_mgr_;
 }
 
-ui::project& ui::stick_man::project() {
+mdl::project& ui::stick_man::project() {
     return project_;
 }
 
@@ -233,7 +233,7 @@ void ui::stick_man::insert_edit_menu() {
     edit_menu->addSeparator();
     edit_menu->addAction(delete_action);
 
-    connect(&project_, &project::refresh_undo_redo_state, this, &stick_man::update_undo_and_redo);
+    connect(&project_, &mdl::project::refresh_undo_redo_state, this, &stick_man::update_undo_and_redo);
     redo_action_->setEnabled(false);
     undo_action_->setEnabled(false);
 }

@@ -1,6 +1,6 @@
 #include "project.h"
-#include "canvas.h"
-#include "canvas_item.h"
+#include "../ui/canvas.h"
+#include "../ui/canvas_item.h"
 #include "commands.h"
 #include "../core/sm_skeleton.h"
 #include "../core/json.hpp"
@@ -40,7 +40,7 @@ namespace {
         return tabs;
     }
 
-    std::optional<std::tuple<ui::tab_table, sm::world>> json_to_project_components(
+    std::optional<std::tuple<mdl::tab_table, sm::world>> json_to_project_components(
             const std::string& str) {
         try {
 
@@ -87,7 +87,7 @@ namespace {
 
 /*------------------------------------------------------------------------------------------------*/
 
-void ui::project::delete_skeleton_name_from_canvas_table(
+void mdl::project::delete_skeleton_name_from_canvas_table(
         const std::string& tab, const std::string& skel) {
     auto iter_tab = tabs_.find(tab);
     if (iter_tab == tabs_.end()) {
@@ -101,36 +101,36 @@ void ui::project::delete_skeleton_name_from_canvas_table(
     skel_group.erase(iter_skel);
 }
 
-void ui::project::clear_redo_stack() {
+void mdl::project::clear_redo_stack() {
     redo_stack_ = {};
 }
 
-void ui::project::execute_command(const command& cmd) {
+void mdl::project::execute_command(const command& cmd) {
     clear_redo_stack();
     cmd.redo(*this);
     undo_stack_.push(cmd);
     emit refresh_undo_redo_state(can_redo(), can_undo());
 }
 
-ui::project::project()
+mdl::project::project()
 {}
 
-const sm::world& ui::project::world() const {
+const sm::world& mdl::project::world() const {
     return world_;
 }
 
-sm::world& ui::project::world() {
+sm::world& mdl::project::world() {
     return world_;
 }
 
-void ui::project::clear() {
+void mdl::project::clear() {
     tabs_.clear();
     world_.clear();
     redo_stack_ = {};
     undo_stack_ = {};
 }
 
-void ui::project::undo() {
+void mdl::project::undo() {
     if (!can_undo()) {
         return;
     }
@@ -142,7 +142,7 @@ void ui::project::undo() {
     emit refresh_undo_redo_state(can_redo(), can_undo());
 }
 
-void ui::project::redo() {
+void mdl::project::redo() {
     if (!can_redo()) {
         return;
     }
@@ -154,19 +154,19 @@ void ui::project::redo() {
     emit refresh_undo_redo_state(can_redo(), can_undo());
 }
 
-bool ui::project::can_undo() const {
+bool mdl::project::can_undo() const {
     return !undo_stack_.empty();
 }
 
-bool ui::project::can_redo() const {
+bool mdl::project::can_redo() const {
     return !redo_stack_.empty();
 }
 
-bool ui::project::has_tab(const std::string& str) const {
+bool mdl::project::has_tab(const std::string& str) const {
     return tabs_.contains(str);
 }
 
-bool ui::project::add_new_tab(const std::string& name)
+bool mdl::project::add_new_tab(const std::string& name)
 {
     if (has_tab(name)) {
         return false;
@@ -176,11 +176,11 @@ bool ui::project::add_new_tab(const std::string& name)
     return true;
 }
 
-std::span<const std::string> ui::project::skel_names_on_tab(std::string_view name) const {
+std::span<const std::string> mdl::project::skel_names_on_tab(std::string_view name) const {
     return tabs_.at(std::string(name));
 }
 
-std::string ui::project::to_json() const {
+std::string mdl::project::to_json() const {
     json stick_man_project = {
         {"version", 0.0},
         {"tabs", tabs_to_json(tabs_)},
@@ -190,7 +190,7 @@ std::string ui::project::to_json() const {
     return stick_man_project.dump(4);
 }
 
-bool ui::project::from_json(const std::string& str) {
+bool mdl::project::from_json(const std::string& str) {
 
     auto comps = json_to_project_components(str);
     if (!comps) {
@@ -205,21 +205,21 @@ bool ui::project::from_json(const std::string& str) {
     return true;
 }
 
-void ui::project::add_bone(const std::string& tab, 
+void mdl::project::add_bone(const std::string& tab, 
         const handle& u, const handle& v) {
     execute_command(
         commands::make_add_bone_command(tab, u, v)
     );
 }
 
-void ui::project::add_new_skeleton_root(const std::string& tab, sm::point loc) {
+void mdl::project::add_new_skeleton_root(const std::string& tab, sm::point loc) {
     execute_command(
         commands::make_create_node_command(tab, loc)
     );
 }
 
 //TODO: maintain a skeleton -> canvas table...
-std::string ui::project::canvas_name_from_skeleton(const std::string& skel) const {
+std::string mdl::project::canvas_name_from_skeleton(const std::string& skel) const {
     for (const auto& [canv_name, skels] : tabs_) {
         for (auto skel_name : skels) {
             if (skel == skel_name) {
@@ -230,7 +230,7 @@ std::string ui::project::canvas_name_from_skeleton(const std::string& skel) cons
     return {};
 }
 
-void ui::project::rename_aux(skel_piece piece_var, const std::string& new_name)
+void mdl::project::rename_aux(skel_piece piece_var, const std::string& new_name)
 {
     auto result = std::visit(
         [&](auto ref)->sm::result {
@@ -241,13 +241,13 @@ void ui::project::rename_aux(skel_piece piece_var, const std::string& new_name)
         piece_var
     );
     if (result != sm::result::success) {
-        throw std::runtime_error("ui::project::rename_aux");
+        throw std::runtime_error("mod::project::rename_aux");
     }
     
     emit name_changed(piece_var, new_name);
 }
 
-bool ui::project::can_rename(skel_piece piece, const std::string& new_name) {
+bool mdl::project::can_rename(skel_piece piece, const std::string& new_name) {
     return std::visit(
         overload{
             [new_name](sm::is_node_or_bone_ref auto node_or_bone_ref)->bool {
@@ -266,7 +266,7 @@ bool ui::project::can_rename(skel_piece piece, const std::string& new_name) {
     );
 }
 
-bool ui::project::rename(skel_piece piece, const std::string& new_name) {
+bool mdl::project::rename(skel_piece piece, const std::string& new_name) {
     if (!can_rename(piece, new_name)) {
         return false;
     }
@@ -284,7 +284,7 @@ bool ui::project::rename(skel_piece piece, const std::string& new_name) {
     return true;
 }
 
-void ui::project::transform(const std::vector<sm::node_ref>& nodes,
+void mdl::project::transform(const std::vector<sm::node_ref>& nodes,
         const std::function<void(sm::node&)>& fn) {
     auto canvas_name = canvas_name_from_skeleton(
         nodes.front().get().owner().get().name()
@@ -294,7 +294,7 @@ void ui::project::transform(const std::vector<sm::node_ref>& nodes,
     );
 }
 
-void ui::project::transform(const std::vector<sm::bone_ref>& bones,
+void mdl::project::transform(const std::vector<sm::bone_ref>& bones,
         const std::function<void(sm::bone&)>& fn) {
     auto canvas_name = canvas_name_from_skeleton(
         bones.front().get().owner().get().name()
@@ -304,7 +304,7 @@ void ui::project::transform(const std::vector<sm::bone_ref>& bones,
     );
 }
 
-void ui::project::replace_skeletons_aux(const std::string& canvas_name,
+void mdl::project::replace_skeletons_aux(const std::string& canvas_name,
         const std::vector<std::string>& replacees,
         const std::vector<sm::skel_ref>& replacements,
         std::vector<std::string>* new_names) {
@@ -325,7 +325,7 @@ void ui::project::replace_skeletons_aux(const std::string& canvas_name,
             should_rename ? unique_skeleton_name(skel.name(), world_.skeleton_names()) : ""
         );
         if (!new_skel) {
-            assert("skeleton copy failed", false);
+            throw std::runtime_error("skeleton copy failed");
         }
         if (should_rename) {
             new_names->push_back(new_skel->get().name());
@@ -336,7 +336,7 @@ void ui::project::replace_skeletons_aux(const std::string& canvas_name,
     emit refresh_canvas(*this, canvas_name, true);
 }
 
-void ui::project::replace_skeletons(const std::string& canvas_name,
+void mdl::project::replace_skeletons(const std::string& canvas_name,
         const std::vector<std::string>& replacees,
         const std::vector<sm::skel_ref>& replacements) {
     execute_command(
@@ -344,7 +344,7 @@ void ui::project::replace_skeletons(const std::string& canvas_name,
     );
 }
 
-std::string ui::unique_skeleton_name(const std::string& old_name,
+std::string mdl::unique_skeleton_name(const std::string& old_name,
     const std::vector<std::string>& used_names) {
     auto is_not_unique = r::find_if(used_names,
         [old_name](auto&& str) {return str == old_name; }
@@ -354,8 +354,8 @@ std::string ui::unique_skeleton_name(const std::string& old_name,
         old_name;
 }
 
-bool ui::identical_pieces(ui::skel_piece p1, ui::skel_piece p2) {
-    auto to_void_star = [](ui::skel_piece sp) {
+bool mdl::identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2) {
+    auto to_void_star = [](mdl::skel_piece sp) {
         return std::visit(
             [](auto& p)->void* {
                 return &p.get();

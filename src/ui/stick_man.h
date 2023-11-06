@@ -3,7 +3,7 @@
 #include <QtWidgets/QMainWindow>
 #include "canvas.h"
 #include "tools.h"
-#include "project.h"
+#include "../model/project.h"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -32,7 +32,7 @@ namespace ui {
         void insert_new_tab();
 
         tool_manager& tool_mgr();
-        project& project();
+        mdl::project& project();
         tool_settings_pane& tool_pane();
 		skeleton_pane& skel_pane();
         canvas_manager& canvases();
@@ -54,7 +54,7 @@ namespace ui {
         tool_settings_pane* tool_pane_;
 		skeleton_pane* skel_pane_;
         canvas_manager* canvases_;
-        ui::project project_;
+        mdl::project project_;
 		bool was_shown_;
 		bool has_fully_layed_out_widgets_;
         QAction* undo_action_;

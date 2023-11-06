@@ -33,7 +33,7 @@ namespace ui {
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
         void deactivate(canvas_manager& c) override;
         QWidget* settings_widget() override;
-		void init(canvas_manager& canvases, project& model) override;
+		void init(canvas_manager& canvases, mdl::project& model) override;
     };
 
 }

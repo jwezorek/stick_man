@@ -137,9 +137,9 @@ void ui::abstract_canvas_item::set_selected(bool selected) {
 	}
 }
 
-ui::skel_piece ui::abstract_canvas_item::to_skeleton_piece() {
+mdl::skel_piece ui::abstract_canvas_item::to_skeleton_piece() {
     return std::visit(
-        []<typename T>(std::reference_wrapper<const T> p)->skel_piece {
+        []<typename T>(std::reference_wrapper<const T> p)->mdl::skel_piece {
             return const_cast<T&>(p.get());
         },
         const_cast<const abstract_canvas_item*>(this)->to_skeleton_piece()
@@ -202,7 +202,7 @@ QGraphicsItem* ui::skeleton_item::item_body() {
 	return this;
 }
 
-ui::const_skel_piece ui::skeleton_item::to_skeleton_piece() const {
+mdl::const_skel_piece ui::skeleton_item::to_skeleton_piece() const {
     auto& skel = model();
     return std::ref(skel);
 }
@@ -282,7 +282,7 @@ QGraphicsItem* ui::node_item::item_body() {
 	return this;
 }
 
-ui::const_skel_piece ui::node_item::to_skeleton_piece() const {
+mdl::const_skel_piece ui::node_item::to_skeleton_piece() const {
     auto& node = model();
     return std::ref(node);
 }
@@ -337,7 +337,7 @@ void ui::bone_item::sync_rotation_constraint_to_model() {
 	}
 }
 
-ui::const_skel_piece ui::bone_item::to_skeleton_piece() const {
+mdl::const_skel_piece ui::bone_item::to_skeleton_piece() const {
     const auto& bone = model();
     return std::ref(bone);
 }

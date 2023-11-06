@@ -6,8 +6,8 @@
 #include "util.h"
 #include "stick_man.h"
 #include "canvas_item.h"
-#include "project.h"
-#include "handle.h"
+#include "../model/project.h"
+#include "../model/handle.h"
 #include <QGraphicsScene>
 #include <array>
 #include <functional>
@@ -49,7 +49,7 @@ void ui::abstract_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* e
 void ui::abstract_tool::mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
 void ui::abstract_tool::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {}
 void ui::abstract_tool::deactivate(canvas_manager& canvases) {}
-void ui::abstract_tool::init(canvas_manager&, project&) {}
+void ui::abstract_tool::init(canvas_manager&, mdl::project&) {}
 QWidget* ui::abstract_tool::settings_widget() { return nullptr; }
 ui::abstract_tool::~abstract_tool() {}
 
@@ -120,7 +120,7 @@ ui::add_node_tool::add_node_tool() :
     abstract_tool("add node", "add_node_icon.png", ui::tool_id::add_node) 
 {}
 
-void ui::add_node_tool::init(canvas_manager& canvases, project& model) {
+void ui::add_node_tool::init(canvas_manager& canvases, mdl::project& model) {
     model_ = &model;
 }
 
@@ -147,7 +147,7 @@ ui::add_bone_tool::add_bone_tool() :
     abstract_tool("add bone", "add_bone_icon.png", ui::tool_id::add_bone) {
 }
 
-void ui::add_bone_tool::init(canvas_manager& canvases, project& model) {
+void ui::add_bone_tool::init(canvas_manager& canvases, mdl::project& model) {
     model_ = &model;
 }
 
@@ -174,8 +174,8 @@ void ui::add_bone_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent
 
     model_->add_bone(
         canv.tab_name(), 
-        to_handle(parent_node->model()), 
-        to_handle(child_node->model())
+        mdl::to_handle(parent_node->model()),
+        mdl::to_handle(child_node->model())
     );
 }
 
@@ -191,7 +191,7 @@ ui::tool_manager::tool_manager() :
     tool_registry_.emplace_back(std::make_unique<ui::add_bone_tool>());
 }
 
-void ui::tool_manager::init(canvas_manager& canvases, project& model) {
+void ui::tool_manager::init(canvas_manager& canvases, mdl::project& model) {
 	for (auto& tool : tool_registry_) {
 		tool->init(canvases, model);
 	}
