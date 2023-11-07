@@ -564,12 +564,12 @@ ui::canvas_manager::canvas_manager(input_handler& inp_handler) :
         "    height: 28px; /* Set the height of tabs */"
         "}"
     );
-    add_new_tab("untitled");
+    add_tab("untitled");
     connect_current_tab_signal();
 }
 
 void ui::canvas_manager::init(mdl::project& proj) {
-    connect(&proj, &mdl::project::new_tab_added, this, &canvas_manager::add_new_tab);
+    connect(&proj, &mdl::project::tab_created_or_deleted, this, &canvas_manager::add_or_delete_tab);
     connect(&proj, &mdl::project::pre_new_bone_added, this, &canvas_manager::prepare_to_add_bone);
     connect(&proj, &mdl::project::new_bone_added, this, &canvas_manager::add_new_bone);
     connect(&proj, &mdl::project::new_skeleton_added, this, &canvas_manager::add_new_skeleton);
@@ -594,7 +594,7 @@ void ui::canvas_manager::clear() {
     }
 }
 
-void ui::canvas_manager::add_new_tab(const std::string& name) {
+void ui::canvas_manager::add_tab(const std::string& name) {
     QGraphicsView* view = new QGraphicsView();
 
     view->setRenderHint(QPainter::Antialiasing, true);
@@ -611,6 +611,26 @@ void ui::canvas_manager::add_new_tab(const std::string& name) {
         active_canv_ = canv;
     }
     center_active_view();
+}
+
+void ui::canvas_manager::add_or_delete_tab(const std::string& name, bool should_add) {
+    if (should_add) {
+        add_tab(name);
+    } else {
+        int index_of_tab = -1;
+        for (int i = 0; i < count(); ++i) {
+            if (tabText(i).toStdString() == name) {
+                index_of_tab = i;
+                break;
+            }
+        }
+        if (index_of_tab == -1) {
+            throw std::runtime_error("canvas not found");
+        }
+        auto view = static_cast<QGraphicsView*>(widget(index_of_tab));
+        removeTab(index_of_tab);
+        delete view;
+    }
 }
 
 void ui::canvas_manager::prepare_to_add_bone(sm::node& u, sm::node& v) {
@@ -683,7 +703,7 @@ void ui::canvas_manager::set_contents(mdl::project& model) {
     disconnect_current_tab_signal();
     clear();
     for (auto tab_name : model.tabs()) {
-        add_new_tab( tab_name.c_str() );
+        add_tab( tab_name.c_str() );
     }
     connect_current_tab_signal();
     

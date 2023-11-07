@@ -121,5 +121,7 @@ namespace mdl {
             const std::function<void(sm::node&)>& nodes_fn,
             const std::function<void(sm::bone&)>& bones_fn
         );
+
+        static command make_add_tab_command(const std::string& tab_name);
     };
 }

@@ -16,11 +16,8 @@
 
 namespace mdl {
 
-    class canvas_manager;
-
-    using tab_table = std::unordered_map<std::string, std::vector<std::string>>;
-
     class project;
+
     struct command {
         std::function<void(project&)> redo;
         std::function<void(project&)> undo;
@@ -32,7 +29,7 @@ namespace mdl {
 
         Q_OBJECT
 
-        tab_table tabs_;
+        std::unordered_map<std::string, std::vector<std::string>> tabs_;
         sm::world world_;
 
         std::stack<command> redo_stack_;
@@ -47,29 +44,19 @@ namespace mdl {
             const std::vector<std::string>& replacees,
             const std::vector<sm::skel_ref>& replacements,
             std::vector<std::string>* new_names_of_replacements);
+        void clear();
 
     public:
         project();
 
-        const sm::world& world() const;
-        sm::world& world();
-        void clear();
-
-        void undo();
-        void redo();
+        const sm::world& world() const;        
         bool can_undo() const;
         bool can_redo() const;
-
         auto tabs() const {
             namespace rv = std::ranges::views;
             return tabs_ | rv::transform([](auto&& p) {return p.first; });
         }
-
-        bool has_tab(const std::string& str) const;
-        bool add_new_tab(const std::string& name);
-
         std::span<const std::string> skel_names_on_tab(std::string_view name) const;
-
         auto skeletons_on_tab(std::string_view name) const {
             namespace rv = std::ranges::views;
             return skel_names_on_tab(name) |
@@ -80,7 +67,14 @@ namespace mdl {
                     }
             );
         }
+        bool has_tab(const std::string& str) const;
+        std::string to_json() const;
+        std::string canvas_name_from_skeleton(const std::string& skel) const;
 
+        void undo();
+        void redo();
+        sm::world& world();
+        bool add_new_tab(const std::string& name);
         auto skeletons_on_tab(std::string_view name) {
             namespace rv = std::ranges::views;
             auto const_this = const_cast<const project*>(this);
@@ -91,10 +85,6 @@ namespace mdl {
                     }
                 );
         }
-
-        std::string to_json() const;
-        std::string canvas_name_from_skeleton(const std::string& skel) const;
-
         bool from_json(const std::string& str);
         void add_bone(const std::string& tab, 
             const handle& node_u, const handle& node_v);
@@ -110,7 +100,7 @@ namespace mdl {
             const std::function<void(sm::bone&)>& fn);
 
     signals:
-        void new_tab_added(const std::string& name);
+        void tab_created_or_deleted(const std::string& name, bool created);
         void pre_new_bone_added(sm::node& u, sm::node& v);
         void new_bone_added(sm::bone& bone);
         void new_project_opened(project& model);

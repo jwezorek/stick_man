@@ -146,7 +146,8 @@ namespace ui {
 
         void connect_current_tab_signal();
         void disconnect_current_tab_signal();
-        void add_new_tab(const std::string& name);
+        void add_tab(const std::string& name);
+        void add_or_delete_tab(const std::string& name, bool should_add);
         void prepare_to_add_bone(sm::node& u, sm::node& v);
         void add_new_bone(sm::bone& bone);
         void add_new_skeleton(sm::skel_ref skel);

@@ -241,3 +241,18 @@ mdl::command mdl::commands::make_transform_bones_or_nodes_command(
     };
 }
 
+mdl::command mdl::commands::make_add_tab_command(const std::string& tab)
+{
+    auto tab_name = std::make_shared<std::string>(tab);
+    return {
+        [tab_name](project& proj) {
+            proj.tabs_[*tab_name] = {};
+            emit proj.tab_created_or_deleted(*tab_name, true);
+        },
+        [tab_name](project& proj) {
+            proj.tabs_.erase(*tab_name);
+            emit proj.tab_created_or_deleted(*tab_name, false);
+        }
+    };
+}
+

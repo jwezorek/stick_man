@@ -40,7 +40,9 @@ namespace {
         return tabs;
     }
 
-    std::optional<std::tuple<mdl::tab_table, sm::world>> json_to_project_components(
+    using tab_table = std::unordered_map<std::string, std::vector<std::string>>;
+
+    std::optional<std::tuple<tab_table, sm::world>> json_to_project_components(
             const std::string& str) {
         try {
 
@@ -166,16 +168,6 @@ bool mdl::project::has_tab(const std::string& str) const {
     return tabs_.contains(str);
 }
 
-bool mdl::project::add_new_tab(const std::string& name)
-{
-    if (has_tab(name)) {
-        return false;
-    }
-    tabs_[name] = {};
-    emit new_tab_added(name);
-    return true;
-}
-
 std::span<const std::string> mdl::project::skel_names_on_tab(std::string_view name) const {
     return tabs_.at(std::string(name));
 }
@@ -202,6 +194,17 @@ bool mdl::project::from_json(const std::string& str) {
     world_ = std::move(std::get<1>(*comps));
 
     emit new_project_opened(*this);
+    return true;
+}
+
+bool mdl::project::add_new_tab(const std::string& tab_name)
+{
+    if (has_tab(tab_name)) {
+        return false;
+    }
+    execute_command(
+        commands::make_add_tab_command(tab_name)
+    );
     return true;
 }
 
