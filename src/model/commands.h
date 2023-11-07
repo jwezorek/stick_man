@@ -21,7 +21,7 @@ namespace mdl {
 
 
         struct create_node_state {
-            std::string tab_name;
+            std::string canvas_name;
             std::string skeleton;
             sm::point loc;
         };

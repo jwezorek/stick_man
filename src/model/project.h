@@ -104,7 +104,7 @@ namespace mdl {
         void pre_new_bone_added(sm::node& u, sm::node& v);
         void new_bone_added(sm::bone& bone);
         void new_project_opened(project& model);
-        void new_skeleton_added(sm::skel_ref skel);
+        void new_skeleton_added(const std::string& canvas_name, sm::skel_ref skel);
         void refresh_canvas(project& model, const std::string& canvas, bool clear);
         void name_changed(skel_piece piece, const std::string& new_name);
         void refresh_undo_redo_state(bool, bool);

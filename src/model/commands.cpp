@@ -41,22 +41,22 @@ namespace {
     }
 }
 
-mdl::command mdl::commands::make_create_node_command(const std::string& tab, const sm::point& pt) {
-    auto state = std::make_shared<create_node_state>(tab, "", pt);
+mdl::command mdl::commands::make_create_node_command(const std::string& canvas, const sm::point& pt) {
+    auto state = std::make_shared<create_node_state>(canvas, "", pt);
 
     return {
         [state](mdl::project& proj) {
             auto skel = proj.world_.create_skeleton(state->loc);
             state->skeleton = skel.get().name();
-            proj.tabs_[state->tab_name].push_back(skel.get().name());
-            emit proj.new_skeleton_added(skel);
+            proj.tabs_[state->canvas_name].push_back(skel.get().name());
+            emit proj.new_skeleton_added(state->canvas_name, skel);
         },
         [state](mdl::project& proj) {
             proj.delete_skeleton_name_from_canvas_table(
-                state->tab_name, state->skeleton
+                state->canvas_name, state->skeleton
             );
             proj.world_.delete_skeleton(state->skeleton);
-            emit proj.refresh_canvas(proj, state->tab_name, true);
+            emit proj.refresh_canvas(proj, state->canvas_name, true);
         }
     };
 }

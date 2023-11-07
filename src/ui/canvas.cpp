@@ -579,7 +579,7 @@ void ui::canvas_manager::init(mdl::project& proj) {
             if (clear) {
                 set_contents_of_canvas(model, canvas);
             } else {
-                canvas_from_tab(canvas)->sync_to_model();
+                canvas_from_name(canvas)->sync_to_model();
             }
         }
     );
@@ -650,9 +650,8 @@ void ui::canvas_manager::add_new_bone(sm::bone& bone) {
     emit canvas_refresh(world);
 }
 
-void ui::canvas_manager::add_new_skeleton(sm::skel_ref skel_ref) {
-    auto& canv = active_canvas();
-    auto tab_name = canv.tab_name();
+void ui::canvas_manager::add_new_skeleton(const std::string& canvas, sm::skel_ref skel_ref) {
+    auto& canv = *canvas_from_name(canvas);
 
     auto& skel = skel_ref.get();
     canv.insert_item(skel.root_node().get());
@@ -661,7 +660,7 @@ void ui::canvas_manager::add_new_skeleton(sm::skel_ref skel_ref) {
     emit canvas_refresh(skel.owner().get());
 }
 
-ui::canvas* ui::canvas_manager::canvas_from_tab(const std::string& tab_name) {
+ui::canvas* ui::canvas_manager::canvas_from_name(const std::string& tab_name) {
     for (int i = 0; i < count(); ++i) {
         if (tabText(i).toStdString() == tab_name) {
             auto view = static_cast<QGraphicsView*>(widget(i));
@@ -709,7 +708,7 @@ void ui::canvas_manager::set_contents(mdl::project& model) {
     
     // set their contents...
     for (auto tab : model.tabs()) {
-        canvas_from_tab(tab)->set_contents(
+        canvas_from_name(tab)->set_contents(
             model.skeletons_on_tab(tab) | r::to<std::vector<sm::skel_ref>>()
         );
     }
@@ -717,7 +716,7 @@ void ui::canvas_manager::set_contents(mdl::project& model) {
 }
 
 void ui::canvas_manager::set_contents_of_canvas(mdl::project& model, const std::string& canvas ) {
-    auto* canv = canvas_from_tab(canvas);
+    auto* canv = canvas_from_name(canvas);
     if (!canv) {
         return;
     }
@@ -730,7 +729,7 @@ void ui::canvas_manager::set_contents_of_canvas(mdl::project& model, const std::
 
 void ui::canvas_manager::clear_canvas(const std::string& canv)
 {
-    canvas_from_tab(canv)->clear();
+    canvas_from_name(canv)->clear();
 }
 
 void ui::canvas_manager::set_drag_mode(drag_mode dm) {

@@ -150,7 +150,7 @@ namespace ui {
         void add_or_delete_tab(const std::string& name, bool should_add);
         void prepare_to_add_bone(sm::node& u, sm::node& v);
         void add_new_bone(sm::bone& bone);
-        void add_new_skeleton(sm::skel_ref skel);
+        void add_new_skeleton(const std::string& canvas, sm::skel_ref skel);
         void set_contents(mdl::project& model);
         void set_contents_of_canvas(mdl::project& model, const std::string& canvas);
         void clear_canvas(const std::string& canv);
@@ -161,7 +161,7 @@ namespace ui {
         void clear();
         void center_active_view();
         canvas& active_canvas() const;
-        canvas* canvas_from_tab(const std::string& tab_name);
+        canvas* canvas_from_name(const std::string& canv_name);
         void set_drag_mode(drag_mode dm);
         void set_active_canvas(const canvas& c);
         std::vector<std::string> tab_names() const;
