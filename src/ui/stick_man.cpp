@@ -3,7 +3,7 @@
 #include "panes/animation_pane.h"
 #include "tool_palette.h"
 #include "panes/tool_settings_pane.h"
-#include "canvas_item.h"
+#include "canvas/canvas_item.h"
 #include "util.h"
 #include "clipboard.h"
 #include <QtWidgets>

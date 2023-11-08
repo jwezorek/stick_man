@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../canvas.h"
+#include "../canvas/canvas.h"
 #include <QWidget>
 #include <QtWidgets>
 #include "../../core/sm_types.h"

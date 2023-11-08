@@ -19,7 +19,7 @@ set(CMAKE_AUTOUIC ON)
 add_executable(stick_man
     src/ui/stick_man.qrc
     src/ui/stick_man.cpp
-    src/ui/canvas.cpp
+    src/ui/canvas/canvas.cpp
     src/ui/tool_palette.cpp
     src/ui/tools.cpp
     src/ui/move_tool.cpp
@@ -31,7 +31,7 @@ add_executable(stick_man
     src/core/sm_skeleton.cpp
     src/core/sm_bone.cpp
     src/core/sm_types.cpp
-    src/ui/canvas_item.cpp
+    src/ui/canvas/canvas_item.cpp
     src/main.cpp
     src/ui/panes/properties.cpp
     src/ui/clipboard.cpp

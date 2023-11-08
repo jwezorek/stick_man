@@ -1,7 +1,7 @@
 #include "canvas.h"
 #include "canvas_item.h"
-#include "util.h"
-#include "../core/sm_skeleton.h"
+#include "../util.h"
+#include "../../core/sm_skeleton.h"
 
 namespace r = std::ranges;
 namespace rv = std::ranges::views;

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "util.h"
-#include "../model/project.h"
+#include "../util.h"
+#include "../../model/project.h"
 #include <QWidget>
 #include <QtWidgets>
 #include <QGraphicsScene>

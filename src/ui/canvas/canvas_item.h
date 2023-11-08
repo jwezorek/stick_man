@@ -7,8 +7,8 @@
 #include <any>
 #include <ranges>
 #include <variant>
-#include "../core/sm_types.h"
-#include "../model/project.h"
+#include "../../core/sm_types.h"
+#include "../../model/project.h"
 
 namespace ui {
 
