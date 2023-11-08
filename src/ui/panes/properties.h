@@ -3,8 +3,8 @@
 #include <QtWidgets>
 #include <unordered_map>
 #include <functional>
-#include "util.h"
-#include "../model/project.h"
+#include "../util.h"
+#include "../../model/project.h"
 
 /*------------------------------------------------------------------------------------------------*/
 

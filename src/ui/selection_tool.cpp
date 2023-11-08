@@ -1,5 +1,5 @@
 #include "selection_tool.h"
-#include "skeleton_pane.h"
+#include "panes/skeleton_pane.h"
 #include "util.h"
 #include "canvas.h"
 #include "canvas_item.h"

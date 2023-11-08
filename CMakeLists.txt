@@ -24,16 +24,16 @@ add_executable(stick_man
     src/ui/tools.cpp
     src/ui/move_tool.cpp
     src/ui/selection_tool.cpp
-    src/ui/skeleton_pane.cpp
-    src/ui/tool_settings_pane.cpp
-    src/ui/animation_pane.cpp
+    src/ui/panes/skeleton_pane.cpp
+    src/ui/panes/tool_settings_pane.cpp
+    src/ui/panes/animation_pane.cpp
     src/ui/util.cpp
     src/core/sm_skeleton.cpp
     src/core/sm_bone.cpp
     src/core/sm_types.cpp
     src/ui/canvas_item.cpp
     src/main.cpp
-    src/ui/properties.cpp
+    src/ui/panes/properties.cpp
     src/ui/clipboard.cpp
     src/model/project.cpp
     src/model/commands.cpp

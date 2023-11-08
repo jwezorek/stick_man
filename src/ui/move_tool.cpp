@@ -1,6 +1,6 @@
 #include "move_tool.h"
 #include "canvas_item.h"
-#include "tool_settings_pane.h"
+#include "panes/tool_settings_pane.h"
 #include "util.h"
 #include "../core/sm_skeleton.h"
 #include <unordered_map>

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "canvas.h"
+#include "../canvas.h"
 #include <QWidget>
 #include <QtWidgets>
-#include "../core/sm_types.h"
+#include "../../core/sm_types.h"
 #include "properties.h"
 #include <functional>
 

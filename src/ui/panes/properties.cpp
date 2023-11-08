@@ -1,11 +1,11 @@
 #include "properties.h"
-#include "canvas.h"
-#include "canvas_item.h"
-#include "util.h"
-#include "stick_man.h"
+#include "../canvas.h"
+#include "../canvas_item.h"
+#include "../util.h"
+#include "../stick_man.h"
 #include "skeleton_pane.h"
-#include "../model/project.h"
-#include "../model/handle.h"
+#include "../../model/project.h"
+#include "../../model/handle.h"
 #include <unordered_map>
 #include <unordered_set>
 #include <ranges>
