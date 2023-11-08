@@ -74,12 +74,12 @@ mdl::command mdl::commands::make_add_bone_command(const std::string& tab,
             auto& u = state->u_hnd.to<sm::node>(proj.world_);
             auto& v = state->v_hnd.to<sm::node>(proj.world_);
 
-            if (&u.owner().get() == &v.owner().get()) {
+            if (&u.owner() == &v.owner()) {
                 return;
             }
 
-            auto& skel_u = u.owner().get();
-            auto& skel_v = v.owner().get();
+            auto& skel_u = u.owner();
+            auto& skel_v = v.owner();
             auto new_u = skel_u.copy_to(state->original);
             auto new_v = skel_v.copy_to(state->original);
             if (!new_u || !new_v) {
@@ -87,7 +87,7 @@ mdl::command mdl::commands::make_add_bone_command(const std::string& tab,
             }
             emit proj.pre_new_bone_added(u, v);
             proj.delete_skeleton_name_from_canvas_table(
-                state->canvas_name, v.owner().get().name()
+                state->canvas_name, v.owner().name()
             );
 
             auto bone = proj.world_.create_bone({}, u, v);
@@ -95,7 +95,7 @@ mdl::command mdl::commands::make_add_bone_command(const std::string& tab,
                 throw std::runtime_error("create_bone failed");
             }
 
-            state->merged = bone->get().owner().get().name();
+            state->merged = bone->get().owner().name();
             emit proj.new_bone_added(bone->get());
         },
         [state](mdl::project& proj) {
@@ -155,7 +155,7 @@ mdl::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
     for (auto handle : node_hnds) {
         auto& node = handle.to<sm::node>(proj.world_);
         if (canvas.empty()) {
-            canvas = proj.canvas_name_from_skeleton(node.owner().get().name());
+            canvas = proj.canvas_name_from_skeleton(node.owner().name());
         }
         nodes.push_back(handle);
         old_node_to_position[handle] = node.world_pos();
@@ -172,7 +172,7 @@ mdl::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
     for (auto handle : bone_hnds) {
         auto& bone = handle.to<sm::bone>(proj.world_);
         if (canvas.empty()) {
-            canvas = proj.canvas_name_from_skeleton(bone.owner().get().name());
+            canvas = proj.canvas_name_from_skeleton(bone.owner().name());
         }
         bones.push_back(handle);
 

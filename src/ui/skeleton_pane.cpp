@@ -124,7 +124,7 @@ namespace{
 			return sm::visit_result::continue_traversal;
 		};
 
-		sm::visit_bones(skel.get().root_node().get(), visit);
+		sm::visit_bones(skel.get().root_node(), visit);
 	}
 
 	bool is_same_bone_selection(const std::vector<ui::bone_item*>& canv_sel,
@@ -315,7 +315,7 @@ bool ui::skeleton_pane::validate_props_name_change(const std::string& new_name) 
 		[new_name](auto model_ref)->bool {
 			auto& model = model_ref.get();
 			using T = std::remove_cvref_t<decltype(model)>;
-			auto& owner = model.owner().get();
+			auto& owner = model.owner();
 			if constexpr (std::is_same<T, sm::skeleton>::value) {
 				return !owner.contains_skeleton(new_name);
 			} else {

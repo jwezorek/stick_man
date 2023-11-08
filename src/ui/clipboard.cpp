@@ -90,7 +90,7 @@ namespace {
                 copied.insert(node);
                 
                 if (!dest_skel) {
-                    dest_skel = create_skeleton(dest, node.owner().get().name());
+                    dest_skel = create_skeleton(dest, node.owner().name());
                 }
                 if (!dest_skel->contains<sm::node>(node.name())) {
                     bool is_root = dest_skel->empty();
@@ -107,7 +107,7 @@ namespace {
                 copied.insert(bone);
 
                 if (!dest_skel) {
-                    dest_skel = create_skeleton(dest, bone.owner().get().name());
+                    dest_skel = create_skeleton(dest, bone.owner().name());
                 }
                 if (!dest_skel->get_by_name<sm::node>(bone.parent_node().name())) {
                     bone.parent_node().copy_to( *dest_skel );
@@ -263,8 +263,8 @@ namespace {
                                 return &skel.get();
                             },
                             [](auto node_or_bone)->const sm::skeleton* {
-                                auto skel = node_or_bone.get().owner();
-                                return &skel.get();
+                                auto& skel = node_or_bone.get().owner();
+                                return &skel;
                             }
                         },
                         itm->to_skeleton_piece()
@@ -318,7 +318,7 @@ namespace {
         };
 
         auto pts = world.skeletons() |
-            rv::transform([](auto s) {return s.get().root_node().get().world_pos(); });
+            rv::transform([](auto s) {return s.get().root_node().world_pos(); });
         for (auto pt : pts) {
             if (pt.y < lower_left.y || (pt.y == lower_left.y && pt.x < lower_left.x)) {
                 lower_left = pt;

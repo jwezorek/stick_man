@@ -238,8 +238,8 @@ void mdl::project::rename_aux(skel_piece piece_var, const std::string& new_name)
     auto result = std::visit(
         [&](auto ref)->sm::result {
             auto& piece = ref.get();
-            auto& owner = piece.owner().get();
-            return owner.set_name(piece, new_name);
+            auto& owner_skel = piece.owner();
+            return owner_skel.set_name(piece, new_name);
         },
         piece_var
     );
@@ -256,12 +256,12 @@ bool mdl::project::can_rename(skel_piece piece, const std::string& new_name) {
             [new_name](sm::is_node_or_bone_ref auto node_or_bone_ref)->bool {
                 const auto& node_or_bone = node_or_bone_ref.get();
                 using value_type = std::remove_cvref_t<decltype(node_or_bone)>;
-                const auto& skel = node_or_bone.owner().get();
+                const auto& skel = node_or_bone.owner();
                 return !skel.contains<value_type>(new_name);
             } ,
             [new_name](sm::skel_ref itm)->bool {
                 const auto& skel = itm.get();
-                const auto& world = skel.owner().get();
+                const auto& world = skel.owner();
                 return !world.contains_skeleton(new_name);
             }
         },

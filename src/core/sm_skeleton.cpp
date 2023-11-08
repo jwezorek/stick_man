@@ -788,7 +788,7 @@ void sm::skeleton::on_new_bone(sm::bone& b) {
 
     auto iter = r::find_if(nodes,
             [this](const auto& pair)->bool {
-                return pair.second != &root_node().get() && pair.first == "root";
+                return pair.second != &root_node() && pair.first == "root";
             }
         );
     if (iter != nodes.end()) {
@@ -821,11 +821,11 @@ void sm::skeleton::set_name(const std::string& str) {
 	name_ = str;
 }
 
-sm::node_ref sm::skeleton::root_node() {
+sm::node& sm::skeleton::root_node() {
 	return root_.value();
 }
 
-sm::const_node_ref sm::skeleton::root_node() const {
+const sm::node& sm::skeleton::root_node() const {
 	return root_.value();
 }
 
@@ -940,7 +940,7 @@ json sm::skeleton::to_json() const {
         {"name", name_},
         {"nodes", nodes},
         {"bones", bones},
-        {"root", root_node().get().name()}
+        {"root", root_node().name()}
     };
 }
 
@@ -955,7 +955,7 @@ void sm::skeleton::set_owner(sm::world& owner)
 }
 
 void sm::skeleton::register_node(sm::node& new_node) {
-    if (contains<node>(new_node.name()) || &new_node.owner().get() != this) {
+    if (contains<node>(new_node.name()) || &new_node.owner() != this) {
         throw std::runtime_error("sm::skeleton::register_node failed");
     }
     nodes_[new_node.name()] = &new_node;
@@ -965,7 +965,7 @@ void sm::skeleton::register_node(sm::node& new_node) {
 }
 
 void sm::skeleton::register_bone(sm::bone& new_bone) {
-    if (contains<node>(new_bone.name()) || &new_bone.owner().get() != this) {
+    if (contains<node>(new_bone.name()) || &new_bone.owner() != this) {
         throw std::runtime_error("sm::skeleton::register_node failed");
     }
     bones_[new_bone.name()] = &new_bone;
@@ -975,11 +975,11 @@ bool sm::skeleton::empty() const {
     return !root_.has_value();
 }
 
-sm::world_ref sm::skeleton::owner() {
+sm::world& sm::skeleton::owner() {
 	return owner_;
 }
 
-sm::const_world_ref sm::skeleton::owner() const {
+const sm::world& sm::skeleton::owner() const {
 	return owner_;
 }
 
@@ -1083,7 +1083,7 @@ sm::result sm::world::delete_skeleton(const std::string& skel_name) {
             }
         ) |  rv::filter(
             [&skel](const sm::bone* e)->bool {
-                return &e->owner().get() == &skel;
+                return &e->owner() == &skel;
             }
         ) | r::to<std::unordered_set<const bone*>>();
 
@@ -1094,7 +1094,7 @@ sm::result sm::world::delete_skeleton(const std::string& skel_name) {
             }
         ) | rv::filter(
             [&skel](const sm::node* n)->bool {
-                return &n->owner().get() == &skel;
+                return &n->owner() == &skel;
             }
         ) | r::to<std::unordered_set<const node*>>();
 
@@ -1152,9 +1152,9 @@ sm::expected_bone sm::world::create_bone_in_skeleton(
     if (!v.is_root()) {
         return std::unexpected(sm::result::multi_parent_node);
     }
-    auto skel_u = u.owner();
-    auto skel_v = v.owner();
-    if (&skel_u.get() != &skel_v.get()) {
+    auto& skel_u = u.owner();
+    auto& skel_v = v.owner();
+    if (&skel_u != &skel_v) {
         return std::unexpected(sm::result::cross_skeleton_bone);
     }
     bones_.push_back(bone::make_unique(bone_name, u, v));
@@ -1168,17 +1168,17 @@ std::expected<sm::bone_ref, sm::result> sm::world::create_bone(
         return std::unexpected(sm::result::multi_parent_node);
     }
 
-	auto skel_u = u.owner();
-	auto skel_v = v.owner();
-    if (&skel_u.get() == &skel_v.get()) {
+	auto& skel_u = u.owner();
+	auto& skel_v = v.owner();
+    if (&skel_u == &skel_v) {
         return std::unexpected(sm::result::cyclic_bones);
     }
 
-	skeletons_.erase(skel_v.get().name());
+	skeletons_.erase(skel_v.name());
 
     std::string name = (bone_name.empty()) ? "bone-1" : bone_name;
 	bones_.push_back(bone::make_unique("bone-1", u, v));
-	skel_u.get().on_new_bone( *bones_.back() );
+	skel_u.on_new_bone( *bones_.back() );
 
     return *bones_.back();
 }

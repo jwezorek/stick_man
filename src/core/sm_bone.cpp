@@ -45,7 +45,7 @@ sm::expected_node sm::node::copy_to(skeleton& skel) const {
     if (skel.contains<node>(name_)) {
         return std::unexpected(sm::result::non_unique_name);
     }
-    auto node = skel.owner().get().create_node(
+    auto node = skel.owner().create_node(
         skel, name_,
         x_, y_
     );
@@ -102,11 +102,13 @@ std::vector<sm::const_bone_ref> sm::node::adjacent_bones() const {
 		r::to< std::vector<sm::const_bone_ref>>();
 }
 
-sm::skel_ref sm::node::owner() {
+sm::skeleton& sm::node::owner() {
 	return std::visit(
 		overloaded{
-			[](skel_ref skel) {return skel; },
-			[](bone_ref bone) {
+			[](skel_ref skel)->sm::skeleton& { 
+                return skel.get(); 
+            },
+			[](bone_ref bone)->sm::skeleton& {
 				return bone.get().owner();
 			}
 		},
@@ -114,7 +116,7 @@ sm::skel_ref sm::node::owner() {
 	);
 }
 
-sm::const_skel_ref sm::node::owner() const {
+const sm::skeleton& sm::node::owner() const {
 	auto non_const_this = const_cast<sm::node*>(this);
 	return non_const_this->owner();
 }
@@ -203,7 +205,7 @@ sm::expected_bone sm::bone::copy_to(skeleton& skel) const
         return std::unexpected(result::no_parent);
     }
 
-    auto bone = skel.owner().get().create_bone_in_skeleton(name_, u->get(), v->get());
+    auto bone = skel.owner().create_bone_in_skeleton(name_, u->get(), v->get());
     if (rot_constraint_) {
         bone->get().set_rotation_constraint(
             rot_constraint_->start_angle,
@@ -265,11 +267,11 @@ const sm::node& sm::bone::opposite_node(const node& j) const {
 	return non_const_this->opposite_node(j);
 }
 
-sm::skel_ref sm::bone::owner() {
+sm::skeleton& sm::bone::owner() {
 	return parent_node().owner();
 }
 
-sm::const_skel_ref sm::bone::owner() const {
+const sm::skeleton& sm::bone::owner() const {
 	return parent_node().owner();
 }
 

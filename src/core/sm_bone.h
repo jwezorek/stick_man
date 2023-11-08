@@ -44,8 +44,8 @@ namespace sm {
 		std::vector<const_bone_ref> adjacent_bones() const;
 		std::vector<bone_ref> adjacent_bones();
 
- 		skel_ref owner();
-		const_skel_ref owner() const;
+ 		sm::skeleton& owner();
+		const sm::skeleton& owner() const;
 
 		double world_x() const;
 		double world_y() const;
@@ -93,8 +93,8 @@ namespace sm {
 		const node& child_node() const;
 		const node& opposite_node(const node& j) const;
 
-		skel_ref owner();
-		const_skel_ref owner() const;
+		sm::skeleton& owner();
+		const sm::skeleton& owner() const;
 
 		node& parent_node();
 		node& child_node();

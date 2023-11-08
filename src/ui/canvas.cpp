@@ -635,7 +635,7 @@ void ui::canvas_manager::add_or_delete_tab(const std::string& name, bool should_
 
 void ui::canvas_manager::prepare_to_add_bone(sm::node& u, sm::node& v) {
     auto& canv = active_canvas();
-    auto* deletee = named_skeleton_item(canv, v.owner().get().name());
+    auto* deletee = named_skeleton_item(canv, v.owner().name());
     if (deletee) {
         canv.delete_item(deletee, false);
     }
@@ -646,7 +646,7 @@ void ui::canvas_manager::add_new_bone(sm::bone& bone) {
     canv.insert_item(bone);
     canv.sync_to_model();
 
-    auto& world = bone.owner().get().owner().get();
+    auto& world = bone.owner().owner();
     emit canvas_refresh(world);
 }
 
@@ -654,10 +654,10 @@ void ui::canvas_manager::add_new_skeleton(const std::string& canvas, sm::skel_re
     auto& canv = *canvas_from_name(canvas);
 
     auto& skel = skel_ref.get();
-    canv.insert_item(skel.root_node().get());
+    canv.insert_item(skel.root_node());
     canv.insert_item(skel);
 
-    emit canvas_refresh(skel.owner().get());
+    emit canvas_refresh(skel.owner());
 }
 
 ui::canvas* ui::canvas_manager::canvas_from_name(const std::string& tab_name) {

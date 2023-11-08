@@ -37,7 +37,7 @@ mdl::handle mdl::to_handle(const mdl::skel_piece& piece) {
     return std::visit(
         overload{
             [](sm::is_node_or_bone_ref auto node_or_bone)->handle {
-                auto skel_name = node_or_bone.get().owner().get().name();
+                auto skel_name = node_or_bone.get().owner().name();
                 return { skel_name, node_or_bone.get().name() };
             } ,
             [](sm::skel_ref itm)->handle {

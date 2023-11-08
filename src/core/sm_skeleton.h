@@ -53,8 +53,8 @@ namespace sm {
 	public:
 		std::string name() const;
         bool empty() const;
-		node_ref root_node();
-		const_node_ref root_node() const;
+		sm::node& root_node();
+		const sm::node& root_node() const;
 
 		std::any get_user_data() const;
 		void set_user_data(std::any data);
@@ -69,8 +69,8 @@ namespace sm {
 		auto nodes() const { return detail::to_range_view<const_node_ref>(nodes_); }
 		auto bones() const { return detail::to_range_view<const_bone_ref>(bones_); }
 
-		world_ref owner();
-		const_world_ref owner() const;
+		sm::world& owner();
+		const sm::world& owner() const;
 
 		template <is_node_or_bone T>
 		bool contains(const std::string& name) const {

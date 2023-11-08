@@ -102,7 +102,7 @@ namespace {
 
         for (auto skel_item : skeletons) {
             auto& skel = skel_item->model();
-            sm::visit_bones(skel.root_node().get(),
+            sm::visit_bones(skel.root_node(),
                 [&](auto& bone)->sm::visit_result {
                     if (selected.contains(&bone)) {
                         ordered_bones.push_back(&bone);
@@ -186,8 +186,8 @@ namespace {
 		static sm::point origin_by_tab(int tab_index, const sm::node& selected_node) {
 			if (tab_index == 1) {
 				// skeleton relative...
-				const auto& owner = selected_node.owner().get();
-				return owner.root_node().get().world_pos();
+				const auto& owner = selected_node.owner();
+				return owner.root_node().world_pos();
 			}
 			else {
 				// parent relative...
