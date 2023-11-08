@@ -20,10 +20,10 @@ add_executable(stick_man
     src/ui/stick_man.qrc
     src/ui/stick_man.cpp
     src/ui/canvas/canvas.cpp
-    src/ui/tool_palette.cpp
-    src/ui/tools.cpp
-    src/ui/move_tool.cpp
-    src/ui/selection_tool.cpp
+    src/ui/tools/tool_palette.cpp
+    src/ui/tools/tools.cpp
+    src/ui/tools/move_tool.cpp
+    src/ui/tools/selection_tool.cpp
     src/ui/panes/skeleton_pane.cpp
     src/ui/panes/tool_settings_pane.cpp
     src/ui/panes/animation_pane.cpp

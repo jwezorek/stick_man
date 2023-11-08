@@ -1,8 +1,8 @@
 #include "move_tool.h"
-#include "canvas/canvas_item.h"
-#include "panes/tool_settings_pane.h"
-#include "util.h"
-#include "../core/sm_skeleton.h"
+#include "../canvas/canvas_item.h"
+#include "../panes/tool_settings_pane.h"
+#include "../util.h"
+#include "../../core/sm_skeleton.h"
 #include <unordered_map>
 #include <array>
 #include <numbers>

@@ -2,7 +2,7 @@
 
 #include <QtWidgets/QMainWindow>
 #include "canvas/canvas.h"
-#include "tools.h"
+#include "tools/tools.h"
 #include "../model/project.h"
 
 /*------------------------------------------------------------------------------------------------*/

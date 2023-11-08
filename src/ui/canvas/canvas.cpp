@@ -1,7 +1,7 @@
 #include "canvas.h"
 #include "canvas_item.h"
 #include "../stick_man.h"
-#include "../tools.h"
+#include "../tools/tools.h"
 #include "../util.h"
 #include "../../model/project.h"
 #include "../../core/sm_skeleton.h"

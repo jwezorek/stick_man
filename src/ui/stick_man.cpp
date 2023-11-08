@@ -1,7 +1,7 @@
 #include "stick_man.h"
 #include "panes/skeleton_pane.h"
 #include "panes/animation_pane.h"
-#include "tool_palette.h"
+#include "tools/tool_palette.h"
 #include "panes/tool_settings_pane.h"
 #include "canvas/canvas_item.h"
 #include "util.h"

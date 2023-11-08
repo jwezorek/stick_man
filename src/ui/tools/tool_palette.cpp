@@ -1,6 +1,6 @@
 #include "tool_palette.h"
-#include "stick_man.h"
-#include "util.h"
+#include "../stick_man.h"
+#include "../util.h"
 #include <ranges>
 #include <vector>
 #include <tuple>
