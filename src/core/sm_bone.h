@@ -44,8 +44,8 @@ namespace sm {
 		std::vector<const_bone_ref> adjacent_bones() const;
 		std::vector<bone_ref> adjacent_bones();
 
- 		sm::skeleton& owner();
-		const sm::skeleton& owner() const;
+ 		skeleton& owner();
+		const skeleton& owner() const;
 
 		double world_x() const;
 		double world_y() const;
@@ -93,15 +93,15 @@ namespace sm {
 		const node& child_node() const;
 		const node& opposite_node(const node& j) const;
 
-		sm::skeleton& owner();
-		const sm::skeleton& owner() const;
+		skeleton& owner();
+		const skeleton& owner() const;
 
 		node& parent_node();
 		node& child_node();
 		node& opposite_node(const node& j);
 
-		std::optional<const_node_ref> shared_node(const bone& b) const;
-		std::optional<node_ref> shared_node(const bone& b);
+		maybe_const_node_ref shared_node(const bone& b) const;
+		maybe_node_ref shared_node(const bone& b);
 
 		std::optional<rot_constraint> rotation_constraint() const;
 		result set_rotation_constraint(double start, double span, bool relative_to_parent);

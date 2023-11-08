@@ -275,7 +275,7 @@ const sm::skeleton& sm::bone::owner() const {
 	return parent_node().owner();
 }
 
-std::optional<sm::node_ref> sm::bone::shared_node(const bone& b) {
+sm::maybe_node_ref sm::bone::shared_node(const bone& b) {
 	auto* b_u = &b.parent_node();
 	auto* b_v = &b.child_node();
 	if (&u_ == b_u || (&u_ == b_v)) {
@@ -287,7 +287,7 @@ std::optional<sm::node_ref> sm::bone::shared_node(const bone& b) {
 	return {};
 }
 
-std::optional<sm::const_node_ref> sm::bone::shared_node(const bone& b) const {
+sm::maybe_const_node_ref sm::bone::shared_node(const bone& b) const {
 	auto* non_const_this = const_cast<sm::bone*>(this);
 	return non_const_this->shared_node(b);
 }

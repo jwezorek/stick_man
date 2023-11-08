@@ -46,9 +46,9 @@ mdl::command mdl::commands::make_create_node_command(const std::string& canvas, 
 
     return {
         [state](mdl::project& proj) {
-            auto skel = proj.world_.create_skeleton(state->loc);
-            state->skeleton = skel.get().name();
-            proj.tabs_[state->canvas_name].push_back(skel.get().name());
+            auto& skel = proj.world_.create_skeleton(state->loc);
+            state->skeleton = skel.name();
+            proj.tabs_[state->canvas_name].push_back(skel.name());
             emit proj.new_skeleton_added(state->canvas_name, skel);
         },
         [state](mdl::project& proj) {

@@ -1018,13 +1018,13 @@ bool sm::world::empty() const {
     return skeletons_.empty();
 }
 
-sm::skel_ref sm::world::create_skeleton(double x, double y) {
+sm::skeleton& sm::world::create_skeleton(double x, double y) {
 	auto new_name = unique_name("skeleton", skeleton_names());
 	skeletons_.emplace( new_name, skeleton::make_unique( *this, new_name, x, y ) );
 	return *skeletons_[new_name];
 }
 
-sm::skel_ref sm::world::create_skeleton(const point& pt) {
+sm::skeleton& sm::world::create_skeleton(const point& pt) {
     return create_skeleton(pt.x, pt.y);
 }
 

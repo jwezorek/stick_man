@@ -119,8 +119,8 @@ namespace sm {
 
         void clear();
         bool empty() const;
-		skel_ref create_skeleton(double x, double y);
-        skel_ref create_skeleton(const point& pt);
+		skeleton& create_skeleton(double x, double y);
+        skeleton& create_skeleton(const point& pt);
         expected_skel create_skeleton(const std::string& name);
 		expected_skel skeleton(const std::string& name);
         expected_const_skel skeleton(const std::string& name) const;
