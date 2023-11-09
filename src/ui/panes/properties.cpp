@@ -1,6 +1,7 @@
 #include "properties.h"
 #include "../canvas/canvas.h"
 #include "../canvas/canvas_item.h"
+#include "../canvas/canvas_manager.h"
 #include "../util.h"
 #include "../stick_man.h"
 #include "skeleton_pane.h"

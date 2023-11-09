@@ -3,6 +3,7 @@
 #include "../core/json.hpp"
 #include "canvas/canvas_item.h"
 #include "canvas/canvas.h"
+#include "canvas/canvas_manager.h"
 #include "../model/project.h"
 #include "stick_man.h"
 #include "util.h"

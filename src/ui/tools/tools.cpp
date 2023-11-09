@@ -6,6 +6,7 @@
 #include "../util.h"
 #include "../stick_man.h"
 #include "../canvas/canvas_item.h"
+#include "../canvas/canvas_manager.h"
 #include "../../model/project.h"
 #include "../../model/handle.h"
 #include <QGraphicsScene>

@@ -3,6 +3,7 @@
 #include "../util.h"
 #include "../canvas/canvas.h"
 #include "../canvas/canvas_item.h"
+#include "../canvas/canvas_manager.h"
 #include "../stick_man.h"
 #include "../../core/sm_skeleton.h"
 #include "../../core/sm_types.h"

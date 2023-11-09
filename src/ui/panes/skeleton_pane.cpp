@@ -2,6 +2,7 @@
 #include "../util.h"
 #include "../canvas/canvas_item.h"
 #include "../canvas/canvas.h"
+#include "../canvas/canvas_manager.h"
 #include "../tools/tools.h"
 #include "../tools/tools.h"
 #include "../stick_man.h"

@@ -4,6 +4,7 @@
 #include "tools/tool_palette.h"
 #include "panes/tool_settings_pane.h"
 #include "canvas/canvas_item.h"
+#include "canvas/canvas_manager.h"
 #include "util.h"
 #include "clipboard.h"
 #include <QtWidgets>
