@@ -1,5 +1,7 @@
 #include "props_box.h"
 #include "properties.h"
+#include "node_properties.h"
+#include "bone_properties.h"
 #include "../canvas/canvas.h"
 
 props::props_box::props_box(
@@ -51,7 +53,8 @@ void props::props_box::populate(mdl::project& proj) {
 
 }
 
-void props::props_box::lose_selection() {}
+void props::props_box::lose_selection() {
+}
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -68,4 +71,45 @@ void props::single_or_multi_props_widget::set_selection(const ui::canvas& canv) 
     else {
         set_selection_single(canv);
     }
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
+props::no_properties::no_properties(const props::current_canvas_fn& fn,
+        ui::selection_properties* parent) :
+        props::props_box(fn, parent, "no selection") {
+}
+
+void props::no_properties::set_selection(const ui::canvas& canv) {
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
+props::mixed_properties::mixed_properties::mixed_properties(
+        const props::current_canvas_fn& fn, ui::selection_properties* parent) :
+    props_box(fn, parent, "") {
+}
+
+void props::mixed_properties::populate(mdl::project& proj) {
+    layout_->addWidget(
+        nodes_ = new props::node_properties(get_current_canv_, parent_)
+    );
+    layout_->addWidget(ui::horz_separator());
+    layout_->addWidget(
+        bones_ = new props::bone_properties(get_current_canv_, parent_)
+    );
+    nodes_->populate(proj);
+    bones_->populate(proj);
+    nodes_->show();
+    bones_->show();
+}
+
+void props::mixed_properties::set_selection(const ui::canvas& canv) {
+    nodes_->set_selection(canv);
+    bones_->set_selection(canv);
+}
+
+void props::mixed_properties::lose_selection() {
+    nodes_->lose_selection();
+    bones_->lose_selection();
 }

@@ -15,7 +15,8 @@ namespace ui {
 namespace props {
 
     using current_canvas_fn = std::function<ui::canvas& ()>;
-
+    class node_properties;
+    class bone_properties;
 
     class props_box : public QWidget {
     protected:
@@ -48,5 +49,22 @@ namespace props {
         virtual void set_selection_single(const ui::canvas& canv) = 0;
         virtual void set_selection_multi(const ui::canvas& canv) = 0;
         virtual bool is_multi(const ui::canvas& canv) = 0;
+    };
+
+    class no_properties : public props_box {
+    public:
+        no_properties(const current_canvas_fn& fn, ui::selection_properties* parent);
+        void set_selection(const ui::canvas& canv) override;
+    };
+
+    class mixed_properties : public props_box {
+    private:
+        node_properties* nodes_;
+        bone_properties* bones_;
+    public:
+        mixed_properties(const current_canvas_fn& fn, ui::selection_properties* parent);
+        void populate(mdl::project& proj) override;
+        void set_selection(const ui::canvas& canv) override;
+        void lose_selection() override;
     };
 }

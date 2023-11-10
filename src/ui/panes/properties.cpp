@@ -53,60 +53,19 @@ namespace {
 				}
 		);
 	}
-
-	class no_properties : public props::props_box {
-	public:
-		no_properties(const props::current_canvas_fn& fn,
-            ui::selection_properties* parent) : 
-                props::props_box(fn, parent, "no selection") {}
-		void set_selection(const ui::canvas& canv) override {}
-	};
-
-	class mixed_properties : public props::props_box {
-	private:
-		props::node_properties* nodes_;
-        props::bone_properties* bones_;
-	public:
-		mixed_properties(const props::current_canvas_fn& fn, ui::selection_properties* parent) :
-            props::props_box(fn, parent, "") {
-		}
-
-		void populate(mdl::project& proj) override {
-			layout_->addWidget(
-				nodes_ = new props::node_properties(get_current_canv_, parent_)
-			);
-			layout_->addWidget( ui::horz_separator() );
-			layout_->addWidget(
-				bones_ = new props::bone_properties(get_current_canv_, parent_)
-			);
-			nodes_->populate(proj);
-			bones_->populate(proj);
-			nodes_->show();
-			bones_->show();
-		}
-
-		void set_selection(const ui::canvas& canv) override {
-			nodes_->set_selection(canv);
-			bones_->set_selection(canv);
-		}
-
-		void lose_selection() override {
-			nodes_->lose_selection();
-			bones_->lose_selection();
-		}
-	};
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::selection_properties::selection_properties(const props::current_canvas_fn& fn, skeleton_pane* sp) :
+ui::selection_properties::selection_properties(const props::current_canvas_fn& fn,
+            skeleton_pane* sp) :
         skel_pane_(sp),
 		props_{
-			{selection_type::none, new no_properties(fn, this)},
+			{selection_type::none, new props::no_properties(fn, this)},
 			{selection_type::node, new props::node_properties(fn, this)},
 			{selection_type::bone, new props::bone_properties(fn, this)},
 			{selection_type::skeleton, new props::skeleton_properties(fn, this)},
-			{selection_type::mixed, new mixed_properties(fn, this)}
+			{selection_type::mixed, new props::mixed_properties(fn, this)}
 		} {
 	for (const auto& [key, prop_box] : props_) {
         QScrollArea* scroller = new QScrollArea();
