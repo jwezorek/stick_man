@@ -214,6 +214,7 @@ namespace ui {
 	double angle_through_points(QPointF origin, QPointF pt);
 	double distance(QPointF p1, QPointF p2);
 	double normalize_angle(double theta);
+    bool is_approximately_equal(double v1, double v2, double tolerance);
 	double clamp_above(double v, double floor);
 	double clamp_below(double v, double ceiling);
 	double clamp(double v, double floor, double ceiling);

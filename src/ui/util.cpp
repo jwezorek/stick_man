@@ -587,6 +587,10 @@ double ui::normalize_angle(double theta) {
 	return std::atan2(sine, cosine);
 }
 
+bool ui::is_approximately_equal(double v1, double v2, double tolerance) {
+    return std::abs(v1 - v2) < tolerance;
+}
+
 double ui::clamp_above(double v, double floor) {
 	return (v > floor) ? v : floor;
 }

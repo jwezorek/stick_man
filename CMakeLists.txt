@@ -38,7 +38,10 @@ add_executable(stick_man
     src/model/project.cpp
     src/model/commands.cpp
     src/model/handle.cpp
- "src/ui/canvas/canvas_manager.cpp" "src/ui/canvas/canvas_manager.h")
+    src/ui/canvas/canvas_manager.cpp
+    src/ui/panes/skeleton_properties.cpp
+    src/ui/panes/node_properties.cpp
+)
 
 target_link_libraries(stick_man PRIVATE Qt6::Widgets  Eigen3::Eigen)
 

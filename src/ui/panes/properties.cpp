@@ -1,4 +1,6 @@
 #include "properties.h"
+#include "skeleton_properties.h"
+#include "node_properties.h"
 #include "../canvas/canvas.h"
 #include "../canvas/canvas_item.h"
 #include "../canvas/canvas_manager.h"
@@ -9,8 +11,6 @@
 #include "../../model/handle.h"
 #include <unordered_map>
 #include <unordered_set>
-#include <ranges>
-#include <functional>
 #include <numbers>
 #include <qdebug.h>
 
@@ -22,7 +22,6 @@ namespace rv = std::ranges::views;
 
 namespace {
 
-	constexpr double k_tolerance = 0.00005;
 	constexpr double k_default_rot_constraint_min = -std::numbers::pi / 2.0;
 	constexpr double k_default_rot_constraint_span = std::numbers::pi;
 
@@ -55,23 +54,6 @@ namespace {
 					return itm->model();
 				}
 		);
-	}
-
-	bool is_approximately_equal(double v1, double v2, double tolerance) {
-		return std::abs(v1 - v2) < tolerance;
-	}
-
-	std::optional<double> get_unique_val(auto vals, double tolerance = k_tolerance) {
-		if (vals.empty()) {
-			return {};
-		}
-		auto first_val = *vals.begin();
-		auto first_not_equal = r::find_if(
-			vals,
-			std::not_fn(std::bind(is_approximately_equal, _1, first_val, tolerance))
-		);
-		return  (first_not_equal == vals.end()) ?
-			std::optional<double>{first_val} : std::optional<double>{};
 	}
 
 	void set_rot_constraints(mdl::project& proj, ui::canvas& canv, bool is_parent_relative, double start, double span) {
@@ -143,199 +125,6 @@ namespace {
             ui::selection_properties* parent) : 
                 abstract_properties_widget(fn, parent, "no selection") {}
 		void set_selection(const ui::canvas& canv) override {}
-	};
-
-	class skeleton_properties : public ui::abstract_properties_widget {
-		ui::labeled_field* name_;
-	public:
-		skeleton_properties(const ui::current_canvas_fn& fn, ui::selection_properties* parent) :
-			abstract_properties_widget(fn, parent, "skeleton selection") {}
-
-		void populate(mdl::project& proj) override {
-			layout_->addWidget(
-				name_ = new ui::labeled_field("   name", "")
-			);
-			name_->set_color(QColor("yellow"));
-			name_->value()->set_validator(
-				[this](const std::string& new_name)->bool {
-					return parent_->skel_pane().validate_props_name_change(new_name);
-				}
-			);
-
-            connect(&proj, &mdl::project::name_changed,
-                [this](mdl::skel_piece piece, const std::string& new_name) {
-                    handle_rename(piece, name_->value(), new_name);
-                }
-            );
-
-			connect(
-                name_->value(), &ui::string_edit::value_changed, 
-                this, &skeleton_properties::do_property_name_change
-			);
-		}
-
-		void set_selection(const ui::canvas& canv) override {
-			auto* skel_item = canv.selected_skeleton();
-			name_->set_value(skel_item->model().name().c_str());
-		}
-	};
-
-	class node_position_tab : public ui::tabbed_values {
-	private:
-        ui::current_canvas_fn get_curr_canv_;
-
-		static sm::point origin_by_tab(int tab_index, const sm::node& selected_node) {
-			if (tab_index == 1) {
-				// skeleton relative...
-				const auto& owner = selected_node.owner();
-				return owner.root_node().world_pos();
-			}
-			else {
-				// parent relative...
-				auto parent_bone = selected_node.parent_bone();
-				return (parent_bone) ?
-					parent_bone->get().parent_node().world_pos() :
-					sm::point(0, 0);
-			}
-		}
-
-		double to_nth_tab(int n, int field, double val) override {
-			auto selected_nodes = get_curr_canv_().selected_nodes();
-			if (selected_nodes.size() != 1 || n == 0) {
-				return val;
-			}
-
-			auto origin = origin_by_tab(n, selected_nodes.front()->model());
-			if (field == 0) {
-				return val - origin.x;
-			} else {
-				return val - origin.y;
-			}
-		}
-
-		double from_nth_tab(int n, int field, double val) override {
-			auto selected_nodes = get_curr_canv_().selected_nodes();
-			if (selected_nodes.size() != 1 || n == 0) {
-				return val;
-			}
-
-			auto origin = origin_by_tab(n, selected_nodes.front()->model());
-			if (field == 0) {
-				return origin.x + val;
-			} else {
-				return origin.y + val;
-			}
-		}
-
-	public:
-		node_position_tab(const ui::current_canvas_fn& fn) :
-            get_curr_canv_(fn),
-			ui::tabbed_values(nullptr,
-					{ "world", "skeleton", "parent" }, {
-						{"x", 0.0, -1500.0, 1500.0},
-						{"y", 0.0, -1500.0, 1500.0}
-					}, 135
-			)
-		{}
-	};
-
-	class node_properties : public ui::single_or_multi_props_widget {
-		ui::labeled_field* name_;
-		node_position_tab* positions_;
-
-		static double world_coordinate_to_rel(int index, double val) {
-			return val;
-		}
-
-	public:
-		node_properties(const ui::current_canvas_fn& fn, ui::selection_properties* parent) :
-			single_or_multi_props_widget(
-				fn,
-				parent,
-				"selected nodes"
-			),
-			positions_{} {
-		}
-
-		void populate(mdl::project& proj) override {
-			layout_->addWidget(
-				name_ = new ui::labeled_field("   name", "")
-			);
-			name_->set_color(QColor("yellow"));
-			name_->value()->set_validator(
-				[this](const std::string& new_name)->bool {
-					return parent_->skel_pane().validate_props_name_change(new_name);
-				}
-			);
-
-			connect(name_->value(), &ui::string_edit::value_changed,
-                this, &node_properties::do_property_name_change
-			);
-
-			layout_->addWidget(positions_ = new node_position_tab(get_current_canv_));
-
-			connect(positions_, &ui::tabbed_values::value_changed,
-				[this](int field) {
-					auto& canv = get_current_canv_();
-					auto v = positions_->value(field);
-                    auto sel = mdl::to_handles(ui::to_model_ptrs(canv.selected_nodes())) |
-                        r::to<std::vector<mdl::handle>>();
-					if (field == 0) {
-                        proj_->transform(sel,
-                            [&](sm::node& node) {
-                                auto y = node.world_y();
-                                node.set_world_pos(sm::point(*v, y));
-                            }
-                        );
-					} else {
-                        proj_->transform(sel,
-                            [&](sm::node& node) {
-                                auto x = node.world_x();
-                                node.set_world_pos(sm::point(x, *v));
-                            }
-                        );
-					} 
-					canv.sync_to_model();
-				}
-			);
-
-            connect(&proj, &mdl::project::name_changed,
-                [this](mdl::skel_piece piece, const std::string& new_name) {
-                    handle_rename(piece, name_->value(), new_name);
-                }
-            );
-		}
-
-		void set_selection_common(const ui::canvas& canv) {
-			const auto& sel = canv.selection();
-			auto nodes = to_model_objects(ui::as_range_view_of_type<ui::node_item>(sel));
-			auto x_pos = get_unique_val(nodes |
-				rv::transform([](sm::node& n) {return n.world_x(); }));
-			auto y_pos = get_unique_val(nodes |
-				rv::transform([](sm::node& n) {return n.world_y(); }));
-
-			positions_->set_value(0, x_pos);
-			positions_->set_value(1, y_pos);
-		}
-
-		void set_selection_single(const ui::canvas& canv) {
-			name_->show();
-			auto& node = canv.selected_nodes().front()->model();
-			name_->set_value(node.name().c_str());
-			positions_->unlock();
-		}
-
-		void set_selection_multi(const ui::canvas& canv) {
-			name_->hide();
-			positions_->lock_to_primary_tab();
-		}
-
-		bool is_multi(const ui::canvas& canv) {
-			return canv.selected_nodes().size() > 1;
-		}
-
-		void lose_selection() override {
-		}
 	};
 
 	class rot_constraint_box : public QGroupBox {
@@ -674,7 +463,7 @@ namespace {
 
 	class mixed_properties : public ui::abstract_properties_widget {
 	private:
-		node_properties* nodes_;
+		props::node_properties* nodes_;
 		bone_properties* bones_;
 	public:
 		mixed_properties(const ui::current_canvas_fn& fn, ui::selection_properties* parent) :
@@ -683,7 +472,7 @@ namespace {
 
 		void populate(mdl::project& proj) override {
 			layout_->addWidget(
-				nodes_ = new node_properties(get_current_canv_, parent_)
+				nodes_ = new props::node_properties(get_current_canv_, parent_)
 			);
 			layout_->addWidget( ui::horz_separator() );
 			layout_->addWidget(
@@ -729,7 +518,8 @@ void ui::abstract_properties_widget::do_property_name_change(const std::string& 
     proj_->rename(*maybe_piece, new_name);
 }
 
-void ui::abstract_properties_widget::handle_rename(mdl::skel_piece p, ui::string_edit* name_edit, const std::string& new_name)
+void ui::abstract_properties_widget::handle_rename(mdl::skel_piece p, 
+        ui::string_edit* name_edit, const std::string& new_name)
 {
     auto maybe_piece = selected_single_model(get_current_canv_());
     if (!maybe_piece) {
@@ -781,9 +571,9 @@ ui::selection_properties::selection_properties(const current_canvas_fn& fn, skel
         skel_pane_(sp),
 		props_{
 			{selection_type::none, new no_properties(fn, this)},
-			{selection_type::node, new node_properties(fn, this)},
+			{selection_type::node, new props::node_properties(fn, this)},
 			{selection_type::bone, new bone_properties(fn, this)},
-			{selection_type::skeleton, new skeleton_properties(fn, this)},
+			{selection_type::skeleton, new props::skeleton_properties(fn, this)},
 			{selection_type::mixed, new mixed_properties(fn, this)}
 		} {
 	for (const auto& [key, prop_box] : props_) {
