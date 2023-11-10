@@ -7,14 +7,14 @@ namespace props {
 
     class node_position_tab;
 
-    class node_properties : public ui::single_or_multi_props_widget {
+    class node_properties : public single_or_multi_props_widget {
         ui::labeled_field* name_;
         node_position_tab* positions_;
 
         static double world_coordinate_to_rel(int index, double val);
 
     public:
-        node_properties(const ui::current_canvas_fn& fn, ui::selection_properties* parent);
+        node_properties(const current_canvas_fn& fn, ui::selection_properties* parent);
 
         void populate(mdl::project& proj) override;
         void set_selection_common(const ui::canvas& canv) override;

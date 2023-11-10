@@ -601,7 +601,6 @@ double ui::clamp_below(double v, double ceiling) {
 
 double ui::clamp(double v, double floor, double ceiling) {
 	return clamp_below(clamp_above(v, floor), ceiling);
-
 }
 
 /*------------------------------------------------------------------------------------------------*/

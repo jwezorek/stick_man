@@ -4,8 +4,8 @@
 #include "skeleton_pane.h"
 
 props::skeleton_properties::skeleton_properties(
-        const ui::current_canvas_fn& fn, ui::selection_properties* parent) :
-    abstract_properties_widget(fn, parent, "skeleton selection") {
+        const current_canvas_fn& fn, ui::selection_properties* parent) :
+    props_box(fn, parent, "skeleton selection") {
 }
 
 void props::skeleton_properties::populate(mdl::project & proj) {

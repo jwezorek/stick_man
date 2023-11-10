@@ -15,7 +15,7 @@ namespace {
 namespace props {
     class node_position_tab : public ui::tabbed_values {
     private:
-        ui::current_canvas_fn get_curr_canv_;
+        current_canvas_fn get_curr_canv_;
 
         static sm::point origin_by_tab(int tab_index, const sm::node& selected_node) {
             if (tab_index == 1) {
@@ -63,7 +63,7 @@ namespace props {
         }
 
     public:
-        node_position_tab(const ui::current_canvas_fn& fn) :
+        node_position_tab(const current_canvas_fn& fn) :
             get_curr_canv_(fn),
             ui::tabbed_values(nullptr,
                     { "world", "skeleton", "parent" }, {
@@ -79,7 +79,7 @@ double props::node_properties::world_coordinate_to_rel(int index, double val) {
     return val;
 }
 
-props::node_properties::node_properties(const ui::current_canvas_fn& fn, ui::selection_properties* parent) :
+props::node_properties::node_properties(const current_canvas_fn& fn, ui::selection_properties* parent) :
     single_or_multi_props_widget(
         fn,
         parent,
