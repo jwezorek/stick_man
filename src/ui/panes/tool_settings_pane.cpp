@@ -1,5 +1,5 @@
 #include "tool_settings_pane.h"
-#include "../tools/tool.h"
+#include "../tools/tool_manager.h"
 #include "../util.h"
 
 /*------------------------------------------------------------------------------------------------*/
