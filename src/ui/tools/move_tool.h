@@ -4,7 +4,7 @@
 
 namespace ui {
 
-    class move_tool : public abstract_tool {
+    class move_tool : public tool {
     public:
 
         struct move_state {

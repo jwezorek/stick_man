@@ -21,45 +21,45 @@ namespace rv = std::ranges::views;
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::abstract_tool::abstract_tool(QString name, QString rsrc, tool_id id) :
+ui::tool::tool(QString name, QString rsrc, tool_id id) :
     name_(name),
     rsrc_(rsrc),
     id_(id) {
 }
 
-ui::tool_id ui::abstract_tool::id() const {
+ui::tool_id ui::tool::id() const {
     return id_;
 }
 
-QString ui::abstract_tool::name() const {
+QString ui::tool::name() const {
     return name_;
 }
 
-QString ui::abstract_tool::icon_rsrc() const {
+QString ui::tool::icon_rsrc() const {
     return rsrc_;
 }
 
-void ui::abstract_tool::populate_settings(tool_settings_pane* pane) {
+void ui::tool::populate_settings(tool_settings_pane* pane) {
     pane->set_tool(name_, settings_widget());
 }
 
-void ui::abstract_tool::activate(canvas_manager& canvases) {}
-void ui::abstract_tool::keyPressEvent(canvas& c, QKeyEvent* event) {}
-void ui::abstract_tool::keyReleaseEvent(canvas& c, QKeyEvent* event) {}
-void ui::abstract_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
-void ui::abstract_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
-void ui::abstract_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
-void ui::abstract_tool::mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
-void ui::abstract_tool::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {}
-void ui::abstract_tool::deactivate(canvas_manager& canvases) {}
-void ui::abstract_tool::init(canvas_manager&, mdl::project&) {}
-QWidget* ui::abstract_tool::settings_widget() { return nullptr; }
-ui::abstract_tool::~abstract_tool() {}
+void ui::tool::activate(canvas_manager& canvases) {}
+void ui::tool::keyPressEvent(canvas& c, QKeyEvent* event) {}
+void ui::tool::keyReleaseEvent(canvas& c, QKeyEvent* event) {}
+void ui::tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
+void ui::tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
+void ui::tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
+void ui::tool::mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) {}
+void ui::tool::wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) {}
+void ui::tool::deactivate(canvas_manager& canvases) {}
+void ui::tool::init(canvas_manager&, mdl::project&) {}
+QWidget* ui::tool::settings_widget() { return nullptr; }
+ui::tool::~tool() {}
 
 /*------------------------------------------------------------------------------------------------*/
 
 ui::zoom_tool::zoom_tool() :
-        abstract_tool("zoom", "zoom_icon.png", ui::tool_id::zoom),
+        tool("zoom", "zoom_icon.png", ui::tool_id::zoom),
         zoom_level_(0),
         settings_(nullptr) {
 }
@@ -105,7 +105,7 @@ QWidget* ui::zoom_tool::settings_widget() {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::pan_tool::pan_tool() : 
-    abstract_tool("pan", "pan_icon.png", ui::tool_id::pan) 
+    tool("pan", "pan_icon.png", ui::tool_id::pan) 
 {}
 
 void ui::pan_tool::deactivate(canvas_manager& canvases) {
@@ -120,7 +120,7 @@ void ui::pan_tool::activate(canvas_manager& canvases) {
 
 ui::add_node_tool::add_node_tool() :
     model_(nullptr),
-    abstract_tool("add node", "add_node_icon.png", ui::tool_id::add_node) 
+    tool("add node", "add_node_icon.png", ui::tool_id::add_node) 
 {}
 
 void ui::add_node_tool::init(canvas_manager& canvases, mdl::project& model) {
@@ -147,7 +147,7 @@ void ui::add_bone_tool::init_rubber_band(canvas& c) {
 ui::add_bone_tool::add_bone_tool() :
         model_(nullptr),
         rubber_band_(nullptr),
-    abstract_tool("add bone", "add_bone_icon.png", ui::tool_id::add_bone) {
+    tool("add bone", "add_bone_icon.png", ui::tool_id::add_bone) {
 }
 
 void ui::add_bone_tool::init(canvas_manager& canvases, mdl::project& model) {
@@ -261,7 +261,7 @@ bool ui::tool_manager::has_current_tool() const {
     return curr_item_index_ >= 0;
 }
 
-ui::abstract_tool& ui::tool_manager::current_tool() const {
+ui::tool& ui::tool_manager::current_tool() const {
     return *tool_registry_.at(curr_item_index_);
 }
 

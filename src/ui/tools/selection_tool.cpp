@@ -123,7 +123,7 @@ namespace {
 }
 
 ui::selection_tool::selection_tool() :
-    abstract_tool("selection", "arrow_icon.png", ui::tool_id::selection) {
+    tool("selection", "arrow_icon.png", ui::tool_id::selection) {
 }
 
 void ui::selection_tool::init(canvas_manager& canvases, mdl::project& model) {

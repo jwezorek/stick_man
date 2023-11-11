@@ -15,7 +15,7 @@ namespace ui {
 	class canvas_manager;
     class project;
 
-    class selection_tool : public abstract_tool {
+    class selection_tool : public tool {
     private:
 
         std::optional<QRectF> rubber_band_;

@@ -48,9 +48,9 @@ namespace ui {
     class canvas_manager;
     class tool_manager;
 
-    class abstract_tool : public input_handler {
+    class tool : public input_handler {
     public:
-        abstract_tool(QString name, QString rsrc, tool_id id);
+        tool(QString name, QString rsrc, tool_id id);
         tool_id id() const;
         QString name() const;
         QString icon_rsrc() const;
@@ -66,7 +66,7 @@ namespace ui {
         virtual void deactivate(canvas_manager& canvases);
 		virtual void init(canvas_manager& canvases, mdl::project& model);
         virtual QWidget* settings_widget();
-		virtual ~abstract_tool();
+		virtual ~tool();
 
     private:
         tool_id id_;
@@ -74,7 +74,7 @@ namespace ui {
         QString rsrc_;
     };
 
-    class zoom_tool : public abstract_tool {
+    class zoom_tool : public tool {
         int zoom_level_;
         QWidget* settings_;
         QComboBox* magnify_;
@@ -88,14 +88,14 @@ namespace ui {
         virtual QWidget* settings_widget() override;
     };
 
-    class pan_tool : public abstract_tool {
+    class pan_tool : public tool {
     public:
         pan_tool();
         void activate(canvas_manager& canvases) override;
         void deactivate(canvas_manager& canvases) override;
     };
 
-    class add_node_tool : public abstract_tool {
+    class add_node_tool : public tool {
         mdl::project* model_;
     public:
         add_node_tool();
@@ -103,7 +103,7 @@ namespace ui {
         void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
     };
 
-    class add_bone_tool : public abstract_tool {
+    class add_bone_tool : public tool {
     private:
         QPointF origin_;
         QGraphicsLineItem* rubber_band_;
@@ -124,7 +124,7 @@ namespace ui {
         Q_OBJECT
 
     private:
-        std::vector<std::unique_ptr<ui::abstract_tool>> tool_registry_;
+        std::vector<std::unique_ptr<ui::tool>> tool_registry_;
         int curr_item_index_;
 
         int index_from_id(tool_id id) const;
@@ -141,10 +141,10 @@ namespace ui {
         void wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) override;
         std::span<const tool_info> tool_info() const;
         bool has_current_tool() const;
-        abstract_tool& current_tool() const;
+        tool& current_tool() const;
         void set_current_tool(canvas_manager& canvases, tool_id id);
     signals:
-        void current_tool_changed(abstract_tool& new_tool);
+        void current_tool_changed(tool& new_tool);
     };
 
 }
