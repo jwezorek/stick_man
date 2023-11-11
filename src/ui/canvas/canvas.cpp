@@ -4,7 +4,7 @@
 #include "skel_item.h"
 #include "canvas_manager.h"
 #include "../stick_man.h"
-#include "../tools/tools.h"
+#include "../tools/tool.h"
 #include "../util.h"
 #include "../../model/project.h"
 #include "../../core/sm_skeleton.h"
