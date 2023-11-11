@@ -8,78 +8,78 @@
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
 
-namespace {
+namespace ui {
+    namespace pane {
+        namespace props {
+            class node_position_tab : public ui::tabbed_values {
+            private:
+                current_canvas_fn get_curr_canv_;
 
-}
+                static sm::point origin_by_tab(int tab_index, const sm::node& selected_node) {
+                    if (tab_index == 1) {
+                        // skeleton relative...
+                        const auto& owner = selected_node.owner();
+                        return owner.root_node().world_pos();
+                    }
+                    else {
+                        // parent relative...
+                        auto parent_bone = selected_node.parent_bone();
+                        return (parent_bone) ?
+                            parent_bone->get().parent_node().world_pos() :
+                            sm::point(0, 0);
+                    }
+                }
 
-namespace props {
-    class node_position_tab : public ui::tabbed_values {
-    private:
-        current_canvas_fn get_curr_canv_;
+                double to_nth_tab(int n, int field, double val) override {
+                    auto selected_nodes = get_curr_canv_().selected_nodes();
+                    if (selected_nodes.size() != 1 || n == 0) {
+                        return val;
+                    }
 
-        static sm::point origin_by_tab(int tab_index, const sm::node& selected_node) {
-            if (tab_index == 1) {
-                // skeleton relative...
-                const auto& owner = selected_node.owner();
-                return owner.root_node().world_pos();
-            }
-            else {
-                // parent relative...
-                auto parent_bone = selected_node.parent_bone();
-                return (parent_bone) ?
-                    parent_bone->get().parent_node().world_pos() :
-                    sm::point(0, 0);
-            }
-        }
+                    auto origin = origin_by_tab(n, selected_nodes.front()->model());
+                    if (field == 0) {
+                        return val - origin.x;
+                    }
+                    else {
+                        return val - origin.y;
+                    }
+                }
 
-        double to_nth_tab(int n, int field, double val) override {
-            auto selected_nodes = get_curr_canv_().selected_nodes();
-            if (selected_nodes.size() != 1 || n == 0) {
-                return val;
-            }
+                double from_nth_tab(int n, int field, double val) override {
+                    auto selected_nodes = get_curr_canv_().selected_nodes();
+                    if (selected_nodes.size() != 1 || n == 0) {
+                        return val;
+                    }
 
-            auto origin = origin_by_tab(n, selected_nodes.front()->model());
-            if (field == 0) {
-                return val - origin.x;
-            }
-            else {
-                return val - origin.y;
-            }
-        }
+                    auto origin = origin_by_tab(n, selected_nodes.front()->model());
+                    if (field == 0) {
+                        return origin.x + val;
+                    }
+                    else {
+                        return origin.y + val;
+                    }
+                }
 
-        double from_nth_tab(int n, int field, double val) override {
-            auto selected_nodes = get_curr_canv_().selected_nodes();
-            if (selected_nodes.size() != 1 || n == 0) {
-                return val;
-            }
-
-            auto origin = origin_by_tab(n, selected_nodes.front()->model());
-            if (field == 0) {
-                return origin.x + val;
-            }
-            else {
-                return origin.y + val;
-            }
-        }
-
-    public:
-        node_position_tab(const current_canvas_fn& fn) :
-            get_curr_canv_(fn),
-            ui::tabbed_values(nullptr,
+            public:
+                node_position_tab(const current_canvas_fn& fn) :
+                    get_curr_canv_(fn),
+                    ui::tabbed_values(nullptr,
                     { "world", "skeleton", "parent" }, {
                         {"x", 0.0, -1500.0, 1500.0},
                         {"y", 0.0, -1500.0, 1500.0}
                     }, 135
-            )
-        {}
-    };
+                    )
+                {}
+            };
+        }
+    }
 }
 
-double props::node_properties::world_coordinate_to_rel(int index, double val) {
+double ui::pane::props::nodes::world_coordinate_to_rel(int index, double val) {
     return val;
 }
 
-props::node_properties::node_properties(const current_canvas_fn& fn, ui::selection_properties* parent) :
+ui::pane::props::nodes::nodes(const current_canvas_fn& fn, selection_properties* parent) :
     single_or_multi_props_widget(
         fn,
         parent,
@@ -88,7 +88,7 @@ props::node_properties::node_properties(const current_canvas_fn& fn, ui::selecti
     positions_{} {
 }
 
-void props::node_properties::populate(mdl::project& proj) {
+void ui::pane::props::nodes::populate(mdl::project& proj) {
     layout_->addWidget(
         name_ = new ui::labeled_field("   name", "")
     );
@@ -100,7 +100,7 @@ void props::node_properties::populate(mdl::project& proj) {
     );
 
     connect(name_->value(), &ui::string_edit::value_changed,
-        this, &node_properties::do_property_name_change
+        this, &nodes::do_property_name_change
     );
 
     layout_->addWidget(positions_ = new node_position_tab(get_current_canv_));
@@ -138,7 +138,7 @@ void props::node_properties::populate(mdl::project& proj) {
     );
 }
 
-void props::node_properties::set_selection_common(const ui::canvas& canv) {
+void ui::pane::props::nodes::set_selection_common(const ui::canvas& canv) {
     const auto& sel = canv.selection();
     auto nodes = ui::to_model_ptrs(ui::as_range_view_of_type<ui::node_item>(sel));
     auto x_pos = ui::get_unique_val(nodes |
@@ -150,21 +150,21 @@ void props::node_properties::set_selection_common(const ui::canvas& canv) {
     positions_->set_value(1, y_pos);
 }
 
-void props::node_properties::set_selection_single(const ui::canvas& canv) {
+void ui::pane::props::nodes::set_selection_single(const ui::canvas& canv) {
     name_->show();
     auto& node = canv.selected_nodes().front()->model();
     name_->set_value(node.name().c_str());
     positions_->unlock();
 }
 
-void props::node_properties::set_selection_multi(const ui::canvas& canv) {
+void ui::pane::props::nodes::set_selection_multi(const ui::canvas& canv) {
     name_->hide();
     positions_->lock_to_primary_tab();
 }
 
-bool props::node_properties::is_multi(const ui::canvas& canv) {
+bool ui::pane::props::nodes::is_multi(const ui::canvas& canv) {
     return canv.selected_nodes().size() > 1;
 }
 
-void props::node_properties::lose_selection() {
+void ui::pane::props::nodes::lose_selection() {
 }

@@ -59,14 +59,14 @@ namespace {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::selection_properties::selection_properties(const props::current_canvas_fn& fn,
-            skeleton_pane* sp) :
+ui::pane::selection_properties::selection_properties(const props::current_canvas_fn& fn,
+            pane::skeleton* sp) :
         skel_pane_(sp),
 		props_{
 			{selection_type::none, new props::no_properties(fn, this)},
-			{selection_type::node, new props::node_properties(fn, this)},
-			{selection_type::bone, new props::bone_properties(fn, this)},
-			{selection_type::skeleton, new props::skeleton_properties(fn, this)},
+			{selection_type::node, new props::nodes(fn, this)},
+			{selection_type::bone, new props::bones(fn, this)},
+			{selection_type::skeleton, new props::skeletons(fn, this)},
 			{selection_type::mixed, new props::mixed_properties(fn, this)}
 		} {
 	for (const auto& [key, prop_box] : props_) {
@@ -77,13 +77,13 @@ ui::selection_properties::selection_properties(const props::current_canvas_fn& f
 	}
 }
 
-props::props_box* ui::selection_properties::current_props() const {
+ui::pane::props::props_box* ui::pane::selection_properties::current_props() const {
 	return static_cast<props::props_box*>(
         static_cast<QScrollArea*>(currentWidget())->widget()
     );
 }
 
-void ui::selection_properties::set(const ui::canvas& canv) {
+void ui::pane::selection_properties::set(const ui::canvas& canv) {
 	auto* old_props = current_props();
 
     QScrollArea* scroller = nullptr;
@@ -106,11 +106,11 @@ void ui::selection_properties::set(const ui::canvas& canv) {
 	}
 }
 
-void ui::selection_properties::handle_selection_changed(canvas& canv) {
+void ui::pane::selection_properties::handle_selection_changed(canvas& canv) {
     set(canv);
 }
 
-void ui::selection_properties::init(canvas_manager& canvases, mdl::project& proj)
+void ui::pane::selection_properties::init(canvas_manager& canvases, mdl::project& proj)
 {
     for (const auto& [key, prop_box] : props_) {
         prop_box->init(proj);
@@ -122,6 +122,6 @@ void ui::selection_properties::init(canvas_manager& canvases, mdl::project& proj
     );
 }
 
-ui::skeleton_pane& ui::selection_properties::skel_pane() {
+ui::pane::skeleton& ui::pane::selection_properties::skel_pane() {
     return *skel_pane_;
 }

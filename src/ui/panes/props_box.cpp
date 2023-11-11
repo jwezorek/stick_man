@@ -4,9 +4,9 @@
 #include "bone_properties.h"
 #include "../canvas/canvas.h"
 
-props::props_box::props_box(
+ui::pane::props::props_box::props_box(
         const current_canvas_fn& fn,
-        ui::selection_properties* parent, QString title) :
+        selection_properties* parent, QString title) :
     QWidget(parent),
     get_current_canv_(fn),
     parent_(parent),
@@ -16,7 +16,7 @@ props::props_box::props_box(
     hide();
 }
 
-void props::props_box::do_property_name_change(const std::string& new_name) {
+void ui::pane::props::props_box::do_property_name_change(const std::string& new_name) {
     auto maybe_piece = ui::selected_single_model(get_current_canv_());
     if (!maybe_piece) {
         return;
@@ -24,7 +24,7 @@ void props::props_box::do_property_name_change(const std::string& new_name) {
     proj_->rename(*maybe_piece, new_name);
 }
 
-void props::props_box::handle_rename(mdl::skel_piece p,
+void ui::pane::props::props_box::handle_rename(mdl::skel_piece p,
     ui::string_edit* name_edit, const std::string& new_name)
 {
     auto maybe_piece = ui::selected_single_model(get_current_canv_());
@@ -39,31 +39,31 @@ void props::props_box::handle_rename(mdl::skel_piece p,
     }
 }
 
-void props::props_box::set_title(QString title) {
+void ui::pane::props::props_box::set_title(QString title) {
     title_->setText(title);
 }
 
-void props::props_box::init(mdl::project& proj) {
+void ui::pane::props::props_box::init(mdl::project& proj) {
     populate(proj);
     layout_->addStretch();
     proj_ = &proj;
 }
 
-void props::props_box::populate(mdl::project& proj) {
+void ui::pane::props::props_box::populate(mdl::project& proj) {
 
 }
 
-void props::props_box::lose_selection() {
+void ui::pane::props::props_box::lose_selection() {
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
-props::single_or_multi_props_widget::single_or_multi_props_widget(
-        const props::current_canvas_fn& fn, ui::selection_properties* parent, QString title) :
+ui::pane::props::single_or_multi_props_widget::single_or_multi_props_widget(
+        const props::current_canvas_fn& fn, selection_properties* parent, QString title) :
     props::props_box(fn, parent, title)
 {}
 
-void props::single_or_multi_props_widget::set_selection(const ui::canvas& canv) {
+void ui::pane::props::single_or_multi_props_widget::set_selection(const ui::canvas& canv) {
     set_selection_common(canv);
     if (is_multi(canv)) {
         set_selection_multi(canv);
@@ -75,28 +75,28 @@ void props::single_or_multi_props_widget::set_selection(const ui::canvas& canv) 
 
 /*------------------------------------------------------------------------------------------------*/
 
-props::no_properties::no_properties(const props::current_canvas_fn& fn,
-        ui::selection_properties* parent) :
-        props::props_box(fn, parent, "no selection") {
+ui::pane::props::no_properties::no_properties(const props::current_canvas_fn& fn,
+        selection_properties* parent) :
+        props_box(fn, parent, "no selection") {
 }
 
-void props::no_properties::set_selection(const ui::canvas& canv) {
+void ui::pane::props::no_properties::set_selection(const ui::canvas& canv) {
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
-props::mixed_properties::mixed_properties::mixed_properties(
-        const props::current_canvas_fn& fn, ui::selection_properties* parent) :
+ui::pane::props::mixed_properties::mixed_properties::mixed_properties(
+        const current_canvas_fn& fn, selection_properties* parent) :
     props_box(fn, parent, "") {
 }
 
-void props::mixed_properties::populate(mdl::project& proj) {
+void ui::pane::props::mixed_properties::populate(mdl::project& proj) {
     layout_->addWidget(
-        nodes_ = new props::node_properties(get_current_canv_, parent_)
+        nodes_ = new props::nodes(get_current_canv_, parent_)
     );
     layout_->addWidget(ui::horz_separator());
     layout_->addWidget(
-        bones_ = new props::bone_properties(get_current_canv_, parent_)
+        bones_ = new props::bones(get_current_canv_, parent_)
     );
     nodes_->populate(proj);
     bones_->populate(proj);
@@ -104,12 +104,12 @@ void props::mixed_properties::populate(mdl::project& proj) {
     bones_->show();
 }
 
-void props::mixed_properties::set_selection(const ui::canvas& canv) {
+void ui::pane::props::mixed_properties::set_selection(const ui::canvas& canv) {
     nodes_->set_selection(canv);
     bones_->set_selection(canv);
 }
 
-void props::mixed_properties::lose_selection() {
+void ui::pane::props::mixed_properties::lose_selection() {
     nodes_->lose_selection();
     bones_->lose_selection();
 }

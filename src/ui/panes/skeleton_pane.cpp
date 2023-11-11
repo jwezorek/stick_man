@@ -178,7 +178,7 @@ namespace{
     }
 }
 
-void ui::skeleton_pane::expand_selected_items() {
+void ui::pane::skeleton::expand_selected_items() {
 
 	QAbstractItemModel* model = skeleton_tree_->model();
 	QItemSelectionModel* selectionModel = skeleton_tree_->selectionModel();
@@ -195,7 +195,7 @@ void ui::skeleton_pane::expand_selected_items() {
 	}
 }
 
-void ui::skeleton_pane::sync_with_model(sm::world& model)
+void ui::pane::skeleton::sync_with_model(sm::world& model)
 {
 	disconnect_tree_sel_handler();
 
@@ -225,7 +225,7 @@ void ui::skeleton_pane::sync_with_model(sm::world& model)
 	connect_tree_sel_handler();
 }
 
-void ui::skeleton_pane::handle_tree_selection_change(
+void ui::pane::skeleton::handle_tree_selection_change(
 		const QItemSelection&, const QItemSelection&) {
 
     disconnect_tree_sel_handler();
@@ -271,7 +271,7 @@ void ui::skeleton_pane::handle_tree_selection_change(
     connect_tree_sel_handler();
 }
 
-void ui::skeleton_pane::traverse_tree_items(const std::function<void(QStandardItem*)>& callback_visitor) {
+void ui::pane::skeleton::traverse_tree_items(const std::function<void(QStandardItem*)>& callback_visitor) {
     auto& model = *(static_cast<QStandardItemModel*>(skeleton_tree_->model()));
 
     auto visit_item = [&](this auto&& self, QStandardItem* itm)->void {
@@ -290,7 +290,7 @@ void ui::skeleton_pane::traverse_tree_items(const std::function<void(QStandardIt
     }
 }
 
-void ui::skeleton_pane::handle_rename(mdl::skel_piece piece, const std::string& new_name) {
+void ui::pane::skeleton::handle_rename(mdl::skel_piece piece, const std::string& new_name) {
     if (std::holds_alternative<sm::node_ref>(piece)) {
         return;
     }
@@ -307,7 +307,7 @@ void ui::skeleton_pane::handle_rename(mdl::skel_piece piece, const std::string& 
     );
 }
 
-bool ui::skeleton_pane::validate_props_name_change(const std::string& new_name) {
+bool ui::pane::skeleton::validate_props_name_change(const std::string& new_name) {
 	auto model_item = selected_single_model(canvas());
 	if (!model_item) {
 		return false;
@@ -327,7 +327,7 @@ bool ui::skeleton_pane::validate_props_name_change(const std::string& new_name) 
 	);
 }
 
-ui::skeleton_pane::skeleton_pane(ui::stick_man* mw) :
+ui::pane::skeleton::skeleton(ui::stick_man* mw) :
         canvases_(nullptr),
         project_(nullptr),
 		QDockWidget(tr(""), mw) {
@@ -350,7 +350,7 @@ ui::skeleton_pane::skeleton_pane(ui::stick_man* mw) :
 	connect_tree_change_handler();
 }
 
-ui::selection_properties& ui::skeleton_pane::sel_properties() {
+ui::pane::selection_properties& ui::pane::skeleton::sel_properties() {
 	return *sel_properties_;
 }
 
@@ -368,7 +368,7 @@ void expand_item(QStandardItem* item, QTreeView* treeView) {
     treeView->scrollTo(item->index(), QAbstractItemView::PositionAtCenter);
 }
 
-void ui::skeleton_pane::select_item(QStandardItem* item, bool select = true) {
+void ui::pane::skeleton::select_item(QStandardItem* item, bool select = true) {
 
     expand_item(item, skeleton_tree_);
 
@@ -395,28 +395,28 @@ void ui::skeleton_pane::select_item(QStandardItem* item, bool select = true) {
 
 }
 
-void ui::skeleton_pane::connect_canv_cont_handler() {
+void ui::pane::skeleton::connect_canv_cont_handler() {
     canv_content_conn_ = connect(canvases_, &canvas_manager::canvas_refresh,
-        this, &ui::skeleton_pane::sync_with_model
+        this, &ui::pane::skeleton::sync_with_model
     );
 }
 
-void ui::skeleton_pane::disconnect_canv_cont_handler() {
+void ui::pane::skeleton::disconnect_canv_cont_handler() {
     disconnect(canv_content_conn_);
 }
 
-void ui::skeleton_pane::connect_canv_sel_handler() {
+void ui::pane::skeleton::connect_canv_sel_handler() {
 	auto& canv = canvas();
 	canv_sel_conn_ = connect(&canv.manager(), &ui::canvas_manager::selection_changed,
-		this, &ui::skeleton_pane::handle_canv_sel_change
+		this, &ui::pane::skeleton::handle_canv_sel_change
 	);
 }
 
-void ui::skeleton_pane::disconnect_canv_sel_handler() {
+void ui::pane::skeleton::disconnect_canv_sel_handler() {
 	disconnect(canv_sel_conn_);
 }
 
-void ui::skeleton_pane::init(canvas_manager& canvases, mdl::project& proj) {
+void ui::pane::skeleton::init(canvas_manager& canvases, mdl::project& proj) {
     project_ = &proj;
     canvases_ = &canvases;
 	sel_properties_->init(canvases, proj);
@@ -425,10 +425,10 @@ void ui::skeleton_pane::init(canvas_manager& canvases, mdl::project& proj) {
 	connect_canv_sel_handler();
 	connect_tree_sel_handler();
 
-    connect(project_, &mdl::project::name_changed, this, &skeleton_pane::handle_rename);
+    connect(project_, &mdl::project::name_changed, this, &skeleton::handle_rename);
 }
 
-void ui::skeleton_pane::select_items(const std::vector<QStandardItem*>& items, bool emit_signal) {
+void ui::pane::skeleton::select_items(const std::vector<QStandardItem*>& items, bool emit_signal) {
 	if (!emit_signal) {
 		disconnect_tree_sel_handler();
 	}
@@ -441,7 +441,7 @@ void ui::skeleton_pane::select_items(const std::vector<QStandardItem*>& items, b
 	}
 }
 
-void ui::skeleton_pane::handle_canv_sel_change() {
+void ui::pane::skeleton::handle_canv_sel_change() {
 
 	disconnect_tree_sel_handler();
 
@@ -456,7 +456,7 @@ void ui::skeleton_pane::handle_canv_sel_change() {
 	connect_tree_sel_handler();
 }
 
-void ui::skeleton_pane::handle_tree_change(QStandardItem* item) {
+void ui::pane::skeleton::handle_tree_change(QStandardItem* item) {
     auto piece = get_treeitem_var(item);
     auto old_name = std::visit([](auto p) {return p.get().name(); }, piece);
     auto result = project_->rename(piece, item->text().toStdString());
@@ -465,7 +465,7 @@ void ui::skeleton_pane::handle_tree_change(QStandardItem* item) {
     }
 }
 
-std::vector<QStandardItem*> ui::skeleton_pane::selected_items() const {
+std::vector<QStandardItem*> ui::pane::skeleton::selected_items() const {
 	std::vector<QStandardItem*> selection;
 	QItemSelectionModel* sel_model = skeleton_tree_->selectionModel();
 	QModelIndexList selectedIndexes = sel_model->selectedIndexes();
@@ -481,21 +481,21 @@ std::vector<QStandardItem*> ui::skeleton_pane::selected_items() const {
 	return selection;
 }
 
-ui::canvas& ui::skeleton_pane::canvas() {
+ui::canvas& ui::pane::skeleton::canvas() {
 	return canvases_->active_canvas();
 }
 
-void ui::skeleton_pane::connect_tree_change_handler() {
+void ui::pane::skeleton::connect_tree_change_handler() {
 	auto* model = static_cast<QStandardItemModel*>(skeleton_tree_->model());
 	tree_conn_ = connect(model, &QStandardItemModel::itemChanged, this,
-		&skeleton_pane::handle_tree_change
+		&skeleton::handle_tree_change
 	);
 }
-void ui::skeleton_pane::disconnect_tree_change_handler() {
+void ui::pane::skeleton::disconnect_tree_change_handler() {
 	disconnect(tree_conn_);
 }
 
-QTreeView* ui::skeleton_pane::create_skeleton_tree() {
+QTreeView* ui::pane::skeleton::create_skeleton_tree() {
 	QStandardItemModel* model = new QStandardItemModel();
 	QTreeView* treeView = new QTreeView();
 	treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -532,11 +532,11 @@ QTreeView* ui::skeleton_pane::create_skeleton_tree() {
 	return treeView;
 }
 
-void ui::skeleton_pane::connect_tree_sel_handler() {
+void ui::pane::skeleton::connect_tree_sel_handler() {
     tree_sel_conn_ = connect(skeleton_tree_->selectionModel(), &QItemSelectionModel::selectionChanged,
-		this, &ui::skeleton_pane::handle_tree_selection_change);
+		this, &ui::pane::skeleton::handle_tree_selection_change);
 }
 
-void ui::skeleton_pane::disconnect_tree_sel_handler() {
+void ui::pane::skeleton::disconnect_tree_sel_handler() {
 	disconnect(tree_sel_conn_);
 }

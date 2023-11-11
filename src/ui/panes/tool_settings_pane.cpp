@@ -8,13 +8,13 @@ namespace{
 
 }
 
-ui::tool_settings_pane::tool_settings_pane(QMainWindow* wnd) :
+ui::pane::tool_settings::tool_settings(QMainWindow* wnd) :
     QDockWidget(tr(""), wnd) {
 
     setTitleBarWidget( custom_title_bar("tool") );
 }
 
-void ui::tool_settings_pane::set_tool(QString tool_name, QWidget* contents) {
+void ui::pane::tool_settings::set_tool(QString tool_name, QWidget* contents) {
 
     ui::set_custom_title_bar_txt(this, tool_name + " tool");
     if (widget()) {
@@ -29,12 +29,12 @@ void ui::tool_settings_pane::set_tool(QString tool_name, QWidget* contents) {
     }
 }
 
-void ui::tool_settings_pane::on_current_tool_changed(tool& tool) {
+void ui::pane::tool_settings::on_current_tool_changed(tool& tool) {
     tool.populate_settings(this);
 }
 
-void ui::tool_settings_pane::init(tool_manager& tool_mgr) {
+void ui::pane::tool_settings::init(tool_manager& tool_mgr) {
     connect(&tool_mgr, &tool_manager::current_tool_changed,
-        this, &tool_settings_pane::on_current_tool_changed
+        this, &tool_settings::on_current_tool_changed
     );
 }

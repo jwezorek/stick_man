@@ -37,9 +37,9 @@ ui::stick_man::stick_man(QWidget* parent) :
 		was_shown_(false),
 		has_fully_layed_out_widgets_(false),
 		tool_pal_(new tool_palette(this)),
-		anim_pane_(new animation_pane(this)),
-		tool_pane_(new tool_settings_pane(this)),
-		skel_pane_(new skeleton_pane(this)) {
+		anim_pane_(new pane::animation(this)),
+		tool_pane_(new pane::tool_settings(this)),
+		skel_pane_(new pane::skeleton(this)) {
     setDarkTitleBar(winId());
 
     setDockNestingEnabled(true);
@@ -143,12 +143,12 @@ mdl::project& ui::stick_man::project() {
     return project_;
 }
 
-ui::tool_settings_pane& ui::stick_man::tool_pane() {
+ui::pane::tool_settings& ui::stick_man::tool_pane() {
     return *tool_pane_;
 }
 
 
-ui::skeleton_pane& ui::stick_man::skel_pane() {
+ui::pane::skeleton& ui::stick_man::skel_pane() {
 	return *skel_pane_;
 }
 

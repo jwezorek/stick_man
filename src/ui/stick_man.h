@@ -9,9 +9,12 @@
 
 namespace ui {
 
+    namespace pane {
+        class animation;
+        class skeleton;
+    }
+
     class tool_palette;
-    class animation_pane;
-    class skeleton_pane;
     class tool_settings_pane;
 
     class stick_man : public QMainWindow
@@ -33,8 +36,8 @@ namespace ui {
 
         tool_manager& tool_mgr();
         mdl::project& project();
-        tool_settings_pane& tool_pane();
-		skeleton_pane& skel_pane();
+        pane::tool_settings& tool_pane();
+		pane::skeleton& skel_pane();
         canvas_manager& canvases();
 
     private:
@@ -50,9 +53,9 @@ namespace ui {
 
         tool_manager tool_mgr_;
         tool_palette* tool_pal_;
-        animation_pane* anim_pane_;
-        tool_settings_pane* tool_pane_;
-		skeleton_pane* skel_pane_;
+        pane::animation* anim_pane_;
+        pane::tool_settings* tool_pane_;
+		pane::skeleton * skel_pane_;
         canvas_manager* canvases_;
         mdl::project project_;
 		bool was_shown_;

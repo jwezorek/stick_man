@@ -39,7 +39,7 @@ QString ui::tool::icon_rsrc() const {
     return rsrc_;
 }
 
-void ui::tool::populate_settings(tool_settings_pane* pane) {
+void ui::tool::populate_settings(pane::tool_settings* pane) {
     pane->set_tool(name_, settings_widget());
 }
 

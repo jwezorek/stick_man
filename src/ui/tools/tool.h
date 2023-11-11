@@ -44,7 +44,10 @@ namespace ui {
         QString rsrc_name;
     };
 
-    class tool_settings_pane;
+    namespace pane {
+        class tool_settings;
+    }
+
     class canvas_manager;
     class tool_manager;
 
@@ -54,7 +57,7 @@ namespace ui {
         tool_id id() const;
         QString name() const;
         QString icon_rsrc() const;
-        void populate_settings(tool_settings_pane* pane);
+        void populate_settings(pane::tool_settings* pane);
         virtual void activate(canvas_manager& canvases);
         virtual void keyPressEvent(canvas& c, QKeyEvent* event) override;
         virtual void keyReleaseEvent(canvas& c, QKeyEvent* event) override;

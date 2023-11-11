@@ -7,9 +7,13 @@
 
 namespace ui {
 
-    class animation_pane : public QDockWidget {
-    public:
-        animation_pane(QMainWindow* wnd);
-    };
+    namespace pane {
+
+        class animation : public QDockWidget {
+        public:
+            animation(QMainWindow* wnd);
+        };
+
+    }
 
 }
