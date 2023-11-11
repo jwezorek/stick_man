@@ -92,10 +92,10 @@ namespace {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::abstract_canvas_item::abstract_canvas_item() : selection_frame_(nullptr)
+ui::canvas_item::canvas_item() : selection_frame_(nullptr)
 {}
 
-void ui::abstract_canvas_item::sync_to_model() {
+void ui::canvas_item::sync_to_model() {
 	sync_item_to_model();
 	if (!is_selection_frame_only()) {
 		if (selection_frame_) {
@@ -104,12 +104,12 @@ void ui::abstract_canvas_item::sync_to_model() {
 	}
 }
 
-ui::canvas* ui::abstract_canvas_item::canvas() const {
+ui::canvas* ui::canvas_item::canvas() const {
 	auto* ptr = dynamic_cast<const QGraphicsItem*>(this);
 	return static_cast<ui::canvas*>(ptr->scene());
 }
 
-bool ui::abstract_canvas_item::is_selected() const {
+bool ui::canvas_item::is_selected() const {
 	if (!is_selection_frame_only()) {
 		return selection_frame_ && selection_frame_->isVisible();
 	} else {
@@ -117,7 +117,7 @@ bool ui::abstract_canvas_item::is_selected() const {
 	}
 }
 
-void ui::abstract_canvas_item::set_selected(bool selected) {
+void ui::canvas_item::set_selected(bool selected) {
 	if (!is_selection_frame_only()) {
 		if (selected) {
 			if (!selection_frame_) {
@@ -137,27 +137,27 @@ void ui::abstract_canvas_item::set_selected(bool selected) {
 	}
 }
 
-mdl::skel_piece ui::abstract_canvas_item::to_skeleton_piece() {
+mdl::skel_piece ui::canvas_item::to_skeleton_piece() {
     return std::visit(
         []<typename T>(std::reference_wrapper<const T> p)->mdl::skel_piece {
             return const_cast<T&>(p.get());
         },
-        const_cast<const abstract_canvas_item*>(this)->to_skeleton_piece()
+        const_cast<const canvas_item*>(this)->to_skeleton_piece()
     );
 }
 
-ui::abstract_canvas_item::~abstract_canvas_item() {
+ui::canvas_item::~canvas_item() {
 	if (selection_frame_) {
 		delete selection_frame_;
 	}
 }
 
-const QGraphicsItem* ui::abstract_canvas_item::item_body() const {
-	auto* nonconst_this = const_cast<abstract_canvas_item*>(this);
+const QGraphicsItem* ui::canvas_item::item_body() const {
+	auto* nonconst_this = const_cast<canvas_item*>(this);
 	return const_cast<const QGraphicsItem*>(nonconst_this->item_body());
 }
 
-QGraphicsItem* ui::abstract_canvas_item::selection_frame() {
+QGraphicsItem* ui::canvas_item::selection_frame() {
 	return selection_frame_;
 }
 

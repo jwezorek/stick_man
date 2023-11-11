@@ -24,13 +24,13 @@ namespace {
 
 	void deselect_skeleton(ui::canvas& canv) {
 		canv.filter_selection(
-			[](ui::abstract_canvas_item* itm)->bool {
+			[](ui::canvas_item* itm)->bool {
 				return dynamic_cast<ui::skeleton_item*>(itm) == nullptr;
 			}
 		);
 	}
 
-	auto just_nodes_and_bones(std::span<ui::abstract_canvas_item*> itms) {
+	auto just_nodes_and_bones(std::span<ui::canvas_item*> itms) {
 		return itms | rv::filter(
 			[](auto* ptr)->bool {
 				return dynamic_cast<ui::node_item*>(ptr) ||
@@ -43,7 +43,7 @@ namespace {
 	auto items_to_model_set(auto abstract_items) {
 		using U = typename T::model_type;
 		return abstract_items | rv::transform(
-			[](ui::abstract_canvas_item* aci)->U* {
+			[](ui::canvas_item* aci)->U* {
 				auto item_ptr = dynamic_cast<T*>(aci);
 				if (!item_ptr) {
 					return nullptr;
@@ -203,7 +203,7 @@ void ui::selection_tool::handle_drag(canvas& canv, QRectF rect, bool shift_down,
 	}
 
 	clicked_items = just_nodes_and_bones(clicked_items) |
-		r::to<std::vector<ui::abstract_canvas_item*>>();
+		r::to<std::vector<ui::canvas_item*>>();
 	if (clicked_items.empty()) {
 		canv.clear_selection();
 		return;

@@ -36,11 +36,11 @@ namespace ui {
     class node_item;
     class bone_item;
     class skeleton_item;
-    class abstract_canvas_item;
+    class canvas_item;
 
-    using selection_set = std::unordered_set<ui::abstract_canvas_item*>;
+    using selection_set = std::unordered_set<ui::canvas_item*>;
 
-    using item_transform = std::function<void(abstract_canvas_item*)>;
+    using item_transform = std::function<void(canvas_item*)>;
     using node_transform = std::function<void(node_item*)>;
     using bone_transform = std::function<void(bone_item*)>;
 
@@ -86,9 +86,9 @@ namespace ui {
         canvas(input_handler& inp_handler);
         void init();
         node_item* top_node(const QPointF& pt) const;
-        abstract_canvas_item* top_item(const QPointF& pt) const;
-        std::vector<abstract_canvas_item*> items_in_rect(const QRectF& pt) const;
-        std::vector<abstract_canvas_item*> canvas_items() const;
+        canvas_item* top_item(const QPointF& pt) const;
+        std::vector<canvas_item*> items_in_rect(const QRectF& pt) const;
+        std::vector<canvas_item*> canvas_items() const;
         std::vector<node_item*> root_node_items() const;
         std::vector<node_item*> node_items() const;
         std::vector<bone_item*> bone_items() const;
@@ -114,18 +114,18 @@ namespace ui {
         void transform_selection(item_transform trans);
         void transform_selection(node_transform trans);
         void transform_selection(bone_transform trans);
-        void add_to_selection(std::span<abstract_canvas_item*> itms, bool sync = false);
-        void add_to_selection(abstract_canvas_item* itm, bool sync = false);
-        void subtract_from_selection(std::span<abstract_canvas_item*> itms, bool sync = false);
-        void subtract_from_selection(abstract_canvas_item* itm, bool sync = false);
-        void set_selection(std::span<abstract_canvas_item*> itms, bool sync = false);
-        void set_selection(abstract_canvas_item* itm, bool sync = false);
+        void add_to_selection(std::span<canvas_item*> itms, bool sync = false);
+        void add_to_selection(canvas_item* itm, bool sync = false);
+        void subtract_from_selection(std::span<canvas_item*> itms, bool sync = false);
+        void subtract_from_selection(canvas_item* itm, bool sync = false);
+        void set_selection(std::span<canvas_item*> itms, bool sync = false);
+        void set_selection(canvas_item* itm, bool sync = false);
         void clear_selection();
         void clear();
         void show_status_line(const QString& txt);
         void hide_status_line();
-        void filter_selection(std::function<bool(abstract_canvas_item*)> filter);
-        void delete_item(abstract_canvas_item* item, bool emit_signals);
+        void filter_selection(std::function<bool(canvas_item*)> filter);
+        void delete_item(canvas_item* item, bool emit_signals);
         QPointF from_global_to_canvas(const QPoint& pt);
         std::string tab_name() const;
         const canvas_manager& manager() const;

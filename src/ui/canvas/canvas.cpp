@@ -37,8 +37,8 @@ namespace {
     }
 
     template<typename T>
-    std::vector<ui::abstract_canvas_item*> to_stick_man_items(const T& collection) {
-        return ui::to_vector_of_type<ui::abstract_canvas_item*>(collection);
+    std::vector<ui::canvas_item*> to_stick_man_items(const T& collection) {
+        return ui::to_vector_of_type<ui::canvas_item*>(collection);
     }
 
     template<typename T>
@@ -76,8 +76,8 @@ namespace {
         painter->drawLine(ribbon_rect.topLeft(), ribbon_rect.topRight());
     }
 
-    ui::abstract_canvas_item* to_stick_man(QGraphicsItem* itm) {
-        return dynamic_cast<ui::abstract_canvas_item*>(itm);
+    ui::canvas_item* to_stick_man(QGraphicsItem* itm) {
+        return dynamic_cast<ui::canvas_item*>(itm);
     }
 
     void draw_grid_lines(QPainter* painter, const QRectF& r, double line_spacing) {
@@ -295,18 +295,18 @@ void ui::canvas::transform_selection(bone_transform trans) {
     r::for_each(as_range_view_of_type<bone_item>(selection_), trans);
 }
 
-void ui::canvas::add_to_selection(std::span<ui::abstract_canvas_item*> itms, bool sync) {
+void ui::canvas::add_to_selection(std::span<ui::canvas_item*> itms, bool sync) {
     selection_.insert(itms.begin(), itms.end());
 	if (sync) {
 		sync_selection();
 	}
 }
 
-void ui::canvas::add_to_selection(ui::abstract_canvas_item* itm, bool sync) {
+void ui::canvas::add_to_selection(ui::canvas_item* itm, bool sync) {
     add_to_selection({ &itm,1 }, sync);
 }
 
-void ui::canvas::subtract_from_selection(std::span<ui::abstract_canvas_item*> itms, bool sync) {
+void ui::canvas::subtract_from_selection(std::span<ui::canvas_item*> itms, bool sync) {
     for (auto itm : itms) {
         selection_.erase(itm);
     }
@@ -315,16 +315,16 @@ void ui::canvas::subtract_from_selection(std::span<ui::abstract_canvas_item*> it
 	}
 }
 
-void ui::canvas::subtract_from_selection(ui::abstract_canvas_item* itm, bool sync) {
+void ui::canvas::subtract_from_selection(ui::canvas_item* itm, bool sync) {
     subtract_from_selection({ &itm,1 }, sync);
 }
 
-void ui::canvas::set_selection(std::span<ui::abstract_canvas_item*> itms, bool sync) {
+void ui::canvas::set_selection(std::span<ui::canvas_item*> itms, bool sync) {
     selection_.clear();
     add_to_selection(itms,sync);
 }
 
-void ui::canvas::set_selection(ui::abstract_canvas_item* itm, bool sync) {
+void ui::canvas::set_selection(ui::canvas_item* itm, bool sync) {
     set_selection({ &itm,1 },sync);
 }
 
@@ -349,7 +349,7 @@ void ui::canvas::clear() {
 
 void ui::canvas::sync_selection() {
     auto itms = items();
-    for (auto* itm : as_range_view_of_type<ui::abstract_canvas_item>(itms)) {
+    for (auto* itm : as_range_view_of_type<ui::canvas_item>(itms)) {
         bool selected = selection_.contains(itm);
         itm->set_selected(selected);
     }
@@ -370,7 +370,7 @@ void ui::canvas::show_status_line(const QString& txt) {
     setFocus();
 }
 
-void ui::canvas::filter_selection(std::function<bool(abstract_canvas_item*)> filter) {
+void ui::canvas::filter_selection(std::function<bool(canvas_item*)> filter) {
 	selection_set sel;
 	for (auto* aci : selection_) {
 		if (filter(aci)) {
@@ -382,11 +382,11 @@ void ui::canvas::filter_selection(std::function<bool(abstract_canvas_item*)> fil
 	selection_ = sel;
 }
 
-void ui::canvas::delete_item(abstract_canvas_item* deletee, bool emit_signals) {
+void ui::canvas::delete_item(canvas_item* deletee, bool emit_signals) {
 	bool was_selected = deletee->is_selected();
 	if (was_selected) {
 		filter_selection(
-			[deletee](abstract_canvas_item* item)->bool {
+			[deletee](canvas_item* item)->bool {
 				return item != deletee;
 			}
 		);
@@ -461,16 +461,16 @@ ui::node_item* ui::canvas::top_node(const QPointF& pt) const {
     return top_item_of_type<ui::node_item>(*this, pt);
 }
 
-ui::abstract_canvas_item* ui::canvas::top_item(const QPointF& pt) const {
-    return top_item_of_type<ui::abstract_canvas_item>(*this, pt);
+ui::canvas_item* ui::canvas::top_item(const QPointF& pt) const {
+    return top_item_of_type<ui::canvas_item>(*this, pt);
 }
 
-std::vector<ui::abstract_canvas_item*> ui::canvas::items_in_rect(const QRectF& r) const {
-    return to_vector_of_type<ui::abstract_canvas_item>(items(r));
+std::vector<ui::canvas_item*> ui::canvas::items_in_rect(const QRectF& r) const {
+    return to_vector_of_type<ui::canvas_item>(items(r));
 }
 
-std::vector<ui::abstract_canvas_item*> ui::canvas::canvas_items() const {
-    return to_vector_of_type<ui::abstract_canvas_item>(items());
+std::vector<ui::canvas_item*> ui::canvas::canvas_items() const {
+    return to_vector_of_type<ui::canvas_item>(items());
 }
 
 std::vector<ui::node_item*> ui::canvas::root_node_items() const {
