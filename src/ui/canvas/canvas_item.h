@@ -10,6 +10,8 @@
 #include "../../core/sm_types.h"
 #include "../../model/project.h"
 
+/*------------------------------------------------------------------------------------------------*/
+
 namespace ui {
 
 	class canvas;
@@ -61,83 +63,6 @@ namespace ui {
 		QStandardItem* treeview_item() const;
 	};
 
-	class skeleton_item :
-		public has_treeview_item,
-		public has_stick_man_model<skeleton_item, sm::skeleton&>, 
-		public QGraphicsRectItem {
-	private:
-		void sync_item_to_model() override;
-		void sync_sel_frame_to_model() override;
-		QGraphicsItem* create_selection_frame() const override;
-		bool is_selection_frame_only() const override;
-		QGraphicsItem* item_body() override;
-        mdl::const_skel_piece to_skeleton_piece() const override;
-
-	public:
-		using model_type = sm::skeleton;
-		skeleton_item(sm::skeleton& skel, double scale);
-	};
-
-	class node_item :
-		public has_stick_man_model<node_item, sm::node&>, public QGraphicsEllipseItem {
-	private:
-		QGraphicsEllipseItem* pin_;
-		void sync_item_to_model() override;
-		void sync_sel_frame_to_model() override;
-		QGraphicsItem* create_selection_frame() const override;
-		bool is_selection_frame_only() const override;
-	    QGraphicsItem* item_body() override;
-        mdl::const_skel_piece to_skeleton_piece() const override;
-
-		bool is_pinned_;
-	public:
-		using model_type = sm::node;
-
-		node_item(sm::node& node, double scale);
-		void set_pinned(bool pinned);
-		bool is_pinned() const;
-	};
-
-	class rot_constraint_adornment;
-
-	class bone_item :
-		public has_treeview_item,
-		public has_stick_man_model<bone_item, sm::bone&>, 
-		public QGraphicsPolygonItem {
-	private:
-		rot_constraint_adornment* rot_constraint_;
-		QStandardItem* treeview_item_;
-
-		void sync_item_to_model() override;
-		void sync_sel_frame_to_model() override;
-		QGraphicsItem* create_selection_frame() const override;
-		bool is_selection_frame_only() const override;
-		QGraphicsItem* item_body() override;
-		void sync_rotation_constraint_to_model();
-        mdl::const_skel_piece to_skeleton_piece() const override;
-
-	public:
-		using model_type = sm::bone;
-
-		bone_item(sm::bone& bone, double scale);
-		node_item& parent_node_item() const;
-		node_item& child_node_item() const;
-	};
-
-	Q_DECLARE_METATYPE(bone_item*);
-
-	class rot_constraint_adornment : 
-		public QGraphicsEllipseItem {
-
-	public:
-		rot_constraint_adornment();
-		void set(
-			const sm::bone& node,
-			const sm::rot_constraint& constraint,
-			double scale
-		);
-	};
-
 	// T is a graphics item type (node_item, bone_item, or skeleton_item) and 
 	// is provided explicitely by the caller
 	// U is a model type (node, bone, or skeleton) and is deduced.
@@ -169,4 +94,9 @@ namespace ui {
             }
         );
     }
+
+    constexpr auto k_sel_frame_distance = 4.0;
+    constexpr auto k_sel_color = QColorConstants::Svg::turquoise;
+    constexpr auto k_sel_thickness = 3.0;
+    constexpr auto k_node_radius = 8.0;
 }

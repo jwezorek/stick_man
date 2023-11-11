@@ -1,6 +1,7 @@
 #include "skeleton_pane.h"
 #include "../util.h"
-#include "../canvas/canvas_item.h"
+#include "../canvas/skel_item.h"
+#include "../canvas/bone_item.h"
 #include "../canvas/canvas.h"
 #include "../canvas/canvas_manager.h"
 #include "../tools/tools.h"

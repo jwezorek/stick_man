@@ -1,5 +1,7 @@
 #include "move_tool.h"
-#include "../canvas/canvas_item.h"
+#include "../canvas/node_item.h"
+#include "../canvas/bone_item.h"
+#include "../canvas/skel_item.h"
 #include "../panes/tool_settings_pane.h"
 #include "../util.h"
 #include "../../core/sm_skeleton.h"

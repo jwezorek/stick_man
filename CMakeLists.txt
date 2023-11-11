@@ -43,6 +43,9 @@ add_executable(stick_man
     src/ui/panes/node_properties.cpp
     src/ui/panes/bone_properties.cpp
     src/ui/panes/props_box.cpp
+    src/ui/canvas/node_item.cpp
+    src/ui/canvas/bone_item.cpp
+    src/ui/canvas/skel_item.cpp
 )
 
 target_link_libraries(stick_man PRIVATE Qt6::Widgets  Eigen3::Eigen)

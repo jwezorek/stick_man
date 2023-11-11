@@ -1,6 +1,9 @@
 #include "bone_properties.h"
 #include "../canvas/canvas.h"
 #include "../canvas/canvas_item.h"
+#include "../canvas/bone_item.h"
+#include "../canvas/node_item.h"
+#include "../canvas/skel_item.h"
 #include "../panes/skeleton_pane.h"
 #include <ranges>
 #include <functional>

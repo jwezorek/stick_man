@@ -1,6 +1,6 @@
 #include "skeleton_properties.h"
 #include "../canvas/canvas.h"
-#include "../canvas/canvas_item.h"
+#include "../canvas/skel_item.h"
 #include "skeleton_pane.h"
 
 props::skeleton_properties::skeleton_properties(

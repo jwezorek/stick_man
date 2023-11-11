@@ -1,7 +1,7 @@
 #include "node_properties.h"
 #include "../util.h"
 #include "../canvas/canvas.h"
-#include "../canvas/canvas_item.h"
+#include "../canvas/node_item.h"
 #include "skeleton_pane.h"
 #include <ranges>
 

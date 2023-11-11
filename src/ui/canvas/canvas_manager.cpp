@@ -1,5 +1,6 @@
 #include "canvas_manager.h"
 #include "canvas_item.h"
+#include "skel_item.h"
 #include <ranges>
 
 namespace r = std::ranges;

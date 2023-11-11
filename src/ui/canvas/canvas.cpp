@@ -1,5 +1,7 @@
 #include "canvas.h"
-#include "canvas_item.h"
+#include "node_item.h"
+#include "bone_item.h"
+#include "skel_item.h"
 #include "canvas_manager.h"
 #include "../stick_man.h"
 #include "../tools/tools.h"
