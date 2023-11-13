@@ -4,9 +4,11 @@
 #include <QtWidgets>
 #include "scene.h"
 
-class input_handler;
-
 namespace ui {
+
+    namespace tool {
+        class input_handler;
+    }
 
     namespace canvas {
 
@@ -18,7 +20,7 @@ namespace ui {
             QGraphicsView& active_view() const;
             scene* active_canv_;
             QMetaObject::Connection current_tab_conn_;
-            input_handler& inp_handler_;
+            tool::input_handler& inp_handler_;
             drag_mode drag_mode_;
 
             void connect_current_tab_signal();
@@ -33,7 +35,7 @@ namespace ui {
             void clear_canvas(const std::string& canv);
 
         public:
-            manager(input_handler& inp_handler);
+            manager(tool::input_handler& inp_handler);
             void init(mdl::project& proj);
             void clear();
             void center_active_view();

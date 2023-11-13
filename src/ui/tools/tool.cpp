@@ -21,39 +21,39 @@ namespace rv = std::ranges::views;
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::tool::tool(QString name, QString rsrc, tool_id id) :
+ui::tool::tool::tool(QString name, QString rsrc, tool_id id) :
     name_(name),
     rsrc_(rsrc),
     id_(id) {
 }
 
-ui::tool_id ui::tool::id() const {
+ui::tool::tool_id ui::tool::tool::id() const {
     return id_;
 }
 
-QString ui::tool::name() const {
+QString ui::tool::tool::name() const {
     return name_;
 }
 
-QString ui::tool::icon_rsrc() const {
+QString ui::tool::tool::icon_rsrc() const {
     return rsrc_;
 }
 
-void ui::tool::populate_settings(pane::tool_settings* pane) {
+void ui::tool::tool::populate_settings(pane::tool_settings* pane) {
     pane->set_tool(name_, settings_widget());
 }
 
-void ui::tool::activate(canvas::manager& canvases) {}
-void ui::tool::keyPressEvent(canvas::scene& c, QKeyEvent* event) {}
-void ui::tool::keyReleaseEvent(canvas::scene& c, QKeyEvent* event) {}
-void ui::tool::mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {}
-void ui::tool::mouseMoveEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {}
-void ui::tool::mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {}
-void ui::tool::mouseDoubleClickEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {}
-void ui::tool::wheelEvent(canvas::scene& c, QGraphicsSceneWheelEvent* event) {}
-void ui::tool::deactivate(canvas::manager& canvases) {}
-void ui::tool::init(canvas::manager&, mdl::project&) {}
-QWidget* ui::tool::settings_widget() { return nullptr; }
-ui::tool::~tool() {}
+void ui::tool::tool::activate(canvas::manager& canvases) {}
+void ui::tool::tool::keyPressEvent(canvas::scene& c, QKeyEvent* event) {}
+void ui::tool::tool::keyReleaseEvent(canvas::scene& c, QKeyEvent* event) {}
+void ui::tool::tool::mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {}
+void ui::tool::tool::mouseMoveEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {}
+void ui::tool::tool::mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {}
+void ui::tool::tool::mouseDoubleClickEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {}
+void ui::tool::tool::wheelEvent(canvas::scene& c, QGraphicsSceneWheelEvent* event) {}
+void ui::tool::tool::deactivate(canvas::manager& canvases) {}
+void ui::tool::tool::init(canvas::manager&, mdl::project&) {}
+QWidget* ui::tool::tool::settings_widget() { return nullptr; }
+ui::tool::tool::~tool() {}
 
 

@@ -30,8 +30,11 @@ namespace mdl {
 namespace ui {
 
     class stick_man;
-    class tool_manager;
-    class input_handler;
+
+    namespace tool {
+        class tool_manager;
+        class input_handler;
+    }
 
     namespace canvas {
         class manager;
@@ -67,7 +70,7 @@ namespace ui {
             double scale_ = 1.0;
             QString status_line_;
             selection_set selection_;
-            input_handler& inp_handler_;
+            tool::input_handler& inp_handler_;
 
             void sync_selection();
             QGraphicsView& view();
@@ -88,7 +91,7 @@ namespace ui {
 
         public:
 
-            scene(input_handler& inp_handler);
+            scene(tool::input_handler& inp_handler);
             void init();
             item::node* top_node(const QPointF& pt) const;
             item::base* top_item(const QPointF & pt) const;

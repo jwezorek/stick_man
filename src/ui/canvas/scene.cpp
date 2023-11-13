@@ -141,7 +141,7 @@ namespace {
 }
 /*------------------------------------------------------------------------------------------------*/
 
-ui::canvas::scene::scene(input_handler& inp_handler) :
+ui::canvas::scene::scene(tool::input_handler& inp_handler) :
         inp_handler_(inp_handler) {
     setSceneRect(QRectF(-1500, -1500, 3000, 3000));
 }

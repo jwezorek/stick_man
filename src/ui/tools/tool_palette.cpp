@@ -14,10 +14,10 @@ namespace ui {
 
     class tool_btn : public QPushButton {
     private:
-        ui::tool_id id_;
+        ui::tool::tool_id id_;
         QString bkgd_color_str_;
     public:
-        tool_btn(tool_id id, QString icon_rsrc) : id_(id) {
+        tool_btn(tool::tool_id id, QString icon_rsrc) : id_(id) {
             QIcon icon(QString(":/images/") + icon_rsrc);
             setIcon(icon);
             setIconSize(QSize(32, 32));
@@ -34,7 +34,7 @@ namespace ui {
 			setStyleSheet("background-color: " + k_accent_color.name());
         }
 
-        tool_id id() const {
+        tool::tool_id id() const {
             return id_;
         }
     };
@@ -77,9 +77,9 @@ ui::tool_palette::tool_palette(QMainWindow* wnd) :
     );
 }
 
-ui::tool_btn* ui::tool_palette::tool_from_id(tool_id id)
+ui::tool_btn* ui::tool_palette::tool_from_id(tool::tool_id id)
 {
-    if (id == tool_id::none) {
+    if (id == tool::tool_id::none) {
         return nullptr;
     }
     auto tools = this->findChildren<tool_btn*>();
@@ -90,14 +90,14 @@ ui::tool_btn* ui::tool_palette::tool_from_id(tool_id id)
 
 void ui::tool_palette::handle_tool_click(canvas::manager& canvases, tool_btn* btn) {
 
-    tool_id current_tool_id = (tools_.has_current_tool()) ? 
-        tools_.current_tool().id() : tool_id::none;
+    tool::tool_id current_tool_id = (tools_.has_current_tool()) ?
+        tools_.current_tool().id() : tool::tool_id::none;
 
     if (btn->id() == current_tool_id) {
         return;
     }
     
-    if (current_tool_id != tool_id::none) {
+    if (current_tool_id != tool::tool_id::none) {
         tool_from_id(current_tool_id)->deactivate();
     }
 

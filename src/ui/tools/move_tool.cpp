@@ -13,7 +13,7 @@
 
 namespace {
 
-    using move_state = ui::move_tool::move_state;
+    using move_state = ui::tool::move_tool::move_state;
 
     enum class move_mode {
         none = -1,
@@ -225,7 +225,7 @@ namespace {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::move_tool::move_state::move_state() : 
+ui::tool::move_tool::move_state::move_state() :
     canvas_(nullptr), 
     anchor_(nullptr),
     bone_(nullptr),
@@ -233,26 +233,26 @@ ui::move_tool::move_state::move_state() :
 	key_event_(nullptr)
 {}
 
-void ui::move_tool::move_state::set(canvas::scene& c, QGraphicsSceneMouseEvent* evnt) {
+void ui::tool::move_tool::move_state::set(canvas::scene& c, QGraphicsSceneMouseEvent* evnt) {
     canvas_ = &c;
     event_ = evnt;
 }
 
-void  ui::move_tool::move_state::set(canvas::scene& c, QKeyEvent* evnt) {
+void  ui::tool::move_tool::move_state::set(canvas::scene& c, QKeyEvent* evnt) {
     canvas_ = &c;
     key_event_ = evnt;
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::move_tool::move_tool() :
+ui::tool::move_tool::move_tool() :
         settings_(nullptr),
 		btns_(nullptr),
-        tool("move", "move_icon.png", ui::tool_id::move) {
+        tool("move", "move_icon.png", ui::tool::tool_id::move) {
 
 }
 
-void ui::move_tool::keyPressEvent(canvas::scene& c, QKeyEvent* event) {
+void ui::tool::move_tool::keyPressEvent(canvas::scene& c, QKeyEvent* event) {
     auto mode = static_cast<move_mode>(btns_->checkedId());
     if (mode == move_mode::none) {
         return;
@@ -261,7 +261,7 @@ void ui::move_tool::keyPressEvent(canvas::scene& c, QKeyEvent* event) {
     tool_for_mode(mode)->keyPressEvent(state_);
 }
 
-void ui::move_tool::mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool::move_tool::mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {
     auto mode = static_cast<move_mode>(btns_->checkedId());
     if (mode == move_mode::none) {
         return;
@@ -270,7 +270,7 @@ void ui::move_tool::mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEvent* 
     tool_for_mode(mode)->mousePressEvent(state_);
 }
 
-void ui::move_tool::mouseMoveEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool::move_tool::mouseMoveEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {
     auto mode = static_cast<move_mode>(btns_->checkedId());
     if (mode == move_mode::none) {
         return;
@@ -279,7 +279,7 @@ void ui::move_tool::mouseMoveEvent(canvas::scene& c, QGraphicsSceneMouseEvent* e
     tool_for_mode(mode)->mouseMoveEvent(state_);
 }
 
-void ui::move_tool::mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool::move_tool::mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {
     auto mode = static_cast<move_mode>(btns_->checkedId());
     if (mode == move_mode::none) {
         return;
@@ -288,7 +288,7 @@ void ui::move_tool::mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent
     tool_for_mode(mode)->mouseReleaseEvent(state_);
 }
 
-QWidget* ui::move_tool::settings_widget() {
+QWidget* ui::tool::move_tool::settings_widget() {
     if (!settings_) {
         settings_ = new QWidget();
         btns_ = new QButtonGroup(settings_);

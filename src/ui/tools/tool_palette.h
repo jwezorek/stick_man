@@ -21,9 +21,9 @@ namespace ui {
     private:
 
         constexpr static auto k_tool_dim = 64;
-        tool_manager& tools_;
+        tool::tool_manager& tools_;
         void handle_tool_click(canvas::manager& canvases, tool_btn* btn);
-        tool_btn* tool_from_id(tool_id id);
+        tool_btn* tool_from_id(tool::tool_id id);
 
     public:
 

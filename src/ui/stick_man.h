@@ -34,7 +34,7 @@ namespace ui {
 
         void insert_new_tab();
 
-        tool_manager& tool_mgr();
+        tool::tool_manager& tool_mgr();
         mdl::project& project();
         pane::tool_settings& tool_pane();
 		pane::skeleton& skel_pane();
@@ -51,7 +51,7 @@ namespace ui {
 		void resizeEvent(QResizeEvent* event) override;
         void update_undo_and_redo(bool can_redo, bool can_undo);
 
-        tool_manager tool_mgr_;
+        tool::tool_manager tool_mgr_;
         tool_palette* tool_pal_;
         pane::animation* anim_pane_;
         pane::tool_settings* tool_pane_;

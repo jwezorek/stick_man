@@ -135,7 +135,7 @@ void ui::stick_man::insert_new_tab() {
     project_.add_new_tab(new_tab_name);
 }
 
-ui::tool_manager& ui::stick_man::tool_mgr() {
+ui::tool::tool_manager& ui::stick_man::tool_mgr() {
     return tool_mgr_;
 }
 

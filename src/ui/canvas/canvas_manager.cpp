@@ -43,7 +43,7 @@ void ui::canvas::manager::disconnect_current_tab_signal() {
     disconnect(current_tab_conn_);
 }
 
-ui::canvas::manager::manager(input_handler& inp_handler) :
+ui::canvas::manager::manager(tool::input_handler& inp_handler) :
     drag_mode_(drag_mode::none),
     inp_handler_(inp_handler),
     active_canv_(nullptr) {
