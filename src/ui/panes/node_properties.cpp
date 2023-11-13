@@ -109,7 +109,7 @@ void ui::pane::props::nodes::populate(mdl::project& proj) {
         [this](int field) {
             auto& canv = get_current_canv_();
             auto v = positions_->value(field);
-            auto sel = mdl::to_handles(ui::to_model_ptrs(canv.selected_nodes())) |
+            auto sel = mdl::to_handles(ui::canvas::to_model_ptrs(canv.selected_nodes())) |
                 r::to<std::vector<mdl::handle>>();
             if (field == 0) {
                 proj_->transform(sel,
@@ -138,9 +138,9 @@ void ui::pane::props::nodes::populate(mdl::project& proj) {
     );
 }
 
-void ui::pane::props::nodes::set_selection_common(const ui::canvas& canv) {
+void ui::pane::props::nodes::set_selection_common(const ui::canvas::canvas& canv) {
     const auto& sel = canv.selection();
-    auto nodes = ui::to_model_ptrs(ui::as_range_view_of_type<ui::node_item>(sel));
+    auto nodes = ui::canvas::to_model_ptrs(ui::as_range_view_of_type<ui::canvas::node_item>(sel));
     auto x_pos = ui::get_unique_val(nodes |
         rv::transform([](sm::node* n) {return n->world_x(); }));
     auto y_pos = ui::get_unique_val(nodes |
@@ -150,19 +150,19 @@ void ui::pane::props::nodes::set_selection_common(const ui::canvas& canv) {
     positions_->set_value(1, y_pos);
 }
 
-void ui::pane::props::nodes::set_selection_single(const ui::canvas& canv) {
+void ui::pane::props::nodes::set_selection_single(const ui::canvas::canvas& canv) {
     name_->show();
     auto& node = canv.selected_nodes().front()->model();
     name_->set_value(node.name().c_str());
     positions_->unlock();
 }
 
-void ui::pane::props::nodes::set_selection_multi(const ui::canvas& canv) {
+void ui::pane::props::nodes::set_selection_multi(const ui::canvas::canvas& canv) {
     name_->hide();
     positions_->lock_to_primary_tab();
 }
 
-bool ui::pane::props::nodes::is_multi(const ui::canvas& canv) {
+bool ui::pane::props::nodes::is_multi(const ui::canvas::canvas& canv) {
     return canv.selected_nodes().size() > 1;
 }
 

@@ -20,7 +20,7 @@ qreal ui::zoom_tool::scale_from_zoom_level(int zoom_level) {
     return 1.0 / (zoom + 1.0);
 }
 
-void ui::zoom_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::zoom_tool::mouseReleaseEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) {
     if (!event->modifiers().testFlag(Qt::AltModifier)) {
         zoom_level_++;
     }

@@ -24,19 +24,19 @@ namespace rv = std::ranges::views;
 
 namespace {
 
-	void deselect_skeleton(ui::canvas& canv) {
+	void deselect_skeleton(ui::canvas::canvas& canv) {
 		canv.filter_selection(
-			[](ui::canvas_item* itm)->bool {
-				return dynamic_cast<ui::skeleton_item*>(itm) == nullptr;
+			[](ui::canvas::canvas_item* itm)->bool {
+				return dynamic_cast<ui::canvas::skeleton_item*>(itm) == nullptr;
 			}
 		);
 	}
 
-	auto just_nodes_and_bones(std::span<ui::canvas_item*> itms) {
+	auto just_nodes_and_bones(std::span<ui::canvas::canvas_item*> itms) {
 		return itms | rv::filter(
 			[](auto* ptr)->bool {
-				return dynamic_cast<ui::node_item*>(ptr) ||
-					dynamic_cast<ui::bone_item*>(ptr);
+				return dynamic_cast<ui::canvas::node_item*>(ptr) ||
+					dynamic_cast<ui::canvas::bone_item*>(ptr);
 			}
 		);
 	}
@@ -45,7 +45,7 @@ namespace {
 	auto items_to_model_set(auto abstract_items) {
 		using U = typename T::model_type;
 		return abstract_items | rv::transform(
-			[](ui::canvas_item* aci)->U* {
+			[](ui::canvas::canvas_item* aci)->U* {
 				auto item_ptr = dynamic_cast<T*>(aci);
 				if (!item_ptr) {
 					return nullptr;
@@ -59,8 +59,8 @@ namespace {
 
 	std::optional<sm::skel_ref> as_skeleton(auto itms) {
 
-		auto node_set = items_to_model_set<ui::node_item>(itms);
-		auto bone_set = items_to_model_set<ui::bone_item>(itms);
+		auto node_set = items_to_model_set<ui::canvas::node_item>(itms);
+		auto bone_set = items_to_model_set<ui::canvas::bone_item>(itms);
 
 		if (node_set.empty() || bone_set.empty()) {
 			return {};
@@ -126,10 +126,10 @@ ui::selection_tool::selection_tool() :
     tool("selection", "arrow_icon.png", ui::tool_id::selection) {
 }
 
-void ui::selection_tool::init(canvas_manager& canvases, mdl::project& model) {
+void ui::selection_tool::init(canvas::canvas_manager& canvases, mdl::project& model) {
     canvases.connect(
-        &canvases, &canvas_manager::rubber_band_change,
-        [&](canvas& canv, QRect rbr, QPointF from, QPointF to) {
+        &canvases, &canvas::canvas_manager::rubber_band_change,
+        [&](canvas::canvas& canv, QRect rbr, QPointF from, QPointF to) {
             if (from != QPointF{ 0, 0 }) {
                 rubber_band_ = points_to_rect(from, to);
             }
@@ -137,22 +137,22 @@ void ui::selection_tool::init(canvas_manager& canvases, mdl::project& model) {
     );
 }
 
-void ui::selection_tool::activate(canvas_manager& canv_mgr) {
-    canv_mgr.set_drag_mode(ui::drag_mode::rubber_band);
+void ui::selection_tool::activate(canvas::canvas_manager& canv_mgr) {
+    canv_mgr.set_drag_mode(ui::canvas::drag_mode::rubber_band);
     rubber_band_ = {};
 }
 
-void ui::selection_tool::keyReleaseEvent(canvas & c, QKeyEvent * event) {
+void ui::selection_tool::keyReleaseEvent(canvas::canvas & c, QKeyEvent * event) {
 }
 
-void ui::selection_tool::mousePressEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
+void ui::selection_tool::mousePressEvent(canvas::canvas& canv, QGraphicsSceneMouseEvent* event) {
     rubber_band_ = {};
 }
 
-void ui::selection_tool::mouseMoveEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
+void ui::selection_tool::mouseMoveEvent(canvas::canvas& canv, QGraphicsSceneMouseEvent* event) {
 }
 
-void ui::selection_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEvent* event) {
+void ui::selection_tool::mouseReleaseEvent(canvas::canvas& canv, QGraphicsSceneMouseEvent* event) {
     bool shift_down = event->modifiers().testFlag(Qt::ShiftModifier);
     bool ctrl_down = event->modifiers().testFlag(Qt::ControlModifier);
     if (rubber_band_) {
@@ -163,7 +163,7 @@ void ui::selection_tool::mouseReleaseEvent(canvas& canv, QGraphicsSceneMouseEven
 	canv.sync_to_model();
 }
 
-void ui::selection_tool::handle_click(canvas& canv, QPointF pt, bool shift_down, bool ctrl_down) {
+void ui::selection_tool::handle_click(canvas::canvas& canv, QPointF pt, bool shift_down, bool ctrl_down) {
     auto clicked_item = canv.top_item(pt);
     if (!clicked_item) {
         canv.clear_selection();
@@ -185,7 +185,7 @@ void ui::selection_tool::handle_click(canvas& canv, QPointF pt, bool shift_down,
     canv.set_selection(clicked_item, true);
 }
 
-void ui::selection_tool::handle_drag(canvas& canv, QRectF rect, bool shift_down, bool ctrl_down) {
+void ui::selection_tool::handle_drag(canvas::canvas& canv, QRectF rect, bool shift_down, bool ctrl_down) {
     auto clicked_items = canv.items_in_rect(rect);
     if (clicked_items.empty()) {
         canv.clear_selection();
@@ -194,9 +194,9 @@ void ui::selection_tool::handle_drag(canvas& canv, QRectF rect, bool shift_down,
 
 	auto maybe_skeleton = as_skeleton(just_nodes_and_bones(clicked_items));
 	if (maybe_skeleton) {
-		ui::skeleton_item* skel_item = nullptr;
+		ui::canvas::skeleton_item* skel_item = nullptr;
 		if (maybe_skeleton->get().get_user_data().has_value()) {
-			skel_item = &(item_from_model<skeleton_item>(maybe_skeleton->get()));
+			skel_item = &(canvas::item_from_model<canvas::skeleton_item>(maybe_skeleton->get()));
 		} else {
 			skel_item = canv.insert_item(maybe_skeleton->get());
 		}
@@ -205,7 +205,7 @@ void ui::selection_tool::handle_drag(canvas& canv, QRectF rect, bool shift_down,
 	}
 
 	clicked_items = just_nodes_and_bones(clicked_items) |
-		r::to<std::vector<ui::canvas_item*>>();
+		r::to<std::vector<ui::canvas::canvas_item*>>();
 	if (clicked_items.empty()) {
 		canv.clear_selection();
 		return;
@@ -224,8 +224,8 @@ void ui::selection_tool::handle_drag(canvas& canv, QRectF rect, bool shift_down,
     canv.set_selection( clicked_items, true );
 }
 
-void ui::selection_tool::deactivate(canvas_manager& canv_mgr) {
-    canv_mgr.set_drag_mode(ui::drag_mode::none);
+void ui::selection_tool::deactivate(canvas::canvas_manager& canv_mgr) {
+    canv_mgr.set_drag_mode(ui::canvas::drag_mode::none);
 }
 
 QWidget* ui::selection_tool::settings_widget() {

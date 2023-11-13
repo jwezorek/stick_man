@@ -17,7 +17,7 @@ ui::pane::props::props_box::props_box(
 }
 
 void ui::pane::props::props_box::do_property_name_change(const std::string& new_name) {
-    auto maybe_piece = ui::selected_single_model(get_current_canv_());
+    auto maybe_piece = ui::canvas::selected_single_model(get_current_canv_());
     if (!maybe_piece) {
         return;
     }
@@ -27,7 +27,7 @@ void ui::pane::props::props_box::do_property_name_change(const std::string& new_
 void ui::pane::props::props_box::handle_rename(mdl::skel_piece p,
     ui::string_edit* name_edit, const std::string& new_name)
 {
-    auto maybe_piece = ui::selected_single_model(get_current_canv_());
+    auto maybe_piece = ui::canvas::selected_single_model(get_current_canv_());
     if (!maybe_piece) {
         return;
     }
@@ -63,7 +63,7 @@ ui::pane::props::single_or_multi_props_widget::single_or_multi_props_widget(
     props::props_box(fn, parent, title)
 {}
 
-void ui::pane::props::single_or_multi_props_widget::set_selection(const ui::canvas& canv) {
+void ui::pane::props::single_or_multi_props_widget::set_selection(const ui::canvas::canvas& canv) {
     set_selection_common(canv);
     if (is_multi(canv)) {
         set_selection_multi(canv);
@@ -80,7 +80,7 @@ ui::pane::props::no_properties::no_properties(const props::current_canvas_fn& fn
         props_box(fn, parent, "no selection") {
 }
 
-void ui::pane::props::no_properties::set_selection(const ui::canvas& canv) {
+void ui::pane::props::no_properties::set_selection(const ui::canvas::canvas& canv) {
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -104,7 +104,7 @@ void ui::pane::props::mixed_properties::populate(mdl::project& proj) {
     bones_->show();
 }
 
-void ui::pane::props::mixed_properties::set_selection(const ui::canvas& canv) {
+void ui::pane::props::mixed_properties::set_selection(const ui::canvas::canvas& canv) {
     nodes_->set_selection(canv);
     bones_->set_selection(canv);
 }

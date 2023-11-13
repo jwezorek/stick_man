@@ -12,7 +12,7 @@ namespace rv = std::ranges::views;
 namespace {
 
     constexpr auto k_node_zorder = 10;
-    constexpr auto k_pin_radius = ui::k_node_radius - 3.0;
+    constexpr auto k_pin_radius = ui::canvas::k_node_radius - 3.0;
 
     void set_circle(QGraphicsEllipseItem* ei, QPointF pos, double radius, double scale) {
         ei->setPos(0, 0);
@@ -29,8 +29,8 @@ namespace {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::node_item::node_item(sm::node& node, double scale) :
-    has_stick_man_model<ui::node_item, sm::node&>(node),
+ui::canvas::node_item::node_item(sm::node& node, double scale) :
+    has_stick_man_model<ui::canvas::node_item, sm::node&>(node),
     is_pinned_(false),
     pin_(nullptr) {
     auto inv_scale = 1.0 / scale;
@@ -40,7 +40,7 @@ ui::node_item::node_item(sm::node& node, double scale) :
     setZValue(k_node_zorder);
 }
 
-void ui::node_item::set_pinned(bool pinned) {
+void ui::canvas::node_item::set_pinned(bool pinned) {
     if (!pin_) {
         pin_ = new QGraphicsEllipseItem();
         set_circle(pin_, { 0,0 }, k_pin_radius, 1.0 / canvas()->scale());
@@ -50,18 +50,17 @@ void ui::node_item::set_pinned(bool pinned) {
     }
     if (pinned) {
         pin_->show();
-    }
-    else {
+    } else {
         pin_->hide();
     }
     is_pinned_ = pinned;
 }
 
-bool ui::node_item::is_pinned() const {
+bool ui::canvas::node_item::is_pinned() const {
     return is_pinned_;
 }
 
-void ui::node_item::sync_item_to_model() {
+void ui::canvas::node_item::sync_item_to_model() {
     auto& canv = *canvas();
     double inv_scale = 1.0 / canv.scale();
     setPen(QPen(Qt::black, 2.0 * inv_scale));
@@ -71,14 +70,14 @@ void ui::node_item::sync_item_to_model() {
     }
 }
 
-void ui::node_item::sync_sel_frame_to_model() {
+void ui::canvas::node_item::sync_sel_frame_to_model() {
     auto* sf = static_cast<QGraphicsEllipseItem*>(selection_frame_);
     auto inv_scale = 1.0 / canvas()->scale();
     set_circle(sf, { 0,0 }, k_node_radius + k_sel_frame_distance, inv_scale);
     sf->setPen(QPen(k_sel_color, k_sel_thickness * inv_scale, Qt::DotLine));
 }
 
-QGraphicsItem* ui::node_item::create_selection_frame() const {
+QGraphicsItem* ui::canvas::node_item::create_selection_frame() const {
     auto& canv = *canvas();
     auto inv_scale = 1.0 / canvas()->scale();
     auto sf = new QGraphicsEllipseItem();
@@ -88,15 +87,15 @@ QGraphicsItem* ui::node_item::create_selection_frame() const {
     return sf;
 }
 
-bool ui::node_item::is_selection_frame_only() const {
+bool ui::canvas::node_item::is_selection_frame_only() const {
     return false;
 }
 
-QGraphicsItem* ui::node_item::item_body() {
+QGraphicsItem* ui::canvas::node_item::item_body() {
     return this;
 }
 
-mdl::const_skel_piece ui::node_item::to_skeleton_piece() const {
+mdl::const_skel_piece ui::canvas::node_item::to_skeleton_piece() const {
     auto& node = model();
     return std::ref(node);
 }

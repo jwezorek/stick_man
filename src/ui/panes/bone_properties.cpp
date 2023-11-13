@@ -18,10 +18,10 @@ namespace {
     constexpr double k_default_rot_constraint_min = -std::numbers::pi / 2.0;
     constexpr double k_default_rot_constraint_span = std::numbers::pi;
 
-    void set_rot_constraints(mdl::project& proj, ui::canvas& canv, 
+    void set_rot_constraints(mdl::project& proj, ui::canvas::canvas& canv,
             bool is_parent_relative, double start, double span) {
         proj.transform(
-            mdl::to_handles(ui::to_model_ptrs(canv.selected_bones())) |
+            mdl::to_handles(ui::canvas::to_model_ptrs(canv.selected_bones())) |
             r::to<std::vector<mdl::handle>>(),
             [&](sm::bone& bone) {
                 bone.set_rotation_constraint(start, span, is_parent_relative);
@@ -29,9 +29,9 @@ namespace {
         );
     }
 
-    void remove_rot_constraints(mdl::project& proj, ui::canvas& canv) {
+    void remove_rot_constraints(mdl::project& proj, ui::canvas::canvas& canv) {
         proj.transform(
-            mdl::to_handles(ui::to_model_ptrs(canv.selected_bones())) |
+            mdl::to_handles(ui::canvas::to_model_ptrs(canv.selected_bones())) |
             r::to<std::vector<mdl::handle>>(),
             [](sm::bone& bone) {
                 bone.remove_rotation_constraint();
@@ -39,9 +39,9 @@ namespace {
         );
     }
 
-    std::vector<sm::bone*> topological_sort_selected_bones(ui::canvas& canv) {
+    std::vector<sm::bone*> topological_sort_selected_bones(ui::canvas::canvas& canv) {
         auto bone_items = canv.selected_bones();
-        std::unordered_set<sm::bone*> selected = ui::to_model_ptrs(bone_items) |
+        std::unordered_set<sm::bone*> selected = ui::canvas::to_model_ptrs(bone_items) |
             r::to< std::unordered_set<sm::bone*>>();
         std::vector<sm::bone*> ordered_bones;
         auto skeletons = canv.skeleton_items();
@@ -61,7 +61,7 @@ namespace {
         return ordered_bones;
     }
 
-    void set_selected_bone_length(mdl::project& proj, ui::canvas& canv, double new_length) {
+    void set_selected_bone_length(mdl::project& proj, ui::canvas::canvas& canv, double new_length) {
         auto ordered = topological_sort_selected_bones(canv);
         proj.transform(
             mdl::to_handles(rv::all(ordered)) | r::to<std::vector<mdl::handle>>(),
@@ -71,7 +71,7 @@ namespace {
         );
     }
 
-    void set_selected_bone_rotation(mdl::project& proj, ui::canvas& canv, double theta) {
+    void set_selected_bone_rotation(mdl::project& proj, ui::canvas::canvas& canv, double theta) {
         auto ordered = topological_sort_selected_bones(canv);
         // sort bones into topological order and then set world rotation...
         proj.transform(
@@ -91,7 +91,7 @@ namespace ui {
                 ui::labeled_numeric_val* start_angle_;
                 ui::labeled_numeric_val* span_angle_;
                 QComboBox* mode_;
-                ui::canvas& canv_;
+                ui::canvas::canvas& canv_;
                 mdl::project& proj_;
 
                 bool is_constraint_relative_to_parent() const {
@@ -112,7 +112,7 @@ namespace ui {
                     return ui::degrees_to_radians(*span_angle_->num_edit()->value());
                 }
 
-                void set_constraint_angle(mdl::project& proj, ui::canvas& canv, double val, bool is_start_angle) {
+                void set_constraint_angle(mdl::project& proj, ui::canvas::canvas& canv, double val, bool is_start_angle) {
                     auto theta = ui::degrees_to_radians(val);
                     auto start_angle = is_start_angle ? theta : constraint_start_angle();
                     auto span_angle = is_start_angle ? constraint_span_angle() : theta;
@@ -121,7 +121,7 @@ namespace ui {
                     canv.sync_to_model();
                 }
 
-                void set_constraint_mode(mdl::project& proj, ui::canvas& canv, bool relative_to_parent) {
+                void set_constraint_mode(mdl::project& proj, ui::canvas::canvas& canv, bool relative_to_parent) {
                     set_rot_constraints(proj, canv,
                         relative_to_parent, constraint_start_angle(), constraint_span_angle()
                     );
@@ -141,7 +141,7 @@ namespace ui {
                 }
 
             public:
-                rot_constraint_box(QPushButton* btn, ui::canvas& canv, mdl::project& proj) :
+                rot_constraint_box(QPushButton* btn, ui::canvas::canvas& canv, mdl::project& proj) :
                     btn_(btn),
                     start_angle_(nullptr),
                     span_angle_(nullptr),
@@ -196,7 +196,7 @@ namespace ui {
                         return;
                     }
                     sm::bone& bone = bones.front()->model();
-                    auto& node_itm = ui::item_from_model<ui::node_item>(
+                    auto& node_itm = ui::canvas::item_from_model<ui::canvas::node_item>(
                         (parent_node) ? bone.parent_node() : bone.child_node()
                     );
                     canv.set_selection(&node_itm, true);
@@ -251,7 +251,7 @@ namespace ui {
     }
 }
 
-void ui::pane::props::bones::add_or_delete_constraint(mdl::project& proj, ui::canvas& canv) {
+void ui::pane::props::bones::add_or_delete_constraint(mdl::project& proj, ui::canvas::canvas& canv) {
     bool is_adding = !constraint_box_->isVisible();
     if (is_adding) {
         set_rot_constraints(proj, canv, true,
@@ -358,13 +358,13 @@ void ui::pane::props::bones::populate(mdl::project& proj) {
     );
 }
 
-bool ui::pane::props::bones::is_multi(const ui::canvas& canv) {
+bool ui::pane::props::bones::is_multi(const ui::canvas::canvas& canv) {
     return canv.selected_bones().size() > 1;
 }
 
-void ui::pane::props::bones::set_selection_common(const ui::canvas& canv) {
+void ui::pane::props::bones::set_selection_common(const ui::canvas::canvas& canv) {
     const auto& sel = canv.selection();
-    auto bones = ui::to_model_ptrs(ui::as_range_view_of_type<ui::bone_item>(sel));
+    auto bones = ui::canvas::to_model_ptrs(ui::as_range_view_of_type<ui::canvas::bone_item>(sel));
     auto length = get_unique_val(bones |
         rv::transform([](sm::bone* b) {return b->scaled_length(); }));
     length_->num_edit()->set_value(length);
@@ -374,7 +374,7 @@ void ui::pane::props::bones::set_selection_common(const ui::canvas& canv) {
     rotation_->set_value(0, world_rot.transform(ui::radians_to_degrees));
 }
 
-void ui::pane::props::bones::set_selection_multi(const ui::canvas& canv) {
+void ui::pane::props::bones::set_selection_multi(const ui::canvas::canvas& canv) {
     name_->hide();
     nodes_->hide();
     constraint_box_->hide();
@@ -382,7 +382,7 @@ void ui::pane::props::bones::set_selection_multi(const ui::canvas& canv) {
     rotation_->lock_to_primary_tab();
 }
 
-void ui::pane::props::bones::set_selection_single(const ui::canvas& canv) {
+void ui::pane::props::bones::set_selection_single(const ui::canvas::canvas& canv) {
     name_->show();
     nodes_->show();
     constraint_btn_->show();

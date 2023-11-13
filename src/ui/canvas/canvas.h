@@ -32,106 +32,109 @@ namespace ui {
     class stick_man;
     class tool_manager;
     class input_handler;
-    class canvas_manager;
-    class node_item;
-    class bone_item;
-    class skeleton_item;
-    class canvas_item;
 
-    using selection_set = std::unordered_set<ui::canvas_item*>;
+    namespace canvas {
+        class canvas_item;
+        class canvas_manager;
+        class node_item;
+        class bone_item;
+        class skeleton_item;
 
-    using item_transform = std::function<void(canvas_item*)>;
-    using node_transform = std::function<void(node_item*)>;
-    using bone_transform = std::function<void(bone_item*)>;
+        using selection_set = std::unordered_set<canvas_item*>;
 
-    enum class drag_mode {
-        none,
-        pan,
-        rubber_band
-    };
+        using item_transform = std::function<void(canvas_item*)>;
+        using node_transform = std::function<void(node_item*)>;
+        using bone_transform = std::function<void(bone_item*)>;
 
-    class canvas : public QGraphicsScene {
+        enum class drag_mode {
+            none,
+            pan,
+            rubber_band
+        };
 
-        Q_OBJECT
+        class canvas : public QGraphicsScene {
 
-        friend class canvas_manager;
+            Q_OBJECT
 
-    private:
+                friend class canvas_manager;
 
-        constexpr static auto k_grid_line_spacing = 10;
-        double scale_ = 1.0;
-        QString status_line_;
-        selection_set selection_;
-        input_handler& inp_handler_;
+        private:
 
-        void sync_selection();
-        QGraphicsView& view();
-        const QGraphicsView& view() const;
-        void set_drag_mode(drag_mode dm);
-        void set_contents(const std::vector<sm::skel_ref>& contents);
+            constexpr static auto k_grid_line_spacing = 10;
+            double scale_ = 1.0;
+            QString status_line_;
+            selection_set selection_;
+            input_handler& inp_handler_;
 
-        void keyPressEvent(QKeyEvent* event) override;
-        void keyReleaseEvent(QKeyEvent* event) override;
-        void mousePressEvent(QGraphicsSceneMouseEvent* event) override;
-        void mouseMoveEvent(QGraphicsSceneMouseEvent* event) override;
-        void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override;
-        void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override;
-        void wheelEvent(QGraphicsSceneWheelEvent* event) override;
-        void drawBackground(QPainter* painter, const QRectF& rect) override;
-        void drawForeground(QPainter* painter, const QRectF& rect) override;
-        void focusOutEvent(QFocusEvent* focusEvent) override;
+            void sync_selection();
+            QGraphicsView& view();
+            const QGraphicsView& view() const;
+            void set_drag_mode(drag_mode dm);
+            void set_contents(const std::vector<sm::skel_ref>& contents);
 
-    public:
+            void keyPressEvent(QKeyEvent* event) override;
+            void keyReleaseEvent(QKeyEvent* event) override;
+            void mousePressEvent(QGraphicsSceneMouseEvent* event) override;
+            void mouseMoveEvent(QGraphicsSceneMouseEvent* event) override;
+            void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override;
+            void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override;
+            void wheelEvent(QGraphicsSceneWheelEvent* event) override;
+            void drawBackground(QPainter* painter, const QRectF& rect) override;
+            void drawForeground(QPainter* painter, const QRectF& rect) override;
+            void focusOutEvent(QFocusEvent* focusEvent) override;
 
-        canvas(input_handler& inp_handler);
-        void init();
-        node_item* top_node(const QPointF& pt) const;
-        canvas_item* top_item(const QPointF& pt) const;
-        std::vector<canvas_item*> items_in_rect(const QRectF& pt) const;
-        std::vector<canvas_item*> canvas_items() const;
-        std::vector<node_item*> root_node_items() const;
-        std::vector<node_item*> node_items() const;
-        std::vector<bone_item*> bone_items() const;
-        std::vector<skeleton_item*> skeleton_items() const;
+        public:
 
-        void set_scale(double scale, std::optional<QPointF> pt = {});
-        double scale() const;
-        void sync_to_model();
+            canvas(input_handler& inp_handler);
+            void init();
+            node_item* top_node(const QPointF& pt) const;
+            canvas_item* top_item(const QPointF& pt) const;
+            std::vector<canvas_item*> items_in_rect(const QRectF& pt) const;
+            std::vector<canvas_item*> canvas_items() const;
+            std::vector<node_item*> root_node_items() const;
+            std::vector<node_item*> node_items() const;
+            std::vector<bone_item*> bone_items() const;
+            std::vector<skeleton_item*> skeleton_items() const;
 
-        const selection_set& selection() const;
-        //sel_type selection_type() const;
+            void set_scale(double scale, std::optional<QPointF> pt = {});
+            double scale() const;
+            void sync_to_model();
 
-        skeleton_item* selected_skeleton() const;
-        std::vector<bone_item*> selected_bones() const;
-        std::vector<node_item*> selected_nodes() const;
+            const selection_set& selection() const;
+            //sel_type selection_type() const;
 
-        bool is_status_line_visible() const;
+            skeleton_item* selected_skeleton() const;
+            std::vector<bone_item*> selected_bones() const;
+            std::vector<node_item*> selected_nodes() const;
 
-        node_item* insert_item(sm::node& node);
-        bone_item* insert_item(sm::bone& bone);
-        skeleton_item* insert_item(sm::skeleton& skel);
+            bool is_status_line_visible() const;
 
-        void transform_selection(item_transform trans);
-        void transform_selection(node_transform trans);
-        void transform_selection(bone_transform trans);
-        void add_to_selection(std::span<canvas_item*> itms, bool sync = false);
-        void add_to_selection(canvas_item* itm, bool sync = false);
-        void subtract_from_selection(std::span<canvas_item*> itms, bool sync = false);
-        void subtract_from_selection(canvas_item* itm, bool sync = false);
-        void set_selection(std::span<canvas_item*> itms, bool sync = false);
-        void set_selection(canvas_item* itm, bool sync = false);
-        void clear_selection();
-        void clear();
-        void show_status_line(const QString& txt);
-        void hide_status_line();
-        void filter_selection(std::function<bool(canvas_item*)> filter);
-        void delete_item(canvas_item* item, bool emit_signals);
-        QPointF from_global_to_canvas(const QPoint& pt);
-        std::string tab_name() const;
-        const canvas_manager& manager() const;
-        canvas_manager& manager(); 
-        std::optional<sm::point> cursor_pos() const;
-    };
+            node_item* insert_item(sm::node& node);
+            bone_item* insert_item(sm::bone& bone);
+            skeleton_item* insert_item(sm::skeleton& skel);
 
-    std::optional<mdl::skel_piece> selected_single_model(const ui::canvas& canv);
+            void transform_selection(item_transform trans);
+            void transform_selection(node_transform trans);
+            void transform_selection(bone_transform trans);
+            void add_to_selection(std::span<canvas_item*> itms, bool sync = false);
+            void add_to_selection(canvas_item* itm, bool sync = false);
+            void subtract_from_selection(std::span<canvas_item*> itms, bool sync = false);
+            void subtract_from_selection(canvas_item* itm, bool sync = false);
+            void set_selection(std::span<canvas_item*> itms, bool sync = false);
+            void set_selection(canvas_item* itm, bool sync = false);
+            void clear_selection();
+            void clear();
+            void show_status_line(const QString& txt);
+            void hide_status_line();
+            void filter_selection(std::function<bool(canvas_item*)> filter);
+            void delete_item(canvas_item* item, bool emit_signals);
+            QPointF from_global_to_canvas(const QPoint& pt);
+            std::string tab_name() const;
+            const canvas_manager& manager() const;
+            canvas_manager& manager();
+            std::optional<sm::point> cursor_pos() const;
+        };
+
+        std::optional<mdl::skel_piece> selected_single_model(const canvas& canv);
+    }
 }

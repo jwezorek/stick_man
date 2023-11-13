@@ -41,7 +41,7 @@ namespace {
 	std::vector<sm::node_ref> pinned_nodes(sm::node& node) {
 		std::vector<sm::node_ref> pinned_nodes;
 		auto visit_node = [&pinned_nodes](sm::node& j)->sm::visit_result {
-			ui::node_item& ni = ui::item_from_model<ui::node_item>(j);
+			ui::canvas::node_item& ni = ui::canvas::item_from_model<ui::canvas::node_item>(j);
 			if (ni.is_pinned()) {
 				pinned_nodes.emplace_back(j);
 			}
@@ -68,21 +68,21 @@ namespace {
         virtual void mouseReleaseEvent(move_state& ms) = 0;
     };
 
-    ui::bone_item* parent_bone(ui::node_item* j) {
+    ui::canvas::bone_item* parent_bone(ui::canvas::node_item* j) {
         auto maybe_parent_bone = j->model().parent_bone();
         if (!maybe_parent_bone) {
             return nullptr;
         }
-        return &ui::item_from_model<ui::bone_item>(maybe_parent_bone->get());
+        return &ui::canvas::item_from_model<ui::canvas::bone_item>(maybe_parent_bone->get());
     }
 
-    ui::node_item* parent_node(ui::node_item* j) {
+    ui::canvas::node_item* parent_node(ui::canvas::node_item* j) {
         auto maybe_parent_bone= j->model().parent_bone();
         if (!maybe_parent_bone) {
             return nullptr;
         }
         auto& parent_bone = maybe_parent_bone->get();
-        auto& parent_node = ui::item_from_model<ui::node_item>
+        auto& parent_node = ui::canvas::item_from_model<ui::canvas::node_item>
             (parent_bone.parent_node()
         );
         return &parent_node;
@@ -233,12 +233,12 @@ ui::move_tool::move_state::move_state() :
 	key_event_(nullptr)
 {}
 
-void ui::move_tool::move_state::set(canvas& c, QGraphicsSceneMouseEvent* evnt) {
+void ui::move_tool::move_state::set(canvas::canvas& c, QGraphicsSceneMouseEvent* evnt) {
     canvas_ = &c;
     event_ = evnt;
 }
 
-void  ui::move_tool::move_state::set(canvas& c, QKeyEvent* evnt) {
+void  ui::move_tool::move_state::set(canvas::canvas& c, QKeyEvent* evnt) {
     canvas_ = &c;
     key_event_ = evnt;
 }
@@ -252,7 +252,7 @@ ui::move_tool::move_tool() :
 
 }
 
-void ui::move_tool::keyPressEvent(canvas& c, QKeyEvent* event) {
+void ui::move_tool::keyPressEvent(canvas::canvas& c, QKeyEvent* event) {
     auto mode = static_cast<move_mode>(btns_->checkedId());
     if (mode == move_mode::none) {
         return;
@@ -261,7 +261,7 @@ void ui::move_tool::keyPressEvent(canvas& c, QKeyEvent* event) {
     tool_for_mode(mode)->keyPressEvent(state_);
 }
 
-void ui::move_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::move_tool::mousePressEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) {
     auto mode = static_cast<move_mode>(btns_->checkedId());
     if (mode == move_mode::none) {
         return;
@@ -270,7 +270,7 @@ void ui::move_tool::mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) 
     tool_for_mode(mode)->mousePressEvent(state_);
 }
 
-void ui::move_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::move_tool::mouseMoveEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) {
     auto mode = static_cast<move_mode>(btns_->checkedId());
     if (mode == move_mode::none) {
         return;
@@ -279,7 +279,7 @@ void ui::move_tool::mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
     tool_for_mode(mode)->mouseMoveEvent(state_);
 }
 
-void ui::move_tool::mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::move_tool::mouseReleaseEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) {
     auto mode = static_cast<move_mode>(btns_->checkedId());
     if (mode == move_mode::none) {
         return;

@@ -21,10 +21,10 @@ namespace ui {
                 nodes(const current_canvas_fn& fn, selection_properties* parent);
 
                 void populate(mdl::project& proj) override;
-                void set_selection_common(const ui::canvas& canv) override;
-                void set_selection_single(const ui::canvas& canv) override;
-                void set_selection_multi(const ui::canvas& canv) override;
-                bool is_multi(const ui::canvas& canv) override;
+                void set_selection_common(const ui::canvas::canvas& canv) override;
+                void set_selection_single(const ui::canvas::canvas& canv) override;
+                void set_selection_multi(const ui::canvas::canvas& canv) override;
+                bool is_multi(const ui::canvas::canvas& canv) override;
                 void lose_selection() override;
             };
 

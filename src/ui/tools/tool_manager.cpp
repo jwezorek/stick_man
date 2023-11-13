@@ -24,49 +24,49 @@ ui::tool_manager::tool_manager() :
     tool_registry_.emplace_back(std::make_unique<ui::add_bone_tool>());
 }
 
-void ui::tool_manager::init(canvas_manager& canvases, mdl::project& model) {
+void ui::tool_manager::init(canvas::canvas_manager& canvases, mdl::project& model) {
     for (auto& tool : tool_registry_) {
         tool->init(canvases, model);
     }
 }
 
-void ui::tool_manager::keyPressEvent(ui::canvas& c, QKeyEvent* event) {
+void ui::tool_manager::keyPressEvent(ui::canvas::canvas& c, QKeyEvent* event) {
     if (has_current_tool()) {
         current_tool().keyPressEvent(c, event);
     }
 }
 
-void ui::tool_manager::keyReleaseEvent(ui::canvas& c, QKeyEvent* event) {
+void ui::tool_manager::keyReleaseEvent(ui::canvas::canvas& c, QKeyEvent* event) {
     if (has_current_tool()) {
         current_tool().keyReleaseEvent(c, event);
     }
 }
 
-void ui::tool_manager::mousePressEvent(ui::canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool_manager::mousePressEvent(ui::canvas::canvas& c, QGraphicsSceneMouseEvent* event) {
     if (has_current_tool()) {
         current_tool().mousePressEvent(c, event);
     }
 }
 
-void ui::tool_manager::mouseMoveEvent(ui::canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool_manager::mouseMoveEvent(ui::canvas::canvas& c, QGraphicsSceneMouseEvent* event) {
     if (has_current_tool()) {
         current_tool().mouseMoveEvent(c, event);
     }
 }
 
-void ui::tool_manager::mouseReleaseEvent(ui::canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool_manager::mouseReleaseEvent(ui::canvas::canvas& c, QGraphicsSceneMouseEvent* event) {
     if (has_current_tool()) {
         current_tool().mouseReleaseEvent(c, event);
     }
 }
 
-void ui::tool_manager::mouseDoubleClickEvent(ui::canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool_manager::mouseDoubleClickEvent(ui::canvas::canvas& c, QGraphicsSceneMouseEvent* event) {
     if (has_current_tool()) {
         current_tool().mouseDoubleClickEvent(c, event);
     }
 }
 
-void ui::tool_manager::wheelEvent(ui::canvas& c, QGraphicsSceneWheelEvent* event) {
+void ui::tool_manager::wheelEvent(ui::canvas::canvas& c, QGraphicsSceneWheelEvent* event) {
     if (has_current_tool()) {
         current_tool().wheelEvent(c, event);
     }
@@ -95,7 +95,7 @@ ui::tool& ui::tool_manager::current_tool() const {
     return *tool_registry_.at(curr_item_index_);
 }
 
-void ui::tool_manager::set_current_tool(canvas_manager& canvases, tool_id id) {
+void ui::tool_manager::set_current_tool(canvas::canvas_manager& canvases, tool_id id) {
     int new_tool_index = index_from_id(id);
     if (new_tool_index == curr_item_index_) {
         return;

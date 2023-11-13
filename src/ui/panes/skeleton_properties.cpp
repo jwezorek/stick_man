@@ -31,7 +31,7 @@ void ui::pane::props::skeletons::populate(mdl::project & proj) {
     );
 }
 
-void ui::pane::props::skeletons::set_selection(const ui::canvas& canv) {
+void ui::pane::props::skeletons::set_selection(const ui::canvas::canvas& canv) {
     auto* skel_item = canv.selected_skeleton();
     name_->set_value(skel_item->model().name().c_str());
 }

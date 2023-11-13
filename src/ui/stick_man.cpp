@@ -48,7 +48,7 @@ ui::stick_man::stick_man(QWidget* parent) :
     addDockWidget(Qt::RightDockWidgetArea, skel_pane_);
     addDockWidget(Qt::BottomDockWidgetArea, anim_pane_);
 
-    setCentralWidget(canvases_ = new canvas_manager(tool_mgr_));
+    setCentralWidget(canvases_ = new canvas::canvas_manager(tool_mgr_));
     createMainMenu();
     canvases_->init(project_);
 	skel_pane_->init(*canvases_, project_);
@@ -152,7 +152,7 @@ ui::pane::skeleton& ui::stick_man::skel_pane() {
 	return *skel_pane_;
 }
 
-ui::canvas_manager& ui::stick_man::canvases() {
+ui::canvas::canvas_manager& ui::stick_man::canvases() {
     return *canvases_;
 }
 

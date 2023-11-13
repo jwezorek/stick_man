@@ -88,7 +88,7 @@ ui::tool_btn* ui::tool_palette::tool_from_id(tool_id id)
     );
 }
 
-void ui::tool_palette::handle_tool_click(canvas_manager& canvases, tool_btn* btn) {
+void ui::tool_palette::handle_tool_click(canvas::canvas_manager& canvases, tool_btn* btn) {
 
     tool_id current_tool_id = (tools_.has_current_tool()) ? 
         tools_.current_tool().id() : tool_id::none;

@@ -25,21 +25,21 @@ namespace rv = std::ranges::views;
 
 namespace {
 
-	ui::selection_type type_of_selection(const ui::selection_set& sel) {
+	ui::selection_type type_of_selection(const ui::canvas::selection_set& sel) {
 
 		if (sel.empty()) {
 			return ui::selection_type::none;
 		}
 
-		if (sel.size() == 1 && dynamic_cast<ui::skeleton_item*>(*sel.begin())) {
+		if (sel.size() == 1 && dynamic_cast<ui::canvas::skeleton_item*>(*sel.begin())) {
 			return ui::selection_type::skeleton;
 		}
 
 		bool has_node = false;
 		bool has_bone = false;
 		for (auto itm_ptr : sel) {
-			has_node = dynamic_cast<ui::node_item*>(itm_ptr) || has_node;
-			has_bone = dynamic_cast<ui::bone_item*>(itm_ptr) || has_bone;
+			has_node = dynamic_cast<ui::canvas::node_item*>(itm_ptr) || has_node;
+			has_bone = dynamic_cast<ui::canvas::bone_item*>(itm_ptr) || has_bone;
 			if (has_node && has_bone) {
 				return ui::selection_type::mixed;
 			}
@@ -83,7 +83,7 @@ ui::pane::props::props_box* ui::pane::selection_properties::current_props() cons
     );
 }
 
-void ui::pane::selection_properties::set(const ui::canvas& canv) {
+void ui::pane::selection_properties::set(const ui::canvas::canvas& canv) {
 	auto* old_props = current_props();
 
     QScrollArea* scroller = nullptr;
@@ -100,23 +100,23 @@ void ui::pane::selection_properties::set(const ui::canvas& canv) {
 	old_props->lose_selection();
 	current_props()->set_selection(canv);
 
-	auto bone_items = ui::as_range_view_of_type<ui::bone_item>(canv.selection());
-	for (ui::bone_item* bi : bone_items) {
+	auto bone_items = ui::as_range_view_of_type<ui::canvas::bone_item>(canv.selection());
+	for (ui::canvas::bone_item* bi : bone_items) {
 		auto* tvi = bi->treeview_item();
 	}
 }
 
-void ui::pane::selection_properties::handle_selection_changed(canvas& canv) {
+void ui::pane::selection_properties::handle_selection_changed(canvas::canvas& canv) {
     set(canv);
 }
 
-void ui::pane::selection_properties::init(canvas_manager& canvases, mdl::project& proj)
+void ui::pane::selection_properties::init(canvas::canvas_manager& canvases, mdl::project& proj)
 {
     for (const auto& [key, prop_box] : props_) {
         prop_box->init(proj);
     }
     set(canvases.active_canvas());
-    connect(&canvases, &canvas_manager::selection_changed,
+    connect(&canvases, &canvas::canvas_manager::selection_changed,
         this,
         &selection_properties::handle_selection_changed
     );

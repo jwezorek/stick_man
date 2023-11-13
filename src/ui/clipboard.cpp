@@ -133,7 +133,7 @@ namespace {
     // skeleton item in the UI *or* it returns any sm::skeletons for which all of their nodes
     // and bones are selected.
 
-    std::unordered_set<const sm::skeleton*> get_selected_skeletons(ui::canvas& canv) {
+    std::unordered_set<const sm::skeleton*> get_selected_skeletons(ui::canvas::canvas& canv) {
         std::unordered_set<const sm::skeleton*> selected_skels;
         auto selected_skel = canv.selected_skeleton();
         if (selected_skel) {
@@ -143,12 +143,12 @@ namespace {
                 auto& skel = skel_item->model();
                 bool skel_is_selected = r::all_of(skel.nodes(),
                         [](sm::node_ref nr)->bool {
-                            auto& ni = ui::item_from_model<ui::node_item>(nr.get());
+                            auto& ni = ui::canvas::item_from_model<ui::canvas::node_item>(nr.get());
                             return ni.is_selected();
                         }
                     ) && r::all_of(skel.bones(),
                         [](sm::bone_ref br)->bool {
-                            auto& bi = ui::item_from_model<ui::bone_item>(br.get());
+                            auto& bi = ui::canvas::item_from_model<ui::canvas::bone_item>(br.get());
                             return bi.is_selected();
                         }
                     );
@@ -165,7 +165,7 @@ namespace {
     // just the an item for the whole skeleton.
 
     std::vector<std::tuple<mdl::const_skel_piece, bool>> skeleton_pieces_in_topological_order(
-            ui::canvas& canv, const std::unordered_set<const sm::skeleton*>& skel_set) {
+            ui::canvas::canvas& canv, const std::unordered_set<const sm::skeleton*>& skel_set) {
 
         auto selected_skeletons = get_selected_skeletons(canv);
         auto pieces_and_sel_state = selected_skeletons |
@@ -183,14 +183,14 @@ namespace {
             sm::dfs(
                 skel_ptr->root_node(),
                 [&](const sm::node& node)->sm::visit_result {
-                    auto& ni = ui::item_from_model<ui::node_item>(node);
+                    auto& ni = ui::canvas::item_from_model<ui::canvas::node_item>(node);
                     pieces_and_sel_state.emplace_back(
                         std::ref(node), ni.is_selected()
                     );
                     return sm::visit_result::continue_traversal;
                 },
                 [&](const sm::bone& bone)->sm::visit_result {
-                    auto& bi = ui::item_from_model<ui::bone_item>(bone);
+                    auto& bi = ui::canvas::item_from_model<ui::canvas::bone_item>(bone);
                     pieces_and_sel_state.emplace_back(
                         std::ref(bone), bi.is_selected()
                     );
@@ -210,7 +210,7 @@ namespace {
     // we want. This is what representing arbitrary selections as skeletons entails. 
 
     std::tuple<sm::world, sm::world> split_skeletons_by_selection( 
-            ui::canvas& canv, const std::unordered_set<const sm::skeleton*>& skel_set) {
+            ui::canvas::canvas& canv, const std::unordered_set<const sm::skeleton*>& skel_set) {
         auto pieces = skeleton_pieces_in_topological_order(canv, skel_set);
 
         skeleton_piece_set selection_set;
@@ -256,10 +256,10 @@ namespace {
     // returns the the set of skeletons that are either selected or contain at least one 
     // node or bone that is selected, 
 
-    std::unordered_set<const sm::skeleton*> relavent_skeleton_set(ui::canvas& canv) {
+    std::unordered_set<const sm::skeleton*> relavent_skeleton_set(ui::canvas::canvas& canv) {
         return canv.selection() |
             rv::transform(
-                [](ui::canvas_item* itm)->const sm::skeleton* {
+                [](ui::canvas::canvas_item* itm)->const sm::skeleton* {
                     return std::visit(
                         overload{
                             [](sm::skel_ref skel)->const sm::skeleton* {

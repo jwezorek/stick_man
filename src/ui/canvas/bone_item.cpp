@@ -22,12 +22,11 @@ namespace {
         return { pts };
     }
 
-    void set_bone_item_pos(
-        ui::bone_item* itm, double len, const
-        sm::point& pos, double rot, double scale) {
+    void set_bone_item_pos( ui::canvas::bone_item* itm, double len, const
+            sm::point& pos, double rot, double scale) {
         itm->setPos(0, 0);
         itm->setRotation(0);
-        itm->setPolygon(bone_polygon(len, ui::k_node_radius, scale));
+        itm->setPolygon(bone_polygon(len, ui::canvas::k_node_radius, scale));
         itm->setRotation(ui::radians_to_degrees(rot));
         itm->setPos(ui::to_qt_pt(pos));
     }
@@ -36,9 +35,9 @@ namespace {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::bone_item::bone_item(sm::bone& bone, double scale) :
-    treeview_item_(nullptr),
-    has_stick_man_model<ui::bone_item, sm::bone&>(bone),
+ui::canvas::bone_item::bone_item(sm::bone& bone, double scale) :
+        treeview_item_(nullptr),
+        has_stick_man_model<ui::canvas::bone_item, sm::bone&>(bone),
     rot_constraint_(nullptr) {
     setBrush(Qt::black);
     setPen(QPen(Qt::black, 1.0 / scale));
@@ -52,19 +51,19 @@ ui::bone_item::bone_item(sm::bone& bone, double scale) :
     setZValue(k_bone_zorder);
 }
 
-ui::node_item& ui::bone_item::parent_node_item() const {
-    return std::any_cast<std::reference_wrapper<ui::node_item>>(
+ui::canvas::node_item& ui::canvas::bone_item::parent_node_item() const {
+    return std::any_cast<std::reference_wrapper<ui::canvas::node_item>>(
         model_.parent_node().get_user_data()
     );
 }
 
-ui::node_item& ui::bone_item::child_node_item() const {
-    return std::any_cast<std::reference_wrapper<ui::node_item>>(
+ui::canvas::node_item& ui::canvas::bone_item::child_node_item() const {
+    return std::any_cast<std::reference_wrapper<ui::canvas::node_item>>(
         model_.child_node().get_user_data()
     );
 }
 
-void ui::bone_item::sync_rotation_constraint_to_model() {
+void ui::canvas::bone_item::sync_rotation_constraint_to_model() {
     auto constraint = model().rotation_constraint();
     if (!constraint) {
         if (rot_constraint_) {
@@ -85,12 +84,12 @@ void ui::bone_item::sync_rotation_constraint_to_model() {
     }
 }
 
-mdl::const_skel_piece ui::bone_item::to_skeleton_piece() const {
+mdl::const_skel_piece ui::canvas::bone_item::to_skeleton_piece() const {
     const auto& bone = model();
     return std::ref(bone);
 }
 
-void ui::bone_item::sync_item_to_model() {
+void ui::canvas::bone_item::sync_item_to_model() {
     auto& canv = *canvas();
     setPen(QPen(Qt::black, 1.0 / canv.scale()));
     set_bone_item_pos(
@@ -103,14 +102,14 @@ void ui::bone_item::sync_item_to_model() {
     sync_rotation_constraint_to_model();
 }
 
-void ui::bone_item::sync_sel_frame_to_model() {
+void ui::canvas::bone_item::sync_sel_frame_to_model() {
     auto* sf = static_cast<QGraphicsLineItem*>(selection_frame_);
     auto inv_scale = 1.0 / canvas()->scale();
     sf->setLine(0, 0, model_.scaled_length(), 0);
     sf->setPen(QPen(k_sel_color, k_sel_thickness * inv_scale, Qt::DotLine));
 }
 
-QGraphicsItem* ui::bone_item::create_selection_frame() const {
+QGraphicsItem* ui::canvas::bone_item::create_selection_frame() const {
     auto& canv = *canvas();
     auto inv_scale = 1.0 / canvas()->scale();
     auto sf = new QGraphicsLineItem();
@@ -119,23 +118,23 @@ QGraphicsItem* ui::bone_item::create_selection_frame() const {
     return sf;
 }
 
-bool ui::bone_item::is_selection_frame_only() const {
+bool ui::canvas::bone_item::is_selection_frame_only() const {
     return false;
 }
 
-QGraphicsItem* ui::bone_item::item_body() {
+QGraphicsItem* ui::canvas::bone_item::item_body() {
     return this;
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
 
-ui::rot_constraint_adornment::rot_constraint_adornment() {
+ui::canvas::rot_constraint_adornment::rot_constraint_adornment() {
     setBrush(QBrush(k_sel_color));
     setPen(Qt::NoPen);
 }
 
-void ui::rot_constraint_adornment::set(const sm::bone& bone,
+void ui::canvas::rot_constraint_adornment::set(const sm::bone& bone,
     const sm::rot_constraint& constraint, double scale) {
     QPointF pivot = {};
     double start_angle = 0;

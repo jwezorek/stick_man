@@ -32,17 +32,17 @@ namespace{
 
 	template <>
 	struct item_for_model<sm::node> {
-		using type = ui::node_item;
+		using type = ui::canvas::node_item;
 	};
 
 	template <>
 	struct item_for_model<sm::bone> {
-		using type = ui::bone_item;
+		using type = ui::canvas::bone_item;
 	};
 
 	template <>
 	struct item_for_model<sm::skeleton> {
-		using type = ui::skeleton_item;
+		using type = ui::canvas::skeleton_item;
 	};
 
 	constexpr int k_treeview_max_hgt = 300;
@@ -88,7 +88,7 @@ namespace{
 
 	QStandardItem* make_treeitem(sm::bone& bone) {
 		auto* itm = new QStandardItem(bone.name().c_str());
-		auto& bi = ui::item_from_model<ui::bone_item>(bone);
+		auto& bi = ui::canvas::item_from_model<ui::canvas::bone_item>(bone);
 		set_treeitem_data(itm, bone);
 		bi.set_treeview_item(itm);
 		return itm;
@@ -97,8 +97,8 @@ namespace{
 	QStandardItem* make_treeitem(sm::skeleton& skel) {
 
 		auto* itm = new QStandardItem(skel.name().c_str());
-		ui::skeleton_item* canv_item = nullptr;
-        canv_item = &ui::item_from_model<ui::skeleton_item>(skel);
+		ui::canvas::skeleton_item* canv_item = nullptr;
+        canv_item = &ui::canvas::item_from_model<ui::canvas::skeleton_item>(skel);
 		set_treeitem_data(itm, skel);
 		canv_item->set_treeview_item(itm);
 
@@ -128,7 +128,7 @@ namespace{
 		sm::visit_bones(skel.get().root_node(), visit);
 	}
 
-	bool is_same_bone_selection(const std::vector<ui::bone_item*>& canv_sel,
+	bool is_same_bone_selection(const std::vector<ui::canvas::bone_item*>& canv_sel,
 			const std::vector<QStandardItem*>& tree_sel) {
 		if (canv_sel.size() != tree_sel.size()) {
 			return false;
@@ -157,8 +157,8 @@ namespace{
     // if the selection is all in one canvas return as is; otherwise, remove all
     // items that are not on the active canvas.
 
-    std::vector<ui::canvas_item*> normalize_selection_per_active_canvas(
-        const std::vector<ui::canvas_item*>& itms, const ui::canvas& active_canv) {
+    std::vector<ui::canvas::canvas_item*> normalize_selection_per_active_canvas(
+        const std::vector<ui::canvas::canvas_item*>& itms, const ui::canvas::canvas& active_canv) {
         if (itms.empty()) {
             return {};
         }
@@ -171,10 +171,10 @@ namespace{
         }
         return itms |
             rv::filter(
-                [&active_canv](ui::canvas_item* itm) {
+                [&active_canv](ui::canvas::canvas_item* itm) {
                     return  itm->canvas() == &active_canv;
                 }
-        ) | r::to< std::vector<ui::canvas_item*>>();
+        ) | r::to< std::vector<ui::canvas::canvas_item*>>();
     }
 }
 
@@ -212,11 +212,11 @@ void ui::pane::skeleton::sync_with_model(sm::world& model)
 	//sync the new treeview selection state with the selected bones in the canvas.
 	auto selected_tree_items = canvas().selection() | rv::filter(
 			[](auto* aci)->bool {
-				return aci->is_selected() && dynamic_cast<has_treeview_item*>(aci);
+				return aci->is_selected() && dynamic_cast<canvas::has_treeview_item*>(aci);
 			}
 		) | rv::transform(
 			[](auto* aci)->QStandardItem* {
-				return  dynamic_cast<has_treeview_item*>(aci)->treeview_item();
+				return  dynamic_cast<canvas::has_treeview_item*>(aci)->treeview_item();
 			}
 		) | r::to<std::vector<QStandardItem*>>();
 	select_items(selected_tree_items, true);
@@ -232,7 +232,7 @@ void ui::pane::skeleton::handle_tree_selection_change(
     disconnect_canv_sel_handler();
 
     auto& curr_canv = canvas();
-	std::vector<canvas_item*> sel_canv_items;
+	std::vector<canvas::canvas_item*> sel_canv_items;
 	auto selection = selected_items();
 	QStandardItem* selected_skel = nullptr;
 
@@ -247,14 +247,14 @@ void ui::pane::skeleton::handle_tree_selection_change(
         skeleton_tree_->selectionModel()->clearSelection();
 		select_item(selected_skel, true);
 		sel_canv_items.push_back(
-            &item_from_model<skeleton_item>(
+            &canvas::item_from_model<canvas::skeleton_item>(
                 *get_treeitem_data<sm::skeleton>(selected_skel)
             )
         );
 	} else {
 		for (auto* sel : selection) {
 			sm::bone* bone_ptr = get_treeitem_data<sm::bone>(sel);
-			sel_canv_items.push_back(&item_from_model<bone_item>(*bone_ptr));
+			sel_canv_items.push_back(&canvas::item_from_model<canvas::bone_item>(*bone_ptr));
 		}
         normalize_selection_per_active_canvas(sel_canv_items, curr_canv);
 	}
@@ -339,7 +339,7 @@ ui::pane::skeleton::skeleton(ui::stick_man* mw) :
 
     splitter->addWidget(skeleton_tree_ = create_skeleton_tree());
     splitter->addWidget(sel_properties_ = new selection_properties(
-            [mw]()->ui::canvas& {
+            [mw]()->ui::canvas::canvas& {
                 return mw->canvases().active_canvas();
             },
             this
@@ -396,7 +396,7 @@ void ui::pane::skeleton::select_item(QStandardItem* item, bool select = true) {
 }
 
 void ui::pane::skeleton::connect_canv_cont_handler() {
-    canv_content_conn_ = connect(canvases_, &canvas_manager::canvas_refresh,
+    canv_content_conn_ = connect(canvases_, &canvas::canvas_manager::canvas_refresh,
         this, &ui::pane::skeleton::sync_with_model
     );
 }
@@ -407,7 +407,7 @@ void ui::pane::skeleton::disconnect_canv_cont_handler() {
 
 void ui::pane::skeleton::connect_canv_sel_handler() {
 	auto& canv = canvas();
-	canv_sel_conn_ = connect(&canv.manager(), &ui::canvas_manager::selection_changed,
+	canv_sel_conn_ = connect(&canv.manager(), &ui::canvas::canvas_manager::selection_changed,
 		this, &ui::pane::skeleton::handle_canv_sel_change
 	);
 }
@@ -416,7 +416,7 @@ void ui::pane::skeleton::disconnect_canv_sel_handler() {
 	disconnect(canv_sel_conn_);
 }
 
-void ui::pane::skeleton::init(canvas_manager& canvases, mdl::project& proj) {
+void ui::pane::skeleton::init(canvas::canvas_manager& canvases, mdl::project& proj) {
     project_ = &proj;
     canvases_ = &canvases;
 	sel_properties_->init(canvases, proj);
@@ -446,8 +446,8 @@ void ui::pane::skeleton::handle_canv_sel_change() {
 	disconnect_tree_sel_handler();
 
 	skeleton_tree_->clearSelection();
-	for (canvas_item* canv_itm : canvas().selection()) {
-		auto* treeitem_holder = dynamic_cast<has_treeview_item*>(canv_itm);
+	for (canvas::canvas_item* canv_itm : canvas().selection()) {
+		auto* treeitem_holder = dynamic_cast<canvas::has_treeview_item*>(canv_itm);
 		if (treeitem_holder) {
 			select_item(treeitem_holder->treeview_item(), true);
 		}
@@ -481,7 +481,7 @@ std::vector<QStandardItem*> ui::pane::skeleton::selected_items() const {
 	return selection;
 }
 
-ui::canvas& ui::pane::skeleton::canvas() {
+ui::canvas::canvas& ui::pane::skeleton::canvas() {
 	return canvases_->active_canvas();
 }
 

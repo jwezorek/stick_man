@@ -4,6 +4,10 @@
 
 namespace ui {
 
+    namespace canvas {
+        class canvas_manager;
+    }
+
     class tool_manager : public QObject, public input_handler {
 
         Q_OBJECT
@@ -16,18 +20,18 @@ namespace ui {
 
     public:
         tool_manager();
-        void init(canvas_manager& canvases, mdl::project& model);
-        void keyPressEvent(canvas& c, QKeyEvent* event) override;
-        void keyReleaseEvent(canvas& c, QKeyEvent* event) override;
-        void mousePressEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void mouseMoveEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void mouseReleaseEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void mouseDoubleClickEvent(canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void wheelEvent(canvas& c, QGraphicsSceneWheelEvent* event) override;
+        void init(canvas::canvas_manager& canvases, mdl::project& model);
+        void keyPressEvent(canvas::canvas& c, QKeyEvent* event) override;
+        void keyReleaseEvent(canvas::canvas& c, QKeyEvent* event) override;
+        void mousePressEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseMoveEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseReleaseEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseDoubleClickEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void wheelEvent(canvas::canvas& c, QGraphicsSceneWheelEvent* event) override;
         std::span<const tool_info> tool_info() const;
         bool has_current_tool() const;
         tool& current_tool() const;
-        void set_current_tool(canvas_manager& canvases, tool_id id);
+        void set_current_tool(canvas::canvas_manager& canvases, tool_id id);
     signals:
         void current_tool_changed(tool& new_tool);
     };

@@ -13,13 +13,15 @@ namespace ui {
 
 	class tool_manager;
 	class stick_man;
-    class canvas_manager;
+    namespace canvas {
+        class canvas_manager;
+    }
     class project;
 
     namespace pane {
 
         class skeleton : public QDockWidget {
-            canvas_manager* canvases_;
+            canvas::canvas_manager* canvases_;
             mdl::project* project_;
             QTreeView* skeleton_tree_;
             selection_properties* sel_properties_;
@@ -52,7 +54,7 @@ namespace ui {
 
             QTreeView* create_skeleton_tree();
             std::vector<QStandardItem*> selected_items() const;
-            ui::canvas& canvas();
+            canvas::canvas& canvas();
 
             void select_item(QStandardItem* item, bool select);
             void select_items(const std::vector<QStandardItem*>& items, bool emit_signal = true);
@@ -61,7 +63,7 @@ namespace ui {
 
             skeleton(ui::stick_man* mgr);
             selection_properties& sel_properties();
-            void init(canvas_manager& canvases, mdl::project& proj);
+            void init(canvas::canvas_manager& canvases, mdl::project& proj);
             bool validate_props_name_change(const std::string& new_name);
 
         };
