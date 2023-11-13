@@ -5,7 +5,7 @@
 namespace ui {
 
     namespace tool {
-        class zoom_tool : public base {
+        class zoom : public base {
             int zoom_level_;
             QWidget* settings_;
             QComboBox* magnify_;
@@ -13,7 +13,7 @@ namespace ui {
             void handleButtonClick(int level);
 
         public:
-            zoom_tool();
+            zoom();
             void mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
             virtual QWidget* settings_widget() override;
         };

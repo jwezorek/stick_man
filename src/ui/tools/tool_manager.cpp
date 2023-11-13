@@ -16,12 +16,12 @@ namespace rv = std::ranges::views;
 
 ui::tool::manager::manager() :
     curr_item_index_(-1) {
-    tool_registry_.emplace_back(std::make_unique<ui::tool::pan_tool>());
-    tool_registry_.emplace_back(std::make_unique<ui::tool::zoom_tool>());
-    tool_registry_.emplace_back(std::make_unique<ui::tool::selection_tool>());
-    tool_registry_.emplace_back(std::make_unique<ui::tool::move_tool>());
-    tool_registry_.emplace_back(std::make_unique<ui::tool::add_node_tool>());
-    tool_registry_.emplace_back(std::make_unique<ui::tool::add_bone_tool>());
+    tool_registry_.emplace_back(std::make_unique<ui::tool::pan>());
+    tool_registry_.emplace_back(std::make_unique<ui::tool::zoom>());
+    tool_registry_.emplace_back(std::make_unique<ui::tool::select>());
+    tool_registry_.emplace_back(std::make_unique<ui::tool::move>());
+    tool_registry_.emplace_back(std::make_unique<ui::tool::add_node>());
+    tool_registry_.emplace_back(std::make_unique<ui::tool::add_bone>());
 }
 
 void ui::tool::manager::init(canvas::manager& canvases, mdl::project& model) {

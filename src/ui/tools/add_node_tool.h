@@ -9,10 +9,10 @@ namespace ui {
     }
     namespace tool {
 
-        class add_node_tool : public base {
+        class add_node : public base {
             mdl::project* model_;
         public:
-            add_node_tool();
+            add_node();
             void init(canvas::manager& canvases, mdl::project& model) override;
             void mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
         };

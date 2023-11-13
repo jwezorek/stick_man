@@ -17,7 +17,7 @@ namespace ui {
     }
 
     namespace tool {
-        class selection_tool : public base {
+        class select : public base {
         private:
 
             std::optional<QRectF> rubber_band_;
@@ -26,7 +26,7 @@ namespace ui {
             void handle_drag(canvas::scene& c, QRectF rect, bool shift_down, bool alt_down);
         public:
 
-            selection_tool();
+            select();
             void activate(canvas::manager& c) override;
 
             void keyReleaseEvent(canvas::scene& c, QKeyEvent* event) override;

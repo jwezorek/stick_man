@@ -4,7 +4,7 @@
 
 namespace ui {
     namespace tool {
-        class move_tool : public base {
+        class move : public base {
         public:
 
             struct move_state {
@@ -20,7 +20,7 @@ namespace ui {
                 void set(canvas::scene& canvas, QKeyEvent* event);
             };
 
-            move_tool();
+            move();
             void keyPressEvent(canvas::scene& c, QKeyEvent* event) override;
             void mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
             void mouseMoveEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;

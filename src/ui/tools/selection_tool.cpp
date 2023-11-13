@@ -122,11 +122,11 @@ namespace {
 	}
 }
 
-ui::tool::selection_tool::selection_tool() :
+ui::tool::select::select() :
     base("selection", "arrow_icon.png", ui::tool::id::selection) {
 }
 
-void ui::tool::selection_tool::init(canvas::manager& canvases, mdl::project& model) {
+void ui::tool::select::init(canvas::manager& canvases, mdl::project& model) {
     canvases.connect(
         &canvases, &canvas::manager::rubber_band_change,
         [&](canvas::scene& canv, QRect rbr, QPointF from, QPointF to) {
@@ -137,22 +137,22 @@ void ui::tool::selection_tool::init(canvas::manager& canvases, mdl::project& mod
     );
 }
 
-void ui::tool::selection_tool::activate(canvas::manager& canv_mgr) {
+void ui::tool::select::activate(canvas::manager& canv_mgr) {
     canv_mgr.set_drag_mode(ui::canvas::drag_mode::rubber_band);
     rubber_band_ = {};
 }
 
-void ui::tool::selection_tool::keyReleaseEvent(canvas::scene & c, QKeyEvent * event) {
+void ui::tool::select::keyReleaseEvent(canvas::scene & c, QKeyEvent * event) {
 }
 
-void ui::tool::selection_tool::mousePressEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
+void ui::tool::select::mousePressEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
     rubber_band_ = {};
 }
 
-void ui::tool::selection_tool::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
+void ui::tool::select::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
 }
 
-void ui::tool::selection_tool::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
+void ui::tool::select::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
     bool shift_down = event->modifiers().testFlag(Qt::ShiftModifier);
     bool ctrl_down = event->modifiers().testFlag(Qt::ControlModifier);
     if (rubber_band_) {
@@ -163,7 +163,7 @@ void ui::tool::selection_tool::mouseReleaseEvent(canvas::scene& canv, QGraphicsS
 	canv.sync_to_model();
 }
 
-void ui::tool::selection_tool::handle_click(canvas::scene& canv, QPointF pt, bool shift_down, bool ctrl_down) {
+void ui::tool::select::handle_click(canvas::scene& canv, QPointF pt, bool shift_down, bool ctrl_down) {
     auto clicked_item = canv.top_item(pt);
     if (!clicked_item) {
         canv.clear_selection();
@@ -185,7 +185,7 @@ void ui::tool::selection_tool::handle_click(canvas::scene& canv, QPointF pt, boo
     canv.set_selection(clicked_item, true);
 }
 
-void ui::tool::selection_tool::handle_drag(canvas::scene& canv, QRectF rect, bool shift_down, bool ctrl_down) {
+void ui::tool::select::handle_drag(canvas::scene& canv, QRectF rect, bool shift_down, bool ctrl_down) {
     auto clicked_items = canv.items_in_rect(rect);
     if (clicked_items.empty()) {
         canv.clear_selection();
@@ -224,10 +224,10 @@ void ui::tool::selection_tool::handle_drag(canvas::scene& canv, QRectF rect, boo
     canv.set_selection( clicked_items, true );
 }
 
-void ui::tool::selection_tool::deactivate(canvas::manager& canv_mgr) {
+void ui::tool::select::deactivate(canvas::manager& canv_mgr) {
     canv_mgr.set_drag_mode(ui::canvas::drag_mode::none);
 }
 
-QWidget* ui::tool::selection_tool::settings_widget() {
+QWidget* ui::tool::select::settings_widget() {
 	return new QWidget();
 }

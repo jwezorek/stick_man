@@ -2,13 +2,13 @@
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::tool::zoom_tool::zoom_tool() :
+ui::tool::zoom::zoom() :
     base("zoom", "zoom_icon.png", ui::tool::id::zoom),
     zoom_level_(0),
     settings_(nullptr) {
 }
 
-qreal ui::tool::zoom_tool::scale_from_zoom_level(int zoom_level) {
+qreal ui::tool::zoom::scale_from_zoom_level(int zoom_level) {
     if (zoom_level == 0) {
         return 1.0;
     }
@@ -20,7 +20,7 @@ qreal ui::tool::zoom_tool::scale_from_zoom_level(int zoom_level) {
     return 1.0 / (zoom + 1.0);
 }
 
-void ui::tool::zoom_tool::mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool::zoom::mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {
     if (!event->modifiers().testFlag(Qt::AltModifier)) {
         zoom_level_++;
     }
@@ -32,7 +32,7 @@ void ui::tool::zoom_tool::mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMous
     c.set_scale(zoom, pt);
 }
 
-QWidget* ui::tool::zoom_tool::settings_widget() {
+QWidget* ui::tool::zoom::settings_widget() {
     if (!settings_) {
         settings_ = new QWidget();
         auto* flow = new ui::FlowLayout(settings_);
