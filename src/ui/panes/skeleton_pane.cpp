@@ -157,8 +157,8 @@ namespace{
     // if the selection is all in one canvas return as is; otherwise, remove all
     // items that are not on the active canvas.
 
-    std::vector<ui::canvas::item*> normalize_selection_per_active_canvas(
-        const std::vector<ui::canvas::item*>& itms, const ui::canvas::scene& active_canv) {
+    std::vector<ui::canvas::base*> normalize_selection_per_active_canvas(
+        const std::vector<ui::canvas::base*>& itms, const ui::canvas::scene& active_canv) {
         if (itms.empty()) {
             return {};
         }
@@ -171,10 +171,10 @@ namespace{
         }
         return itms |
             rv::filter(
-                [&active_canv](ui::canvas::item* itm) {
+                [&active_canv](ui::canvas::base* itm) {
                     return  itm->canvas() == &active_canv;
                 }
-        ) | r::to< std::vector<ui::canvas::item*>>();
+        ) | r::to< std::vector<ui::canvas::base*>>();
     }
 }
 
@@ -232,7 +232,7 @@ void ui::pane::skeleton::handle_tree_selection_change(
     disconnect_canv_sel_handler();
 
     auto& curr_canv = canvas();
-	std::vector<canvas::item*> sel_canv_items;
+	std::vector<canvas::base*> sel_canv_items;
 	auto selection = selected_items();
 	QStandardItem* selected_skel = nullptr;
 
@@ -446,7 +446,7 @@ void ui::pane::skeleton::handle_canv_sel_change() {
 	disconnect_tree_sel_handler();
 
 	skeleton_tree_->clearSelection();
-	for (canvas::item* canv_itm : canvas().selection()) {
+	for (canvas::base* canv_itm : canvas().selection()) {
 		auto* treeitem_holder = dynamic_cast<canvas::has_treeview_item*>(canv_itm);
 		if (treeitem_holder) {
 			select_item(treeitem_holder->treeview_item(), true);
