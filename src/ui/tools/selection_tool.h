@@ -17,6 +17,7 @@ namespace ui {
     }
 
     namespace tool {
+
         class select : public base {
         private:
 
@@ -38,4 +39,5 @@ namespace ui {
             void init(canvas::manager& canvases, mdl::project& model) override;
         };
     }
+
 }

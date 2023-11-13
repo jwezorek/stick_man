@@ -7,6 +7,7 @@ namespace ui {
     namespace canvas {
         class manager;
     }
+
     namespace tool {
 
         class add_node : public base {

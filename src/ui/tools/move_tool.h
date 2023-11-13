@@ -4,6 +4,7 @@
 
 namespace ui {
     namespace tool {
+
         class move : public base {
         public:
 

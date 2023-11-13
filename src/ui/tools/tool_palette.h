@@ -15,7 +15,6 @@ namespace ui {
     }
 
     class tool_palette : public QDockWidget {
-
         Q_OBJECT
 
     private:

@@ -16,7 +16,6 @@ namespace ui {
     namespace canvas {
         class manager;
     }
-    class project;
 
     namespace pane {
 

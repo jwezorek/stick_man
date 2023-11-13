@@ -15,7 +15,6 @@ namespace ui {
     }
 
     class tool_palette;
-    class tool_settings_pane;
 
     class stick_man : public QMainWindow
     {

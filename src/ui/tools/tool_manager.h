@@ -9,6 +9,7 @@ namespace ui {
     }
 
     namespace tool {
+
         class manager : public QObject, public input_handler {
 
             Q_OBJECT
@@ -36,5 +37,6 @@ namespace ui {
         signals:
             void current_tool_changed(base& new_tool);
         };
+
     }
 }
