@@ -36,7 +36,7 @@ namespace {
 		return itms | rv::filter(
 			[](auto* ptr)->bool {
 				return dynamic_cast<ui::canvas::item::node*>(ptr) ||
-					dynamic_cast<ui::canvas::item::bone_item*>(ptr);
+					dynamic_cast<ui::canvas::item::bone*>(ptr);
 			}
 		);
 	}
@@ -60,7 +60,7 @@ namespace {
 	std::optional<sm::skel_ref> as_skeleton(auto itms) {
 
 		auto node_set = items_to_model_set<ui::canvas::item::node>(itms);
-		auto bone_set = items_to_model_set<ui::canvas::item::bone_item>(itms);
+		auto bone_set = items_to_model_set<ui::canvas::item::bone>(itms);
 
 		if (node_set.empty() || bone_set.empty()) {
 			return {};

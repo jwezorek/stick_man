@@ -10,9 +10,9 @@ namespace ui {
             class node;
             class rot_constraint_adornment;
 
-            class bone_item :
+            class bone :
                 public has_treeview_item,
-                public has_stick_man_model<bone_item, sm::bone&>,
+                public has_stick_man_model<bone, sm::bone&>,
                 public QGraphicsPolygonItem {
             private:
                 rot_constraint_adornment* rot_constraint_;
@@ -29,12 +29,12 @@ namespace ui {
             public:
                 using model_type = sm::bone;
 
-                bone_item(sm::bone& bone, double scale);
+                bone(sm::bone& bone, double scale);
                 item::node& parent_node_item() const;
                 item::node& child_node_item() const;
             };
 
-            Q_DECLARE_METATYPE(bone_item*);
+            Q_DECLARE_METATYPE(bone*);
 
             class rot_constraint_adornment :
                 public QGraphicsEllipseItem {

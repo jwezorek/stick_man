@@ -37,7 +37,7 @@ namespace{
 
 	template <>
 	struct item_for_model<sm::bone> {
-		using type = ui::canvas::item::bone_item;
+		using type = ui::canvas::item::bone;
 	};
 
 	template <>
@@ -88,7 +88,7 @@ namespace{
 
 	QStandardItem* make_treeitem(sm::bone& bone) {
 		auto* itm = new QStandardItem(bone.name().c_str());
-		auto& bi = ui::canvas::item_from_model<ui::canvas::item::bone_item>(bone);
+		auto& bi = ui::canvas::item_from_model<ui::canvas::item::bone>(bone);
 		set_treeitem_data(itm, bone);
 		bi.set_treeview_item(itm);
 		return itm;
@@ -128,7 +128,7 @@ namespace{
 		sm::visit_bones(skel.get().root_node(), visit);
 	}
 
-	bool is_same_bone_selection(const std::vector<ui::canvas::item::bone_item*>& canv_sel,
+	bool is_same_bone_selection(const std::vector<ui::canvas::item::bone*>& canv_sel,
 			const std::vector<QStandardItem*>& tree_sel) {
 		if (canv_sel.size() != tree_sel.size()) {
 			return false;
@@ -254,7 +254,7 @@ void ui::pane::skeleton::handle_tree_selection_change(
 	} else {
 		for (auto* sel : selection) {
 			sm::bone* bone_ptr = get_treeitem_data<sm::bone>(sel);
-			sel_canv_items.push_back(&canvas::item_from_model<canvas::item::bone_item>(*bone_ptr));
+			sel_canv_items.push_back(&canvas::item_from_model<canvas::item::bone>(*bone_ptr));
 		}
         normalize_selection_per_active_canvas(sel_canv_items, curr_canv);
 	}

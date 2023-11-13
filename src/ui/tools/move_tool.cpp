@@ -68,12 +68,12 @@ namespace {
         virtual void mouseReleaseEvent(move_state& ms) = 0;
     };
 
-    ui::canvas::item::bone_item* parent_bone(ui::canvas::item::node* j) {
+    ui::canvas::item::bone* parent_bone(ui::canvas::item::node* j) {
         auto maybe_parent_bone = j->model().parent_bone();
         if (!maybe_parent_bone) {
             return nullptr;
         }
-        return &ui::canvas::item_from_model<ui::canvas::item::bone_item>(maybe_parent_bone->get());
+        return &ui::canvas::item_from_model<ui::canvas::item::bone>(maybe_parent_bone->get());
     }
 
     ui::canvas::item::node* parent_node(ui::canvas::item::node* j) {

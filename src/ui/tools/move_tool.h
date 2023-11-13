@@ -11,7 +11,7 @@ namespace ui {
 
             canvas::scene* canvas_;
             ui::canvas::item::node* anchor_;
-            ui::canvas::item::bone_item* bone_;
+            ui::canvas::item::bone* bone_;
             QGraphicsSceneMouseEvent* event_;
             QKeyEvent* key_event_;
 

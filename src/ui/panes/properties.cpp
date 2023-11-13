@@ -39,7 +39,7 @@ namespace {
 		bool has_bone = false;
 		for (auto itm_ptr : sel) {
 			has_node = dynamic_cast<ui::canvas::item::node*>(itm_ptr) || has_node;
-			has_bone = dynamic_cast<ui::canvas::item::bone_item*>(itm_ptr) || has_bone;
+			has_bone = dynamic_cast<ui::canvas::item::bone*>(itm_ptr) || has_bone;
 			if (has_node && has_bone) {
 				return ui::selection_type::mixed;
 			}
@@ -100,8 +100,8 @@ void ui::pane::selection_properties::set(const ui::canvas::scene& canv) {
 	old_props->lose_selection();
 	current_props()->set_selection(canv);
 
-	auto bone_items = ui::as_range_view_of_type<ui::canvas::item::bone_item>(canv.selection());
-	for (ui::canvas::item::bone_item* bi : bone_items) {
+	auto bone_items = ui::as_range_view_of_type<ui::canvas::item::bone>(canv.selection());
+	for (ui::canvas::item::bone* bi : bone_items) {
 		auto* tvi = bi->treeview_item();
 	}
 }

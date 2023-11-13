@@ -364,7 +364,7 @@ bool ui::pane::props::bones::is_multi(const ui::canvas::scene& canv) {
 
 void ui::pane::props::bones::set_selection_common(const ui::canvas::scene& canv) {
     const auto& sel = canv.selection();
-    auto bones = ui::canvas::to_model_ptrs(ui::as_range_view_of_type<ui::canvas::item::bone_item>(sel));
+    auto bones = ui::canvas::to_model_ptrs(ui::as_range_view_of_type<ui::canvas::item::bone>(sel));
     auto length = get_unique_val(bones |
         rv::transform([](sm::bone* b) {return b->scaled_length(); }));
     length_->num_edit()->set_value(length);

@@ -148,7 +148,7 @@ namespace {
                         }
                     ) && r::all_of(skel.bones(),
                         [](sm::bone_ref br)->bool {
-                            auto& bi = ui::canvas::item_from_model<ui::canvas::item::bone_item>(br.get());
+                            auto& bi = ui::canvas::item_from_model<ui::canvas::item::bone>(br.get());
                             return bi.is_selected();
                         }
                     );
@@ -190,7 +190,7 @@ namespace {
                     return sm::visit_result::continue_traversal;
                 },
                 [&](const sm::bone& bone)->sm::visit_result {
-                    auto& bi = ui::canvas::item_from_model<ui::canvas::item::bone_item>(bone);
+                    auto& bi = ui::canvas::item_from_model<ui::canvas::item::bone>(bone);
                     pieces_and_sel_state.emplace_back(
                         std::ref(bone), bi.is_selected()
                     );

@@ -115,8 +115,8 @@ namespace {
         auto bones = node->model().child_bones();
         return bones |
             rv::transform(
-                [](sm::const_bone_ref bone)->ui::canvas::item::bone_item& {
-                    return std::any_cast<std::reference_wrapper<ui::canvas::item::bone_item>>(
+                [](sm::const_bone_ref bone)->ui::canvas::item::bone& {
+                    return std::any_cast<std::reference_wrapper<ui::canvas::item::bone>>(
                         bone.get().get_user_data()
                     );
                 }
@@ -240,7 +240,7 @@ void ui::canvas::scene::set_contents(const std::vector<sm::skel_ref>& contents) 
         }
 
         for (auto bone : skel.bones()) {
-            addItem(new ui::canvas::item::bone_item(bone.get(), scale()));
+            addItem(new ui::canvas::item::bone(bone.get(), scale()));
         }
     }
 
@@ -255,8 +255,8 @@ ui::canvas::item::skeleton_item* ui::canvas::scene::selected_skeleton() const {
 	return (skeletons.size() == 1) ? skeletons.front() : nullptr;
 }
 
-std::vector<ui::canvas::item::bone_item*> ui::canvas::scene::selected_bones() const {
-    return to_vector_of_type<ui::canvas::item::bone_item>(selection_);
+std::vector<ui::canvas::item::bone*> ui::canvas::scene::selected_bones() const {
+    return to_vector_of_type<ui::canvas::item::bone>(selection_);
 }
 
 std::vector<ui::canvas::item::node*> ui::canvas::scene::selected_nodes() const {
@@ -273,9 +273,9 @@ ui::canvas::item::node* ui::canvas::scene::insert_item(sm::node& node) {
 	return ni;
 }
 
-ui::canvas::item::bone_item* ui::canvas::scene::insert_item(sm::bone& bone) {
-	ui::canvas::item::bone_item* bi;
-	addItem(bi = new item::bone_item(bone, 1.0 / scale()));
+ui::canvas::item::bone* ui::canvas::scene::insert_item(sm::bone& bone) {
+	ui::canvas::item::bone* bi;
+	addItem(bi = new item::bone(bone, 1.0 / scale()));
 	return bi;
 }
 
@@ -294,7 +294,7 @@ void ui::canvas::scene::transform_selection(node_transform trans) {
 }
 
 void ui::canvas::scene::transform_selection(bone_transform trans) {
-    r::for_each(as_range_view_of_type<item::bone_item>(selection_), trans);
+    r::for_each(as_range_view_of_type<item::bone>(selection_), trans);
 }
 
 void ui::canvas::scene::add_to_selection(std::span<ui::canvas::item::base*> itms, bool sync) {
@@ -489,8 +489,8 @@ std::vector<ui::canvas::item::node*> ui::canvas::scene::node_items() const {
     return to_vector_of_type<item::node>(items());
 }
 
-std::vector<ui::canvas::item::bone_item*> ui::canvas::scene::bone_items() const {
-    return to_vector_of_type<item::bone_item>(items());
+std::vector<ui::canvas::item::bone*> ui::canvas::scene::bone_items() const {
+    return to_vector_of_type<item::bone>(items());
 }
 
 std::vector<ui::canvas::item::skeleton_item*> ui::canvas::scene::skeleton_items() const {

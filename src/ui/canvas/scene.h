@@ -39,7 +39,7 @@ namespace ui {
         namespace item {
             class base;
             class node;
-            class bone_item;
+            class bone;
             class skeleton_item;
         }
 
@@ -47,7 +47,7 @@ namespace ui {
 
         using item_transform = std::function<void(item::base*)>;
         using node_transform = std::function<void(item::node*)>;
-        using bone_transform = std::function<void(item::bone_item*)>;
+        using bone_transform = std::function<void(item::bone*)>;
 
         enum class drag_mode {
             none,
@@ -96,7 +96,7 @@ namespace ui {
             std::vector<item::base*> canvas_items() const;
             std::vector<item::node*> root_node_items() const;
             std::vector<item::node*> node_items() const;
-            std::vector<item::bone_item*> bone_items() const;
+            std::vector<item::bone*> bone_items() const;
             std::vector<item::skeleton_item*> skeleton_items() const;
 
             void set_scale(double scale, std::optional<QPointF> pt = {});
@@ -107,13 +107,13 @@ namespace ui {
             //sel_type selection_type() const;
 
             item::skeleton_item* selected_skeleton() const;
-            std::vector<item::bone_item*> selected_bones() const;
+            std::vector<item::bone*> selected_bones() const;
             std::vector<item::node*> selected_nodes() const;
 
             bool is_status_line_visible() const;
 
             item::node* insert_item(sm::node& node);
-            item::bone_item* insert_item(sm::bone& bone);
+            item::bone* insert_item(sm::bone& bone);
             item::skeleton_item* insert_item(sm::skeleton& skel);
 
             void transform_selection(item_transform trans);
