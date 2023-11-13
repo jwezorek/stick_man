@@ -35,7 +35,7 @@ namespace ui {
 
     namespace canvas {
         class canvas_item;
-        class canvas_manager;
+        class manager;
         class node_item;
         class bone_item;
         class skeleton_item;
@@ -56,7 +56,7 @@ namespace ui {
 
             Q_OBJECT
 
-                friend class canvas_manager;
+                friend class manager;
 
         private:
 
@@ -130,8 +130,8 @@ namespace ui {
             void delete_item(canvas_item* item, bool emit_signals);
             QPointF from_global_to_canvas(const QPoint& pt);
             std::string tab_name() const;
-            const canvas_manager& manager() const;
-            canvas_manager& manager();
+            const canvas::manager& manager() const;
+            canvas::manager& manager();
             std::optional<sm::point> cursor_pos() const;
         };
 

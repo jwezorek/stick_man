@@ -14,14 +14,14 @@ namespace ui {
 	class tool_manager;
 	class stick_man;
     namespace canvas {
-        class canvas_manager;
+        class manager;
     }
     class project;
 
     namespace pane {
 
         class skeleton : public QDockWidget {
-            canvas::canvas_manager* canvases_;
+            canvas::manager* canvases_;
             mdl::project* project_;
             QTreeView* skeleton_tree_;
             selection_properties* sel_properties_;
@@ -63,7 +63,7 @@ namespace ui {
 
             skeleton(ui::stick_man* mgr);
             selection_properties& sel_properties();
-            void init(canvas::canvas_manager& canvases, mdl::project& proj);
+            void init(canvas::manager& canvases, mdl::project& proj);
             bool validate_props_name_change(const std::string& new_name);
 
         };

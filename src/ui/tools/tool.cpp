@@ -43,7 +43,7 @@ void ui::tool::populate_settings(pane::tool_settings* pane) {
     pane->set_tool(name_, settings_widget());
 }
 
-void ui::tool::activate(canvas::canvas_manager& canvases) {}
+void ui::tool::activate(canvas::manager& canvases) {}
 void ui::tool::keyPressEvent(canvas::scene& c, QKeyEvent* event) {}
 void ui::tool::keyReleaseEvent(canvas::scene& c, QKeyEvent* event) {}
 void ui::tool::mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {}
@@ -51,8 +51,8 @@ void ui::tool::mouseMoveEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event)
 void ui::tool::mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {}
 void ui::tool::mouseDoubleClickEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {}
 void ui::tool::wheelEvent(canvas::scene& c, QGraphicsSceneWheelEvent* event) {}
-void ui::tool::deactivate(canvas::canvas_manager& canvases) {}
-void ui::tool::init(canvas::canvas_manager&, mdl::project&) {}
+void ui::tool::deactivate(canvas::manager& canvases) {}
+void ui::tool::init(canvas::manager&, mdl::project&) {}
 QWidget* ui::tool::settings_widget() { return nullptr; }
 ui::tool::~tool() {}
 

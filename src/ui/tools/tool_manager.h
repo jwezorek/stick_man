@@ -5,7 +5,7 @@
 namespace ui {
 
     namespace canvas {
-        class canvas_manager;
+        class manager;
     }
 
     class tool_manager : public QObject, public input_handler {
@@ -20,7 +20,7 @@ namespace ui {
 
     public:
         tool_manager();
-        void init(canvas::canvas_manager& canvases, mdl::project& model);
+        void init(canvas::manager& canvases, mdl::project& model);
         void keyPressEvent(canvas::scene& c, QKeyEvent* event) override;
         void keyReleaseEvent(canvas::scene& c, QKeyEvent* event) override;
         void mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
@@ -31,7 +31,7 @@ namespace ui {
         std::span<const tool_info> tool_info() const;
         bool has_current_tool() const;
         tool& current_tool() const;
-        void set_current_tool(canvas::canvas_manager& canvases, tool_id id);
+        void set_current_tool(canvas::manager& canvases, tool_id id);
     signals:
         void current_tool_changed(tool& new_tool);
     };

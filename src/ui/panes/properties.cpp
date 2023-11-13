@@ -110,13 +110,13 @@ void ui::pane::selection_properties::handle_selection_changed(canvas::scene& can
     set(canv);
 }
 
-void ui::pane::selection_properties::init(canvas::canvas_manager& canvases, mdl::project& proj)
+void ui::pane::selection_properties::init(canvas::manager& canvases, mdl::project& proj)
 {
     for (const auto& [key, prop_box] : props_) {
         prop_box->init(proj);
     }
     set(canvases.active_canvas());
-    connect(&canvases, &canvas::canvas_manager::selection_changed,
+    connect(&canvases, &canvas::manager::selection_changed,
         this,
         &selection_properties::handle_selection_changed
     );

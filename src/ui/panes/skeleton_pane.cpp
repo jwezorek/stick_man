@@ -396,7 +396,7 @@ void ui::pane::skeleton::select_item(QStandardItem* item, bool select = true) {
 }
 
 void ui::pane::skeleton::connect_canv_cont_handler() {
-    canv_content_conn_ = connect(canvases_, &canvas::canvas_manager::canvas_refresh,
+    canv_content_conn_ = connect(canvases_, &canvas::manager::canvas_refresh,
         this, &ui::pane::skeleton::sync_with_model
     );
 }
@@ -407,7 +407,7 @@ void ui::pane::skeleton::disconnect_canv_cont_handler() {
 
 void ui::pane::skeleton::connect_canv_sel_handler() {
 	auto& canv = canvas();
-	canv_sel_conn_ = connect(&canv.manager(), &ui::canvas::canvas_manager::selection_changed,
+	canv_sel_conn_ = connect(&canv.manager(), &ui::canvas::manager::selection_changed,
 		this, &ui::pane::skeleton::handle_canv_sel_change
 	);
 }
@@ -416,7 +416,7 @@ void ui::pane::skeleton::disconnect_canv_sel_handler() {
 	disconnect(canv_sel_conn_);
 }
 
-void ui::pane::skeleton::init(canvas::canvas_manager& canvases, mdl::project& proj) {
+void ui::pane::skeleton::init(canvas::manager& canvases, mdl::project& proj) {
     project_ = &proj;
     canvases_ = &canvases;
 	sel_properties_->init(canvases, proj);

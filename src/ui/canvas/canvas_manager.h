@@ -10,7 +10,7 @@ namespace ui {
 
     namespace canvas {
 
-        class canvas_manager : public QTabWidget {
+        class manager : public QTabWidget {
 
             Q_OBJECT
 
@@ -33,7 +33,7 @@ namespace ui {
             void clear_canvas(const std::string& canv);
 
         public:
-            canvas_manager(input_handler& inp_handler);
+            manager(input_handler& inp_handler);
             void init(mdl::project& proj);
             void clear();
             void center_active_view();

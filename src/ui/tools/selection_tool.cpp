@@ -126,9 +126,9 @@ ui::selection_tool::selection_tool() :
     tool("selection", "arrow_icon.png", ui::tool_id::selection) {
 }
 
-void ui::selection_tool::init(canvas::canvas_manager& canvases, mdl::project& model) {
+void ui::selection_tool::init(canvas::manager& canvases, mdl::project& model) {
     canvases.connect(
-        &canvases, &canvas::canvas_manager::rubber_band_change,
+        &canvases, &canvas::manager::rubber_band_change,
         [&](canvas::scene& canv, QRect rbr, QPointF from, QPointF to) {
             if (from != QPointF{ 0, 0 }) {
                 rubber_band_ = points_to_rect(from, to);
@@ -137,7 +137,7 @@ void ui::selection_tool::init(canvas::canvas_manager& canvases, mdl::project& mo
     );
 }
 
-void ui::selection_tool::activate(canvas::canvas_manager& canv_mgr) {
+void ui::selection_tool::activate(canvas::manager& canv_mgr) {
     canv_mgr.set_drag_mode(ui::canvas::drag_mode::rubber_band);
     rubber_band_ = {};
 }
@@ -224,7 +224,7 @@ void ui::selection_tool::handle_drag(canvas::scene& canv, QRectF rect, bool shif
     canv.set_selection( clicked_items, true );
 }
 
-void ui::selection_tool::deactivate(canvas::canvas_manager& canv_mgr) {
+void ui::selection_tool::deactivate(canvas::manager& canv_mgr) {
     canv_mgr.set_drag_mode(ui::canvas::drag_mode::none);
 }
 

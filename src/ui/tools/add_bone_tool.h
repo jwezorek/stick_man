@@ -5,7 +5,7 @@
 namespace ui {
 
     namespace canvas {
-        class canvas_manager;
+        class manager;
     }
 
     class add_bone_tool : public tool {
@@ -18,7 +18,7 @@ namespace ui {
 
     public:
         add_bone_tool();
-        void init(canvas::canvas_manager& canvases, mdl::project& model) override;
+        void init(canvas::manager& canvases, mdl::project& model) override;
         void mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
         void mouseMoveEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
         void mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;

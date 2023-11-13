@@ -38,7 +38,7 @@ namespace ui {
         mdl::project& project();
         pane::tool_settings& tool_pane();
 		pane::skeleton& skel_pane();
-        canvas::canvas_manager& canvases();
+        canvas::manager& canvases();
 
     private:
 
@@ -56,7 +56,7 @@ namespace ui {
         pane::animation* anim_pane_;
         pane::tool_settings* tool_pane_;
 		pane::skeleton * skel_pane_;
-        canvas::canvas_manager* canvases_;
+        canvas::manager* canvases_;
         mdl::project project_;
 		bool was_shown_;
 		bool has_fully_layed_out_widgets_;

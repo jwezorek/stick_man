@@ -13,7 +13,7 @@ namespace ui {
     using selection_set = std::unordered_set<ui::canvas::canvas_item*>;
 
     namespace canvas {
-        class canvas_manager;
+        class manager;
     }
 
     class project;
@@ -28,15 +28,15 @@ namespace ui {
     public:
 
         selection_tool();
-        void activate(canvas::canvas_manager& c) override;
+        void activate(canvas::manager& c) override;
 
         void keyReleaseEvent(canvas::scene& c, QKeyEvent* event) override;
         void mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
         void mouseMoveEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
         void mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
-        void deactivate(canvas::canvas_manager& c) override;
+        void deactivate(canvas::manager& c) override;
         QWidget* settings_widget() override;
-		void init(canvas::canvas_manager& canvases, mdl::project& model) override;
+		void init(canvas::manager& canvases, mdl::project& model) override;
     };
 
 }

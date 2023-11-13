@@ -24,7 +24,7 @@ ui::tool_manager::tool_manager() :
     tool_registry_.emplace_back(std::make_unique<ui::add_bone_tool>());
 }
 
-void ui::tool_manager::init(canvas::canvas_manager& canvases, mdl::project& model) {
+void ui::tool_manager::init(canvas::manager& canvases, mdl::project& model) {
     for (auto& tool : tool_registry_) {
         tool->init(canvases, model);
     }
@@ -95,7 +95,7 @@ ui::tool& ui::tool_manager::current_tool() const {
     return *tool_registry_.at(curr_item_index_);
 }
 
-void ui::tool_manager::set_current_tool(canvas::canvas_manager& canvases, tool_id id) {
+void ui::tool_manager::set_current_tool(canvas::manager& canvases, tool_id id) {
     int new_tool_index = index_from_id(id);
     if (new_tool_index == curr_item_index_) {
         return;

@@ -21,7 +21,7 @@ ui::add_bone_tool::add_bone_tool() :
     tool("add bone", "add_bone_icon.png", ui::tool_id::add_bone) {
 }
 
-void ui::add_bone_tool::init(canvas::canvas_manager& canvases, mdl::project& model) {
+void ui::add_bone_tool::init(canvas::manager& canvases, mdl::project& model) {
     model_ = &model;
 }
 

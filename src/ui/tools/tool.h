@@ -49,7 +49,7 @@ namespace ui {
     }
 
     namespace canvas {
-        class canvas_manager;
+        class manager;
     }
 
     class tool_manager;
@@ -61,7 +61,7 @@ namespace ui {
         QString name() const;
         QString icon_rsrc() const;
         void populate_settings(pane::tool_settings* pane);
-        virtual void activate(canvas::canvas_manager& canvases);
+        virtual void activate(canvas::manager& canvases);
         virtual void keyPressEvent(canvas::scene& c, QKeyEvent* event) override;
         virtual void keyReleaseEvent(canvas::scene& c, QKeyEvent* event) override;
         virtual void mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
@@ -69,8 +69,8 @@ namespace ui {
         virtual void mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
         virtual void mouseDoubleClickEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
         virtual void wheelEvent(canvas::scene& c, QGraphicsSceneWheelEvent* event) override;
-        virtual void deactivate(canvas::canvas_manager& canvases);
-		virtual void init(canvas::canvas_manager& canvases, mdl::project& model);
+        virtual void deactivate(canvas::manager& canvases);
+		virtual void init(canvas::manager& canvases, mdl::project& model);
         virtual QWidget* settings_widget();
 		virtual ~tool();
 

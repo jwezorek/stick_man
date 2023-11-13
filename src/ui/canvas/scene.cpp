@@ -429,14 +429,14 @@ void ui::canvas::scene::hide_status_line() {
     update();
 }
 
-const ui::canvas::canvas_manager& ui::canvas::scene::manager() const {
+const ui::canvas::manager& ui::canvas::scene::manager() const {
     auto unconst_this = const_cast<ui::canvas::scene*>(this);
     return unconst_this->manager();
 }
 
-ui::canvas::canvas_manager& ui::canvas::scene::manager() {
+ui::canvas::manager& ui::canvas::scene::manager() {
     auto* parent = view().parent()->parent();
-    return *static_cast<ui::canvas::canvas_manager*>(parent);
+    return *static_cast<ui::canvas::manager*>(parent);
 }
 
 std::optional<sm::point> ui::canvas::scene::cursor_pos() const {

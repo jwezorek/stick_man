@@ -15,7 +15,7 @@ namespace ui {
 	class stick_man;
 
     namespace canvas {
-        class canvas_manager;
+        class manager;
         class scene;
     }
 
@@ -41,7 +41,7 @@ namespace ui {
             selection_properties(const props::current_canvas_fn& fn, pane::skeleton* pane);
             props::props_box* current_props() const;
             void set(const canvas::scene& canv);
-            void init(canvas::canvas_manager& canvases, mdl::project& proj);
+            void init(canvas::manager& canvases, mdl::project& proj);
             pane::skeleton& skel_pane();
         };
 
