@@ -18,7 +18,7 @@ void ui::tool::add_bone_tool::init_rubber_band(canvas::scene& c) {
 ui::tool::add_bone_tool::add_bone_tool() :
     model_(nullptr),
     rubber_band_(nullptr),
-    base("add bone", "add_bone_icon.png", ui::tool::tool_id::add_bone) {
+    base("add bone", "add_bone_icon.png", ui::tool::id::add_bone) {
 }
 
 void ui::tool::add_bone_tool::init(canvas::manager& canvases, mdl::project& model) {

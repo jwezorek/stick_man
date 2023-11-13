@@ -38,7 +38,7 @@ namespace ui {
             virtual void wheelEvent(canvas::scene& c, QGraphicsSceneWheelEvent* event) = 0;
         };
 
-        enum class tool_id {
+        enum class id {
             none,
             selection,
             move,
@@ -48,8 +48,8 @@ namespace ui {
             add_bone
         };
 
-        struct tool_info {
-            tool_id id;
+        struct fields {
+            id id;
             QString name;
             QString rsrc_name;
         };
@@ -58,8 +58,8 @@ namespace ui {
 
         class base : public input_handler {
         public:
-            base(QString name, QString rsrc, tool_id id);
-            tool_id id() const;
+            base(QString name, QString rsrc, id id);
+            tool::id id() const;
             QString name() const;
             QString icon_rsrc() const;
             void populate_settings(pane::tool_settings* pane);
@@ -77,7 +77,7 @@ namespace ui {
             virtual ~base();
 
         private:
-            tool_id id_;
+            tool::id id_;
             QString name_;
             QString rsrc_;
         };

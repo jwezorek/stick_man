@@ -72,17 +72,17 @@ void ui::tool::tool_manager::wheelEvent(ui::canvas::scene& c, QGraphicsSceneWhee
     }
 }
 
-std::span<const ui::tool::tool_info> ui::tool::tool_manager::tool_info() const {
-    static std::vector<ui::tool::tool_info> tool_records;
+std::span<const ui::tool::fields> ui::tool::tool_manager::tool_info() const {
+    static std::vector<ui::tool::fields> tool_records;
     if (tool_records.empty()) {
         tool_records = tool_registry_ |
             rv::transform(
-                [](const auto& t)->ui::tool::tool_info {
-                    return ui::tool::tool_info{
+                [](const auto& t)->ui::tool::fields {
+                    return ui::tool::fields{
                         t->id(), t->name(), t->icon_rsrc()
                     };
                 }
-        ) | r::to<std::vector<ui::tool::tool_info>>();
+        ) | r::to<std::vector<ui::tool::fields>>();
     }
     return tool_records;
 }
@@ -95,7 +95,7 @@ ui::tool::base& ui::tool::tool_manager::current_tool() const {
     return *tool_registry_.at(curr_item_index_);
 }
 
-void ui::tool::tool_manager::set_current_tool(canvas::manager& canvases, tool_id id) {
+void ui::tool::tool_manager::set_current_tool(canvas::manager& canvases, id id) {
     int new_tool_index = index_from_id(id);
     if (new_tool_index == curr_item_index_) {
         return;
@@ -110,7 +110,7 @@ void ui::tool::tool_manager::set_current_tool(canvas::manager& canvases, tool_id
     emit current_tool_changed(current_tool());
 }
 
-int ui::tool::tool_manager::index_from_id(tool_id id) const {
+int ui::tool::tool_manager::index_from_id(id id) const {
     auto iter = r::find_if(tool_registry_, [id](const auto& t) {return id == t->id(); });
     return std::distance(tool_registry_.begin(), iter);
 }

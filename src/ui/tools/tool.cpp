@@ -21,13 +21,13 @@ namespace rv = std::ranges::views;
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::tool::base::base(QString name, QString rsrc, tool_id id) :
+ui::tool::base::base(QString name, QString rsrc, tool::id id) :
     name_(name),
     rsrc_(rsrc),
     id_(id) {
 }
 
-ui::tool::tool_id ui::tool::base::id() const {
+ui::tool::id ui::tool::base::id() const {
     return id_;
 }
 

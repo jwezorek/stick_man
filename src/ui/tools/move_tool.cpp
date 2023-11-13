@@ -248,7 +248,7 @@ void  ui::tool::move_tool::move_state::set(canvas::scene& c, QKeyEvent* evnt) {
 ui::tool::move_tool::move_tool() :
         settings_(nullptr),
 		btns_(nullptr),
-        base("move", "move_icon.png", ui::tool::tool_id::move) {
+        base("move", "move_icon.png", ui::tool::id::move) {
 
 }
 

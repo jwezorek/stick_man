@@ -17,7 +17,7 @@ namespace ui {
             std::vector<std::unique_ptr<base>> tool_registry_;
             int curr_item_index_;
 
-            int index_from_id(tool_id id) const;
+            int index_from_id(id id) const;
 
         public:
             tool_manager();
@@ -29,10 +29,10 @@ namespace ui {
             void mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
             void mouseDoubleClickEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
             void wheelEvent(canvas::scene& c, QGraphicsSceneWheelEvent* event) override;
-            std::span<const tool_info> tool_info() const;
+            std::span<const fields> tool_info() const;
             bool has_current_tool() const;
             base& current_tool() const;
-            void set_current_tool(canvas::manager& canvases, tool_id id);
+            void set_current_tool(canvas::manager& canvases, id id);
         signals:
             void current_tool_changed(base& new_tool);
         };

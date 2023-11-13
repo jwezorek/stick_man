@@ -3,7 +3,7 @@
 /*------------------------------------------------------------------------------------------------*/
 
 ui::tool::zoom_tool::zoom_tool() :
-    base("zoom", "zoom_icon.png", ui::tool::tool_id::zoom),
+    base("zoom", "zoom_icon.png", ui::tool::id::zoom),
     zoom_level_(0),
     settings_(nullptr) {
 }
