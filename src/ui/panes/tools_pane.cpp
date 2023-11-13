@@ -1,4 +1,4 @@
-#include "tool_palette.h"
+#include "tools_pane.h"
 #include "../stick_man.h"
 #include "../util.h"
 #include <ranges>
@@ -41,7 +41,7 @@ namespace ui {
 
 }
 
-ui::tool_palette::tool_palette(QMainWindow* wnd) :
+ui::pane::tools::tools(QMainWindow* wnd) :
         QDockWidget(tr(""), wnd),
         tools_(static_cast<stick_man*>(wnd)->tool_mgr()) {
 
@@ -77,7 +77,7 @@ ui::tool_palette::tool_palette(QMainWindow* wnd) :
     );
 }
 
-ui::tool_btn* ui::tool_palette::tool_from_id(tool::id id)
+ui::tool_btn* ui::pane::tools::tool_from_id(tool::id id)
 {
     if (id == tool::id::none) {
         return nullptr;
@@ -88,7 +88,7 @@ ui::tool_btn* ui::tool_palette::tool_from_id(tool::id id)
     );
 }
 
-void ui::tool_palette::handle_tool_click(canvas::manager& canvases, tool_btn* btn) {
+void ui::pane::tools::handle_tool_click(canvas::manager& canvases, tool_btn* btn) {
 
     tool::id current_tool_id = (tools_.has_current_tool()) ?
         tools_.current_tool().id() : tool::id::none;

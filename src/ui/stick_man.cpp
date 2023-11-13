@@ -1,7 +1,7 @@
 #include "stick_man.h"
 #include "panes/skeleton_pane.h"
 #include "panes/animation_pane.h"
-#include "tools/tool_palette.h"
+#include "panes/tools_pane.h"
 #include "panes/tool_settings_pane.h"
 #include "canvas/canvas_item.h"
 #include "canvas/canvas_manager.h"
@@ -36,7 +36,7 @@ ui::stick_man::stick_man(QWidget* parent) :
 		QMainWindow(parent),
 		was_shown_(false),
 		has_fully_layed_out_widgets_(false),
-		tool_pal_(new tool_palette(this)),
+		tool_pal_(new pane::tools(this)),
 		anim_pane_(new pane::animation(this)),
 		tool_pane_(new pane::tool_settings(this)),
 		skel_pane_(new pane::skeleton(this)) {

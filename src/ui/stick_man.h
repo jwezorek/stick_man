@@ -12,9 +12,8 @@ namespace ui {
     namespace pane {
         class animation;
         class skeleton;
+        class tools;
     }
-
-    class tool_palette;
 
     class stick_man : public QMainWindow
     {
@@ -51,7 +50,7 @@ namespace ui {
         void update_undo_and_redo(bool can_redo, bool can_undo);
 
         tool::manager tool_mgr_;
-        tool_palette* tool_pal_;
+        pane::tools* tool_pal_;
         pane::animation* anim_pane_;
         pane::tool_settings* tool_pane_;
 		pane::skeleton * skel_pane_;
