@@ -259,7 +259,7 @@ namespace {
     std::unordered_set<const sm::skeleton*> relavent_skeleton_set(ui::canvas::scene& canv) {
         return canv.selection() |
             rv::transform(
-                [](ui::canvas::canvas_item* itm)->const sm::skeleton* {
+                [](ui::canvas::item* itm)->const sm::skeleton* {
                     return std::visit(
                         overload{
                             [](sm::skel_ref skel)->const sm::skeleton* {

@@ -18,7 +18,7 @@ namespace ui {
 
         class scene;
 
-        class canvas_item {
+        class item {
             friend class scene;
         protected:
             QGraphicsItem* selection_frame_;
@@ -31,18 +31,18 @@ namespace ui {
             QGraphicsItem* selection_frame();
             const QGraphicsItem* item_body() const;
         public:
-            canvas_item();
+            item();
             void sync_to_model();
             scene* canvas() const;
             bool is_selected() const;
             void set_selected(bool selected);
             mdl::skel_piece to_skeleton_piece();
             virtual mdl::const_skel_piece to_skeleton_piece() const = 0;
-            virtual ~canvas_item();
+            virtual ~item();
         };
 
         template<typename T, typename U>
-        class has_stick_man_model : public canvas_item {
+        class has_stick_man_model : public item {
         protected:
             U& model_;
         public:

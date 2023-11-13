@@ -10,7 +10,7 @@
 
 namespace ui {
 
-    using selection_set = std::unordered_set<ui::canvas::canvas_item*>;
+    using selection_set = std::unordered_set<ui::canvas::item*>;
 
     namespace canvas {
         class manager;
