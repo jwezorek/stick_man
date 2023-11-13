@@ -54,7 +54,7 @@ namespace ui {
             QString rsrc_name;
         };
 
-        class tool_manager;
+        class manager;
 
         class base : public input_handler {
         public:

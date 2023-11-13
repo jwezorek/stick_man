@@ -9,7 +9,7 @@ namespace ui {
     }
 
     namespace tool {
-        class tool_manager : public QObject, public input_handler {
+        class manager : public QObject, public input_handler {
 
             Q_OBJECT
 
@@ -20,7 +20,7 @@ namespace ui {
             int index_from_id(id id) const;
 
         public:
-            tool_manager();
+            manager();
             void init(canvas::manager& canvases, mdl::project& model);
             void keyPressEvent(canvas::scene& c, QKeyEvent* event) override;
             void keyReleaseEvent(canvas::scene& c, QKeyEvent* event) override;

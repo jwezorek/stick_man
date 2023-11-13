@@ -14,7 +14,7 @@ namespace rv = std::ranges::views;
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::tool::tool_manager::tool_manager() :
+ui::tool::manager::manager() :
     curr_item_index_(-1) {
     tool_registry_.emplace_back(std::make_unique<ui::tool::pan_tool>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::zoom_tool>());
@@ -24,55 +24,55 @@ ui::tool::tool_manager::tool_manager() :
     tool_registry_.emplace_back(std::make_unique<ui::tool::add_bone_tool>());
 }
 
-void ui::tool::tool_manager::init(canvas::manager& canvases, mdl::project& model) {
+void ui::tool::manager::init(canvas::manager& canvases, mdl::project& model) {
     for (auto& tool : tool_registry_) {
         tool->init(canvases, model);
     }
 }
 
-void ui::tool::tool_manager::keyPressEvent(ui::canvas::scene& c, QKeyEvent* event) {
+void ui::tool::manager::keyPressEvent(ui::canvas::scene& c, QKeyEvent* event) {
     if (has_current_tool()) {
         current_tool().keyPressEvent(c, event);
     }
 }
 
-void ui::tool::tool_manager::keyReleaseEvent(ui::canvas::scene& c, QKeyEvent* event) {
+void ui::tool::manager::keyReleaseEvent(ui::canvas::scene& c, QKeyEvent* event) {
     if (has_current_tool()) {
         current_tool().keyReleaseEvent(c, event);
     }
 }
 
-void ui::tool::tool_manager::mousePressEvent(ui::canvas::scene& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool::manager::mousePressEvent(ui::canvas::scene& c, QGraphicsSceneMouseEvent* event) {
     if (has_current_tool()) {
         current_tool().mousePressEvent(c, event);
     }
 }
 
-void ui::tool::tool_manager::mouseMoveEvent(ui::canvas::scene& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool::manager::mouseMoveEvent(ui::canvas::scene& c, QGraphicsSceneMouseEvent* event) {
     if (has_current_tool()) {
         current_tool().mouseMoveEvent(c, event);
     }
 }
 
-void ui::tool::tool_manager::mouseReleaseEvent(ui::canvas::scene& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool::manager::mouseReleaseEvent(ui::canvas::scene& c, QGraphicsSceneMouseEvent* event) {
     if (has_current_tool()) {
         current_tool().mouseReleaseEvent(c, event);
     }
 }
 
-void ui::tool::tool_manager::mouseDoubleClickEvent(ui::canvas::scene& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool::manager::mouseDoubleClickEvent(ui::canvas::scene& c, QGraphicsSceneMouseEvent* event) {
     if (has_current_tool()) {
         current_tool().mouseDoubleClickEvent(c, event);
     }
 }
 
-void ui::tool::tool_manager::wheelEvent(ui::canvas::scene& c, QGraphicsSceneWheelEvent* event) {
+void ui::tool::manager::wheelEvent(ui::canvas::scene& c, QGraphicsSceneWheelEvent* event) {
     if (has_current_tool()) {
         current_tool().wheelEvent(c, event);
     }
 }
 
-std::span<const ui::tool::fields> ui::tool::tool_manager::tool_info() const {
+std::span<const ui::tool::fields> ui::tool::manager::tool_info() const {
     static std::vector<ui::tool::fields> tool_records;
     if (tool_records.empty()) {
         tool_records = tool_registry_ |
@@ -87,15 +87,15 @@ std::span<const ui::tool::fields> ui::tool::tool_manager::tool_info() const {
     return tool_records;
 }
 
-bool ui::tool::tool_manager::has_current_tool() const {
+bool ui::tool::manager::has_current_tool() const {
     return curr_item_index_ >= 0;
 }
 
-ui::tool::base& ui::tool::tool_manager::current_tool() const {
+ui::tool::base& ui::tool::manager::current_tool() const {
     return *tool_registry_.at(curr_item_index_);
 }
 
-void ui::tool::tool_manager::set_current_tool(canvas::manager& canvases, id id) {
+void ui::tool::manager::set_current_tool(canvas::manager& canvases, id id) {
     int new_tool_index = index_from_id(id);
     if (new_tool_index == curr_item_index_) {
         return;
@@ -110,7 +110,7 @@ void ui::tool::tool_manager::set_current_tool(canvas::manager& canvases, id id) 
     emit current_tool_changed(current_tool());
 }
 
-int ui::tool::tool_manager::index_from_id(id id) const {
+int ui::tool::manager::index_from_id(id id) const {
     auto iter = r::find_if(tool_registry_, [id](const auto& t) {return id == t->id(); });
     return std::distance(tool_registry_.begin(), iter);
 }

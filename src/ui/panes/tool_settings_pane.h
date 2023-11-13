@@ -9,7 +9,7 @@
 namespace ui {
 
     namespace tool {
-        class tool_manager;
+        class manager;
         class base;
     }
 
@@ -21,7 +21,7 @@ namespace ui {
         public:
             tool_settings(QMainWindow* wnd);
             void set_tool(QString tool_name, QWidget* contents);
-            void init(tool::tool_manager& tool_mgr);
+            void init(tool::manager& tool_mgr);
         };
 
     }

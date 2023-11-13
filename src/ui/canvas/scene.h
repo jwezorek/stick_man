@@ -32,7 +32,7 @@ namespace ui {
     class stick_man;
 
     namespace tool {
-        class tool_manager;
+        class manager;
         class input_handler;
     }
 

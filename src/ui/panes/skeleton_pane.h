@@ -11,7 +11,7 @@
 
 namespace ui {
 
-	class tool_manager;
+	class manager;
 	class stick_man;
     namespace canvas {
         class manager;
