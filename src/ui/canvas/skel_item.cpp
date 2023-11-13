@@ -55,7 +55,7 @@ namespace {
 
 /*------------------------------------------------------------------------------------------------*/
 
-void ui::canvas::item::skeleton_item::sync_item_to_model() {
+void ui::canvas::item::skeleton::sync_item_to_model() {
     QRectF rect = inflate_rect(skeleton_bounds(model_), k_skel_marg);
     auto& canv = *canvas();
     double inv_scale = 1.0 / canv.scale();
@@ -65,28 +65,28 @@ void ui::canvas::item::skeleton_item::sync_item_to_model() {
     setVisible(is_selected());
 }
 
-void ui::canvas::item::skeleton_item::sync_sel_frame_to_model() {
+void ui::canvas::item::skeleton::sync_sel_frame_to_model() {
 }
 
-QGraphicsItem* ui::canvas::item::skeleton_item::create_selection_frame() const {
+QGraphicsItem* ui::canvas::item::skeleton::create_selection_frame() const {
     return nullptr;
 }
 
-bool ui::canvas::item::skeleton_item::is_selection_frame_only() const {
+bool ui::canvas::item::skeleton::is_selection_frame_only() const {
     return true;
 }
 
-QGraphicsItem* ui::canvas::item::skeleton_item::item_body() {
+QGraphicsItem* ui::canvas::item::skeleton::item_body() {
     return this;
 }
 
-mdl::const_skel_piece ui::canvas::item::skeleton_item::to_skeleton_piece() const {
+mdl::const_skel_piece ui::canvas::item::skeleton::to_skeleton_piece() const {
     auto& skel = model();
     return std::ref(skel);
 }
 
-ui::canvas::item::skeleton_item::skeleton_item(sm::skeleton& skel, double scale) :
-    has_stick_man_model<ui::canvas::item::skeleton_item, sm::skeleton&>(skel) {
+ui::canvas::item::skeleton::skeleton(sm::skeleton& skel, double scale) :
+    has_stick_man_model<ui::canvas::item::skeleton, sm::skeleton&>(skel) {
     setPen(QPen(Qt::cyan, 3, Qt::DotLine));
     setBrush(Qt::NoBrush);
     setVisible(false);

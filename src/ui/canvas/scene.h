@@ -40,7 +40,7 @@ namespace ui {
             class base;
             class node;
             class bone;
-            class skeleton_item;
+            class skeleton;
         }
 
         using selection_set = std::unordered_set<item::base*>;
@@ -97,7 +97,7 @@ namespace ui {
             std::vector<item::node*> root_node_items() const;
             std::vector<item::node*> node_items() const;
             std::vector<item::bone*> bone_items() const;
-            std::vector<item::skeleton_item*> skeleton_items() const;
+            std::vector<item::skeleton*> skeleton_items() const;
 
             void set_scale(double scale, std::optional<QPointF> pt = {});
             double scale() const;
@@ -106,7 +106,7 @@ namespace ui {
             const selection_set& selection() const;
             //sel_type selection_type() const;
 
-            item::skeleton_item* selected_skeleton() const;
+            item::skeleton* selected_skeleton() const;
             std::vector<item::bone*> selected_bones() const;
             std::vector<item::node*> selected_nodes() const;
 
@@ -114,7 +114,7 @@ namespace ui {
 
             item::node* insert_item(sm::node& node);
             item::bone* insert_item(sm::bone& bone);
-            item::skeleton_item* insert_item(sm::skeleton& skel);
+            item::skeleton* insert_item(sm::skeleton& skel);
 
             void transform_selection(item_transform trans);
             void transform_selection(node_transform trans);

@@ -27,7 +27,7 @@ namespace {
 	void deselect_skeleton(ui::canvas::scene& canv) {
 		canv.filter_selection(
 			[](ui::canvas::item::base* itm)->bool {
-				return dynamic_cast<ui::canvas::item::skeleton_item*>(itm) == nullptr;
+				return dynamic_cast<ui::canvas::item::skeleton*>(itm) == nullptr;
 			}
 		);
 	}
@@ -194,9 +194,9 @@ void ui::selection_tool::handle_drag(canvas::scene& canv, QRectF rect, bool shif
 
 	auto maybe_skeleton = as_skeleton(just_nodes_and_bones(clicked_items));
 	if (maybe_skeleton) {
-		ui::canvas::item::skeleton_item* skel_item = nullptr;
+		ui::canvas::item::skeleton* skel_item = nullptr;
 		if (maybe_skeleton->get().get_user_data().has_value()) {
-			skel_item = &(canvas::item_from_model<canvas::item::skeleton_item>(maybe_skeleton->get()));
+			skel_item = &(canvas::item_from_model<canvas::item::skeleton>(maybe_skeleton->get()));
 		} else {
 			skel_item = canv.insert_item(maybe_skeleton->get());
 		}

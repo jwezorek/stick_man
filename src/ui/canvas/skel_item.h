@@ -6,9 +6,9 @@ namespace ui {
 
     namespace canvas {
         namespace item {
-            class skeleton_item :
+            class skeleton :
                 public has_treeview_item,
-                public has_stick_man_model<skeleton_item, sm::skeleton&>,
+                public has_stick_man_model<skeleton, sm::skeleton&>,
                 public QGraphicsRectItem {
             private:
                 void sync_item_to_model() override;
@@ -20,7 +20,7 @@ namespace ui {
 
             public:
                 using model_type = sm::skeleton;
-                skeleton_item(sm::skeleton& skel, double scale);
+                skeleton(sm::skeleton& skel, double scale);
             };
         }
     }

@@ -42,7 +42,7 @@ namespace{
 
 	template <>
 	struct item_for_model<sm::skeleton> {
-		using type = ui::canvas::item::skeleton_item;
+		using type = ui::canvas::item::skeleton;
 	};
 
 	constexpr int k_treeview_max_hgt = 300;
@@ -97,8 +97,8 @@ namespace{
 	QStandardItem* make_treeitem(sm::skeleton& skel) {
 
 		auto* itm = new QStandardItem(skel.name().c_str());
-		ui::canvas::item::skeleton_item* canv_item = nullptr;
-        canv_item = &ui::canvas::item_from_model<ui::canvas::item::skeleton_item>(skel);
+		ui::canvas::item::skeleton* canv_item = nullptr;
+        canv_item = &ui::canvas::item_from_model<ui::canvas::item::skeleton>(skel);
 		set_treeitem_data(itm, skel);
 		canv_item->set_treeview_item(itm);
 
@@ -247,7 +247,7 @@ void ui::pane::skeleton::handle_tree_selection_change(
         skeleton_tree_->selectionModel()->clearSelection();
 		select_item(selected_skel, true);
 		sel_canv_items.push_back(
-            &canvas::item_from_model<canvas::item::skeleton_item>(
+            &canvas::item_from_model<canvas::item::skeleton>(
                 *get_treeitem_data<sm::skeleton>(selected_skel)
             )
         );

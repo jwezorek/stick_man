@@ -250,8 +250,8 @@ const ui::canvas::selection_set&  ui::canvas::scene::selection() const {
 	return selection_;
 }
 
-ui::canvas::item::skeleton_item* ui::canvas::scene::selected_skeleton() const {
-	auto skeletons = to_vector_of_type<ui::canvas::item::skeleton_item>(selection_);
+ui::canvas::item::skeleton* ui::canvas::scene::selected_skeleton() const {
+	auto skeletons = to_vector_of_type<ui::canvas::item::skeleton>(selection_);
 	return (skeletons.size() == 1) ? skeletons.front() : nullptr;
 }
 
@@ -279,9 +279,9 @@ ui::canvas::item::bone* ui::canvas::scene::insert_item(sm::bone& bone) {
 	return bi;
 }
 
-ui::canvas::item::skeleton_item* ui::canvas::scene::insert_item(sm::skeleton& skel) {
-	ui::canvas::item::skeleton_item* si;
-	addItem(si = new item::skeleton_item(skel, 1.0 / scale()));
+ui::canvas::item::skeleton* ui::canvas::scene::insert_item(sm::skeleton& skel) {
+	ui::canvas::item::skeleton* si;
+	addItem(si = new item::skeleton(skel, 1.0 / scale()));
 	return si;
 }
 
@@ -493,8 +493,8 @@ std::vector<ui::canvas::item::bone*> ui::canvas::scene::bone_items() const {
     return to_vector_of_type<item::bone>(items());
 }
 
-std::vector<ui::canvas::item::skeleton_item*> ui::canvas::scene::skeleton_items() const {
-    return to_vector_of_type<item::skeleton_item>(items());
+std::vector<ui::canvas::item::skeleton*> ui::canvas::scene::skeleton_items() const {
+    return to_vector_of_type<item::skeleton>(items());
 }
 
 void ui::canvas::scene::keyPressEvent(QKeyEvent* event) {
