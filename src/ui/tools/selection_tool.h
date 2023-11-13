@@ -17,7 +17,7 @@ namespace ui {
     }
 
     namespace tool {
-        class selection_tool : public tool {
+        class selection_tool : public base {
         private:
 
             std::optional<QRectF> rubber_band_;

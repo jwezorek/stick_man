@@ -29,7 +29,7 @@ void ui::pane::tool_settings::set_tool(QString tool_name, QWidget* contents) {
     }
 }
 
-void ui::pane::tool_settings::on_current_tool_changed(tool::tool& tool) {
+void ui::pane::tool_settings::on_current_tool_changed(tool::base& tool) {
     tool.populate_settings(this);
 }
 

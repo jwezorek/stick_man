@@ -4,7 +4,7 @@
 /*------------------------------------------------------------------------------------------------*/
 
 ui::tool::pan_tool::pan_tool() :
-    tool("pan", "pan_icon.png", ui::tool::tool_id::pan)
+    base("pan", "pan_icon.png", ui::tool::tool_id::pan)
 {}
 
 void ui::tool::pan_tool::deactivate(canvas::manager& canvases) {

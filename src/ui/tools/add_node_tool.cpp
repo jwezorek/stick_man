@@ -4,7 +4,7 @@
 
 ui::tool::add_node_tool::add_node_tool() :
     model_(nullptr),
-    tool("add node", "add_node_icon.png", ui::tool::tool_id::add_node)
+    base("add node", "add_node_icon.png", ui::tool::tool_id::add_node)
 {}
 
 void ui::tool::add_node_tool::init(canvas::manager& canvases, mdl::project& model) {

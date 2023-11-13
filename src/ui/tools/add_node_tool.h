@@ -9,7 +9,7 @@ namespace ui {
     }
     namespace tool {
 
-        class add_node_tool : public tool {
+        class add_node_tool : public base {
             mdl::project* model_;
         public:
             add_node_tool();

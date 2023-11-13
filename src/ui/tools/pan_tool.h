@@ -8,7 +8,7 @@ namespace ui {
         class manager;
     }
     namespace tool {
-        class pan_tool : public tool {
+        class pan_tool : public base {
         public:
             pan_tool();
             void activate(canvas::manager& canvases) override;

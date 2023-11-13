@@ -91,7 +91,7 @@ bool ui::tool::tool_manager::has_current_tool() const {
     return curr_item_index_ >= 0;
 }
 
-ui::tool::tool& ui::tool::tool_manager::current_tool() const {
+ui::tool::base& ui::tool::tool_manager::current_tool() const {
     return *tool_registry_.at(curr_item_index_);
 }
 

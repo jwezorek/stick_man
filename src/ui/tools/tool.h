@@ -56,9 +56,9 @@ namespace ui {
 
         class tool_manager;
 
-        class tool : public input_handler {
+        class base : public input_handler {
         public:
-            tool(QString name, QString rsrc, tool_id id);
+            base(QString name, QString rsrc, tool_id id);
             tool_id id() const;
             QString name() const;
             QString icon_rsrc() const;
@@ -74,7 +74,7 @@ namespace ui {
             virtual void deactivate(canvas::manager& canvases);
             virtual void init(canvas::manager& canvases, mdl::project& model);
             virtual QWidget* settings_widget();
-            virtual ~tool();
+            virtual ~base();
 
         private:
             tool_id id_;

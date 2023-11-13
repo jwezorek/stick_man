@@ -5,7 +5,7 @@
 namespace ui {
 
     namespace tool {
-        class zoom_tool : public tool {
+        class zoom_tool : public base {
             int zoom_level_;
             QWidget* settings_;
             QComboBox* magnify_;

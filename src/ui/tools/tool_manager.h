@@ -14,7 +14,7 @@ namespace ui {
             Q_OBJECT
 
         private:
-            std::vector<std::unique_ptr<tool>> tool_registry_;
+            std::vector<std::unique_ptr<base>> tool_registry_;
             int curr_item_index_;
 
             int index_from_id(tool_id id) const;
@@ -31,10 +31,10 @@ namespace ui {
             void wheelEvent(canvas::scene& c, QGraphicsSceneWheelEvent* event) override;
             std::span<const tool_info> tool_info() const;
             bool has_current_tool() const;
-            tool& current_tool() const;
+            base& current_tool() const;
             void set_current_tool(canvas::manager& canvases, tool_id id);
         signals:
-            void current_tool_changed(tool& new_tool);
+            void current_tool_changed(base& new_tool);
         };
     }
 }

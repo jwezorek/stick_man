@@ -9,7 +9,7 @@ namespace ui {
     }
 
     namespace tool {
-        class add_bone_tool : public tool {
+        class add_bone_tool : public base {
         private:
             QPointF origin_;
             QGraphicsLineItem* rubber_band_;
