@@ -143,12 +143,12 @@ namespace {
                 auto& skel = skel_item->model();
                 bool skel_is_selected = r::all_of(skel.nodes(),
                         [](sm::node_ref nr)->bool {
-                            auto& ni = ui::canvas::item_from_model<ui::canvas::node_item>(nr.get());
+                            auto& ni = ui::canvas::item_from_model<ui::canvas::item::node>(nr.get());
                             return ni.is_selected();
                         }
                     ) && r::all_of(skel.bones(),
                         [](sm::bone_ref br)->bool {
-                            auto& bi = ui::canvas::item_from_model<ui::canvas::bone_item>(br.get());
+                            auto& bi = ui::canvas::item_from_model<ui::canvas::item::bone_item>(br.get());
                             return bi.is_selected();
                         }
                     );
@@ -183,14 +183,14 @@ namespace {
             sm::dfs(
                 skel_ptr->root_node(),
                 [&](const sm::node& node)->sm::visit_result {
-                    auto& ni = ui::canvas::item_from_model<ui::canvas::node_item>(node);
+                    auto& ni = ui::canvas::item_from_model<ui::canvas::item::node>(node);
                     pieces_and_sel_state.emplace_back(
                         std::ref(node), ni.is_selected()
                     );
                     return sm::visit_result::continue_traversal;
                 },
                 [&](const sm::bone& bone)->sm::visit_result {
-                    auto& bi = ui::canvas::item_from_model<ui::canvas::bone_item>(bone);
+                    auto& bi = ui::canvas::item_from_model<ui::canvas::item::bone_item>(bone);
                     pieces_and_sel_state.emplace_back(
                         std::ref(bone), bi.is_selected()
                     );
@@ -259,7 +259,7 @@ namespace {
     std::unordered_set<const sm::skeleton*> relavent_skeleton_set(ui::canvas::scene& canv) {
         return canv.selection() |
             rv::transform(
-                [](ui::canvas::base* itm)->const sm::skeleton* {
+                [](ui::canvas::item::base* itm)->const sm::skeleton* {
                     return std::visit(
                         overload{
                             [](sm::skel_ref skel)->const sm::skeleton* {

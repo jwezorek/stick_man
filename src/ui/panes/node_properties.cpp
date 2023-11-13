@@ -140,7 +140,7 @@ void ui::pane::props::nodes::populate(mdl::project& proj) {
 
 void ui::pane::props::nodes::set_selection_common(const ui::canvas::scene& canv) {
     const auto& sel = canv.selection();
-    auto nodes = ui::canvas::to_model_ptrs(ui::as_range_view_of_type<ui::canvas::node_item>(sel));
+    auto nodes = ui::canvas::to_model_ptrs(ui::as_range_view_of_type<ui::canvas::item::node>(sel));
     auto x_pos = ui::get_unique_val(nodes |
         rv::transform([](sm::node* n) {return n->world_x(); }));
     auto y_pos = ui::get_unique_val(nodes |

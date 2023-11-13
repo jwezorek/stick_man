@@ -34,17 +34,20 @@ namespace ui {
     class input_handler;
 
     namespace canvas {
-        class base;
         class manager;
-        class node_item;
-        class bone_item;
-        class skeleton_item;
 
-        using selection_set = std::unordered_set<base*>;
+        namespace item {
+            class base;
+            class node;
+            class bone_item;
+            class skeleton_item;
+        }
 
-        using item_transform = std::function<void(base*)>;
-        using node_transform = std::function<void(node_item*)>;
-        using bone_transform = std::function<void(bone_item*)>;
+        using selection_set = std::unordered_set<item::base*>;
+
+        using item_transform = std::function<void(item::base*)>;
+        using node_transform = std::function<void(item::node*)>;
+        using bone_transform = std::function<void(item::bone_item*)>;
 
         enum class drag_mode {
             none,
@@ -87,14 +90,14 @@ namespace ui {
 
             scene(input_handler& inp_handler);
             void init();
-            node_item* top_node(const QPointF& pt) const;
-            base* top_item(const QPointF& pt) const;
-            std::vector<base*> items_in_rect(const QRectF& pt) const;
-            std::vector<base*> canvas_items() const;
-            std::vector<node_item*> root_node_items() const;
-            std::vector<node_item*> node_items() const;
-            std::vector<bone_item*> bone_items() const;
-            std::vector<skeleton_item*> skeleton_items() const;
+            item::node* top_node(const QPointF& pt) const;
+            item::base* top_item(const QPointF & pt) const;
+            std::vector<item::base*> items_in_rect(const QRectF& pt) const;
+            std::vector<item::base*> canvas_items() const;
+            std::vector<item::node*> root_node_items() const;
+            std::vector<item::node*> node_items() const;
+            std::vector<item::bone_item*> bone_items() const;
+            std::vector<item::skeleton_item*> skeleton_items() const;
 
             void set_scale(double scale, std::optional<QPointF> pt = {});
             double scale() const;
@@ -103,31 +106,31 @@ namespace ui {
             const selection_set& selection() const;
             //sel_type selection_type() const;
 
-            skeleton_item* selected_skeleton() const;
-            std::vector<bone_item*> selected_bones() const;
-            std::vector<node_item*> selected_nodes() const;
+            item::skeleton_item* selected_skeleton() const;
+            std::vector<item::bone_item*> selected_bones() const;
+            std::vector<item::node*> selected_nodes() const;
 
             bool is_status_line_visible() const;
 
-            node_item* insert_item(sm::node& node);
-            bone_item* insert_item(sm::bone& bone);
-            skeleton_item* insert_item(sm::skeleton& skel);
+            item::node* insert_item(sm::node& node);
+            item::bone_item* insert_item(sm::bone& bone);
+            item::skeleton_item* insert_item(sm::skeleton& skel);
 
             void transform_selection(item_transform trans);
             void transform_selection(node_transform trans);
             void transform_selection(bone_transform trans);
-            void add_to_selection(std::span<base*> itms, bool sync = false);
-            void add_to_selection(base* itm, bool sync = false);
-            void subtract_from_selection(std::span<base*> itms, bool sync = false);
-            void subtract_from_selection(base* itm, bool sync = false);
-            void set_selection(std::span<base*> itms, bool sync = false);
-            void set_selection(base* itm, bool sync = false);
+            void add_to_selection(std::span<item::base*> itms, bool sync = false);
+            void add_to_selection(item::base* itm, bool sync = false);
+            void subtract_from_selection(std::span<item::base*> itms, bool sync = false);
+            void subtract_from_selection(item::base* itm, bool sync = false);
+            void set_selection(std::span<item::base*> itms, bool sync = false);
+            void set_selection(item::base* itm, bool sync = false);
             void clear_selection();
             void clear();
             void show_status_line(const QString& txt);
             void hide_status_line();
-            void filter_selection(std::function<bool(base*)> filter);
-            void delete_item(base* item, bool emit_signals);
+            void filter_selection(std::function<bool(item::base*)> filter);
+            void delete_item(item::base* item, bool emit_signals);
             QPointF from_global_to_canvas(const QPoint& pt);
             std::string tab_name() const;
             const canvas::manager& manager() const;

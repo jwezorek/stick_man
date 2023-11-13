@@ -39,8 +39,8 @@ namespace {
     }
 
     template<typename T>
-    std::vector<ui::canvas::base*> to_stick_man_items(const T& collection) {
-        return ui::to_vector_of_type<ui::canvas::base*>(collection);
+    std::vector<ui::canvas::item::base*> to_stick_man_items(const T& collection) {
+        return ui::to_vector_of_type<ui::canvas::item::base*>(collection);
     }
 
     template<typename T>
@@ -78,8 +78,8 @@ namespace {
         painter->drawLine(ribbon_rect.topLeft(), ribbon_rect.topRight());
     }
 
-    ui::canvas::base* to_stick_man(QGraphicsItem* itm) {
-        return dynamic_cast<ui::canvas::base*>(itm);
+    ui::canvas::item::base* to_stick_man(QGraphicsItem* itm) {
+        return dynamic_cast<ui::canvas::item::base*>(itm);
     }
 
     void draw_grid_lines(QPainter* painter, const QRectF& r, double line_spacing) {
@@ -111,12 +111,12 @@ namespace {
 		painter->drawLine(x1, 0, x2, 0);
     }
 
-    auto child_bones(ui::canvas::node_item* node) {
+    auto child_bones(ui::canvas::item::node* node) {
         auto bones = node->model().child_bones();
         return bones |
             rv::transform(
-                [](sm::const_bone_ref bone)->ui::canvas::bone_item& {
-                    return std::any_cast<std::reference_wrapper<ui::canvas::bone_item>>(
+                [](sm::const_bone_ref bone)->ui::canvas::item::bone_item& {
+                    return std::any_cast<std::reference_wrapper<ui::canvas::item::bone_item>>(
                         bone.get().get_user_data()
                     );
                 }
@@ -236,11 +236,11 @@ void ui::canvas::scene::set_contents(const std::vector<sm::skel_ref>& contents) 
         insert_item(skel);
 
         for (auto node : skel.nodes()) {
-            addItem(new ui::canvas::node_item(node.get(), scale()));
+            addItem(new ui::canvas::item::node(node.get(), scale()));
         }
 
         for (auto bone : skel.bones()) {
-            addItem(new ui::canvas::bone_item(bone.get(), scale()));
+            addItem(new ui::canvas::item::bone_item(bone.get(), scale()));
         }
     }
 
@@ -250,38 +250,38 @@ const ui::canvas::selection_set&  ui::canvas::scene::selection() const {
 	return selection_;
 }
 
-ui::canvas::skeleton_item* ui::canvas::scene::selected_skeleton() const {
-	auto skeletons = to_vector_of_type<ui::canvas::skeleton_item>(selection_);
+ui::canvas::item::skeleton_item* ui::canvas::scene::selected_skeleton() const {
+	auto skeletons = to_vector_of_type<ui::canvas::item::skeleton_item>(selection_);
 	return (skeletons.size() == 1) ? skeletons.front() : nullptr;
 }
 
-std::vector<ui::canvas::bone_item*> ui::canvas::scene::selected_bones() const {
-    return to_vector_of_type<ui::canvas::bone_item>(selection_);
+std::vector<ui::canvas::item::bone_item*> ui::canvas::scene::selected_bones() const {
+    return to_vector_of_type<ui::canvas::item::bone_item>(selection_);
 }
 
-std::vector<ui::canvas::node_item*> ui::canvas::scene::selected_nodes() const {
-    return to_vector_of_type<ui::canvas::node_item>(selection_);
+std::vector<ui::canvas::item::node*> ui::canvas::scene::selected_nodes() const {
+    return to_vector_of_type<ui::canvas::item::node>(selection_);
 }
 
 bool ui::canvas::scene::is_status_line_visible() const {
     return !status_line_.isEmpty();
 }
 
-ui::canvas::node_item* ui::canvas::scene::insert_item(sm::node& node) {
-	ui::canvas::node_item* ni;
-	addItem(ni = new node_item(node, 1.0 / scale()));
+ui::canvas::item::node* ui::canvas::scene::insert_item(sm::node& node) {
+	ui::canvas::item::node* ni;
+	addItem(ni = new item::node(node, 1.0 / scale()));
 	return ni;
 }
 
-ui::canvas::bone_item* ui::canvas::scene::insert_item(sm::bone& bone) {
-	ui::canvas::bone_item* bi;
-	addItem(bi = new bone_item(bone, 1.0 / scale()));
+ui::canvas::item::bone_item* ui::canvas::scene::insert_item(sm::bone& bone) {
+	ui::canvas::item::bone_item* bi;
+	addItem(bi = new item::bone_item(bone, 1.0 / scale()));
 	return bi;
 }
 
-ui::canvas::skeleton_item* ui::canvas::scene::insert_item(sm::skeleton& skel) {
-	ui::canvas::skeleton_item* si;
-	addItem(si = new skeleton_item(skel, 1.0 / scale()));
+ui::canvas::item::skeleton_item* ui::canvas::scene::insert_item(sm::skeleton& skel) {
+	ui::canvas::item::skeleton_item* si;
+	addItem(si = new item::skeleton_item(skel, 1.0 / scale()));
 	return si;
 }
 
@@ -290,25 +290,25 @@ void ui::canvas::scene::transform_selection(item_transform trans) {
 }
 
 void ui::canvas::scene::transform_selection(node_transform trans) {
-    r::for_each(as_range_view_of_type<node_item>(selection_), trans);
+    r::for_each(as_range_view_of_type<item::node>(selection_), trans);
 }
 
 void ui::canvas::scene::transform_selection(bone_transform trans) {
-    r::for_each(as_range_view_of_type<bone_item>(selection_), trans);
+    r::for_each(as_range_view_of_type<item::bone_item>(selection_), trans);
 }
 
-void ui::canvas::scene::add_to_selection(std::span<ui::canvas::base*> itms, bool sync) {
+void ui::canvas::scene::add_to_selection(std::span<ui::canvas::item::base*> itms, bool sync) {
     selection_.insert(itms.begin(), itms.end());
 	if (sync) {
 		sync_selection();
 	}
 }
 
-void ui::canvas::scene::add_to_selection(ui::canvas::base* itm, bool sync) {
+void ui::canvas::scene::add_to_selection(ui::canvas::item::base* itm, bool sync) {
     add_to_selection({ &itm,1 }, sync);
 }
 
-void ui::canvas::scene::subtract_from_selection(std::span<ui::canvas::base*> itms, bool sync) {
+void ui::canvas::scene::subtract_from_selection(std::span<ui::canvas::item::base*> itms, bool sync) {
     for (auto itm : itms) {
         selection_.erase(itm);
     }
@@ -317,16 +317,16 @@ void ui::canvas::scene::subtract_from_selection(std::span<ui::canvas::base*> itm
 	}
 }
 
-void ui::canvas::scene::subtract_from_selection(ui::canvas::base* itm, bool sync) {
+void ui::canvas::scene::subtract_from_selection(ui::canvas::item::base* itm, bool sync) {
     subtract_from_selection({ &itm,1 }, sync);
 }
 
-void ui::canvas::scene::set_selection(std::span<ui::canvas::base*> itms, bool sync) {
+void ui::canvas::scene::set_selection(std::span<ui::canvas::item::base*> itms, bool sync) {
     selection_.clear();
     add_to_selection(itms,sync);
 }
 
-void ui::canvas::scene::set_selection(ui::canvas::base* itm, bool sync) {
+void ui::canvas::scene::set_selection(ui::canvas::item::base* itm, bool sync) {
     set_selection({ &itm,1 },sync);
 }
 
@@ -351,7 +351,7 @@ void ui::canvas::scene::clear() {
 
 void ui::canvas::scene::sync_selection() {
     auto itms = items();
-    for (auto* itm : as_range_view_of_type<ui::canvas::base>(itms)) {
+    for (auto* itm : as_range_view_of_type<ui::canvas::item::base>(itms)) {
         bool selected = selection_.contains(itm);
         itm->set_selected(selected);
     }
@@ -372,7 +372,7 @@ void ui::canvas::scene::show_status_line(const QString& txt) {
     setFocus();
 }
 
-void ui::canvas::scene::filter_selection(std::function<bool(base*)> filter) {
+void ui::canvas::scene::filter_selection(std::function<bool(item::base*)> filter) {
 	selection_set sel;
 	for (auto* aci : selection_) {
 		if (filter(aci)) {
@@ -384,11 +384,11 @@ void ui::canvas::scene::filter_selection(std::function<bool(base*)> filter) {
 	selection_ = sel;
 }
 
-void ui::canvas::scene::delete_item(base* deletee, bool emit_signals) {
+void ui::canvas::scene::delete_item(item::base* deletee, bool emit_signals) {
 	bool was_selected = deletee->is_selected();
 	if (was_selected) {
 		filter_selection(
-			[deletee](base* item)->bool {
+			[deletee](item::base* item)->bool {
 				return item != deletee;
 			}
 		);
@@ -459,42 +459,42 @@ std::string ui::canvas::scene::tab_name() const {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::canvas::node_item* ui::canvas::scene::top_node(const QPointF& pt) const {
-    return top_item_of_type<ui::canvas::node_item>(*this, pt);
+ui::canvas::item::node* ui::canvas::scene::top_node(const QPointF& pt) const {
+    return top_item_of_type<ui::canvas::item::node>(*this, pt);
 }
 
-ui::canvas::base* ui::canvas::scene::top_item(const QPointF& pt) const {
-    return top_item_of_type<ui::canvas::base>(*this, pt);
+ui::canvas::item::base* ui::canvas::scene::top_item(const QPointF& pt) const {
+    return top_item_of_type<ui::canvas::item::base>(*this, pt);
 }
 
-std::vector<ui::canvas::base*> ui::canvas::scene::items_in_rect(const QRectF& r) const {
-    return to_vector_of_type<ui::canvas::base>(items(r));
+std::vector<ui::canvas::item::base*> ui::canvas::scene::items_in_rect(const QRectF& r) const {
+    return to_vector_of_type<ui::canvas::item::base>(items(r));
 }
 
-std::vector<ui::canvas::base*> ui::canvas::scene::canvas_items() const {
-    return to_vector_of_type<ui::canvas::base>(items());
+std::vector<ui::canvas::item::base*> ui::canvas::scene::canvas_items() const {
+    return to_vector_of_type<ui::canvas::item::base>(items());
 }
 
-std::vector<ui::canvas::node_item*> ui::canvas::scene::root_node_items() const {
+std::vector<ui::canvas::item::node*> ui::canvas::scene::root_node_items() const {
     auto nodes = node_items();
     return nodes |
         rv::filter(
             [](auto j)->bool {
                 return !(j->parentItem());
             }
-        ) | r::to<std::vector<node_item*>>();
+        ) | r::to<std::vector<item::node*>>();
 }
 
-std::vector<ui::canvas::node_item*> ui::canvas::scene::node_items() const {
-    return to_vector_of_type<node_item>(items());
+std::vector<ui::canvas::item::node*> ui::canvas::scene::node_items() const {
+    return to_vector_of_type<item::node>(items());
 }
 
-std::vector<ui::canvas::bone_item*> ui::canvas::scene::bone_items() const {
-    return to_vector_of_type<bone_item>(items());
+std::vector<ui::canvas::item::bone_item*> ui::canvas::scene::bone_items() const {
+    return to_vector_of_type<item::bone_item>(items());
 }
 
-std::vector<ui::canvas::skeleton_item*> ui::canvas::scene::skeleton_items() const {
-    return to_vector_of_type<skeleton_item>(items());
+std::vector<ui::canvas::item::skeleton_item*> ui::canvas::scene::skeleton_items() const {
+    return to_vector_of_type<item::skeleton_item>(items());
 }
 
 void ui::canvas::scene::keyPressEvent(QKeyEvent* event) {

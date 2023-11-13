@@ -26,17 +26,17 @@ namespace {
 
 	void deselect_skeleton(ui::canvas::scene& canv) {
 		canv.filter_selection(
-			[](ui::canvas::base* itm)->bool {
-				return dynamic_cast<ui::canvas::skeleton_item*>(itm) == nullptr;
+			[](ui::canvas::item::base* itm)->bool {
+				return dynamic_cast<ui::canvas::item::skeleton_item*>(itm) == nullptr;
 			}
 		);
 	}
 
-	auto just_nodes_and_bones(std::span<ui::canvas::base*> itms) {
+	auto just_nodes_and_bones(std::span<ui::canvas::item::base*> itms) {
 		return itms | rv::filter(
 			[](auto* ptr)->bool {
-				return dynamic_cast<ui::canvas::node_item*>(ptr) ||
-					dynamic_cast<ui::canvas::bone_item*>(ptr);
+				return dynamic_cast<ui::canvas::item::node*>(ptr) ||
+					dynamic_cast<ui::canvas::item::bone_item*>(ptr);
 			}
 		);
 	}
@@ -45,7 +45,7 @@ namespace {
 	auto items_to_model_set(auto abstract_items) {
 		using U = typename T::model_type;
 		return abstract_items | rv::transform(
-			[](ui::canvas::base* aci)->U* {
+			[](ui::canvas::item::base* aci)->U* {
 				auto item_ptr = dynamic_cast<T*>(aci);
 				if (!item_ptr) {
 					return nullptr;
@@ -59,8 +59,8 @@ namespace {
 
 	std::optional<sm::skel_ref> as_skeleton(auto itms) {
 
-		auto node_set = items_to_model_set<ui::canvas::node_item>(itms);
-		auto bone_set = items_to_model_set<ui::canvas::bone_item>(itms);
+		auto node_set = items_to_model_set<ui::canvas::item::node>(itms);
+		auto bone_set = items_to_model_set<ui::canvas::item::bone_item>(itms);
 
 		if (node_set.empty() || bone_set.empty()) {
 			return {};
@@ -194,9 +194,9 @@ void ui::selection_tool::handle_drag(canvas::scene& canv, QRectF rect, bool shif
 
 	auto maybe_skeleton = as_skeleton(just_nodes_and_bones(clicked_items));
 	if (maybe_skeleton) {
-		ui::canvas::skeleton_item* skel_item = nullptr;
+		ui::canvas::item::skeleton_item* skel_item = nullptr;
 		if (maybe_skeleton->get().get_user_data().has_value()) {
-			skel_item = &(canvas::item_from_model<canvas::skeleton_item>(maybe_skeleton->get()));
+			skel_item = &(canvas::item_from_model<canvas::item::skeleton_item>(maybe_skeleton->get()));
 		} else {
 			skel_item = canv.insert_item(maybe_skeleton->get());
 		}
@@ -205,7 +205,7 @@ void ui::selection_tool::handle_drag(canvas::scene& canv, QRectF rect, bool shif
 	}
 
 	clicked_items = just_nodes_and_bones(clicked_items) |
-		r::to<std::vector<ui::canvas::base*>>();
+		r::to<std::vector<ui::canvas::item::base*>>();
 	if (clicked_items.empty()) {
 		canv.clear_selection();
 		return;

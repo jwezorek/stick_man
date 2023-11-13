@@ -41,7 +41,7 @@ namespace {
 	std::vector<sm::node_ref> pinned_nodes(sm::node& node) {
 		std::vector<sm::node_ref> pinned_nodes;
 		auto visit_node = [&pinned_nodes](sm::node& j)->sm::visit_result {
-			ui::canvas::node_item& ni = ui::canvas::item_from_model<ui::canvas::node_item>(j);
+			ui::canvas::item::node& ni = ui::canvas::item_from_model<ui::canvas::item::node>(j);
 			if (ni.is_pinned()) {
 				pinned_nodes.emplace_back(j);
 			}
@@ -68,21 +68,21 @@ namespace {
         virtual void mouseReleaseEvent(move_state& ms) = 0;
     };
 
-    ui::canvas::bone_item* parent_bone(ui::canvas::node_item* j) {
+    ui::canvas::item::bone_item* parent_bone(ui::canvas::item::node* j) {
         auto maybe_parent_bone = j->model().parent_bone();
         if (!maybe_parent_bone) {
             return nullptr;
         }
-        return &ui::canvas::item_from_model<ui::canvas::bone_item>(maybe_parent_bone->get());
+        return &ui::canvas::item_from_model<ui::canvas::item::bone_item>(maybe_parent_bone->get());
     }
 
-    ui::canvas::node_item* parent_node(ui::canvas::node_item* j) {
+    ui::canvas::item::node* parent_node(ui::canvas::item::node* j) {
         auto maybe_parent_bone= j->model().parent_bone();
         if (!maybe_parent_bone) {
             return nullptr;
         }
         auto& parent_bone = maybe_parent_bone->get();
-        auto& parent_node = ui::canvas::item_from_model<ui::canvas::node_item>
+        auto& parent_node = ui::canvas::item_from_model<ui::canvas::item::node>
             (parent_bone.parent_node()
         );
         return &parent_node;

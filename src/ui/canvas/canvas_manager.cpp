@@ -8,7 +8,7 @@ namespace rv = std::ranges::views;
 
 namespace {
 
-    ui::canvas::skeleton_item* named_skeleton_item(ui::canvas::scene& canv, const std::string& str) {
+    ui::canvas::item::skeleton_item* named_skeleton_item(ui::canvas::scene& canv, const std::string& str) {
         auto skels = canv.skeleton_items();
         auto iter = r::find_if(skels,
             [str](auto* skel)->bool {

@@ -18,52 +18,55 @@ namespace ui {
 
         class scene;
 
-        class base {
-            friend class scene;
-        protected:
-            QGraphicsItem* selection_frame_;
+        namespace item {
 
-            virtual QGraphicsItem* create_selection_frame() const = 0;
-            virtual void sync_item_to_model() = 0;
-            virtual void sync_sel_frame_to_model() = 0;
-            virtual bool is_selection_frame_only() const = 0;
-            virtual QGraphicsItem* item_body() = 0;
-            QGraphicsItem* selection_frame();
-            const QGraphicsItem* item_body() const;
-        public:
-            base();
-            void sync_to_model();
-            scene* canvas() const;
-            bool is_selected() const;
-            void set_selected(bool selected);
-            mdl::skel_piece to_skeleton_piece();
-            virtual mdl::const_skel_piece to_skeleton_piece() const = 0;
-            virtual ~base();
-        };
+            class base {
+                friend class scene;
+            protected:
+                QGraphicsItem* selection_frame_;
 
-        template<typename T, typename U>
-        class has_stick_man_model : public base {
-        protected:
-            U& model_;
-        public:
-            has_stick_man_model(U& model) : model_(model) {
-                auto* derived = static_cast<T*>(this);
-                model.set_user_data(std::ref(*derived));
-            }
-            U& model() { return model_; }
-            const U& model() const { return model_; }
-            virtual ~has_stick_man_model() {
-                //model_.set_user_data(std::any{});
-            }
-        };
+                virtual QGraphicsItem* create_selection_frame() const = 0;
+                virtual void sync_item_to_model() = 0;
+                virtual void sync_sel_frame_to_model() = 0;
+                virtual bool is_selection_frame_only() const = 0;
+                virtual QGraphicsItem* item_body() = 0;
+                QGraphicsItem* selection_frame();
+                const QGraphicsItem* item_body() const;
+            public:
+                base();
+                void sync_to_model();
+                scene* canvas() const;
+                bool is_selected() const;
+                void set_selected(bool selected);
+                mdl::skel_piece to_skeleton_piece();
+                virtual mdl::const_skel_piece to_skeleton_piece() const = 0;
+                virtual ~base();
+            };
 
-        class has_treeview_item {
-            QStandardItem* tree_view_item_;
-        public:
-            has_treeview_item();
-            void set_treeview_item(QStandardItem* itm);
-            QStandardItem* treeview_item() const;
-        };
+            template<typename T, typename U>
+            class has_stick_man_model : public base {
+            protected:
+                U& model_;
+            public:
+                has_stick_man_model(U& model) : model_(model) {
+                    auto* derived = static_cast<T*>(this);
+                    model.set_user_data(std::ref(*derived));
+                }
+                U& model() { return model_; }
+                const U& model() const { return model_; }
+                virtual ~has_stick_man_model() {
+                    //model_.set_user_data(std::any{});
+                }
+            };
+
+            class has_treeview_item {
+                QStandardItem* tree_view_item_;
+            public:
+                has_treeview_item();
+                void set_treeview_item(QStandardItem* itm);
+                QStandardItem* treeview_item() const;
+            };
+        }
 
         // T is a graphics item type (node_item, bone_item, or skeleton_item) and 
         // is provided explicitely by the caller

@@ -31,15 +31,15 @@ namespace {
 			return ui::selection_type::none;
 		}
 
-		if (sel.size() == 1 && dynamic_cast<ui::canvas::skeleton_item*>(*sel.begin())) {
+		if (sel.size() == 1 && dynamic_cast<ui::canvas::item::skeleton_item*>(*sel.begin())) {
 			return ui::selection_type::skeleton;
 		}
 
 		bool has_node = false;
 		bool has_bone = false;
 		for (auto itm_ptr : sel) {
-			has_node = dynamic_cast<ui::canvas::node_item*>(itm_ptr) || has_node;
-			has_bone = dynamic_cast<ui::canvas::bone_item*>(itm_ptr) || has_bone;
+			has_node = dynamic_cast<ui::canvas::item::node*>(itm_ptr) || has_node;
+			has_bone = dynamic_cast<ui::canvas::item::bone_item*>(itm_ptr) || has_bone;
 			if (has_node && has_bone) {
 				return ui::selection_type::mixed;
 			}
@@ -100,8 +100,8 @@ void ui::pane::selection_properties::set(const ui::canvas::scene& canv) {
 	old_props->lose_selection();
 	current_props()->set_selection(canv);
 
-	auto bone_items = ui::as_range_view_of_type<ui::canvas::bone_item>(canv.selection());
-	for (ui::canvas::bone_item* bi : bone_items) {
+	auto bone_items = ui::as_range_view_of_type<ui::canvas::item::bone_item>(canv.selection());
+	for (ui::canvas::item::bone_item* bi : bone_items) {
 		auto* tvi = bi->treeview_item();
 	}
 }
