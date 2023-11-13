@@ -12,7 +12,7 @@ namespace ui {
             public:
                 skeletons(const current_canvas_fn& fn, selection_properties* parent);
                 void populate(mdl::project& proj) override;
-                void set_selection(const ui::canvas::canvas& canv) override;
+                void set_selection(const ui::canvas::scene& canv) override;
             };
 
         }

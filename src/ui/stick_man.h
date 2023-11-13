@@ -1,7 +1,7 @@
 #pragma once
 
 #include <QtWidgets/QMainWindow>
-#include "canvas/canvas.h"
+#include "canvas/scene.h"
 #include "tools/tool_manager.h"
 #include "../model/project.h"
 

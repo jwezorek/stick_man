@@ -8,7 +8,7 @@ namespace rv = std::ranges::views;
 
 namespace {
 
-    ui::canvas::skeleton_item* named_skeleton_item(ui::canvas::canvas& canv, const std::string& str) {
+    ui::canvas::skeleton_item* named_skeleton_item(ui::canvas::scene& canv, const std::string& str) {
         auto skels = canv.skeleton_items();
         auto iter = r::find_if(skels,
             [str](auto* skel)->bool {
@@ -28,7 +28,7 @@ namespace {
 void ui::canvas::canvas_manager::connect_current_tab_signal() {
     current_tab_conn_ = connect(this, &QTabWidget::currentChanged,
         [this](int i) {
-            auto* canv = static_cast<canvas*>(
+            auto* canv = static_cast<scene*>(
                 static_cast<QGraphicsView*>(widget(i))->scene()
                 );
             auto old_active_pane = active_canv_;
@@ -91,7 +91,7 @@ void ui::canvas::canvas_manager::add_tab(const std::string& name) {
     view->scale(1, -1);
 
     addTab(view, name.c_str());
-    canvas* canv = new ui::canvas::canvas(inp_handler_);
+    scene* canv = new ui::canvas::scene(inp_handler_);
     view->setScene(canv);
     canv->init();
     canv->set_drag_mode(drag_mode_);
@@ -150,11 +150,11 @@ void ui::canvas::canvas_manager::add_new_skeleton(const std::string& canvas, sm:
     emit canvas_refresh(skel.owner());
 }
 
-ui::canvas::canvas* ui::canvas::canvas_manager::canvas_from_name(const std::string& tab_name) {
+ui::canvas::scene* ui::canvas::canvas_manager::canvas_from_name(const std::string& tab_name) {
     for (int i = 0; i < count(); ++i) {
         if (tabText(i).toStdString() == tab_name) {
             auto view = static_cast<QGraphicsView*>(widget(i));
-            return static_cast<ui::canvas::canvas*>(view->scene());
+            return static_cast<ui::canvas::scene*>(view->scene());
         }
     }
     return nullptr;
@@ -164,9 +164,9 @@ QGraphicsView& ui::canvas::canvas_manager::active_view() const {
     return *static_cast<QGraphicsView*>(this->widget(currentIndex()));
 }
 
-ui::canvas::canvas& ui::canvas::canvas_manager::active_canvas() const {
+ui::canvas::scene& ui::canvas::canvas_manager::active_canvas() const {
 
-    return *static_cast<ui::canvas::canvas*>(active_view().scene());
+    return *static_cast<ui::canvas::scene*>(active_view().scene());
 }
 
 void ui::canvas::canvas_manager::center_active_view() {
@@ -181,7 +181,7 @@ std::vector<std::string> ui::canvas::canvas_manager::tab_names() const {
     return names;
 }
 
-std::string ui::canvas::canvas_manager::tab_name(const canvas& canv) const {
+std::string ui::canvas::canvas_manager::tab_name(const scene& canv) const {
     int index = this->indexOf(&canv.view());
     return (index >= 0) ? tabText(index).toStdString() : "";
 }
@@ -229,7 +229,7 @@ void ui::canvas::canvas_manager::set_drag_mode(drag_mode dm) {
     }
 }
 
-void ui::canvas::canvas_manager::set_active_canvas(const canvas& c) {
+void ui::canvas::canvas_manager::set_active_canvas(const scene& c) {
     auto canvases = this->canvases();
     for (auto [index, canv_ptr] : rv::enumerate(canvases)) {
         if (&c == canv_ptr) {

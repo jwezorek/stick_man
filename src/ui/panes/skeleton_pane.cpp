@@ -2,7 +2,7 @@
 #include "../util.h"
 #include "../canvas/skel_item.h"
 #include "../canvas/bone_item.h"
-#include "../canvas/canvas.h"
+#include "../canvas/scene.h"
 #include "../canvas/canvas_manager.h"
 #include "../tools/tool.h"
 #include "../stick_man.h"
@@ -158,7 +158,7 @@ namespace{
     // items that are not on the active canvas.
 
     std::vector<ui::canvas::canvas_item*> normalize_selection_per_active_canvas(
-        const std::vector<ui::canvas::canvas_item*>& itms, const ui::canvas::canvas& active_canv) {
+        const std::vector<ui::canvas::canvas_item*>& itms, const ui::canvas::scene& active_canv) {
         if (itms.empty()) {
             return {};
         }
@@ -339,7 +339,7 @@ ui::pane::skeleton::skeleton(ui::stick_man* mw) :
 
     splitter->addWidget(skeleton_tree_ = create_skeleton_tree());
     splitter->addWidget(sel_properties_ = new selection_properties(
-            [mw]()->ui::canvas::canvas& {
+            [mw]()->ui::canvas::scene& {
                 return mw->canvases().active_canvas();
             },
             this
@@ -481,7 +481,7 @@ std::vector<QStandardItem*> ui::pane::skeleton::selected_items() const {
 	return selection;
 }
 
-ui::canvas::canvas& ui::pane::skeleton::canvas() {
+ui::canvas::scene& ui::pane::skeleton::canvas() {
 	return canvases_->active_canvas();
 }
 

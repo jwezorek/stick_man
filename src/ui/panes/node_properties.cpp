@@ -1,6 +1,6 @@
 #include "node_properties.h"
 #include "../util.h"
-#include "../canvas/canvas.h"
+#include "../canvas/scene.h"
 #include "../canvas/node_item.h"
 #include "skeleton_pane.h"
 #include <ranges>
@@ -138,7 +138,7 @@ void ui::pane::props::nodes::populate(mdl::project& proj) {
     );
 }
 
-void ui::pane::props::nodes::set_selection_common(const ui::canvas::canvas& canv) {
+void ui::pane::props::nodes::set_selection_common(const ui::canvas::scene& canv) {
     const auto& sel = canv.selection();
     auto nodes = ui::canvas::to_model_ptrs(ui::as_range_view_of_type<ui::canvas::node_item>(sel));
     auto x_pos = ui::get_unique_val(nodes |
@@ -150,19 +150,19 @@ void ui::pane::props::nodes::set_selection_common(const ui::canvas::canvas& canv
     positions_->set_value(1, y_pos);
 }
 
-void ui::pane::props::nodes::set_selection_single(const ui::canvas::canvas& canv) {
+void ui::pane::props::nodes::set_selection_single(const ui::canvas::scene& canv) {
     name_->show();
     auto& node = canv.selected_nodes().front()->model();
     name_->set_value(node.name().c_str());
     positions_->unlock();
 }
 
-void ui::pane::props::nodes::set_selection_multi(const ui::canvas::canvas& canv) {
+void ui::pane::props::nodes::set_selection_multi(const ui::canvas::scene& canv) {
     name_->hide();
     positions_->lock_to_primary_tab();
 }
 
-bool ui::pane::props::nodes::is_multi(const ui::canvas::canvas& canv) {
+bool ui::pane::props::nodes::is_multi(const ui::canvas::scene& canv) {
     return canv.selected_nodes().size() > 1;
 }
 

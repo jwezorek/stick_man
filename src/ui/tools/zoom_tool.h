@@ -13,7 +13,7 @@ namespace ui {
 
     public:
         zoom_tool();
-        void mouseReleaseEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
         virtual QWidget* settings_widget() override;
     };
 

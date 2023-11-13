@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../canvas/canvas.h"
+#include "../canvas/scene.h"
 #include <QWidget>
 #include <QtWidgets>
 #include <vector>
@@ -19,13 +19,13 @@ namespace ui {
 
     class input_handler {
     public:
-        virtual void keyPressEvent(canvas::canvas& c, QKeyEvent* event) = 0;
-        virtual void keyReleaseEvent(canvas::canvas& c, QKeyEvent* event) = 0;
-        virtual void mousePressEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) = 0;
-        virtual void mouseMoveEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) = 0;
-        virtual void mouseReleaseEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) = 0;
-        virtual void mouseDoubleClickEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) = 0;
-        virtual void wheelEvent(canvas::canvas& c, QGraphicsSceneWheelEvent* event) = 0;
+        virtual void keyPressEvent(canvas::scene& c, QKeyEvent* event) = 0;
+        virtual void keyReleaseEvent(canvas::scene& c, QKeyEvent* event) = 0;
+        virtual void mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) = 0;
+        virtual void mouseMoveEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) = 0;
+        virtual void mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) = 0;
+        virtual void mouseDoubleClickEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) = 0;
+        virtual void wheelEvent(canvas::scene& c, QGraphicsSceneWheelEvent* event) = 0;
     };
 
     enum class tool_id {
@@ -62,13 +62,13 @@ namespace ui {
         QString icon_rsrc() const;
         void populate_settings(pane::tool_settings* pane);
         virtual void activate(canvas::canvas_manager& canvases);
-        virtual void keyPressEvent(canvas::canvas& c, QKeyEvent* event) override;
-        virtual void keyReleaseEvent(canvas::canvas& c, QKeyEvent* event) override;
-        virtual void mousePressEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) override;
-        virtual void mouseMoveEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) override;
-        virtual void mouseReleaseEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) override;
-        virtual void mouseDoubleClickEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) override;
-        virtual void wheelEvent(canvas::canvas& c, QGraphicsSceneWheelEvent* event) override;
+        virtual void keyPressEvent(canvas::scene& c, QKeyEvent* event) override;
+        virtual void keyReleaseEvent(canvas::scene& c, QKeyEvent* event) override;
+        virtual void mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
+        virtual void mouseMoveEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
+        virtual void mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
+        virtual void mouseDoubleClickEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
+        virtual void wheelEvent(canvas::scene& c, QGraphicsSceneWheelEvent* event) override;
         virtual void deactivate(canvas::canvas_manager& canvases);
 		virtual void init(canvas::canvas_manager& canvases, mdl::project& model);
         virtual QWidget* settings_widget();

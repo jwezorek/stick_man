@@ -1,4 +1,4 @@
-#include "canvas.h"
+#include "scene.h"
 #include "node_item.h"
 #include "bone_item.h"
 #include "skel_item.h"
@@ -141,12 +141,12 @@ namespace {
 }
 /*------------------------------------------------------------------------------------------------*/
 
-ui::canvas::canvas::canvas(input_handler& inp_handler) :
+ui::canvas::scene::scene(input_handler& inp_handler) :
         inp_handler_(inp_handler) {
     setSceneRect(QRectF(-1500, -1500, 3000, 3000));
 }
 
-void ui::canvas::canvas::init() {
+void ui::canvas::scene::init() {
     connect(&view(), &QGraphicsView::rubberBandChanged,
         [this](QRect rbr, QPointF from, QPointF to) {
             emit manager().rubber_band_change(*this, rbr, from, to);
@@ -154,7 +154,7 @@ void ui::canvas::canvas::init() {
     );
 }
 
-void ui::canvas::canvas::drawBackground(QPainter* painter, const QRectF& dirty_rect) {
+void ui::canvas::scene::drawBackground(QPainter* painter, const QRectF& dirty_rect) {
     painter->fillRect(dirty_rect, QColor::fromRgb(53,53,53));
     painter->setRenderHint(QPainter::Antialiasing, true);
     auto scene_rect = sceneRect();
@@ -176,7 +176,7 @@ QRect client_rectangle(const QGraphicsView* view) {
     return view_rect;
 }
 
-void ui::canvas::canvas::drawForeground(QPainter* painter, const QRectF& rect) {
+void ui::canvas::scene::drawForeground(QPainter* painter, const QRectF& rect) {
     QGraphicsScene::drawForeground(painter, rect);
 
     if (is_status_line_visible()) {
@@ -199,13 +199,13 @@ void ui::canvas::canvas::drawForeground(QPainter* painter, const QRectF& rect) {
     }
 }
 
-void ui::canvas::canvas::focusOutEvent(QFocusEvent* focusEvent) {
+void ui::canvas::scene::focusOutEvent(QFocusEvent* focusEvent) {
     if (is_status_line_visible()) {
         hide_status_line();
     }
 }
 
-void ui::canvas::canvas::set_scale(double scale, std::optional<QPointF> center) {
+void ui::canvas::scene::set_scale(double scale, std::optional<QPointF> center) {
     auto& view = this->view();
     view.resetTransform();
     view.scale(scale, -scale);
@@ -215,11 +215,11 @@ void ui::canvas::canvas::set_scale(double scale, std::optional<QPointF> center) 
     sync_to_model();
 }
 
-double ui::canvas::canvas::scale() const {
+double ui::canvas::scene::scale() const {
     return view().transform().m11();
 }
 
-void ui::canvas::canvas::sync_to_model() {
+void ui::canvas::scene::sync_to_model() {
 	auto itms = items();
 	
     auto is_non_null = [](auto* p) {return p; };
@@ -228,7 +228,7 @@ void ui::canvas::canvas::sync_to_model() {
     }
 }
 
-void ui::canvas::canvas::set_contents(const std::vector<sm::skel_ref>& contents) {
+void ui::canvas::scene::set_contents(const std::vector<sm::skel_ref>& contents) {
 
     clear();
     for (auto skel_ref : contents) {
@@ -246,69 +246,69 @@ void ui::canvas::canvas::set_contents(const std::vector<sm::skel_ref>& contents)
 
 }
 
-const ui::canvas::selection_set&  ui::canvas::canvas::selection() const {
+const ui::canvas::selection_set&  ui::canvas::scene::selection() const {
 	return selection_;
 }
 
-ui::canvas::skeleton_item* ui::canvas::canvas::selected_skeleton() const {
+ui::canvas::skeleton_item* ui::canvas::scene::selected_skeleton() const {
 	auto skeletons = to_vector_of_type<ui::canvas::skeleton_item>(selection_);
 	return (skeletons.size() == 1) ? skeletons.front() : nullptr;
 }
 
-std::vector<ui::canvas::bone_item*> ui::canvas::canvas::selected_bones() const {
+std::vector<ui::canvas::bone_item*> ui::canvas::scene::selected_bones() const {
     return to_vector_of_type<ui::canvas::bone_item>(selection_);
 }
 
-std::vector<ui::canvas::node_item*> ui::canvas::canvas::selected_nodes() const {
+std::vector<ui::canvas::node_item*> ui::canvas::scene::selected_nodes() const {
     return to_vector_of_type<ui::canvas::node_item>(selection_);
 }
 
-bool ui::canvas::canvas::is_status_line_visible() const {
+bool ui::canvas::scene::is_status_line_visible() const {
     return !status_line_.isEmpty();
 }
 
-ui::canvas::node_item* ui::canvas::canvas::insert_item(sm::node& node) {
+ui::canvas::node_item* ui::canvas::scene::insert_item(sm::node& node) {
 	ui::canvas::node_item* ni;
 	addItem(ni = new node_item(node, 1.0 / scale()));
 	return ni;
 }
 
-ui::canvas::bone_item* ui::canvas::canvas::insert_item(sm::bone& bone) {
+ui::canvas::bone_item* ui::canvas::scene::insert_item(sm::bone& bone) {
 	ui::canvas::bone_item* bi;
 	addItem(bi = new bone_item(bone, 1.0 / scale()));
 	return bi;
 }
 
-ui::canvas::skeleton_item* ui::canvas::canvas::insert_item(sm::skeleton& skel) {
+ui::canvas::skeleton_item* ui::canvas::scene::insert_item(sm::skeleton& skel) {
 	ui::canvas::skeleton_item* si;
 	addItem(si = new skeleton_item(skel, 1.0 / scale()));
 	return si;
 }
 
-void ui::canvas::canvas::transform_selection(item_transform trans) {
+void ui::canvas::scene::transform_selection(item_transform trans) {
     r::for_each(selection_, trans);
 }
 
-void ui::canvas::canvas::transform_selection(node_transform trans) {
+void ui::canvas::scene::transform_selection(node_transform trans) {
     r::for_each(as_range_view_of_type<node_item>(selection_), trans);
 }
 
-void ui::canvas::canvas::transform_selection(bone_transform trans) {
+void ui::canvas::scene::transform_selection(bone_transform trans) {
     r::for_each(as_range_view_of_type<bone_item>(selection_), trans);
 }
 
-void ui::canvas::canvas::add_to_selection(std::span<ui::canvas::canvas_item*> itms, bool sync) {
+void ui::canvas::scene::add_to_selection(std::span<ui::canvas::canvas_item*> itms, bool sync) {
     selection_.insert(itms.begin(), itms.end());
 	if (sync) {
 		sync_selection();
 	}
 }
 
-void ui::canvas::canvas::add_to_selection(ui::canvas::canvas_item* itm, bool sync) {
+void ui::canvas::scene::add_to_selection(ui::canvas::canvas_item* itm, bool sync) {
     add_to_selection({ &itm,1 }, sync);
 }
 
-void ui::canvas::canvas::subtract_from_selection(std::span<ui::canvas::canvas_item*> itms, bool sync) {
+void ui::canvas::scene::subtract_from_selection(std::span<ui::canvas::canvas_item*> itms, bool sync) {
     for (auto itm : itms) {
         selection_.erase(itm);
     }
@@ -317,25 +317,25 @@ void ui::canvas::canvas::subtract_from_selection(std::span<ui::canvas::canvas_it
 	}
 }
 
-void ui::canvas::canvas::subtract_from_selection(ui::canvas::canvas_item* itm, bool sync) {
+void ui::canvas::scene::subtract_from_selection(ui::canvas::canvas_item* itm, bool sync) {
     subtract_from_selection({ &itm,1 }, sync);
 }
 
-void ui::canvas::canvas::set_selection(std::span<ui::canvas::canvas_item*> itms, bool sync) {
+void ui::canvas::scene::set_selection(std::span<ui::canvas::canvas_item*> itms, bool sync) {
     selection_.clear();
     add_to_selection(itms,sync);
 }
 
-void ui::canvas::canvas::set_selection(ui::canvas::canvas_item* itm, bool sync) {
+void ui::canvas::scene::set_selection(ui::canvas::canvas_item* itm, bool sync) {
     set_selection({ &itm,1 },sync);
 }
 
-void ui::canvas::canvas::clear_selection() {
+void ui::canvas::scene::clear_selection() {
     selection_.clear();
     sync_selection();
 }
 
-void ui::canvas::canvas::clear() {
+void ui::canvas::scene::clear() {
     selection_.clear();
     auto items = canvas_items();
 	for (auto* item : items) {
@@ -349,7 +349,7 @@ void ui::canvas::canvas::clear() {
 	}
 }
 
-void ui::canvas::canvas::sync_selection() {
+void ui::canvas::scene::sync_selection() {
     auto itms = items();
     for (auto* itm : as_range_view_of_type<ui::canvas::canvas_item>(itms)) {
         bool selected = selection_.contains(itm);
@@ -358,21 +358,21 @@ void ui::canvas::canvas::sync_selection() {
     emit manager().selection_changed(*this);
 }
 
-QGraphicsView& ui::canvas::canvas::view() {
+QGraphicsView& ui::canvas::scene::view() {
     return *views().first();
 }
 
-const QGraphicsView& ui::canvas::canvas::view() const {
+const QGraphicsView& ui::canvas::scene::view() const {
     return *views().first();
 }
 
-void ui::canvas::canvas::show_status_line(const QString& txt) {
+void ui::canvas::scene::show_status_line(const QString& txt) {
     status_line_ = txt;
     update();
     setFocus();
 }
 
-void ui::canvas::canvas::filter_selection(std::function<bool(canvas_item*)> filter) {
+void ui::canvas::scene::filter_selection(std::function<bool(canvas_item*)> filter) {
 	selection_set sel;
 	for (auto* aci : selection_) {
 		if (filter(aci)) {
@@ -384,7 +384,7 @@ void ui::canvas::canvas::filter_selection(std::function<bool(canvas_item*)> filt
 	selection_ = sel;
 }
 
-void ui::canvas::canvas::delete_item(canvas_item* deletee, bool emit_signals) {
+void ui::canvas::scene::delete_item(canvas_item* deletee, bool emit_signals) {
 	bool was_selected = deletee->is_selected();
 	if (was_selected) {
 		filter_selection(
@@ -415,31 +415,31 @@ void ui::canvas::canvas::delete_item(canvas_item* deletee, bool emit_signals) {
 	}
 }
 
-QPointF ui::canvas::canvas::from_global_to_canvas(const QPoint& pt) {
+QPointF ui::canvas::scene::from_global_to_canvas(const QPoint& pt) {
     auto view_coords = view().mapFromGlobal(pt);
     return view().mapToScene(view_coords);
 }
 
-void ui::canvas::canvas::set_drag_mode(drag_mode dm) {
+void ui::canvas::scene::set_drag_mode(drag_mode dm) {
     view().setDragMode( to_qt_drag_mode(dm) );
 }
 
-void ui::canvas::canvas::hide_status_line() {
+void ui::canvas::scene::hide_status_line() {
     status_line_.clear();
     update();
 }
 
-const ui::canvas::canvas_manager& ui::canvas::canvas::manager() const {
-    auto unconst_this = const_cast<ui::canvas::canvas*>(this);
+const ui::canvas::canvas_manager& ui::canvas::scene::manager() const {
+    auto unconst_this = const_cast<ui::canvas::scene*>(this);
     return unconst_this->manager();
 }
 
-ui::canvas::canvas_manager& ui::canvas::canvas::manager() {
+ui::canvas::canvas_manager& ui::canvas::scene::manager() {
     auto* parent = view().parent()->parent();
     return *static_cast<ui::canvas::canvas_manager*>(parent);
 }
 
-std::optional<sm::point> ui::canvas::canvas::cursor_pos() const {
+std::optional<sm::point> ui::canvas::scene::cursor_pos() const {
     auto& view = this->view();
     auto pt = view.mapToScene(view.mapFromGlobal(QCursor::pos()));
     QRectF canvas_view_bounds = QRectF(
@@ -453,29 +453,29 @@ std::optional<sm::point> ui::canvas::canvas::cursor_pos() const {
     }
 }
 
-std::string ui::canvas::canvas::tab_name() const {
+std::string ui::canvas::scene::tab_name() const {
     return manager().tab_name(*this);
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::canvas::node_item* ui::canvas::canvas::top_node(const QPointF& pt) const {
+ui::canvas::node_item* ui::canvas::scene::top_node(const QPointF& pt) const {
     return top_item_of_type<ui::canvas::node_item>(*this, pt);
 }
 
-ui::canvas::canvas_item* ui::canvas::canvas::top_item(const QPointF& pt) const {
+ui::canvas::canvas_item* ui::canvas::scene::top_item(const QPointF& pt) const {
     return top_item_of_type<ui::canvas::canvas_item>(*this, pt);
 }
 
-std::vector<ui::canvas::canvas_item*> ui::canvas::canvas::items_in_rect(const QRectF& r) const {
+std::vector<ui::canvas::canvas_item*> ui::canvas::scene::items_in_rect(const QRectF& r) const {
     return to_vector_of_type<ui::canvas::canvas_item>(items(r));
 }
 
-std::vector<ui::canvas::canvas_item*> ui::canvas::canvas::canvas_items() const {
+std::vector<ui::canvas::canvas_item*> ui::canvas::scene::canvas_items() const {
     return to_vector_of_type<ui::canvas::canvas_item>(items());
 }
 
-std::vector<ui::canvas::node_item*> ui::canvas::canvas::root_node_items() const {
+std::vector<ui::canvas::node_item*> ui::canvas::scene::root_node_items() const {
     auto nodes = node_items();
     return nodes |
         rv::filter(
@@ -485,49 +485,49 @@ std::vector<ui::canvas::node_item*> ui::canvas::canvas::root_node_items() const 
         ) | r::to<std::vector<node_item*>>();
 }
 
-std::vector<ui::canvas::node_item*> ui::canvas::canvas::node_items() const {
+std::vector<ui::canvas::node_item*> ui::canvas::scene::node_items() const {
     return to_vector_of_type<node_item>(items());
 }
 
-std::vector<ui::canvas::bone_item*> ui::canvas::canvas::bone_items() const {
+std::vector<ui::canvas::bone_item*> ui::canvas::scene::bone_items() const {
     return to_vector_of_type<bone_item>(items());
 }
 
-std::vector<ui::canvas::skeleton_item*> ui::canvas::canvas::skeleton_items() const {
+std::vector<ui::canvas::skeleton_item*> ui::canvas::scene::skeleton_items() const {
     return to_vector_of_type<skeleton_item>(items());
 }
 
-void ui::canvas::canvas::keyPressEvent(QKeyEvent* event) {
+void ui::canvas::scene::keyPressEvent(QKeyEvent* event) {
     inp_handler_.keyPressEvent(*this, event);
 }
 
-void ui::canvas::canvas::keyReleaseEvent(QKeyEvent* event) {
+void ui::canvas::scene::keyReleaseEvent(QKeyEvent* event) {
     inp_handler_.keyReleaseEvent(*this, event);
 }
 
-void ui::canvas::canvas::mousePressEvent(QGraphicsSceneMouseEvent* event) {
+void ui::canvas::scene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
     inp_handler_.mousePressEvent(*this, event);
 }
 
-void ui::canvas::canvas::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
+void ui::canvas::scene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
     inp_handler_.mouseMoveEvent(*this, event);
 }
 
-void ui::canvas::canvas::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
+void ui::canvas::scene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
     inp_handler_.mouseReleaseEvent(*this, event);
 }
 
-void ui::canvas::canvas::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
+void ui::canvas::scene::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
     inp_handler_.mouseDoubleClickEvent(*this, event);
 }
 
-void ui::canvas::canvas::wheelEvent(QGraphicsSceneWheelEvent* event) {
+void ui::canvas::scene::wheelEvent(QGraphicsSceneWheelEvent* event) {
     inp_handler_.wheelEvent(*this, event);
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
-std::optional<mdl::skel_piece> ui::canvas::selected_single_model(const canvas& canv) {
+std::optional<mdl::skel_piece> ui::canvas::selected_single_model(const scene& canv) {
 	auto* skel_item = canv.selected_skeleton();
 	if (skel_item) {
 		return mdl::skel_piece{ std::ref(skel_item->model()) };

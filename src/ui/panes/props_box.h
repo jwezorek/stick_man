@@ -9,7 +9,7 @@
 
 namespace ui {
     namespace canvas {
-        class canvas;
+        class scene;
     }
 
     namespace pane {
@@ -17,7 +17,7 @@ namespace ui {
 
         namespace props {
 
-            using current_canvas_fn = std::function<ui::canvas::canvas& ()>;
+            using current_canvas_fn = std::function<ui::canvas::scene& ()>;
             class nodes;
             class bones;
 
@@ -39,7 +39,7 @@ namespace ui {
                 void set_title(QString title);
                 void init(mdl::project& proj);
                 virtual void populate(mdl::project& proj);
-                virtual void set_selection(const ui::canvas::canvas& canv) = 0;
+                virtual void set_selection(const ui::canvas::scene& canv) = 0;
                 virtual void lose_selection();
             };
 
@@ -47,17 +47,17 @@ namespace ui {
             public:
                 single_or_multi_props_widget(const current_canvas_fn& fn, selection_properties* parent,
                     QString title);
-                void set_selection(const ui::canvas::canvas& canv) override;
-                virtual void set_selection_common(const ui::canvas::canvas& canv) = 0;
-                virtual void set_selection_single(const ui::canvas::canvas& canv) = 0;
-                virtual void set_selection_multi(const ui::canvas::canvas& canv) = 0;
-                virtual bool is_multi(const ui::canvas::canvas& canv) = 0;
+                void set_selection(const ui::canvas::scene& canv) override;
+                virtual void set_selection_common(const ui::canvas::scene& canv) = 0;
+                virtual void set_selection_single(const ui::canvas::scene& canv) = 0;
+                virtual void set_selection_multi(const ui::canvas::scene& canv) = 0;
+                virtual bool is_multi(const ui::canvas::scene& canv) = 0;
             };
 
             class no_properties : public props_box {
             public:
                 no_properties(const current_canvas_fn& fn, selection_properties* parent);
-                void set_selection(const ui::canvas::canvas& canv) override;
+                void set_selection(const ui::canvas::scene& canv) override;
             };
 
             class mixed_properties : public props_box {
@@ -67,7 +67,7 @@ namespace ui {
             public:
                 mixed_properties(const current_canvas_fn& fn, selection_properties* parent);
                 void populate(mdl::project& proj) override;
-                void set_selection(const ui::canvas::canvas& canv) override;
+                void set_selection(const ui::canvas::scene& canv) override;
                 void lose_selection() override;
             };
         }

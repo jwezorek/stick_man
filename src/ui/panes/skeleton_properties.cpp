@@ -1,5 +1,5 @@
 #include "skeleton_properties.h"
-#include "../canvas/canvas.h"
+#include "../canvas/scene.h"
 #include "../canvas/skel_item.h"
 #include "skeleton_pane.h"
 
@@ -31,7 +31,7 @@ void ui::pane::props::skeletons::populate(mdl::project & proj) {
     );
 }
 
-void ui::pane::props::skeletons::set_selection(const ui::canvas::canvas& canv) {
+void ui::pane::props::skeletons::set_selection(const ui::canvas::scene& canv) {
     auto* skel_item = canv.selected_skeleton();
     name_->set_value(skel_item->model().name().c_str());
 }

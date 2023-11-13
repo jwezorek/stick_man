@@ -16,10 +16,10 @@ namespace ui {
 
     namespace canvas {
 
-        class canvas;
+        class scene;
 
         class canvas_item {
-            friend class canvas;
+            friend class scene;
         protected:
             QGraphicsItem* selection_frame_;
 
@@ -33,7 +33,7 @@ namespace ui {
         public:
             canvas_item();
             void sync_to_model();
-            canvas* canvas() const;
+            scene* canvas() const;
             bool is_selected() const;
             void set_selected(bool selected);
             mdl::skel_piece to_skeleton_piece();

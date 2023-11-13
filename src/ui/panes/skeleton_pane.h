@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../canvas/canvas.h"
+#include "../canvas/scene.h"
 #include <QWidget>
 #include <QtWidgets>
 #include "../../core/sm_types.h"
@@ -54,7 +54,7 @@ namespace ui {
 
             QTreeView* create_skeleton_tree();
             std::vector<QStandardItem*> selected_items() const;
-            canvas::canvas& canvas();
+            canvas::scene& canvas();
 
             void select_item(QStandardItem* item, bool select);
             void select_items(const std::vector<QStandardItem*>& items, bool emit_signal = true);

@@ -1,4 +1,4 @@
-#include "canvas.h"
+#include "scene.h"
 #include "canvas_item.h"
 #include "../util.h"
 #include "../../core/sm_skeleton.h"
@@ -20,9 +20,9 @@ void ui::canvas::canvas_item::sync_to_model() {
 	}
 }
 
-ui::canvas::canvas* ui::canvas::canvas_item::canvas() const {
+ui::canvas::scene* ui::canvas::canvas_item::canvas() const {
 	auto* ptr = dynamic_cast<const QGraphicsItem*>(this);
-	return static_cast<ui::canvas::canvas*>(ptr->scene());
+	return static_cast<ui::canvas::scene*>(ptr->scene());
 }
 
 bool ui::canvas::canvas_item::is_selected() const {

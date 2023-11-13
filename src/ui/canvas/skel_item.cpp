@@ -1,4 +1,4 @@
-#include "canvas.h"
+#include "scene.h"
 #include "canvas_item.h"
 #include "skel_item.h"
 #include "../util.h"

@@ -16,7 +16,7 @@ namespace ui {
 
     namespace canvas {
         class canvas_manager;
-        class canvas;
+        class scene;
     }
 
 	enum class selection_type {
@@ -35,12 +35,12 @@ namespace ui {
             std::unordered_map<selection_type, props::props_box*> props_;
             pane::skeleton* skel_pane_;
 
-            void handle_selection_changed(canvas::canvas& canv);
+            void handle_selection_changed(canvas::scene& canv);
 
         public:
             selection_properties(const props::current_canvas_fn& fn, pane::skeleton* pane);
             props::props_box* current_props() const;
-            void set(const canvas::canvas& canv);
+            void set(const canvas::scene& canv);
             void init(canvas::canvas_manager& canvases, mdl::project& proj);
             pane::skeleton& skel_pane();
         };

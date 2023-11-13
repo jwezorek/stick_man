@@ -4,7 +4,7 @@
 #include "canvas/node_item.h"
 #include "canvas/bone_item.h"
 #include "canvas/skel_item.h"
-#include "canvas/canvas.h"
+#include "canvas/scene.h"
 #include "canvas/canvas_manager.h"
 #include "../model/project.h"
 #include "stick_man.h"
@@ -133,7 +133,7 @@ namespace {
     // skeleton item in the UI *or* it returns any sm::skeletons for which all of their nodes
     // and bones are selected.
 
-    std::unordered_set<const sm::skeleton*> get_selected_skeletons(ui::canvas::canvas& canv) {
+    std::unordered_set<const sm::skeleton*> get_selected_skeletons(ui::canvas::scene& canv) {
         std::unordered_set<const sm::skeleton*> selected_skels;
         auto selected_skel = canv.selected_skeleton();
         if (selected_skel) {
@@ -165,7 +165,7 @@ namespace {
     // just the an item for the whole skeleton.
 
     std::vector<std::tuple<mdl::const_skel_piece, bool>> skeleton_pieces_in_topological_order(
-            ui::canvas::canvas& canv, const std::unordered_set<const sm::skeleton*>& skel_set) {
+            ui::canvas::scene& canv, const std::unordered_set<const sm::skeleton*>& skel_set) {
 
         auto selected_skeletons = get_selected_skeletons(canv);
         auto pieces_and_sel_state = selected_skeletons |
@@ -210,7 +210,7 @@ namespace {
     // we want. This is what representing arbitrary selections as skeletons entails. 
 
     std::tuple<sm::world, sm::world> split_skeletons_by_selection( 
-            ui::canvas::canvas& canv, const std::unordered_set<const sm::skeleton*>& skel_set) {
+            ui::canvas::scene& canv, const std::unordered_set<const sm::skeleton*>& skel_set) {
         auto pieces = skeleton_pieces_in_topological_order(canv, skel_set);
 
         skeleton_piece_set selection_set;
@@ -256,7 +256,7 @@ namespace {
     // returns the the set of skeletons that are either selected or contain at least one 
     // node or bone that is selected, 
 
-    std::unordered_set<const sm::skeleton*> relavent_skeleton_set(ui::canvas::canvas& canv) {
+    std::unordered_set<const sm::skeleton*> relavent_skeleton_set(ui::canvas::scene& canv) {
         return canv.selection() |
             rv::transform(
                 [](ui::canvas::canvas_item* itm)->const sm::skeleton* {

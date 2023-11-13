@@ -21,13 +21,13 @@ namespace ui {
     public:
         tool_manager();
         void init(canvas::canvas_manager& canvases, mdl::project& model);
-        void keyPressEvent(canvas::canvas& c, QKeyEvent* event) override;
-        void keyReleaseEvent(canvas::canvas& c, QKeyEvent* event) override;
-        void mousePressEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void mouseMoveEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void mouseReleaseEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void mouseDoubleClickEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) override;
-        void wheelEvent(canvas::canvas& c, QGraphicsSceneWheelEvent* event) override;
+        void keyPressEvent(canvas::scene& c, QKeyEvent* event) override;
+        void keyReleaseEvent(canvas::scene& c, QKeyEvent* event) override;
+        void mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseMoveEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseDoubleClickEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
+        void wheelEvent(canvas::scene& c, QGraphicsSceneWheelEvent* event) override;
         std::span<const tool_info> tool_info() const;
         bool has_current_tool() const;
         tool& current_tool() const;

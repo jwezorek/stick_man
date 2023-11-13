@@ -52,7 +52,7 @@ namespace ui {
             rubber_band
         };
 
-        class canvas : public QGraphicsScene {
+        class scene : public QGraphicsScene {
 
             Q_OBJECT
 
@@ -85,7 +85,7 @@ namespace ui {
 
         public:
 
-            canvas(input_handler& inp_handler);
+            scene(input_handler& inp_handler);
             void init();
             node_item* top_node(const QPointF& pt) const;
             canvas_item* top_item(const QPointF& pt) const;
@@ -135,6 +135,6 @@ namespace ui {
             std::optional<sm::point> cursor_pos() const;
         };
 
-        std::optional<mdl::skel_piece> selected_single_model(const canvas& canv);
+        std::optional<mdl::skel_piece> selected_single_model(const scene& canv);
     }
 }

@@ -2,7 +2,7 @@
 #include "skeleton_properties.h"
 #include "node_properties.h"
 #include "bone_properties.h"
-#include "../canvas/canvas.h"
+#include "../canvas/scene.h"
 #include "../canvas/skel_item.h"
 #include "../canvas/node_item.h"
 #include "../canvas/bone_item.h"
@@ -83,7 +83,7 @@ ui::pane::props::props_box* ui::pane::selection_properties::current_props() cons
     );
 }
 
-void ui::pane::selection_properties::set(const ui::canvas::canvas& canv) {
+void ui::pane::selection_properties::set(const ui::canvas::scene& canv) {
 	auto* old_props = current_props();
 
     QScrollArea* scroller = nullptr;
@@ -106,7 +106,7 @@ void ui::pane::selection_properties::set(const ui::canvas::canvas& canv) {
 	}
 }
 
-void ui::pane::selection_properties::handle_selection_changed(canvas::canvas& canv) {
+void ui::pane::selection_properties::handle_selection_changed(canvas::scene& canv) {
     set(canv);
 }
 

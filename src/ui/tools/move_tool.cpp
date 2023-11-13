@@ -233,12 +233,12 @@ ui::move_tool::move_state::move_state() :
 	key_event_(nullptr)
 {}
 
-void ui::move_tool::move_state::set(canvas::canvas& c, QGraphicsSceneMouseEvent* evnt) {
+void ui::move_tool::move_state::set(canvas::scene& c, QGraphicsSceneMouseEvent* evnt) {
     canvas_ = &c;
     event_ = evnt;
 }
 
-void  ui::move_tool::move_state::set(canvas::canvas& c, QKeyEvent* evnt) {
+void  ui::move_tool::move_state::set(canvas::scene& c, QKeyEvent* evnt) {
     canvas_ = &c;
     key_event_ = evnt;
 }
@@ -252,7 +252,7 @@ ui::move_tool::move_tool() :
 
 }
 
-void ui::move_tool::keyPressEvent(canvas::canvas& c, QKeyEvent* event) {
+void ui::move_tool::keyPressEvent(canvas::scene& c, QKeyEvent* event) {
     auto mode = static_cast<move_mode>(btns_->checkedId());
     if (mode == move_mode::none) {
         return;
@@ -261,7 +261,7 @@ void ui::move_tool::keyPressEvent(canvas::canvas& c, QKeyEvent* event) {
     tool_for_mode(mode)->keyPressEvent(state_);
 }
 
-void ui::move_tool::mousePressEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::move_tool::mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {
     auto mode = static_cast<move_mode>(btns_->checkedId());
     if (mode == move_mode::none) {
         return;
@@ -270,7 +270,7 @@ void ui::move_tool::mousePressEvent(canvas::canvas& c, QGraphicsSceneMouseEvent*
     tool_for_mode(mode)->mousePressEvent(state_);
 }
 
-void ui::move_tool::mouseMoveEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::move_tool::mouseMoveEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {
     auto mode = static_cast<move_mode>(btns_->checkedId());
     if (mode == move_mode::none) {
         return;
@@ -279,7 +279,7 @@ void ui::move_tool::mouseMoveEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* 
     tool_for_mode(mode)->mouseMoveEvent(state_);
 }
 
-void ui::move_tool::mouseReleaseEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::move_tool::mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {
     auto mode = static_cast<move_mode>(btns_->checkedId());
     if (mode == move_mode::none) {
         return;

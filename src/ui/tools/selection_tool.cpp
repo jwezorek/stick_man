@@ -1,7 +1,7 @@
 #include "selection_tool.h"
 #include "../panes/skeleton_pane.h"
 #include "../util.h"
-#include "../canvas/canvas.h"
+#include "../canvas/scene.h"
 #include "../canvas/skel_item.h"
 #include "../canvas/node_item.h"
 #include "../canvas/bone_item.h"
@@ -24,7 +24,7 @@ namespace rv = std::ranges::views;
 
 namespace {
 
-	void deselect_skeleton(ui::canvas::canvas& canv) {
+	void deselect_skeleton(ui::canvas::scene& canv) {
 		canv.filter_selection(
 			[](ui::canvas::canvas_item* itm)->bool {
 				return dynamic_cast<ui::canvas::skeleton_item*>(itm) == nullptr;
@@ -129,7 +129,7 @@ ui::selection_tool::selection_tool() :
 void ui::selection_tool::init(canvas::canvas_manager& canvases, mdl::project& model) {
     canvases.connect(
         &canvases, &canvas::canvas_manager::rubber_band_change,
-        [&](canvas::canvas& canv, QRect rbr, QPointF from, QPointF to) {
+        [&](canvas::scene& canv, QRect rbr, QPointF from, QPointF to) {
             if (from != QPointF{ 0, 0 }) {
                 rubber_band_ = points_to_rect(from, to);
             }
@@ -142,17 +142,17 @@ void ui::selection_tool::activate(canvas::canvas_manager& canv_mgr) {
     rubber_band_ = {};
 }
 
-void ui::selection_tool::keyReleaseEvent(canvas::canvas & c, QKeyEvent * event) {
+void ui::selection_tool::keyReleaseEvent(canvas::scene & c, QKeyEvent * event) {
 }
 
-void ui::selection_tool::mousePressEvent(canvas::canvas& canv, QGraphicsSceneMouseEvent* event) {
+void ui::selection_tool::mousePressEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
     rubber_band_ = {};
 }
 
-void ui::selection_tool::mouseMoveEvent(canvas::canvas& canv, QGraphicsSceneMouseEvent* event) {
+void ui::selection_tool::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
 }
 
-void ui::selection_tool::mouseReleaseEvent(canvas::canvas& canv, QGraphicsSceneMouseEvent* event) {
+void ui::selection_tool::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
     bool shift_down = event->modifiers().testFlag(Qt::ShiftModifier);
     bool ctrl_down = event->modifiers().testFlag(Qt::ControlModifier);
     if (rubber_band_) {
@@ -163,7 +163,7 @@ void ui::selection_tool::mouseReleaseEvent(canvas::canvas& canv, QGraphicsSceneM
 	canv.sync_to_model();
 }
 
-void ui::selection_tool::handle_click(canvas::canvas& canv, QPointF pt, bool shift_down, bool ctrl_down) {
+void ui::selection_tool::handle_click(canvas::scene& canv, QPointF pt, bool shift_down, bool ctrl_down) {
     auto clicked_item = canv.top_item(pt);
     if (!clicked_item) {
         canv.clear_selection();
@@ -185,7 +185,7 @@ void ui::selection_tool::handle_click(canvas::canvas& canv, QPointF pt, bool shi
     canv.set_selection(clicked_item, true);
 }
 
-void ui::selection_tool::handle_drag(canvas::canvas& canv, QRectF rect, bool shift_down, bool ctrl_down) {
+void ui::selection_tool::handle_drag(canvas::scene& canv, QRectF rect, bool shift_down, bool ctrl_down) {
     auto clicked_items = canv.items_in_rect(rect);
     if (clicked_items.empty()) {
         canv.clear_selection();

@@ -30,43 +30,43 @@ void ui::tool_manager::init(canvas::canvas_manager& canvases, mdl::project& mode
     }
 }
 
-void ui::tool_manager::keyPressEvent(ui::canvas::canvas& c, QKeyEvent* event) {
+void ui::tool_manager::keyPressEvent(ui::canvas::scene& c, QKeyEvent* event) {
     if (has_current_tool()) {
         current_tool().keyPressEvent(c, event);
     }
 }
 
-void ui::tool_manager::keyReleaseEvent(ui::canvas::canvas& c, QKeyEvent* event) {
+void ui::tool_manager::keyReleaseEvent(ui::canvas::scene& c, QKeyEvent* event) {
     if (has_current_tool()) {
         current_tool().keyReleaseEvent(c, event);
     }
 }
 
-void ui::tool_manager::mousePressEvent(ui::canvas::canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool_manager::mousePressEvent(ui::canvas::scene& c, QGraphicsSceneMouseEvent* event) {
     if (has_current_tool()) {
         current_tool().mousePressEvent(c, event);
     }
 }
 
-void ui::tool_manager::mouseMoveEvent(ui::canvas::canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool_manager::mouseMoveEvent(ui::canvas::scene& c, QGraphicsSceneMouseEvent* event) {
     if (has_current_tool()) {
         current_tool().mouseMoveEvent(c, event);
     }
 }
 
-void ui::tool_manager::mouseReleaseEvent(ui::canvas::canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool_manager::mouseReleaseEvent(ui::canvas::scene& c, QGraphicsSceneMouseEvent* event) {
     if (has_current_tool()) {
         current_tool().mouseReleaseEvent(c, event);
     }
 }
 
-void ui::tool_manager::mouseDoubleClickEvent(ui::canvas::canvas& c, QGraphicsSceneMouseEvent* event) {
+void ui::tool_manager::mouseDoubleClickEvent(ui::canvas::scene& c, QGraphicsSceneMouseEvent* event) {
     if (has_current_tool()) {
         current_tool().mouseDoubleClickEvent(c, event);
     }
 }
 
-void ui::tool_manager::wheelEvent(ui::canvas::canvas& c, QGraphicsSceneWheelEvent* event) {
+void ui::tool_manager::wheelEvent(ui::canvas::scene& c, QGraphicsSceneWheelEvent* event) {
     if (has_current_tool()) {
         current_tool().wheelEvent(c, event);
     }

@@ -13,7 +13,7 @@ namespace ui {
     public:
         add_node_tool();
         void init(canvas::canvas_manager& canvases, mdl::project& model) override;
-        void mouseReleaseEvent(canvas::canvas& c, QGraphicsSceneMouseEvent* event) override;
+        void mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
     };
 
 }

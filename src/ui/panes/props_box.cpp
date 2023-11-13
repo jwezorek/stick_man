@@ -2,7 +2,7 @@
 #include "properties.h"
 #include "node_properties.h"
 #include "bone_properties.h"
-#include "../canvas/canvas.h"
+#include "../canvas/scene.h"
 
 ui::pane::props::props_box::props_box(
         const current_canvas_fn& fn,
@@ -63,7 +63,7 @@ ui::pane::props::single_or_multi_props_widget::single_or_multi_props_widget(
     props::props_box(fn, parent, title)
 {}
 
-void ui::pane::props::single_or_multi_props_widget::set_selection(const ui::canvas::canvas& canv) {
+void ui::pane::props::single_or_multi_props_widget::set_selection(const ui::canvas::scene& canv) {
     set_selection_common(canv);
     if (is_multi(canv)) {
         set_selection_multi(canv);
@@ -80,7 +80,7 @@ ui::pane::props::no_properties::no_properties(const props::current_canvas_fn& fn
         props_box(fn, parent, "no selection") {
 }
 
-void ui::pane::props::no_properties::set_selection(const ui::canvas::canvas& canv) {
+void ui::pane::props::no_properties::set_selection(const ui::canvas::scene& canv) {
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -104,7 +104,7 @@ void ui::pane::props::mixed_properties::populate(mdl::project& proj) {
     bones_->show();
 }
 
-void ui::pane::props::mixed_properties::set_selection(const ui::canvas::canvas& canv) {
+void ui::pane::props::mixed_properties::set_selection(const ui::canvas::scene& canv) {
     nodes_->set_selection(canv);
     bones_->set_selection(canv);
 }

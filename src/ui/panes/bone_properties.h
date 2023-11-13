@@ -19,16 +19,16 @@ namespace ui {
                 rot_constraint_box* constraint_box_;
                 QPushButton* constraint_btn_;
 
-                void add_or_delete_constraint(mdl::project& proj, ui::canvas::canvas& canv);
+                void add_or_delete_constraint(mdl::project& proj, ui::canvas::scene& canv);
 
             public:
                 bones(const current_canvas_fn& fn, selection_properties* parent);
 
                 void populate(mdl::project& proj) override;
-                bool is_multi(const ui::canvas::canvas& canv) override;
-                void set_selection_common(const ui::canvas::canvas& canv) override;
-                void set_selection_multi(const ui::canvas::canvas& canv) override;
-                void set_selection_single(const ui::canvas::canvas& canv) override;
+                bool is_multi(const ui::canvas::scene& canv) override;
+                void set_selection_common(const ui::canvas::scene& canv) override;
+                void set_selection_multi(const ui::canvas::scene& canv) override;
+                void set_selection_single(const ui::canvas::scene& canv) override;
                 void lose_selection() override;
             };
         }

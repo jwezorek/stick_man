@@ -2,7 +2,7 @@
 
 #include <QWidget>
 #include <QtWidgets>
-#include "canvas.h"
+#include "scene.h"
 
 class input_handler;
 
@@ -16,7 +16,7 @@ namespace ui {
 
         private:
             QGraphicsView& active_view() const;
-            canvas* active_canv_;
+            scene* active_canv_;
             QMetaObject::Connection current_tab_conn_;
             input_handler& inp_handler_;
             drag_mode drag_mode_;
@@ -37,20 +37,20 @@ namespace ui {
             void init(mdl::project& proj);
             void clear();
             void center_active_view();
-            canvas& active_canvas() const;
-            canvas* canvas_from_name(const std::string& canv_name);
+            scene& active_canvas() const;
+            scene* canvas_from_name(const std::string& canv_name);
             void set_drag_mode(drag_mode dm);
-            void set_active_canvas(const canvas& c);
+            void set_active_canvas(const scene& c);
             std::vector<std::string> tab_names() const;
-            std::string tab_name(const canvas& canv) const;
+            std::string tab_name(const scene& canv) const;
 
             auto canvases() {
                 namespace r = std::ranges;
                 namespace rv = std::ranges::views;
                 return rv::iota(0, count()) |
                     rv::transform(
-                        [this](int i)->ui::canvas::canvas* {
-                            return static_cast<ui::canvas::canvas*>(
+                        [this](int i)->ui::canvas::scene* {
+                            return static_cast<ui::canvas::scene*>(
                                 static_cast<QGraphicsView*>(widget(i))->scene()
                                 );
                         }
@@ -58,9 +58,9 @@ namespace ui {
             }
 
         signals:
-            void active_canvas_changed(ui::canvas::canvas& old_canv, ui::canvas::canvas& canv);
-            void selection_changed(ui::canvas::canvas& canv);
-            void rubber_band_change(ui::canvas::canvas& canv, QRect rbr, QPointF from, QPointF to);
+            void active_canvas_changed(ui::canvas::scene& old_canv, ui::canvas::scene& canv);
+            void selection_changed(ui::canvas::scene& canv);
+            void rubber_band_change(ui::canvas::scene& canv, QRect rbr, QPointF from, QPointF to);
             void canvas_refresh(sm::world& proj);
         };
     }

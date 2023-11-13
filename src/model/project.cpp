@@ -1,5 +1,5 @@
 #include "project.h"
-#include "../ui/canvas/canvas.h"
+#include "../ui/canvas/scene.h"
 #include "../ui/canvas/canvas_item.h"
 #include "commands.h"
 #include "../core/sm_skeleton.h"
