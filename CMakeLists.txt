@@ -22,7 +22,7 @@ add_executable(stick_man
     src/ui/canvas/scene.cpp
     src/ui/panes/tools_pane.cpp
     src/ui/tools/tool.cpp
-    src/ui/tools/move_tool.cpp
+    "src/ui/tools/animate_tool.cpp"
     src/ui/tools/selection_tool.cpp
     src/ui/panes/skeleton_pane.cpp
     src/ui/panes/tool_settings_pane.cpp

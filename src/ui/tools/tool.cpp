@@ -1,5 +1,5 @@
 #include "tool.h"
-#include "move_tool.h"
+#include "animate_tool.h"
 #include "selection_tool.h"
 #include "../stick_man.h"
 #include "../panes/tool_settings_pane.h"
