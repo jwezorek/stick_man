@@ -20,7 +20,7 @@ namespace ui {
 
         class select : public base {
         private:
-
+            QWidget* settings_;
             std::optional<QRectF> rubber_band_;
 
             void handle_click(canvas::scene& c, QPointF pt, bool shift_down, bool alt_down);

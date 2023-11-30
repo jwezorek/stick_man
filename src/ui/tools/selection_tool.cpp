@@ -123,6 +123,7 @@ namespace {
 }
 
 ui::tool::select::select() :
+    settings_(nullptr),
     base("selection", "arrow_icon.png", ui::tool::id::selection) {
 }
 
@@ -228,6 +229,34 @@ void ui::tool::select::deactivate(canvas::manager& canv_mgr) {
     canv_mgr.set_drag_mode(ui::canvas::drag_mode::none);
 }
 
+QWidget* indent_widget(int indent_level = 1) {
+    auto* iw = new QWidget();
+    iw->setFixedWidth(indent_level * 40);
+    return iw;
+}
+
+QLayout* indented_widget(int indent_level, QWidget* widg) {
+    auto* row = new QHBoxLayout();
+    row->addWidget(indent_widget(indent_level));
+    row->addWidget(widg);
+    row->addStretch();
+    return row;
+}
+
 QWidget* ui::tool::select::settings_widget() {
-	return new QWidget();
+    if (!settings_) {
+        settings_ = new QWidget();
+        QVBoxLayout* column = new QVBoxLayout(settings_);
+        column->addWidget(new QCheckBox("drag behaviors on"));
+        column->addLayout(indented_widget(1, new QRadioButton("rotate")));
+        column->addLayout(indented_widget(2, new QCheckBox("rotate on pins")));
+        column->addLayout(indented_widget(2, new QCheckBox("rubberband mode")));
+        column->addLayout(indented_widget(1, new QRadioButton("translate")));
+        column->addLayout(indented_widget(2, new QCheckBox("entire selection")));
+        column->addLayout(indented_widget(2, new QRadioButton("rag doll mode")));
+        column->addLayout(indented_widget(2, new QRadioButton("rubber band mode")));
+        column->addLayout(indented_widget(2, new QRadioButton("rigid mode")));
+        column->addStretch();
+    }
+    return settings_;
 }
