@@ -51,7 +51,7 @@ add_executable(stick_man
     src/ui/tools/pan_tool.cpp
     src/ui/tools/add_node_tool.cpp
     src/ui/tools/add_bone_tool.cpp
-    src/ui/tools/select_settings.cpp
+    src/ui/tools/select_tool_panel.cpp
 )
 
 target_link_libraries(stick_man PRIVATE Qt6::Widgets  Eigen3::Eigen)

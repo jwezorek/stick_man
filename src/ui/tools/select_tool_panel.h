@@ -6,7 +6,8 @@ namespace ui {
 
     namespace tool {
 
-        class select_settings : public QWidget {
+        class select_tool_panel : public QWidget {
+            QCheckBox* drag_behaviors_;
             QRadioButton* rotate_;
             QCheckBox* rotate_on_pin_;
             QRadioButton* translate_;
@@ -18,7 +19,7 @@ namespace ui {
             QRadioButton* rot_rubber_band_mode_;
             QRadioButton* rot_rigid_mode_;
         public:
-            select_settings();
+            select_tool_panel();
         };
 
     }

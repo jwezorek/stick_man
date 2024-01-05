@@ -1,4 +1,4 @@
-#include "select_settings.h"
+#include "select_tool_panel.h"
 
 namespace {
     QWidget* indent_widget(int indent_level = 1) {
@@ -16,7 +16,7 @@ namespace {
     }
 }
 
-ui::tool::select_settings::select_settings() : QWidget() {
+ui::tool::select_tool_panel::select_tool_panel() : QWidget() {
 
     QVBoxLayout* column = new QVBoxLayout(this);
     
@@ -24,7 +24,7 @@ ui::tool::select_settings::select_settings() : QWidget() {
     QButtonGroup* translate_mode = new QButtonGroup(this);
     QButtonGroup* rotate_mode = new QButtonGroup(this);
     
-    column->addWidget(new QCheckBox("drag behaviors on"));
+    column->addWidget(drag_behaviors_ = new QCheckBox("drag behaviors on"));
     
     column->addLayout(indented_widget(1, rotate_ = new QRadioButton("rotate")));
     column->addLayout(indented_widget(2, rotate_on_pin_ = new QCheckBox("rotate on pin")));

@@ -1,5 +1,5 @@
 #include "selection_tool.h"
-#include "select_settings.h"
+#include "select_tool_panel.h"
 #include "../panes/skeleton_pane.h"
 #include "../util.h"
 #include "../canvas/scene.h"
@@ -232,7 +232,7 @@ void ui::tool::select::deactivate(canvas::manager& canv_mgr) {
 
 QWidget* ui::tool::select::settings_widget() {
     if (!settings_) {
-        settings_ = new select_settings();
+        settings_ = new select_tool_panel();
     }
     return settings_;
 }
