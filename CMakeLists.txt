@@ -22,7 +22,7 @@ add_executable(stick_man
     src/ui/canvas/scene.cpp
     src/ui/panes/tools_pane.cpp
     src/ui/tools/tool.cpp
-    "src/ui/tools/animate_tool.cpp"
+    src/ui/tools/animate_tool.cpp
     src/ui/tools/selection_tool.cpp
     src/ui/panes/skeleton_pane.cpp
     src/ui/panes/tool_settings_pane.cpp
@@ -51,6 +51,7 @@ add_executable(stick_man
     src/ui/tools/pan_tool.cpp
     src/ui/tools/add_node_tool.cpp
     src/ui/tools/add_bone_tool.cpp
+    src/ui/tools/select_settings.cpp
 )
 
 target_link_libraries(stick_man PRIVATE Qt6::Widgets  Eigen3::Eigen)
