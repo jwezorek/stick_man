@@ -147,11 +147,6 @@ ui::canvas::scene::scene(tool::input_handler& inp_handler) :
 }
 
 void ui::canvas::scene::init() {
-    connect(&view(), &QGraphicsView::rubberBandChanged,
-        [this](QRect rbr, QPointF from, QPointF to) {
-            emit manager().rubber_band_change(*this, rbr, from, to);
-        }
-    );
 }
 
 void ui::canvas::scene::drawBackground(QPainter* painter, const QRectF& dirty_rect) {

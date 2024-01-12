@@ -48,7 +48,8 @@ namespace ui {
         public:
             select_tool_panel();
             void init();
-            std::optional<sel_drag_settings> settings() const;
+            sel_drag_settings settings() const;
+            bool has_drag_behavior() const;
         };
 
     }

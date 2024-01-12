@@ -5,6 +5,7 @@
 #include <QtWidgets>
 #include <optional>
 #include <unordered_set>
+#include <variant>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -14,17 +15,31 @@ namespace ui {
 
     namespace canvas {
         class manager;
+        namespace item {
+            class rubber_band;
+        }
     }
 
     namespace tool {
 
+        class select_tool_panel;
+
         class select : public base {
         private:
-            QWidget* settings_;
-            std::optional<QRectF> rubber_band_;
+            select_tool_panel* settings_;
+
+            std::optional<QPointF> click_pt_;
+            canvas::item::rubber_band* rubber_band_;
 
             void handle_click(canvas::scene& c, QPointF pt, bool shift_down, bool alt_down);
             void handle_drag(canvas::scene& c, QRectF rect, bool shift_down, bool alt_down);
+
+            canvas::item::rubber_band* rubber_band_from_drag_settings(canvas::scene& canv);
+            void update_rubber_band(canvas::scene& canv, QPointF loc);
+
+            bool is_dragging() const;
+            void do_dragging(canvas::scene& canv, QPointF pt);
+
         public:
 
             select();

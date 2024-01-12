@@ -62,7 +62,6 @@ namespace ui {
         signals:
             void active_canvas_changed(ui::canvas::scene& old_canv, ui::canvas::scene& canv);
             void selection_changed(ui::canvas::scene& canv);
-            void rubber_band_change(ui::canvas::scene& canv, QRect rbr, QPointF from, QPointF to);
             void canvas_refresh(sm::world& proj);
         };
     }

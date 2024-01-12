@@ -128,7 +128,7 @@ ui::tool::select::select() :
     base("selection", "arrow_icon.png", ui::tool::id::selection) {
 }
 
-void ui::tool::select::init(canvas::manager& canvases, mdl::project& model) {
+void ui::tool::select::init(canvas::manager& canvases, mdl::project& model) { /*
     canvases.connect(
         &canvases, &canvas::manager::rubber_band_change,
         [&](canvas::scene& canv, QRect rbr, QPointF from, QPointF to) {
@@ -137,10 +137,10 @@ void ui::tool::select::init(canvas::manager& canvases, mdl::project& model) {
             }
         }
     );
+    */
 }
 
 void ui::tool::select::activate(canvas::manager& canv_mgr) {
-    canv_mgr.set_drag_mode(ui::canvas::drag_mode::rubber_band);
     rubber_band_ = {};
 }
 
@@ -149,19 +149,48 @@ void ui::tool::select::keyReleaseEvent(canvas::scene & c, QKeyEvent * event) {
 
 void ui::tool::select::mousePressEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
     rubber_band_ = {};
+    click_pt_ = event->scenePos();
+}
+
+bool  ui::tool::select::is_dragging() const {
+    return rubber_band_ != nullptr;
+}
+
+ui::canvas::item::rubber_band* ui::tool::select::rubber_band_from_drag_settings(canvas::scene& canv) {
+    return nullptr;
+}
+
+void ui::tool::select::update_rubber_band(canvas::scene& canv, QPointF pt) {
+
+}
+
+void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
+
 }
 
 void ui::tool::select::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
+    QPointF pt = event->scenePos();
+    if (is_dragging()) {
+        do_dragging(canv, pt);
+        return;
+    }
+    if (click_pt_ && distance(*click_pt_, pt) <= 3.0 && settings_->has_drag_behavior()) {
+         do_dragging(canv, pt);
+         return;
+    }
 }
 
 void ui::tool::select::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
+    click_pt_ = {};
     bool shift_down = event->modifiers().testFlag(Qt::ShiftModifier);
     bool ctrl_down = event->modifiers().testFlag(Qt::ControlModifier);
-    if (rubber_band_) {
-        handle_drag(canv, *rubber_band_, shift_down, ctrl_down);
+
+    if (is_dragging()) {
+       //handle_drag(canv, rubber_band_, shift_down, ctrl_down);
     } else {
         handle_click(canv, event->scenePos(), shift_down, ctrl_down);
     }
+
 	canv.sync_to_model();
 }
 

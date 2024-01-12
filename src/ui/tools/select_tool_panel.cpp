@@ -159,17 +159,18 @@ void ui::tool::select_tool_panel::init() {
     }
 }
 
-std::optional<ui::tool::sel_drag_settings> ui::tool::select_tool_panel::settings() const {
-    if (!drag_behaviors_->isChecked()) {
-        return {};
-    }
-    return {{
+ui::tool::sel_drag_settings ui::tool::select_tool_panel::settings() const {
+    return {
         .is_in_rotate_mode_ = rotate_->isChecked(),
         .rotate_on_pin_ = rotate_on_pin_->isChecked(),
         .rotate_mode_ = rot_mode(),
         .trans_sel_ = trans_selection_->isChecked(),
         .trans_mode_ = trans_mode()
-    }};
+    };
+}
+
+bool ui::tool::select_tool_panel::has_drag_behavior() const {
+    return drag_behaviors_->isChecked();
 }
 
 
