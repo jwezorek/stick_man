@@ -2,6 +2,7 @@
 
 #include "../util.h"
 #include "../../model/project.h"
+#include "rubber_band.h"
 #include <QWidget>
 #include <QtWidgets>
 #include <QGraphicsScene>
@@ -71,6 +72,7 @@ namespace ui {
             QString status_line_;
             selection_set selection_;
             tool::input_handler& inp_handler_;
+            item::rubber_band* rubber_band_;
 
             void sync_selection();
             QGraphicsView& view();
@@ -139,6 +141,26 @@ namespace ui {
             const canvas::manager& manager() const;
             canvas::manager& manager();
             std::optional<sm::point> cursor_pos() const;
+
+            template<typename T>
+            T* rubber_band(QPointF pt) {
+                T* rb = dynamic_cast<T*>(rubber_band_);
+                if (rb) {
+                    rb->set_pinned_point(pt);
+                    rb->setVisible(true);
+                    return rb;
+                }
+                if (rubber_band_ != nullptr) {
+                    this->removeItem(dynamic_cast<QGraphicsItem*>(rubber_band_));
+                    delete rubber_band_;
+                }
+
+                auto rubber_band_ = new T(pt);
+                this->addItem(rubber_band_);
+                rubber_band_->setVisible(true);
+
+                return rubber_band_;
+            }
         };
 
         std::optional<mdl::skel_piece> selected_single_model(const scene& canv);

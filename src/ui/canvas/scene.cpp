@@ -133,7 +133,7 @@ namespace {
 		r::sort(nodes);
 		auto adj_dup = r::adjacent_find(nodes, [](auto n1, auto n2) {return n1 == n2; });
 		return (adj_dup != nodes.end()) ? *adj_dup : nullptr;
-	}
+	}  
 
 	sm::bone* parent_bone(sm::bone* bone_1, sm::bone* bone_2) {
 		return (&(bone_1->parent_node()) == find_shared_node(bone_1, bone_2)) ? bone_2 : bone_1;
@@ -142,7 +142,7 @@ namespace {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::canvas::scene::scene(tool::input_handler& inp_handler) :
-        inp_handler_(inp_handler) {
+        inp_handler_(inp_handler), rubber_band_(nullptr) {
     setSceneRect(QRectF(-1500, -1500, 3000, 3000));
 }
 
