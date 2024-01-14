@@ -26,22 +26,31 @@ namespace ui {
 
         class select : public base {
         private:
-            select_tool_panel* settings_;
+            enum rubber_band_type {
+                selection_rb,
+                translation_rb,
+                rotation_rb
+            };
 
+            struct drag_info {
+                QPointF pt;
+                canvas::item::rubber_band* rubber_band_;
+                rubber_band_type type;
+            };
+
+            select_tool_panel* settings_panel_;
+            std::optional<drag_info> drag_;
             std::optional<QPointF> click_pt_;
-            canvas::item::rubber_band* rubber_band_;
 
             void handle_click(canvas::scene& c, QPointF pt, bool shift_down, bool alt_down);
             void handle_drag_complete(canvas::scene& c, bool shift_down, bool alt_down);
-
             void handle_select_drag(
                 canvas::scene& canv, QRectF rect, bool shift_down, bool ctrl_down
             );
-
-            canvas::item::rubber_band* rubber_band_from_drag_settings(
-                canvas::scene& canv, QPointF pt
+            std::optional<rubber_band_type> kind_of_rubber_band( canvas::scene& canv, QPointF pt );
+            static ui::canvas::item::rubber_band* create_rubber_band(
+                rubber_band_type typ, ui::canvas::scene& canv, QPointF pt
             );
-
             bool is_dragging() const;
             void do_dragging(canvas::scene& canv, QPointF pt);
 

@@ -25,6 +25,18 @@ namespace rv = std::ranges::views;
 
 namespace {
 
+    template<typename T>
+    ui::canvas::item::rubber_band* create_rubber_band(ui::canvas::scene& canv, QPointF pt) {
+        auto* rb = new T(pt);
+        canv.addItem(dynamic_cast<QGraphicsItem*>(rb));
+        return rb;
+    }
+
+    void destroy_rubber_band(ui::canvas::scene& canv, ui::canvas::item::rubber_band* rb) {
+        canv.removeItem(dynamic_cast<QGraphicsItem*>(rb));
+        delete rb;
+    }
+
 	void deselect_skeleton(ui::canvas::scene& canv) {
 		canv.filter_selection(
 			[](ui::canvas::item::base* itm)->bool {
@@ -124,7 +136,7 @@ namespace {
 }
 
 ui::tool::select::select() :
-    settings_(nullptr),
+    settings_panel_(nullptr),
     base("selection", "arrow_icon.png", ui::tool::id::selection) {
 }
 
@@ -141,34 +153,63 @@ void ui::tool::select::init(canvas::manager& canvases, mdl::project& model) { /*
 }
 
 void ui::tool::select::activate(canvas::manager& canv_mgr) {
-    rubber_band_ = {};
+    drag_ = {};
 }
 
 void ui::tool::select::keyReleaseEvent(canvas::scene & c, QKeyEvent * event) {
 }
 
 void ui::tool::select::mousePressEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
-    rubber_band_ = {};
     click_pt_ = event->scenePos();
 }
 
 bool  ui::tool::select::is_dragging() const {
-    return rubber_band_ != nullptr;
+    return drag_.has_value();
 }
 
-ui::canvas::item::rubber_band* ui::tool::select::rubber_band_from_drag_settings(
+std::optional<ui::tool::select::rubber_band_type> ui::tool::select::kind_of_rubber_band(
         canvas::scene& canv, QPointF pt) {
     auto* selected_item = canv.top_item(pt);
     if (!selected_item) {
-        return canv.rubber_band<canvas::item::rect_rubber_band>(pt);
+        return selection_rb;
     }
+    if (!settings_panel_->has_drag_behavior()) {
+        return {};
+    }
+    auto settings = settings_panel_->settings();
+    if (settings.is_in_rotate_mode_) {
+        return rotation_rb;
+    }
+    return translation_rb;
+}
+
+ui::canvas::item::rubber_band* ui::tool::select::create_rubber_band(
+        rubber_band_type typ, ui::canvas::scene& canv, QPointF pt) {
+    switch (typ) {
+        case selection_rb:
+            return ::create_rubber_band<canvas::item::rect_rubber_band>(canv, pt);
+        case translation_rb:
+            return ::create_rubber_band<canvas::item::line_rubber_band>(canv, pt);
+        case rotation_rb:
+            return ::create_rubber_band<canvas::item::arc_rubber_band>(canv, pt);
+    }
+    return nullptr;
 }
 
 void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
-    if (!is_dragging()) {
-        rubber_band_ = rubber_band_from_drag_settings(canv, pt);
+    auto rb_type = kind_of_rubber_band(canv, pt);
+    if (!rb_type) {
+        return;
     }
-    rubber_band_->handle_drag(pt);
+    if (!is_dragging()) {
+        drag_ = drag_info{
+            pt,
+            create_rubber_band(*rb_type, canv, pt),
+            *rb_type
+        };
+    }
+    drag_->pt = pt;
+    drag_->rubber_band_->handle_drag(pt);
 }
 
 void ui::tool::select::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
@@ -177,23 +218,25 @@ void ui::tool::select::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEv
         do_dragging(canv, pt);
         return;
     }
-    if (click_pt_ && distance(*click_pt_, pt) <= 3.0 && settings_->has_drag_behavior()) {
+    if (click_pt_ && distance(*click_pt_, pt) > 3.0) {
          do_dragging(canv, pt);
          return;
     }
 }
 
 void ui::tool::select::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
-    click_pt_ = {};
+    
     bool shift_down = event->modifiers().testFlag(Qt::ShiftModifier);
     bool ctrl_down = event->modifiers().testFlag(Qt::ControlModifier);
 
     if (is_dragging()) {
         handle_drag_complete(canv, shift_down, ctrl_down);
+        destroy_rubber_band(canv, drag_->rubber_band_);
+        drag_ = {};
     } else {
         handle_click(canv, event->scenePos(), shift_down, ctrl_down);
     }
-
+    click_pt_ = {};
 	canv.sync_to_model();
 }
 
@@ -220,7 +263,9 @@ void ui::tool::select::handle_click(canvas::scene& canv, QPointF pt, bool shift_
 }
 
 void ui::tool::select::handle_drag_complete(canvas::scene& c, bool shift_down, bool alt_down) {
-
+    if (drag_->type == selection_rb) {
+        handle_select_drag(c, QRectF(*click_pt_, drag_->pt), shift_down, alt_down);
+    }
 }
 
 void ui::tool::select::handle_select_drag(canvas::scene& canv, QRectF rect, bool shift_down, bool ctrl_down) {
@@ -267,8 +312,8 @@ void ui::tool::select::deactivate(canvas::manager& canv_mgr) {
 }
 
 QWidget* ui::tool::select::settings_widget() {
-    if (!settings_) {
-        settings_ = new select_tool_panel();
+    if (!settings_panel_) {
+        settings_panel_ = new select_tool_panel();
     }
-    return settings_;
+    return settings_panel_;
 }

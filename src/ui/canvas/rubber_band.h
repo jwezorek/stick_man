@@ -12,12 +12,25 @@ namespace ui {
             public: 
                 void set_pinned_point(const QPointF& pt);
                 virtual void handle_drag(const QPointF& pt) = 0;
+                void hide();
                 virtual ~rubber_band() {}
             };
 
             class rect_rubber_band : public rubber_band, public QGraphicsRectItem {
             public:
                 rect_rubber_band(const QPointF& pt);
+                void handle_drag(const QPointF& pt);
+            };
+
+            class line_rubber_band : public rubber_band, public QGraphicsLineItem {
+            public:
+                line_rubber_band(const QPointF& pt);
+                void handle_drag(const QPointF& pt);
+            };
+
+            class arc_rubber_band : public rubber_band, public QGraphicsEllipseItem {
+            public:
+                arc_rubber_band(const QPointF& pt);
                 void handle_drag(const QPointF& pt);
             };
         }
