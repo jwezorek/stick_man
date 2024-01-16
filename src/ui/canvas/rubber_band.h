@@ -29,8 +29,12 @@ namespace ui {
             };
 
             class arc_rubber_band : public rubber_band, public QGraphicsEllipseItem {
+                double radius_;
+                double theta_;
             public:
                 arc_rubber_band(const QPointF& pt);
+                void set_radius(double r);
+                void set_from_theta(double theta);
                 void handle_drag(const QPointF& pt);
             };
         }

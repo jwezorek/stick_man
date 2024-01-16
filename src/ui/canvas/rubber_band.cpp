@@ -46,9 +46,16 @@ ui::canvas::item::arc_rubber_band::arc_rubber_band(const QPointF& pt) {
     set_pinned_point(pt);
 }
 
+void ui::canvas::item::arc_rubber_band::set_radius(double r) {
+    radius_ = r;
+}
+
+void ui::canvas::item::arc_rubber_band::set_from_theta(double theta) {
+    theta_ = theta;
+}
+
 void ui::canvas::item::arc_rubber_band::handle_drag(const QPointF& pt) {
     auto* this_ellipse_item = dynamic_cast<QGraphicsEllipseItem*>(this);
-    auto radius = distance(pinned_point_, pt);
-    auto theta = angle_through_points(pinned_point_, pt);
-    set_arc(this_ellipse_item, pinned_point_, radius, 0.0, theta);
+    auto sweep = angle_through_points(pinned_point_, pt) - theta_;
+    set_arc(this_ellipse_item, pinned_point_, radius_, theta_, sweep);
 }

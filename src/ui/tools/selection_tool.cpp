@@ -25,6 +25,45 @@ namespace rv = std::ranges::views;
 
 namespace {
 
+    template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
+
+    struct rot_info {
+        sm::node_ref axis;
+        sm::node_ref rotating;
+    };
+    std::optional<rot_info> get_rotation_info(ui::canvas::scene& canv, QPointF clicked_pt,
+            const ui::tool::sel_drag_settings& settings) {
+        std::optional<rot_info> ri;
+        if (!settings.rotate_on_pin_) {
+            auto* item = canv.top_item(clicked_pt);
+            if (!item) {
+                return {};
+            }
+            auto model = item->to_skeleton_piece();
+            auto parent_bone = std::visit(
+                overload{
+                    [](sm::node_ref node)->sm::maybe_bone_ref {
+                        return node.get().parent_bone();
+                    },
+                    [](sm::bone_ref bone)->sm::maybe_bone_ref {
+                        return bone;
+                    },
+                    [](sm::skel_ref bone)->sm::maybe_bone_ref {
+                        return {};
+                    }
+                },
+                model
+            );
+            if (!parent_bone) {
+                return {};
+            }
+            ri = rot_info{ parent_bone->get().parent_node(), parent_bone->get().child_node() };
+        } else {
+            return {};
+        }
+        return ri;
+    }
+
     template<typename T>
     ui::canvas::item::rubber_band* create_rubber_band(ui::canvas::scene& canv, QPointF pt) {
         auto* rb = new T(pt);
@@ -183,17 +222,39 @@ std::optional<ui::tool::select::rubber_band_type> ui::tool::select::kind_of_rubb
     return translation_rb;
 }
 
+
+
 ui::canvas::item::rubber_band* ui::tool::select::create_rubber_band(
-        rubber_band_type typ, ui::canvas::scene& canv, QPointF pt) {
-    switch (typ) {
-        case selection_rb:
-            return ::create_rubber_band<canvas::item::rect_rubber_band>(canv, pt);
-        case translation_rb:
-            return ::create_rubber_band<canvas::item::line_rubber_band>(canv, pt);
-        case rotation_rb:
-            return ::create_rubber_band<canvas::item::arc_rubber_band>(canv, pt);
-    }
-    return nullptr;
+        rubber_band_type typ, ui::canvas::scene& canv, QPointF pt) const {
+    using rb_creation_fn = std::function<ui::canvas::item::rubber_band*()>;
+
+    const std::unordered_map<rubber_band_type, rb_creation_fn> tbl = {
+        {selection_rb, [&]()->ui::canvas::item::rubber_band* {
+            return ::create_rubber_band<canvas::item::rect_rubber_band>(canv, pt); }
+        },
+        {translation_rb, [&]()->ui::canvas::item::rubber_band* {
+            return ::create_rubber_band<canvas::item::line_rubber_band>(canv, pt); }
+        },
+        {rotation_rb, 
+            [&]()->ui::canvas::item::rubber_band* {
+                auto ri = get_rotation_info(canv, pt, this->settings_panel_->settings());
+                if (!ri) {
+                    return nullptr;
+                }
+                auto* arb = static_cast<ui::canvas::item::arc_rubber_band*>(
+                    ::create_rubber_band<canvas::item::arc_rubber_band>(canv, 
+                        to_qt_pt(ri->axis.get().world_pos())
+                    )
+                );
+                //TODO
+                //arb->set_radius(ri->radius);
+                //arb->set_from_theta(ri->theta);
+                return arb;
+            }
+        }
+    };
+    
+    return tbl.at(typ)();
 }
 
 void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
@@ -202,11 +263,11 @@ void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
         return;
     }
     if (!is_dragging()) {
-        drag_ = drag_info{
-            pt,
-            create_rubber_band(*rb_type, canv, pt),
-            *rb_type
-        };
+        auto* rb = create_rubber_band(*rb_type, canv, pt);
+        if (!rb) {
+            return;
+        }
+        drag_ = drag_info{ pt, rb, *rb_type };
     }
     drag_->pt = pt;
     drag_->rubber_band_->handle_drag(pt);

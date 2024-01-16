@@ -48,9 +48,9 @@ namespace ui {
                 canvas::scene& canv, QRectF rect, bool shift_down, bool ctrl_down
             );
             std::optional<rubber_band_type> kind_of_rubber_band( canvas::scene& canv, QPointF pt );
-            static ui::canvas::item::rubber_band* create_rubber_band(
+            ui::canvas::item::rubber_band* create_rubber_band(
                 rubber_band_type typ, ui::canvas::scene& canv, QPointF pt
-            );
+            ) const;
             bool is_dragging() const;
             void do_dragging(canvas::scene& canv, QPointF pt);
 
