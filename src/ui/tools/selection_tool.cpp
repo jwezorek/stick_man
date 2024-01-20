@@ -27,43 +27,6 @@ namespace {
 
     template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
 
-    struct rot_info {
-        sm::node_ref axis;
-        sm::node_ref rotating;
-    };
-    std::optional<rot_info> get_rotation_info(ui::canvas::scene& canv, QPointF clicked_pt,
-            const ui::tool::sel_drag_settings& settings) {
-        std::optional<rot_info> ri;
-        if (!settings.rotate_on_pin_) {
-            auto* item = canv.top_item(clicked_pt);
-            if (!item) {
-                return {};
-            }
-            auto model = item->to_skeleton_piece();
-            auto parent_bone = std::visit(
-                overload{
-                    [](sm::node_ref node)->sm::maybe_bone_ref {
-                        return node.get().parent_bone();
-                    },
-                    [](sm::bone_ref bone)->sm::maybe_bone_ref {
-                        return bone;
-                    },
-                    [](sm::skel_ref bone)->sm::maybe_bone_ref {
-                        return {};
-                    }
-                },
-                model
-            );
-            if (!parent_bone) {
-                return {};
-            }
-            ri = rot_info{ parent_bone->get().parent_node(), parent_bone->get().child_node() };
-        } else {
-            return {};
-        }
-        return ri;
-    }
-
     template<typename T>
     ui::canvas::item::rubber_band* create_rubber_band(ui::canvas::scene& canv, QPointF pt) {
         auto* rb = new T(pt);
@@ -222,34 +185,54 @@ std::optional<ui::tool::select::rubber_band_type> ui::tool::select::kind_of_rubb
     return translation_rb;
 }
 
-
-
-ui::canvas::item::rubber_band* ui::tool::select::create_rubber_band(
+std::optional<ui::tool::select::drag_state> ui::tool::select::create_drag_state(
         rubber_band_type typ, ui::canvas::scene& canv, QPointF pt) const {
-    using rb_creation_fn = std::function<ui::canvas::item::rubber_band*()>;
+    using drag_state_fn = std::function<std::optional<drag_state>()>;
 
-    const std::unordered_map<rubber_band_type, rb_creation_fn> tbl = {
-        {selection_rb, [&]()->ui::canvas::item::rubber_band* {
-            return ::create_rubber_band<canvas::item::rect_rubber_band>(canv, pt); }
+    const std::unordered_map<rubber_band_type, drag_state_fn> tbl = {
+        {selection_rb, [&]()->std::optional<drag_state> {
+                auto* rb = ::create_rubber_band<canvas::item::rect_rubber_band>(canv, pt);
+                return drag_state{
+                    pt, rb, selection_rb, std::monostate{}
+                };
+            }
         },
-        {translation_rb, [&]()->ui::canvas::item::rubber_band* {
-            return ::create_rubber_band<canvas::item::line_rubber_band>(canv, pt); }
+        {translation_rb, [&]()->std::optional<drag_state> {
+                auto* rb = ::create_rubber_band<canvas::item::line_rubber_band>(canv, pt);
+                return drag_state{
+                    pt, rb, translation_rb, std::monostate{}
+                };
+            }
         },
         {rotation_rb, 
-            [&]()->ui::canvas::item::rubber_band* {
+            [&]()->std::optional<drag_state> {
                 auto ri = get_rotation_info(canv, pt, this->settings_panel_->settings());
                 if (!ri) {
-                    return nullptr;
+                    return {};
                 }
                 auto* arb = static_cast<ui::canvas::item::arc_rubber_band*>(
                     ::create_rubber_band<canvas::item::arc_rubber_band>(canv, 
                         to_qt_pt(ri->axis.get().world_pos())
                     )
                 );
-                //TODO
-                //arb->set_radius(ri->radius);
-                //arb->set_from_theta(ri->theta);
-                return arb;
+                arb->set_radius(
+                    ui::distance(
+                        ui::to_qt_pt(ri->axis.get().world_pos()),
+                        ui::to_qt_pt(ri->rotating.get().world_pos())
+                    )
+                );
+                arb->set_from_theta(
+                    ui::angle_through_points(
+                        ui::to_qt_pt(ri->axis.get().world_pos()),
+                        ui::to_qt_pt(ri->rotating.get().world_pos())
+                    )
+                );
+                return drag_state{
+                    pt, arb, rotation_rb,  
+                    rot_info {
+                        ri->axis, ri->rotating
+                    }
+                };
             }
         }
     };
@@ -263,14 +246,45 @@ void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
         return;
     }
     if (!is_dragging()) {
-        auto* rb = create_rubber_band(*rb_type, canv, pt);
-        if (!rb) {
-            return;
-        }
-        drag_ = drag_info{ pt, rb, *rb_type };
+        drag_ = create_drag_state( *rb_type, canv, pt);
     }
-    drag_->pt = pt;
-    drag_->rubber_band_->handle_drag(pt);
+    if (is_dragging) {
+        drag_->pt = pt;
+        drag_->rubber_band->handle_drag(pt);
+    }
+}
+
+std::optional<ui::tool::select::rot_info> ui::tool::select::get_rotation_info(
+            ui::canvas::scene& canv, QPointF clicked_pt, const ui::tool::sel_drag_settings& settings) {
+    std::optional<rot_info> ri;
+    if (!settings.rotate_on_pin_) {
+        auto* item = canv.top_item(clicked_pt);
+        if (!item) {
+            return {};
+        }
+        auto model = item->to_skeleton_piece();
+        auto parent_bone = std::visit(
+            overload{
+                [](sm::node_ref node)->sm::maybe_bone_ref {
+                    return node.get().parent_bone();
+                },
+                [](sm::bone_ref bone)->sm::maybe_bone_ref {
+                    return bone;
+                },
+                [](sm::skel_ref bone)->sm::maybe_bone_ref {
+                    return {};
+                }
+            },
+            model
+        );
+        if (!parent_bone) {
+            return {};
+        }
+        ri = rot_info{ parent_bone->get().parent_node(), parent_bone->get().child_node() };
+    } else {
+        return {};
+    }
+    return ri;
 }
 
 void ui::tool::select::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
@@ -292,7 +306,7 @@ void ui::tool::select::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMous
 
     if (is_dragging()) {
         handle_drag_complete(canv, shift_down, ctrl_down);
-        destroy_rubber_band(canv, drag_->rubber_band_);
+        destroy_rubber_band(canv, drag_->rubber_band);
         drag_ = {};
     } else {
         handle_click(canv, event->scenePos(), shift_down, ctrl_down);

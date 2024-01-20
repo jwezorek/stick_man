@@ -6,6 +6,7 @@
 #include <optional>
 #include <unordered_set>
 #include <variant>
+#include "select_tool_panel.h"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -32,14 +33,25 @@ namespace ui {
                 rotation_rb
             };
 
-            struct drag_info {
+            struct rot_info {
+                sm::node_ref axis;
+                sm::node_ref rotating;
+            };
+
+            struct trans_info {
+                std::vector<sm::node_ref> selected;
+                std::vector<sm::node_ref> pinned;
+            };
+
+            struct drag_state {
                 QPointF pt;
-                canvas::item::rubber_band* rubber_band_;
+                canvas::item::rubber_band* rubber_band;
                 rubber_band_type type;
+                std::variant<std::monostate, rot_info, trans_info> extra;
             };
 
             select_tool_panel* settings_panel_;
-            std::optional<drag_info> drag_;
+            std::optional<drag_state> drag_;
             std::optional<QPointF> click_pt_;
 
             void handle_click(canvas::scene& c, QPointF pt, bool shift_down, bool alt_down);
@@ -48,11 +60,13 @@ namespace ui {
                 canvas::scene& canv, QRectF rect, bool shift_down, bool ctrl_down
             );
             std::optional<rubber_band_type> kind_of_rubber_band( canvas::scene& canv, QPointF pt );
-            ui::canvas::item::rubber_band* create_rubber_band(
+            std::optional<drag_state> create_drag_state(
                 rubber_band_type typ, ui::canvas::scene& canv, QPointF pt
             ) const;
             bool is_dragging() const;
             void do_dragging(canvas::scene& canv, QPointF pt);
+            static std::optional<rot_info> get_rotation_info(ui::canvas::scene& canv, QPointF clicked_pt,
+                const ui::tool::sel_drag_settings& settings);
 
         public:
 
