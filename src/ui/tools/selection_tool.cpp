@@ -248,7 +248,7 @@ void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
     if (!is_dragging()) {
         drag_ = create_drag_state( *rb_type, canv, pt);
     }
-    if (is_dragging) {
+    if (is_dragging()) {
         drag_->pt = pt;
         drag_->rubber_band->handle_drag(pt);
     }

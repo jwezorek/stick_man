@@ -73,7 +73,7 @@ ui::tool::select_tool_panel::select_tool_panel() : QWidget() {
     column->addWidget(drag_behaviors_ = new QCheckBox("drag behaviors on"));
     
     column->addLayout(indented_widget(1, rotate_ = new QRadioButton("rotate")));
-    column->addLayout(indented_widget(2, rotate_on_pin_ = new QCheckBox("rotate on pin")));
+    column->addLayout(indented_widget(2, rotate_on_pin_ = new QCheckBox("rotate on nearest selected")));
     column->addLayout(indented_widget(2, rot_rag_doll_mode_ = new QRadioButton("rag doll mode")));
     column->addLayout(indented_widget(2, rot_rubber_band_mode_ = new QRadioButton("rubber band mode")));
     column->addLayout(indented_widget(2, rot_rigid_mode_ = new QRadioButton("rigid mode")));
