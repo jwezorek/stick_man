@@ -15,7 +15,7 @@ namespace ui {
 
         struct sel_drag_settings {
             bool is_in_rotate_mode_;
-            bool rotate_on_pin_;
+            bool rotate_on_selected_;
             sel_drag_mode rotate_mode_;
             bool trans_sel_;
             sel_drag_mode trans_mode_;

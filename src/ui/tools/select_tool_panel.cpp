@@ -162,7 +162,7 @@ void ui::tool::select_tool_panel::init() {
 ui::tool::sel_drag_settings ui::tool::select_tool_panel::settings() const {
     return {
         .is_in_rotate_mode_ = rotate_->isChecked(),
-        .rotate_on_pin_ = rotate_on_pin_->isChecked(),
+        .rotate_on_selected_ = rotate_on_pin_->isChecked(),
         .rotate_mode_ = rot_mode(),
         .trans_sel_ = trans_selection_->isChecked(),
         .trans_mode_ = trans_mode()

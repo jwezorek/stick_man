@@ -3,6 +3,7 @@
 #include "../panes/skeleton_pane.h"
 #include "../util.h"
 #include "../canvas/scene.h"
+#include "../canvas/canvas_item.h"
 #include "../canvas/skel_item.h"
 #include "../canvas/node_item.h"
 #include "../canvas/bone_item.h"
@@ -26,6 +27,124 @@ namespace rv = std::ranges::views;
 namespace {
 
     template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
+
+    int dist(std::unordered_map<sm::node*, int> visited, sm::node& u) {
+        auto adj = u.adjacent_bones();
+        for (auto adj_bone : adj) {
+            auto& v = adj_bone.get().opposite_node(u);
+            if (visited.contains(&v)) {
+                return visited[&v] + 1;
+            }
+        }
+        return -1;
+    }
+
+    std::unordered_set<sm::node*> all_selected_nodes(sm::node& start) {
+        using namespace ui::canvas;
+        std::unordered_set<sm::node*> selected;
+        sm::dfs(
+            start,
+            [&selected](sm::node& n)->sm::visit_result {
+                if (item_from_model<item::node>(n).is_selected()) {
+                    selected.insert(&n);
+                }
+                return sm::visit_result::continue_traversal;
+            },
+            [&selected](sm::bone& b)->sm::visit_result {
+                if (item_from_model<item::bone>(b).is_selected()) {
+                    selected.insert(&b.parent_node());
+                    selected.insert(&b.child_node());
+                }
+                return sm::visit_result::continue_traversal;
+            }
+        );
+        return selected;
+    }
+
+    std::tuple<sm::maybe_node_ref, int> find_closest_selected(sm::node_ref start) {
+        auto selection = all_selected_nodes(start.get());
+        std::unordered_map<sm::node*, int> visited;
+        std::unordered_set<sm::node*> candidates;
+        sm::dfs(
+            start.get(),
+            [&](sm::node& n)->sm::visit_result {
+                if (&n == &start.get()) {
+                    visited[&n] = 0;
+                    return sm::visit_result::continue_traversal;
+                } else {
+                    visited[&n] = dist(visited, n);
+                }
+                if (selection.contains(&n)) {
+                    candidates.insert(&n);
+                    return sm::visit_result::terminate_branch;
+                }
+                return sm::visit_result::continue_traversal;
+            },
+            [&](sm::bone& b)->sm::visit_result {
+                return sm::visit_result::continue_traversal;
+            }
+        );
+        if (candidates.empty()) {
+            return { {}, -1 };
+        }
+        auto min = r::min_element(
+            candidates,
+            [&](auto&& lhs, auto&& rhs) {
+                return visited.at(lhs) < visited.at(rhs);
+            }
+        );
+        return {
+            {std::ref(**min)},
+            visited.at(*min)
+        };
+    }
+
+    using node_pair = std::tuple<sm::node_ref, sm::node_ref>;
+    std::optional<node_pair> rot_info_for_rotate_on_selection(const mdl::skel_piece& model) {
+        return std::visit(
+            overload{
+                [](sm::node_ref node)->std::optional<node_pair> {
+                    auto [closest, dist] = find_closest_selected(node);
+                    if (!closest) {
+                        return {};
+                    }
+                    return {{
+                        *closest,
+                        node
+                    }};
+                },
+                [](sm::bone_ref bone)->std::optional<node_pair> {
+                    using namespace ui::canvas;
+
+                    auto& u = bone.get().parent_node();
+                    auto& v = bone.get().child_node();
+                    auto& item_u = item_from_model<item::node>(u);
+                    auto& item_v = item_from_model<item::node>(v);
+
+                    if (item_u.is_selected() && item_v.is_selected()) {
+                        return { {u, v} };
+                    }
+                    auto [closest_to_u, u_dist] = find_closest_selected(u);
+                    auto [closest_to_v, v_dist] = find_closest_selected(v);
+                    if (!closest_to_u && !closest_to_v) {
+                        return {};
+                    }
+                    if ((u_dist > 0 && u_dist < v_dist) || !closest_to_v) {
+                        return { {*closest_to_u, v} };
+                    }
+                    if (&(closest_to_v->get()) != &u) {
+                        return { {*closest_to_v, u } };
+                    } 
+                    return {};
+                },
+                [](sm::skel_ref bone)->std::optional<node_pair> {
+                    return {};
+                }
+            },
+            model
+        );
+        return {};
+    }
 
     template<typename T>
     ui::canvas::item::rubber_band* create_rubber_band(ui::canvas::scene& canv, QPointF pt) {
@@ -142,16 +261,7 @@ ui::tool::select::select() :
     base("selection", "arrow_icon.png", ui::tool::id::selection) {
 }
 
-void ui::tool::select::init(canvas::manager& canvases, mdl::project& model) { /*
-    canvases.connect(
-        &canvases, &canvas::manager::rubber_band_change,
-        [&](canvas::scene& canv, QRect rbr, QPointF from, QPointF to) {
-            if (from != QPointF{ 0, 0 }) {
-                rubber_band_ = points_to_rect(from, to);
-            }
-        }
-    );
-    */
+void ui::tool::select::init(canvas::manager& canvases, mdl::project& model) { 
 }
 
 void ui::tool::select::activate(canvas::manager& canv_mgr) {
@@ -210,23 +320,18 @@ std::optional<ui::tool::select::drag_state> ui::tool::select::create_drag_state(
                 if (!ri) {
                     return {};
                 }
+
                 auto* arb = static_cast<ui::canvas::item::arc_rubber_band*>(
                     ::create_rubber_band<canvas::item::arc_rubber_band>(canv, 
                         to_qt_pt(ri->axis.get().world_pos())
                     )
                 );
-                arb->set_radius(
-                    ui::distance(
-                        ui::to_qt_pt(ri->axis.get().world_pos()),
-                        ui::to_qt_pt(ri->rotating.get().world_pos())
-                    )
-                );
-                arb->set_from_theta(
-                    ui::angle_through_points(
-                        ui::to_qt_pt(ri->axis.get().world_pos()),
-                        ui::to_qt_pt(ri->rotating.get().world_pos())
-                    )
-                );
+
+                auto axis_pt = ui::to_qt_pt(ri->axis.get().world_pos());
+                auto rotating_pt = ui::to_qt_pt(ri->rotating.get().world_pos());
+                arb->set_radius( ui::distance( axis_pt, rotating_pt ) );
+                arb->set_from_theta( ui::angle_through_points(axis_pt, rotating_pt )  );
+
                 return drag_state{
                     pt, arb, rotation_rb,  
                     rot_info {
@@ -257,12 +362,15 @@ void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
 std::optional<ui::tool::select::rot_info> ui::tool::select::get_rotation_info(
             ui::canvas::scene& canv, QPointF clicked_pt, const ui::tool::sel_drag_settings& settings) {
     std::optional<rot_info> ri;
-    if (!settings.rotate_on_pin_) {
-        auto* item = canv.top_item(clicked_pt);
-        if (!item) {
-            return {};
-        }
-        auto model = item->to_skeleton_piece();
+
+    auto* item = canv.top_item(clicked_pt);
+    if (!item) {
+        return {};
+    }
+
+    auto model = item->to_skeleton_piece();
+
+    if (!settings.rotate_on_selected_ || canv.selection().empty()) {
         auto parent_bone = std::visit(
             overload{
                 [](sm::node_ref node)->sm::maybe_bone_ref {
@@ -277,12 +385,18 @@ std::optional<ui::tool::select::rot_info> ui::tool::select::get_rotation_info(
             },
             model
         );
+
         if (!parent_bone) {
             return {};
         }
         ri = rot_info{ parent_bone->get().parent_node(), parent_bone->get().child_node() };
     } else {
-        return {};
+        auto nodes = rot_info_for_rotate_on_selection(model);
+        if (!nodes) {
+            return {};
+        }
+        auto [axis, rotating] = *nodes;
+        ri = rot_info{ axis, rotating };
     }
     return ri;
 }
