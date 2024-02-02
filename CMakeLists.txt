@@ -60,7 +60,7 @@ add_executable(stick_man
     src/ui/util.cpp
 
     src/main.cpp
-)
+ "src/core/sm_fabrik.h" "src/core/sm_fabrik.cpp")
 
 target_link_libraries(stick_man PRIVATE Qt6::Widgets  Eigen3::Eigen)
 

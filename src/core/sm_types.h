@@ -7,6 +7,7 @@
 #include <functional>
 #include <ranges>
 #include <memory>
+#include <variant>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -138,4 +139,7 @@ namespace sm {
     concept is_skel_piece = std::same_as<T, sm::node> ||
         std::same_as<T, sm::bone> ||
         std::same_as<T, sm::skeleton>;
+
+    template<typename V, typename E>
+    using node_or_bone = std::variant<std::reference_wrapper<V>, std::reference_wrapper<E>>;
 }

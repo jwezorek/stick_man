@@ -166,19 +166,4 @@ namespace sm {
 	void visit_bones(node& j, bone_visitor visit_node);
 	void visit_bones(bone& b, bone_visitor visit_bone);
 
-	struct fabrik_options {
-		int max_iterations;
-		double tolerance;
-		bool forw_reaching_constraints;
-		double max_ang_delta;
-
-		fabrik_options();
-	};
-
-	result perform_fabrik(
-		const std::vector<std::tuple<node_ref,point>>& effectors, 
-		const std::vector<sm::node_ref>& pinned_nodes, 
-		const fabrik_options& opts = {}
-	);
-
 }

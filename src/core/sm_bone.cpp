@@ -1,6 +1,7 @@
 #include "sm_types.h"
 #include "sm_bone.h"
 #include "sm_skeleton.h"
+#include "sm_fabrik.h"
 #include "qdebug.h"
 
 using namespace std::placeholders;
@@ -15,8 +16,6 @@ namespace {
 	template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
 }
-
-double constrain_rotation(sm::bone& b, double theta);
 
 sm::node::node(skeleton& parent, const std::string& name, double x, double y) :
 	parent_(parent),
@@ -379,7 +378,7 @@ void sm::bone::set_world_rotation(double theta) {
 		[&](bone& b)->visit_result {
 
 			auto theta = rotation_tbl.at(&b);
-			theta = constrain_rotation(b, theta);
+			theta = sm::constrain_rotation(b, theta);
 
 			auto rotate_about_u = rotate_about_point_matrix(
 				b.parent_node().world_pos(), theta);

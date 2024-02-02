@@ -5,6 +5,7 @@
 #include "../panes/tool_settings_pane.h"
 #include "../util.h"
 #include "../../core/sm_skeleton.h"
+#include "../../core/sm_fabrik.h"
 #include <unordered_map>
 #include <array>
 #include <numbers>
