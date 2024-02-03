@@ -6,6 +6,7 @@
 #include "../util.h"
 #include "../../core/sm_skeleton.h"
 #include "../../core/sm_fabrik.h"
+#include "../../core/sm_traverse.h"
 #include <unordered_map>
 #include <array>
 #include <numbers>
