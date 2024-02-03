@@ -1,5 +1,6 @@
 #include "sm_fabrik.h"
 #include "sm_skeleton.h"
+#include "sm_traverse.h"
 #include <unordered_set>
 #include <stack>
 #include <numbers>

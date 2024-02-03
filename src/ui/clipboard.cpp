@@ -1,5 +1,6 @@
 #include "clipboard.h"
 #include "../core/sm_skeleton.h"
+#include "../core/sm_traverse.h"
 #include "../core/json.hpp"
 #include "canvas/node_item.h"
 #include "canvas/bone_item.h"

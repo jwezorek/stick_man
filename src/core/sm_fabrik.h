@@ -1,6 +1,7 @@
 #pragma once
 
 #include "sm_types.h"
+#include "sm_traverse.h"
 
 namespace sm {
 

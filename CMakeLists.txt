@@ -48,6 +48,8 @@ add_executable(stick_man
     src/core/sm_skeleton.cpp
     src/core/sm_bone.cpp
     src/core/sm_types.cpp
+    src/core/sm_fabrik.cpp
+    src/core/sm_traverse.cpp
 
     src/model/project.cpp
     src/model/commands.cpp
@@ -60,7 +62,7 @@ add_executable(stick_man
     src/ui/util.cpp
 
     src/main.cpp
- "src/core/sm_fabrik.h" "src/core/sm_fabrik.cpp")
+)
 
 target_link_libraries(stick_man PRIVATE Qt6::Widgets  Eigen3::Eigen)
 

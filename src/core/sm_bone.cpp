@@ -2,6 +2,7 @@
 #include "sm_bone.h"
 #include "sm_skeleton.h"
 #include "sm_fabrik.h"
+#include "sm_traverse.h"
 #include "qdebug.h"
 
 using namespace std::placeholders;

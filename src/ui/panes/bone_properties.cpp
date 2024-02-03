@@ -5,6 +5,7 @@
 #include "../canvas/node_item.h"
 #include "../canvas/skel_item.h"
 #include "../panes/skeleton_pane.h"
+#include "../../core/sm_traverse.h"
 #include <ranges>
 #include <functional>
 #include <numbers>
