@@ -15,12 +15,12 @@ namespace sm {
     using bone_visitor = std::function<visit_result(bone&)>;
     using const_node_visitor = std::function<visit_result(const node&)>;
     using const_bone_visitor = std::function<visit_result(const bone&)>;
-    using node_visitor_with_prev = std::function<visit_result(std::optional<node_ref>, node&)>;
-    using bone_visitor_with_prev = std::function<visit_result(std::optional<node_ref>, bone&)>;
+    using node_visitor_with_prev = std::function<visit_result(maybe_node_ref, node&)>;
+    using bone_visitor_with_prev = std::function<visit_result(maybe_bone_ref, bone&)>;
     using const_node_visitor_with_prev =
-        std::function<visit_result(std::optional<const_node_ref>, const node&)>;
+        std::function<visit_result(maybe_const_node_ref, const node&)>;
     using const_bone_visitor_with_prev =
-        std::function<visit_result(std::optional<const_node_ref>, const bone&)>;
+        std::function<visit_result(maybe_const_bone_ref, const bone&)>;
 
     void dfs(node& root, node_visitor visit_node = {}, bone_visitor visit_bone = {},
         bool just_downstream = false);

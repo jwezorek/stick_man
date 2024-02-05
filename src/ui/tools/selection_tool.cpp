@@ -18,6 +18,7 @@
 #include <unordered_set>
 #include <numbers>
 #include <functional>
+#include <qDebug>
 
 using namespace std::placeholders;
 namespace r = std::ranges;
@@ -455,7 +456,17 @@ void ui::tool::select::handle_click(canvas::scene& canv, QPointF pt, bool shift_
 void ui::tool::select::handle_drag_complete(canvas::scene& c, bool shift_down, bool alt_down) {
     if (drag_->type == selection_rb) {
         handle_select_drag(c, QRectF(*click_pt_, drag_->pt), shift_down, alt_down);
+        return;
     }
+    auto skels = c.skeleton_items();
+    sm::skeleton& skel = skels.front()->model();
+    sm::visit_bones(skel.root_node(),
+        [](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
+            std::string prev_bone = (prev) ? prev->get().name() : "<nil>";
+            qDebug() << "bone: " << bone.name() << " => prev:" << prev_bone;
+            return sm::visit_result::continue_traversal;
+        }
+    );
 }
 
 void ui::tool::select::handle_select_drag(canvas::scene& canv, QRectF rect, bool shift_down, bool ctrl_down) {
