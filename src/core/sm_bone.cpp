@@ -442,13 +442,15 @@ void  sm::bone::rotate_by(double theta, sm::maybe_node_ref axis) {
 			sm::node& u = (prev) ? bone.shared_node(*prev)->get() : axis->get();
 			sm::node& v = bone.opposite_node(u);
 			auto parent_world_rotation = prev ? new_world_rotation.at(&prev->get()) : 0;
-			auto rotate_about_u = rotate_about_point_matrix(
-				u.world_pos(), old_rotation_tbl[&bone].rel_rotation + parent_world_rotation
+			v.set_world_pos(
+				transform(
+					u.world_pos() + sm::point{ old_rotation_tbl.at(&bone).length, 0.0 },
+					rotate_about_point_matrix(
+						u.world_pos(), 
+						old_rotation_tbl[&bone].rel_rotation + parent_world_rotation
+					)
+				)
 			);
-			sm::point new_v_loc = 
-				u.world_pos() + sm::point{ old_rotation_tbl.at(&bone).length, 0.0 };
-			new_v_loc = transform(new_v_loc, rotate_about_u);
-			v.set_world_pos(new_v_loc);
 			new_world_rotation[&bone] = angle_from_u_to_v(u.world_pos(), v.world_pos());
 
 			return sm::visit_result::continue_traversal;

@@ -30,6 +30,32 @@ namespace {
 
     template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
 
+    bool is_bone_from_u_to_v(sm::node_ref u, sm::node_ref v) {
+        bool found = false;
+        sm::visit_bones(
+            u.get(),
+            [&](sm::bone& b)->sm::visit_result {
+                if (&b.parent_node() == &u.get() || &b.child_node() == &v.get()) {
+                    found = true;
+                    return sm::visit_result::terminate_traversal;
+                }
+                return sm::visit_result::continue_traversal;
+            }
+        );
+        return found;
+    }
+
+    sm::maybe_bone_ref find_bone_from_u_to_v(sm::node_ref u, sm::node_ref v) {
+        auto adj = u.get().adjacent_bones();
+        auto i = r::find_if(
+            adj,
+            [&](auto bone)->bool {
+                return is_bone_from_u_to_v(u, v);
+            }
+        );
+        return (i != adj.end()) ? *i : sm::maybe_bone_ref{};
+    }
+
     int dist(std::unordered_map<sm::node*, int> visited, sm::node& u) {
         auto adj = u.adjacent_bones();
         for (auto adj_bone : adj) {
@@ -322,7 +348,6 @@ std::optional<ui::tool::select::drag_state> ui::tool::select::create_drag_state(
                 if (!ri) {
                     return {};
                 }
-
                 auto* arb = static_cast<ui::canvas::item::arc_rubber_band*>(
                     ::create_rubber_band<canvas::item::arc_rubber_band>(canv, 
                         to_qt_pt(ri->axis.get().world_pos())
@@ -337,7 +362,7 @@ std::optional<ui::tool::select::drag_state> ui::tool::select::create_drag_state(
                 return drag_state{
                     pt, arb, rotation_rb,  
                     rot_info {
-                        ri->axis, ri->rotating
+                        ri->axis, ri->rotating, ri->bone, ri->initial_theta
                     }
                 };
             }
@@ -358,6 +383,18 @@ void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
     if (is_dragging()) {
         drag_->pt = pt;
         drag_->rubber_band->handle_drag(pt);
+        std::visit(
+            overload{
+                [](std::monostate) {},
+                [&](const rot_info& ri) {
+                    handle_rotation(canv, pt, ri);
+                },
+                [&](const trans_info& ti) {
+                    handle_translation(canv, ti);
+                }
+            },
+            drag_->extra
+        );
     }
 }
 
@@ -391,14 +428,30 @@ std::optional<ui::tool::select::rot_info> ui::tool::select::get_rotation_info(
         if (!parent_bone) {
             return {};
         }
-        ri = rot_info{ parent_bone->get().parent_node(), parent_bone->get().child_node() };
+        ri = rot_info{ 
+            parent_bone->get().parent_node(), 
+            parent_bone->get().child_node(), 
+            *parent_bone,
+            parent_bone->get().world_rotation()
+        };
     } else {
         auto nodes = rot_info_for_rotate_on_selection(model);
         if (!nodes) {
             return {};
         }
         auto [axis, rotating] = *nodes;
-        ri = rot_info{ axis, rotating };
+        auto lead_bone = find_bone_from_u_to_v(axis, rotating);
+        if (!lead_bone) {
+            return {};
+        }
+        ri = rot_info{ 
+            axis, 
+            rotating, 
+            *lead_bone,
+            sm::normalize_angle(
+                sm::angle_from_u_to_v(axis.get().world_pos(), rotating.get().world_pos())
+            )
+        };
     }
     return ri;
 }
@@ -429,6 +482,18 @@ void ui::tool::select::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMous
     }
     click_pt_ = {};
 	canv.sync_to_model();
+}
+
+void ui::tool::select::handle_rotation(canvas::scene& c, QPointF pt, const rot_info& ri) {
+    auto theta = sm::normalize_angle(
+            sm::angle_from_u_to_v(ri.axis.get().world_pos(), from_qt_pt(pt))
+        ) - sm::angle_from_u_to_v(ri.axis.get().world_pos(), ri.rotating.get().world_pos());
+    ri.bone.get().rotate_by(theta);
+    c.sync_to_model();
+}
+
+void ui::tool::select::handle_translation(canvas::scene& c, const trans_info& ri) {
+
 }
 
 void ui::tool::select::handle_click(canvas::scene& canv, QPointF pt, bool shift_down, bool ctrl_down) {

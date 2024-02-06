@@ -36,6 +36,8 @@ namespace ui {
             struct rot_info {
                 sm::node_ref axis;
                 sm::node_ref rotating;
+                sm::bone_ref bone;
+                double initial_theta;
             };
 
             struct trans_info {
@@ -54,6 +56,8 @@ namespace ui {
             std::optional<drag_state> drag_;
             std::optional<QPointF> click_pt_;
 
+            void handle_rotation(canvas::scene& c, QPointF pt, const rot_info& ri);
+            void handle_translation(canvas::scene& c, const trans_info& ri);
             void handle_click(canvas::scene& c, QPointF pt, bool shift_down, bool alt_down);
             void handle_drag_complete(canvas::scene& c, bool shift_down, bool alt_down);
             void handle_select_drag(
