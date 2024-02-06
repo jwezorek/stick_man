@@ -119,10 +119,12 @@ namespace sm {
 		void set_user_data(std::any data);
 		void clear_user_data();
 
-		void rotate(double theta);
+		//void rotate(double theta);
+		//void set_world_rotation(double theta);
+        //void set_rotation(double theta);
 		void set_world_rotation(double theta);
-        void set_rotation(double theta);
-        void set_length(double len);
+		void rotate_by(double theta, sm::maybe_node_ref axis = {});
+		void set_length(double len);
 	};
 
 }

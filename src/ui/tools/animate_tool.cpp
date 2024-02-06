@@ -121,7 +121,7 @@ namespace {
             auto theta = ui::angle_through_points(ms.anchor_->scenePos(), ms.event_->scenePos()) -
                 ms.bone_->model().world_rotation();
 
-            ms.bone_->model().rotate(theta);
+            ms.bone_->model().rotate_by(theta);
             ms.canvas_->sync_to_model();
         };
 

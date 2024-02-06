@@ -4,6 +4,7 @@
 #include "sm_fabrik.h"
 #include "sm_traverse.h"
 #include "qdebug.h"
+#include <unordered_map>
 
 using namespace std::placeholders;
 namespace r = std::ranges;
@@ -16,6 +17,35 @@ namespace {
 	template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 	template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
+	struct rotation_info {
+		double length;
+		double rel_rotation;
+		double world_rotation;
+	};
+
+	using bone_rotation_tbl = std::unordered_map<sm::bone*, rotation_info>;
+
+	bone_rotation_tbl create_bone_rotation_tbl(sm::bone& src, sm::node& axis) {
+		bone_rotation_tbl tbl;
+		sm::visit_bones(axis,
+			[&](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
+				if (!prev && &bone != &src) {
+					return sm::visit_result::terminate_branch;
+				}
+				sm::node& u = (prev) ? bone.shared_node(*prev)->get() : axis;
+				sm::node& v = bone.opposite_node(u);
+				auto world_rot = sm::angle_from_u_to_v(u.world_pos(), v.world_pos());
+				auto rel_rot = (prev) ? world_rot - tbl[&prev->get()].world_rotation : world_rot;
+				tbl[&bone] = {
+					bone.scaled_length(),
+					rel_rot,
+					world_rot
+				};
+				return sm::visit_result::continue_traversal;
+			}
+		);
+		return tbl;
+	}
 }
 
 sm::node::node(skeleton& parent, const std::string& name, double x, double y) :
@@ -352,6 +382,7 @@ void sm::bone::clear_user_data() {
 	user_data_.reset();
 }
 
+/*
 void sm::bone::rotate(double theta) {
 	set_rotation(
 		rotation() + theta
@@ -361,35 +392,66 @@ void sm::bone::rotate(double theta) {
 void sm::bone::set_rotation(double theta) {
     //TODO
 }
+*/
 
 void sm::bone::set_world_rotation(double theta) {
-	std::unordered_map<bone*, double> rotation_tbl;
-	std::unordered_map<bone*, double> length_tbl;
+	bone_rotation_tbl rotation_tbl;
 	visit_bones(*this, 
 		[&](bone& b)->visit_result {
-			rotation_tbl[&b] = b.world_rotation();
-			length_tbl[&b] = b.scaled_length();
+			rotation_tbl[&b] = {
+				b.scaled_length(),
+				b.world_rotation()
+			};
 			return visit_result::continue_traversal;
 		}
 	);
 
-    rotation_tbl[this] = theta;
+    rotation_tbl[this].world_rotation = theta;
 
 	visit_bones(*this,
 		[&](bone& b)->visit_result {
 
-			auto theta = rotation_tbl.at(&b);
+			auto theta = rotation_tbl.at(&b).world_rotation;
 			theta = sm::constrain_rotation(b, theta);
 
 			auto rotate_about_u = rotate_about_point_matrix(
 				b.parent_node().world_pos(), theta);
-			auto v = b.parent_node().world_pos() + sm::point{ length_tbl.at(&b), 0.0 };
-
+			auto v = b.parent_node().world_pos() + sm::point{ rotation_tbl.at(&b).length, 0.0 };
 			b.child_node().set_world_pos(
 				transform(v, rotate_about_u)
 			);
 
 			return visit_result::continue_traversal;
+		}
+	);
+}
+
+void  sm::bone::rotate_by(double theta, sm::maybe_node_ref axis) {
+	if (!axis) {
+		axis = std::ref(parent_node());
+	}
+	auto old_rotation_tbl = create_bone_rotation_tbl(*this, *axis);
+	old_rotation_tbl[this].rel_rotation += theta;
+	std::unordered_map<sm::bone*, double> new_world_rotation;
+
+	visit_bones(*axis,
+		[&](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
+			if (!prev && &bone != this) {
+				return sm::visit_result::terminate_branch;
+			}
+			sm::node& u = (prev) ? bone.shared_node(*prev)->get() : axis->get();
+			sm::node& v = bone.opposite_node(u);
+			auto parent_world_rotation = prev ? new_world_rotation.at(&prev->get()) : 0;
+			auto rotate_about_u = rotate_about_point_matrix(
+				u.world_pos(), old_rotation_tbl[&bone].rel_rotation + parent_world_rotation
+			);
+			sm::point new_v_loc = 
+				u.world_pos() + sm::point{ old_rotation_tbl.at(&bone).length, 0.0 };
+			new_v_loc = transform(new_v_loc, rotate_about_u);
+			v.set_world_pos(new_v_loc);
+			new_world_rotation[&bone] = angle_from_u_to_v(u.world_pos(), v.world_pos());
+
+			return sm::visit_result::continue_traversal;
 		}
 	);
 }
