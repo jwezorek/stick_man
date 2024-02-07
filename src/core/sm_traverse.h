@@ -31,9 +31,9 @@ namespace sm {
     void dfs(const bone& root, const_node_visitor visit_node = {},
         const_bone_visitor visit_bone = {}, bool just_downstream = false);
 
-    void visit_nodes(node& j, node_visitor visit_node);
-    void visit_bones(node& j, bone_visitor visit_node);
-    void visit_bones(bone& b, bone_visitor visit_bone);
+    void visit_nodes(node& j, node_visitor visit_node, bool just_downstream = true);
+    void visit_bones(node& j, bone_visitor visit_node, bool just_downstream = true);
+    void visit_bones(bone& b, bone_visitor visit_bone, bool just_downstream = true);
 
     void dfs(node& root, node_visitor_with_prev visit_node = {},
         bone_visitor_with_prev visit_bone = {});

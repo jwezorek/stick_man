@@ -224,17 +224,17 @@ void sm::dfs(const bone& root, const_node_visitor visit_node,
     );
 }
 
-void sm::visit_nodes(node& j, node_visitor visit_node) {
-    dfs(j, visit_node, {}, true);
+void sm::visit_nodes(node& j, node_visitor visit_node, bool just_downstream) {
+    dfs(j, visit_node, {}, just_downstream);
 }
 
-void sm::visit_bones(node& j, bone_visitor visit_bone) {
-    dfs(j, {}, visit_bone, true);
+void sm::visit_bones(node& j, bone_visitor visit_bone, bool just_downstream) {
+    dfs(j, {}, visit_bone, just_downstream);
 }
 
-void sm::visit_bones(bone& b, bone_visitor visit_bone) {
+void sm::visit_bones(bone& b, bone_visitor visit_bone, bool just_downstream) {
     visit_bone(b);
-    visit_bones(b.child_node(), visit_bone);
+    visit_bones(b.child_node(), visit_bone, just_downstream);
 }
 
 void sm::dfs(node& root, node_visitor_with_prev visit_node,

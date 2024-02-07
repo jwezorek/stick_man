@@ -35,12 +35,13 @@ namespace {
         sm::visit_bones(
             u.get(),
             [&](sm::bone& b)->sm::visit_result {
-                if (&b.parent_node() == &u.get() || &b.child_node() == &v.get()) {
+                if (&b.parent_node() == &v.get() || &b.child_node() == &v.get()) {
                     found = true;
                     return sm::visit_result::terminate_traversal;
                 }
                 return sm::visit_result::continue_traversal;
-            }
+            },
+            false
         );
         return found;
     }
@@ -488,7 +489,7 @@ void ui::tool::select::handle_rotation(canvas::scene& c, QPointF pt, const rot_i
     auto theta = sm::normalize_angle(
             sm::angle_from_u_to_v(ri.axis.get().world_pos(), from_qt_pt(pt))
         ) - sm::angle_from_u_to_v(ri.axis.get().world_pos(), ri.rotating.get().world_pos());
-    ri.bone.get().rotate_by(theta);
+    ri.bone.get().rotate_by(theta, ri.axis);
     c.sync_to_model();
 }
 
@@ -523,15 +524,6 @@ void ui::tool::select::handle_drag_complete(canvas::scene& c, bool shift_down, b
         handle_select_drag(c, QRectF(*click_pt_, drag_->pt), shift_down, alt_down);
         return;
     }
-    auto skels = c.skeleton_items();
-    sm::skeleton& skel = skels.front()->model();
-    sm::visit_bones(skel.root_node(),
-        [](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
-            std::string prev_bone = (prev) ? prev->get().name() : "<nil>";
-            qDebug() << "bone: " << bone.name() << " => prev:" << prev_bone;
-            return sm::visit_result::continue_traversal;
-        }
-    );
 }
 
 void ui::tool::select::handle_select_drag(canvas::scene& canv, QRectF rect, bool shift_down, bool ctrl_down) {
