@@ -30,12 +30,15 @@ namespace {
 
     template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
 
-    bool is_bone_from_u_to_v(sm::node_ref u, sm::node_ref v) {
+    bool is_bone_from_u_to_v(sm::bone_ref src_bone, sm::node_ref u, sm::node_ref v) {
         bool found = false;
         sm::visit_bones(
-            u.get(),
-            [&](sm::bone& b)->sm::visit_result {
-                if (&b.parent_node() == &v.get() || &b.child_node() == &v.get()) {
+            src_bone.get(),
+            [&](sm::bone& visited_bone)->sm::visit_result {
+                if (&visited_bone != &src_bone.get() && visited_bone.has_node(u.get())) {
+                    return sm::visit_result::terminate_branch;
+                }
+                if (visited_bone.has_node(v.get())) {
                     found = true;
                     return sm::visit_result::terminate_traversal;
                 }
@@ -51,7 +54,7 @@ namespace {
         auto i = r::find_if(
             adj,
             [&](auto bone)->bool {
-                return is_bone_from_u_to_v(u, v);
+                return is_bone_from_u_to_v(bone, u, v);
             }
         );
         return (i != adj.end()) ? *i : sm::maybe_bone_ref{};

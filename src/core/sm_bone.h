@@ -99,6 +99,7 @@ namespace sm {
 		node& parent_node();
 		node& child_node();
 		node& opposite_node(const node& j);
+		bool has_node(const node& j) const;
 
 		maybe_const_node_ref shared_node(const bone& b) const;
 		maybe_node_ref shared_node(const bone& b);

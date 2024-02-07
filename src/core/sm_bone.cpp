@@ -275,6 +275,10 @@ sm::node& sm::bone::opposite_node(const node& j) {
 	}
 }
 
+bool sm::bone::has_node(const sm::node& j) const {
+	return &u_ == &j || &v_ == &j;
+}
+
 std::vector<sm::bone_ref> sm::bone::child_bones() {
 	return v_.child_bones();
 }
