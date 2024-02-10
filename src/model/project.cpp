@@ -301,6 +301,13 @@ void mdl::project::transform(const std::vector<handle>& bones,
     );
 }
 
+void mdl::project::transform_node_positions(const node_locs& old_locs, const node_locs& new_locs)
+{
+    execute_command(
+        commands::make_transform_node_positions_command(*this, old_locs, new_locs)
+    );
+}
+
 void mdl::project::replace_skeletons_aux(const std::string& canvas_name,
         const std::vector<std::string>& replacees,
         const std::vector<sm::skel_ref>& replacements,

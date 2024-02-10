@@ -290,10 +290,12 @@ namespace {
 
 ui::tool::select::select() :
     settings_panel_(nullptr),
+    project_(nullptr),
     base("selection", "arrow_icon.png", ui::tool::id::selection) {
 }
 
 void ui::tool::select::init(canvas::manager& canvases, mdl::project& model) { 
+    project_ = &model;
 }
 
 void ui::tool::select::activate(canvas::manager& canv_mgr) {
@@ -363,12 +365,7 @@ std::optional<ui::tool::select::drag_state> ui::tool::select::create_drag_state(
                 arb->set_radius( ui::distance( axis_pt, rotating_pt ) );
                 arb->set_from_theta( ui::angle_through_points(axis_pt, rotating_pt )  );
 
-                return drag_state{
-                    pt, arb, rotation_rb,  
-                    rot_info {
-                        ri->axis, ri->rotating, ri->bone, ri->initial_theta
-                    }
-                };
+                return drag_state{ pt, arb, rotation_rb, std::move(*ri) };
             }
         }
     };
@@ -402,6 +399,27 @@ void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
     }
 }
 
+ui::tool::node_locs get_branch_node_locs(sm::node& src, sm::bone& branch) {
+    std::unordered_map<mdl::handle, sm::point, mdl::handle_hash> old_locs;
+    visit_bones(src,
+        [&](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
+            if (!prev && &bone != &branch) {
+                return sm::visit_result::terminate_branch;
+            }
+            old_locs[mdl::to_handle(bone.child_node())] = bone.child_node().world_pos();
+            old_locs[mdl::to_handle(bone.parent_node())] = bone.parent_node().world_pos();
+            return sm::visit_result::continue_traversal;
+        }
+    );
+    return old_locs |
+        rv::transform(
+            [](auto&& mv)->std::tuple<mdl::handle, sm::point> {
+                const auto& [hnd, pt] = mv;
+                return { hnd,pt };
+            }
+        ) | r::to<std::vector>();
+}
+
 std::optional<ui::tool::select::rot_info> ui::tool::select::get_rotation_info(
             ui::canvas::scene& canv, QPointF clicked_pt, const ui::tool::sel_drag_settings& settings) {
     std::optional<rot_info> ri;
@@ -432,11 +450,15 @@ std::optional<ui::tool::select::rot_info> ui::tool::select::get_rotation_info(
         if (!parent_bone) {
             return {};
         }
-        ri = rot_info{ 
-            parent_bone->get().parent_node(), 
-            parent_bone->get().child_node(), 
+        ri = rot_info{
+            parent_bone->get().parent_node(),
+            parent_bone->get().child_node(),
             *parent_bone,
-            parent_bone->get().world_rotation()
+            parent_bone->get().world_rotation(),
+            std::make_unique<node_locs>(get_branch_node_locs(
+                    parent_bone->get().parent_node(), parent_bone->get()
+                )
+            )
         };
     } else {
         auto nodes = rot_info_for_rotate_on_selection(model);
@@ -454,6 +476,11 @@ std::optional<ui::tool::select::rot_info> ui::tool::select::get_rotation_info(
             *lead_bone,
             sm::normalize_angle(
                 sm::angle_from_u_to_v(axis.get().world_pos(), rotating.get().world_pos())
+            ),
+            std::make_unique<node_locs>(
+                get_branch_node_locs(
+                    axis, lead_bone->get()
+                )
             )
         };
     }
@@ -522,10 +549,24 @@ void ui::tool::select::handle_click(canvas::scene& canv, QPointF pt, bool shift_
     canv.set_selection(clicked_item, true);
 }
 
+void ui::tool::select::do_rotation_complete(const ui::tool::select::rot_info& ri) {
+    auto new_locs = get_branch_node_locs(ri.axis, ri.bone);
+    project_->transform_node_positions(
+        *ri.old_locs,
+        new_locs
+    );
+}
+
 void ui::tool::select::handle_drag_complete(canvas::scene& c, bool shift_down, bool alt_down) {
-    if (drag_->type == selection_rb) {
-        handle_select_drag(c, QRectF(*click_pt_, drag_->pt), shift_down, alt_down);
-        return;
+    switch (drag_->type) {
+        case selection_rb:
+            handle_select_drag(c, QRectF(*click_pt_, drag_->pt), shift_down, alt_down);
+            return;
+        case rotation_rb:
+            do_rotation_complete(std::get<rot_info>(drag_->extra));
+            return;
+        case translation_rb:
+            return;
     }
 }
 

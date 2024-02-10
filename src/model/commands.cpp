@@ -149,7 +149,7 @@ mdl::command mdl::commands::make_replace_skeletons_command(
     };
 }
 
-mdl::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
+mdl::commands::transform_nodes_and_bones_state::transform_nodes_and_bones_state(
         project& proj,  const std::vector<handle>& node_hnds, const std::function<void(sm::node&)>& fn):
             transform_nodes{ fn } {
     for (auto handle : node_hnds) {
@@ -162,7 +162,7 @@ mdl::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
     }
 }
 
-mdl::commands::trasform_nodes_and_bones_state::trasform_nodes_and_bones_state(
+mdl::commands::transform_nodes_and_bones_state::transform_nodes_and_bones_state(
         project& proj,
         const std::vector<handle>& bone_hnds,
         const std::function<void(sm::bone&)>& fn) :
@@ -200,9 +200,9 @@ mdl::command mdl::commands::make_transform_bones_or_nodes_command(
         const std::function<void(sm::node&)>& nodes_fn,
         const std::function<void(sm::bone&)>& bones_fn) {
 
-    std::shared_ptr<trasform_nodes_and_bones_state> state = (nodes_fn) ?
-        std::make_shared<trasform_nodes_and_bones_state>(proj, nodes, nodes_fn) :
-        std::make_shared<trasform_nodes_and_bones_state>(proj, bones, bones_fn);
+    std::shared_ptr<transform_nodes_and_bones_state> state = (nodes_fn) ?
+        std::make_shared<transform_nodes_and_bones_state>(proj, nodes, nodes_fn) :
+        std::make_shared<transform_nodes_and_bones_state>(proj, bones, bones_fn);
     return {
         [state](project& proj) {
             // either there is a node transformation function or
@@ -237,6 +237,35 @@ mdl::command mdl::commands::make_transform_bones_or_nodes_command(
                 }
             }
             emit proj.refresh_canvas(proj, state->canvas, false);
+        }
+    };
+}
+
+mdl::command mdl::commands::make_transform_node_positions_command(project& proj,
+        const std::vector<std::tuple<handle, sm::point>>& old_locs, 
+        const std::vector<std::tuple<handle, sm::point>>& new_locs) {
+    return {
+        [new_locs](project& proj) {
+             std::string canvas;
+             for (const auto& [node_hnd,loc] : new_locs) {
+                auto& node = node_hnd.to<sm::node>(proj.world_);
+                if (canvas.empty()) {
+                    canvas = proj.canvas_name_from_skeleton(node.owner().name());
+                }
+                node.set_world_pos(loc);
+             }
+            emit proj.refresh_canvas(proj, canvas, false);
+        },
+        [old_locs](project& proj) {
+             std::string canvas;
+             for (const auto& [node_hnd,loc] : old_locs) {
+                auto& node = node_hnd.to<sm::node>(proj.world_);
+                if (canvas.empty()) {
+                    canvas = proj.canvas_name_from_skeleton(node.owner().name());
+                }
+                node.set_world_pos(loc);
+             }
+            emit proj.refresh_canvas(proj, canvas, false);
         }
     };
 }

@@ -16,7 +16,7 @@ namespace{
 
 }
 
-sm::expected_skel mdl::handle::to_skeleton(sm::world& world) {
+sm::expected_skel mdl::handle::to_skeleton(sm::world& world) const {
     return world.skeleton(skel_name);
 }
 

@@ -99,6 +99,11 @@ namespace mdl {
         void transform(const std::vector<handle>& nodes,
             const std::function<void(sm::bone&)>& fn);
 
+        using node_locs = std::vector<std::tuple<handle, sm::point>>;
+        void transform_node_positions(
+            const node_locs& old_locs, const node_locs& new_locs
+        );
+
     signals:
         void tab_created_or_deleted(const std::string& name, bool created);
         void pre_new_bone_added(sm::node& u, sm::node& v);

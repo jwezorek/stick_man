@@ -6,6 +6,7 @@
 #include <optional>
 #include <unordered_set>
 #include <variant>
+#include <memory>
 #include "select_tool_panel.h"
 
 /*------------------------------------------------------------------------------------------------*/
@@ -25,6 +26,8 @@ namespace ui {
 
         class select_tool_panel;
 
+        using node_locs = std::vector<std::tuple<mdl::handle, sm::point>>;
+
         class select : public base {
         private:
             enum rubber_band_type {
@@ -38,6 +41,7 @@ namespace ui {
                 sm::node_ref rotating;
                 sm::bone_ref bone;
                 double initial_theta;
+                std::unique_ptr<node_locs> old_locs;
             };
 
             struct trans_info {
@@ -55,7 +59,9 @@ namespace ui {
             select_tool_panel* settings_panel_;
             std::optional<drag_state> drag_;
             std::optional<QPointF> click_pt_;
+            mdl::project* project_;
 
+            void do_rotation_complete(const rot_info& ri);
             void handle_rotation(canvas::scene& c, QPointF pt, const rot_info& ri);
             void handle_translation(canvas::scene& c, const trans_info& ri);
             void handle_click(canvas::scene& c, QPointF pt, bool shift_down, bool alt_down);

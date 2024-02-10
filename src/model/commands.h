@@ -56,7 +56,7 @@ namespace mdl {
                 const std::vector<sm::skel_ref>& replacements);
         };
 
-        struct trasform_nodes_and_bones_state {
+        struct transform_nodes_and_bones_state {
             std::string canvas;
             std::function<void(sm::node&)> transform_nodes;
             std::function<void(sm::bone&)> transform_bones;
@@ -65,13 +65,13 @@ namespace mdl {
             handle_table<sm::point> old_node_to_position;
             handle_table<sm::rot_constraint> old_bone_to_rotcon;
 
-            trasform_nodes_and_bones_state(
+            transform_nodes_and_bones_state(
                 project& proj,
                 const std::vector<handle>& nodes,
                 const std::function<void(sm::node&)>& fn
             );
 
-            trasform_nodes_and_bones_state(
+            transform_nodes_and_bones_state(
                 project& proj,
                 const std::vector<handle>& bones,
                 const std::function<void(sm::bone&)>& fn
@@ -121,6 +121,12 @@ namespace mdl {
             const std::vector<handle>& bones,
             const std::function<void(sm::node&)>& nodes_fn,
             const std::function<void(sm::bone&)>& bones_fn
+        );
+
+        static command make_transform_node_positions_command(
+            project& proj,
+            const std::vector<std::tuple<handle, sm::point>>& old_locs,
+            const std::vector<std::tuple<handle, sm::point>>& new_locs
         );
 
         static command make_add_tab_command(const std::string& tab_name);

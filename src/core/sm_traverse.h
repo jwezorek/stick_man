@@ -46,5 +46,4 @@ namespace sm {
 
     void visit_nodes(node& j, node_visitor_with_prev visit_node);
     void visit_bones(node& j, bone_visitor_with_prev visit_node);
-
 }

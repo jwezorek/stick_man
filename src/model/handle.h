@@ -15,7 +15,7 @@ namespace mdl {
     private:
         template<sm::is_node_or_bone T>
         std::expected<std::reference_wrapper<T>, sm::result> to_aux(
-                sm::world& world) {
+                sm::world& world) const {
             auto skel = world.skeleton(skel_name);
             if (!skel) {
                 return std::unexpected(skel.error());
@@ -28,7 +28,7 @@ namespace mdl {
             return *maybe_piece;
         }
 
-        sm::expected_skel to_skeleton(sm::world& world);
+        sm::expected_skel to_skeleton(sm::world& world) const;
     public:
         std::string skel_name;
         std::string piece_name;
@@ -36,7 +36,7 @@ namespace mdl {
         bool operator==(const handle& hand) const;
 
         template<sm::is_skel_piece T>
-        T& to(sm::world& world) {
+        T& to(sm::world& world) const {
             if constexpr (std::is_same<T, sm::skeleton>::value) {
                 auto val = to_skeleton(world);
                 if (!val) {
