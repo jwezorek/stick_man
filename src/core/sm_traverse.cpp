@@ -182,6 +182,40 @@ namespace {
             return fn(v);
         };
     }
+
+    struct hierarchy_item {
+        sm::maybe_bone_ref prev;
+        sm::bone_ref curr;
+    };
+
+    std::vector<sm::bone_ref> bone_hierarchy_neighbors(hierarchy_item& item, sm::maybe_node_ref src) {
+        auto& bone = item.curr.get();
+        auto parent_bone = bone.parent_bone();
+        if (src && !item.prev) {
+            if (&src->get() == &bone.parent_node()) {
+                return bone.child_bones();
+            } else {
+                return parent_bone ?
+                    std::vector<sm::bone_ref>{std::ref(parent_bone->get())} :
+                    std::vector<sm::bone_ref>{};
+            }
+        }
+        
+        std::vector<sm::bone_ref> neighbors;
+        if (parent_bone) {
+            neighbors.push_back(*parent_bone);
+        }
+        r::copy(bone.child_bones(), std::back_inserter(neighbors));
+
+        return neighbors | rv::filter(
+            [&](auto neighbor) {
+                if (!item.prev) {
+                    return true;
+                }
+                return &neighbor.get() == &item.prev.value().get();
+            }
+        ) | r::to<std::vector>();
+    }
 }
 
 void sm::dfs(node& root, node_visitor visit_node, bone_visitor visit_bone,
@@ -283,4 +317,33 @@ void sm::visit_nodes(node& j, node_visitor_with_prev visit_node) {
 
 void sm::visit_bones(node& j, bone_visitor_with_prev visit_bone) {
     dfs(j, node_visitor_with_prev{}, visit_bone);
+}
+
+void sm::traverse_bone_hierarchy(node& src, bone_visitor_with_prev visit_node) {
+
+}
+
+void sm::traverse_branch_hierarchy(node& src_node, bone& src_bone, bone_visitor_with_prev visit) {
+
+    std::stack<hierarchy_item> stack;
+    stack.push( { std::nullopt, src_bone } );
+
+    while (!stack.empty()) {
+        auto item = stack.top();
+        stack.pop();
+
+        auto result = visit(item.prev, item.curr);
+
+        if (result == sm::visit_result::terminate_traversal) {
+            return;
+        } else if (result == sm::visit_result::terminate_branch) {
+            continue;
+        }
+
+        auto neighbors = bone_hierarchy_neighbors(item, src_node);
+        for (const auto& neighbor : neighbors) {
+            stack.push( { item.curr, neighbor } );
+        }
+    }
+
 }
