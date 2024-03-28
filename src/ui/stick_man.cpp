@@ -15,6 +15,12 @@
 #pragma comment(lib, "Dwmapi.lib")
 #endif
 
+//debug
+#include "../core/sm_bone.h"
+#include "../core/sm_traverse.h"
+#include "canvas/bone_item.h"
+#include "canvas/node_item.h"
+
 /*------------------------------------------------------------------------------------------------*/
 
 namespace r = std::ranges;
@@ -122,6 +128,29 @@ void ui::stick_man::exit() {
 
 	// Quit the application
 	QCoreApplication::quit();
+}
+
+void ui::stick_man::debug() {
+    auto& canv = canvases().active_canvas();
+    auto bones = canvas::to_model_ptrs(canv.selected_bones()) | r::to<std::vector>();
+    auto nodes = canvas::to_model_ptrs(canv.selected_nodes()) | r::to<std::vector>();
+
+    sm::bone* bone = (!bones.empty()) ? bones.front() : nullptr;
+    sm::node* node = (!nodes.empty()) ? nodes.front() : nullptr;
+    auto visit = [](sm::maybe_bone_ref prev, sm::bone& b)->sm::visit_result {
+            qDebug() << "{ " <<
+                ((prev) ? prev->get().name() : std::string("<nil>")) <<
+                " , " <<
+                b.name() <<
+                " }";
+            return sm::visit_result::continue_traversal;
+        };
+
+    if (node && bone) {
+        sm::traverse_branch_hierarchy(*node, *bone, visit);
+    } else if (node) {
+        sm::traverse_bone_hierarchy(*node, visit);
+    }
 }
 
 void ui::stick_man::insert_new_tab() {
@@ -248,6 +277,7 @@ void ui::stick_man::insert_view_menu() {
     auto view_menu = menuBar()->addMenu(tr("View"));
     QAction* view_action = new QAction(tr("foo"), this);
     view_menu->addAction(view_action);
+    connect(view_action, &QAction::triggered, this, &stick_man::debug);
 }
 
 void ui::stick_man::insert_project_menu() {

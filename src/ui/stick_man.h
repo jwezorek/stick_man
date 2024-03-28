@@ -31,6 +31,7 @@ namespace ui {
         void do_redo();
 
         void insert_new_tab();
+        void debug();
 
         tool::manager& tool_mgr();
         mdl::project& project();

@@ -296,6 +296,11 @@ std::vector<sm::bone_ref> sm::bone::sibling_bones() {
 	) | r::to< std::vector<sm::bone_ref>>();
 }
 
+bool sm::bone::is_sibling(const bone& b) const
+{
+	return &parent_node() == &b.parent_node();
+}
+
 const sm::node& sm::bone::opposite_node(const node& j) const {
 	auto* non_const_this = const_cast<sm::bone*>(this);
 	return non_const_this->opposite_node(j);

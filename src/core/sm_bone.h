@@ -88,6 +88,7 @@ namespace sm {
 		std::vector<const_bone_ref> child_bones() const;
 
 		std::vector<bone_ref> sibling_bones();
+		bool is_sibling(const bone& b) const;
 
 		const node& parent_node() const;
 		const node& child_node() const;

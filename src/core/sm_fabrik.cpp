@@ -113,8 +113,7 @@ namespace {
 			auto parent = current_bone().parent_bone();
 			if (parent) {
 				neighbors.push_back(*parent);
-			}
-			else {
+			} else {
 				r::copy(current_bone().sibling_bones(), std::back_inserter(neighbors));
 			}
 			return neighbors |
