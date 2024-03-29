@@ -8,6 +8,8 @@
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
 
+/*------------------------------------------------------------------------------------------------*/
+
 namespace {
 
 	constexpr int k_max_iter = 100;
@@ -20,136 +22,42 @@ namespace {
 
 	// The core of the implementation of the FABRIK ik algorithm is a DFS over the bones in the
 	// skeleton. At any step in the algorithm the current bone along with its predecessor in the
-	// dfs traversal may be the neighborhood of one or more rotational constraints. This
-	// fabrik item class models such a neighborhood.
+	// dfs traversal may be the neighborhood of one or more rotational constraints. We include the
+	// the root node in the following because if there is no prev bone we still need to be able
+	// to recover the "current node" which in this case will be the root node.
 
-	class fabrik_item {
-		sm::node_or_bone<sm::node, sm::bone> pred_;
-		sm::bone_ref current_;
-		sm::node* current_node_;
-		mutable sm::node* pred_node_;
-
-	public:
-
-		fabrik_item(sm::node_or_bone<sm::node, sm::bone> p, sm::bone_ref b) :
-			pred_{ p },
-			current_{ b },
-			current_node_(nullptr),
-			pred_node_(nullptr) {
-		}
-
-		fabrik_item(sm::bone& b) :
-			pred_{
-				(b.parent_bone()) ?
-					sm::node_or_bone<sm::node, sm::bone>{*b.parent_bone()} :
-					sm::node_or_bone<sm::node, sm::bone>{b.parent_node()}
-		},
-			current_{ b },
-			current_node_(nullptr),
-			pred_node_(nullptr) {
-		}
-
-		sm::bone& current_bone() {
-			return current_.get();
-		}
-
-		const sm::bone& current_bone() const {
-			return current_.get();
-		}
-
-		// return the node that is shared between the current
-		// bone and its preceding bone.
-
-		sm::node& current_node() {
-			if (!current_node_) {
-				if (std::holds_alternative<sm::node_ref>(pred_)) {
-					current_node_ = &std::get<sm::node_ref>(pred_).get();
-				}
-				else {
-					sm::bone& pred_bone = std::get<sm::bone_ref>(pred_);
-					auto shared = current_.get().shared_node(pred_bone);
-					if (!shared) {
-						throw std::runtime_error("invalid fabrik item");
-					}
-					current_node_ = &shared->get();
-				}
-			}
-			return *current_node_;
-		}
-
-		const sm::node& current_node() const {
-			auto* nonconst_self = const_cast<fabrik_item*>(this);
-			return nonconst_self->current_node();
-		}
-
-		// if the current bone has a node as its predecessor, return nil.
-		// otherwise, return the node of the predecessor bone that is not 
-		// the current node i.e. the node that preceded the current node.
-
-		sm::maybe_node_ref pred_node() const {
-			if (!pred_node_ && std::holds_alternative<sm::bone_ref>(pred_)) {
-				auto& pred_bone = std::get<sm::bone_ref>(pred_).get();
-				pred_node_ = &pred_bone.opposite_node(current_node());
-			}
-			if (!pred_node_) {
-				return {};
-			}
-			return *pred_node_;
-		}
-
-		sm::maybe_const_bone_ref pred_bone() const {
-			return (std::holds_alternative<sm::node_ref>(pred_)) ?
-				std::optional<sm::bone_ref>{} :
-				std::get<sm::bone_ref>(pred_);
-		}
-
-		// the trick here is to just return the parent and children of the current bone, 
-		// not sibling bones unless this is the root. this forces a traversal in which it is 
-		// impossible for an applicable rotation constraint to be relative to a bone that is 
-		// not the predecessor bone.(because we do not currently support sibling constraints)
-
-		std::vector<sm::bone_ref> neighbor_bones(const std::unordered_set<sm::bone*>& visited) {
-			auto neighbors = current_bone().child_bones();
-			auto parent = current_bone().parent_bone();
-			if (parent) {
-				neighbors.push_back(*parent);
-			} else {
-				r::copy(current_bone().sibling_bones(), std::back_inserter(neighbors));
-			}
-			return neighbors |
-				rv::filter(
-					[&visited](auto neighbor) {
-						return !visited.contains(&neighbor.get());
-					}
-			) | r::to<std::vector<sm::bone_ref>>();
-		}
+	struct fabrik_neighborhood {
+		sm::node& start_node;
+		sm::maybe_bone_ref prev;
+		sm::bone& current_bone;
 	};
 
-	using fabrik_item_visitor = std::function<bool(fabrik_item&)>;
+	// return the node that is shared between the current
+	// bone and its preceding bone.
 
-	auto to_fabrik_items(auto prev, std::span< sm::bone_ref> bones) {
-		return bones | rv::transform([prev](auto b) {return fabrik_item(prev, b); });
+	sm::node& current_node(const fabrik_neighborhood& fn) {
+
+		if (!fn.prev) {
+			return fn.start_node;
+		}
+		sm::bone& pred_bone = fn.prev->get();
+		auto shared = fn.current_bone.shared_node(pred_bone);
+		if (!shared) {
+			throw std::runtime_error("invalid fabrik item");
+		}
+		return shared->get();
 	}
 
-	void fabrik_traversal(sm::node& start, fabrik_item_visitor visitor) {
-		std::stack<fabrik_item> stack;
-		std::unordered_set<sm::bone*> visited;
-		auto adj_bones = start.adjacent_bones();
-		stack.push_range(
-			to_fabrik_items(sm::node_ref(start), adj_bones)
-		);
-		while (!stack.empty()) {
-			auto item = stack.top();
-			stack.pop();
-			if (!visitor(item)) {
-				return;
-			}
-			visited.insert(&item.current_bone());
-			auto neighbors = item.neighbor_bones(visited);
-			stack.push_range(
-				to_fabrik_items(std::ref(item.current_bone()), neighbors)
-			);
+	// if the current bone has no predecessor bone, return nil.
+	// otherwise, return the node of the predecessor bone that is not 
+	// the current node i.e. the node that preceded the current node.
+
+	sm::maybe_node_ref pred_node(const fabrik_neighborhood& fn) {
+		if (!fn.prev) {
+			return {};
 		}
+		auto& pred_bone = fn.prev->get();
+		return pred_bone.opposite_node( current_node(fn) );
 	}
 
 	std::unordered_map<sm::bone*, bone_info> build_bone_table(sm::node& j) {
@@ -186,17 +94,17 @@ namespace {
 		return sm::transform(pt, rotate_about_point_matrix(u, angle_from_u_to_v(u, v)));
 	}
 
-	std::optional<sm::angle_range> get_forw_rel_rot_constraint(const fabrik_item& fi) {
+	std::optional<sm::angle_range> get_forw_rel_rot_constraint(const fabrik_neighborhood& fi) {
 		// a forward relative rotation constraint is the normal case. The bone
 		// has a rotation constraint on it that is relative to its parent and the
 		// predecessor bone is its parent.
 
-		if (!fi.pred_bone()) {
+		if (!fi.prev) {
 			return {};
 		}
 
-		const auto& pred_bone = fi.pred_bone()->get();
-		const auto& curr = fi.current_bone();
+		const auto& pred_bone = fi.prev->get();
+		const auto& curr = fi.current_bone;
 		auto curr_constraint = curr.rotation_constraint();
 
 		if (curr_constraint) {
@@ -204,8 +112,8 @@ namespace {
 				return {};
 			}
 
-			auto curr_pos = fi.current_node().world_pos();
-			auto pred_pos = fi.pred_node()->get().world_pos();
+			auto curr_pos = current_node(fi).world_pos();
+			auto pred_pos = pred_node(fi)->get().world_pos();
 			auto anchor_angle = angle_from_u_to_v(pred_pos, curr_pos);
 
 			return sm::angle_range{
@@ -217,17 +125,17 @@ namespace {
 		return {};
 	}
 
-	std::optional<sm::angle_range> get_back_rel_rot_constraint(const fabrik_item& fi) {
+	std::optional<sm::angle_range> get_back_rel_rot_constraint(const fabrik_neighborhood& fi) {
 		// a backward relative constraint occurs when the predecessor bone
 		// has a relative-to-parent rotation constraint and the current bone
 		// is the predecessor's parent.
 
-		if (!fi.pred_bone()) {
+		if (!fi.prev) {
 			return {};
 		}
 
-		const auto& pred_bone = fi.pred_bone()->get();
-		const auto& curr = fi.current_bone();
+		const auto& pred_bone = fi.prev->get();
+		const auto& curr = fi.current_bone;
 		auto pred_constraint = pred_bone.rotation_constraint();
 
 		if (!pred_constraint || pred_constraint->relative_to_parent == false) {
@@ -238,8 +146,8 @@ namespace {
 			return {};
 		}
 
-		auto curr_pos = fi.current_node().world_pos();
-		auto pred_pos = fi.pred_node()->get().world_pos();
+		auto curr_pos = current_node(fi).world_pos();
+		auto pred_pos = pred_node(fi)->get().world_pos();
 		auto anchor_angle = angle_from_u_to_v(pred_pos, curr_pos);
 		auto start_angle = -(pred_constraint->start_angle + pred_constraint->span_angle);
 
@@ -249,7 +157,7 @@ namespace {
 		};
 	}
 
-	std::optional<sm::angle_range>  get_relative_rot_constraint(const fabrik_item& fi) {
+	std::optional<sm::angle_range>  get_relative_rot_constraint(const fabrik_neighborhood& fi) {
 
 		auto forward = get_forw_rel_rot_constraint(fi);
 		if (forward) {
@@ -266,8 +174,8 @@ namespace {
 		};
 	}
 
-	std::optional<sm::angle_range> get_absolute_rot_constraint(const fabrik_item& fi) {
-		const sm::bone& curr = fi.current_bone();
+	std::optional<sm::angle_range> get_absolute_rot_constraint(const fabrik_neighborhood& fi) {
+		const sm::bone& curr = fi.current_bone;
 		auto constraint = curr.rotation_constraint();
 
 		if (!constraint) {
@@ -278,14 +186,13 @@ namespace {
 			return {};
 		}
 
-		const auto& pivot_node = fi.current_node();
+		const auto& pivot_node = current_node(fi);
 		return absolute_constraint(
 			(&pivot_node == &curr.parent_node()), constraint->start_angle, constraint->span_angle
 		);
 	}
 
-
-	std::vector<sm::angle_range> get_applicable_rot_constraints(const fabrik_item& fi) {
+	std::vector<sm::angle_range> get_applicable_rot_constraints(const fabrik_neighborhood& fi) {
 		std::vector<sm::angle_range> constraints;
 		auto absolute = get_absolute_rot_constraint(fi);
 
@@ -306,6 +213,7 @@ namespace {
 		if (ranges.size() > 2) {
 			throw std::runtime_error("invalid rotational constraints");
 		}
+
 		if (ranges.size() == 2) {
 			return sm::intersect_angle_ranges(ranges[0], ranges[1]);
 		}
@@ -348,7 +256,7 @@ namespace {
 		return constrain_angle_to_ranges(theta, { &range,1 });
 	}
 
-	std::optional<double> apply_rotation_constraints(const fabrik_item& fi, double theta) {
+	std::optional<double> apply_rotation_constraints(const fabrik_neighborhood& fi, double theta) {
 
 		auto constraints = get_applicable_rot_constraints(fi);
 		if (constraints.empty()) {
@@ -364,9 +272,9 @@ namespace {
 		return constrain_angle_to_ranges(theta, intersection_of_ranges);
 	}
 
-	sm::point apply_rotation_constraints(const fabrik_item& fi, const sm::point& free_pt) {
+	sm::point apply_rotation_constraints(const fabrik_neighborhood& fi, const sm::point& free_pt) {
 
-		auto pivot_pt = fi.current_node().world_pos();
+		auto pivot_pt = current_node(fi).world_pos();
 		auto old_theta = angle_from_u_to_v(pivot_pt, free_pt);
 		auto new_theta = apply_rotation_constraints(fi, old_theta);
 
@@ -382,10 +290,11 @@ namespace {
 	}
 
 	sm::point constrain_angular_velocity(
-		const fabrik_item& fi, double original_rot, double max_angle_delta,
-		const sm::point& free_pt) {
-		auto curr = fi.current_bone();
-		const auto& pivot_node = fi.current_node();
+			const fabrik_neighborhood& fi, double original_rot, double max_angle_delta,
+			const sm::point& free_pt) {
+
+		auto curr = fi.current_bone;
+		const auto& pivot_node = current_node(fi);
 		auto old_theta = angle_from_u_to_v(pivot_node.world_pos(), free_pt);
 		bool is_forward = (&pivot_node == &curr.parent_node());
 
@@ -399,16 +308,18 @@ namespace {
 			sm::point{ sm::distance(pivot_node.world_pos(), free_pt), 0.0 },
 			translation_matrix(pivot_node.world_pos()) * sm::rotation_matrix(new_theta)
 		);
+
 	}
 
 	void perform_one_fabrik_pass(sm::node& start_node, const sm::point& target_pt,
 		const std::unordered_map<sm::bone*, bone_info>& bone_tbl, bool use_constraints,
 		double max_ang_delta) {
 
-		auto perform_fabrik_on_bone = [&](fabrik_item& fi) {
+		auto perform_fabrik_on_bone = 
+			[&](sm::maybe_bone_ref prev, sm::bone& current_bone)->sm::visit_result {
 
-			sm::bone& current_bone = fi.current_bone();
-			auto& leader_node = fi.current_node();
+			fabrik_neighborhood neighborhood{ start_node, prev, current_bone };
+			auto& leader_node = current_node(neighborhood);
 			auto& follower_node = current_bone.opposite_node(leader_node);
 
 			auto new_follower_pos = point_on_line_at_distance(
@@ -416,23 +327,26 @@ namespace {
 				follower_node.world_pos(),
 				bone_tbl.at(&current_bone).length
 			);
-
+			
 			if (use_constraints) {
-				new_follower_pos = apply_rotation_constraints(fi, new_follower_pos);
+				new_follower_pos = apply_rotation_constraints(neighborhood, new_follower_pos);
 			}
 
 			if (max_ang_delta > 0.0) {
 				new_follower_pos = constrain_angular_velocity(
-					fi, bone_tbl.at(&current_bone).rotation, max_ang_delta, new_follower_pos
+					neighborhood, 
+					bone_tbl.at(&current_bone).rotation, 
+					max_ang_delta, 
+					new_follower_pos
 				);
 			}
-
+			
 			follower_node.set_world_pos(new_follower_pos);
-			return true;
-			};
+			return sm::visit_result::continue_traversal;
+		};
 
 		start_node.set_world_pos(target_pt);
-		fabrik_traversal(start_node, perform_fabrik_on_bone);
+		sm::traverse_bone_hierarchy(start_node, perform_fabrik_on_bone);
 	}
 
 	sm::result target_satisfaction_state(const targeted_node& tj, double tolerance) {
@@ -496,7 +410,6 @@ sm::fabrik_options::fabrik_options() :
 	max_ang_delta{ 0.0 }
 {}
 
-
 sm::result sm::perform_fabrik(
 	const std::vector<std::tuple<node_ref, point>>& effectors,
 	const std::vector<sm::node_ref>& pins,
@@ -553,6 +466,10 @@ sm::result sm::perform_fabrik(
 
 double sm::constrain_rotation(sm::bone& b, double theta) {
 
-	fabrik_item fi(b);
+	fabrik_neighborhood fi{
+		b.parent_node(),
+		b.parent_bone(),
+		b
+	};
 	return ::apply_rotation_constraints(fi, theta).value_or(theta);
 }
