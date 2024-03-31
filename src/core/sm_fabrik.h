@@ -21,4 +21,12 @@ namespace sm {
 
 	double constrain_rotation(sm::bone& b, double theta);
 
+	sm::point apply_rotation_constraints(
+		const sm::point& curr_pos,
+		sm::node& start_node,
+		sm::maybe_bone_ref prev,
+		sm::bone& current_bone,
+		bool apply_rot_constaints = true,
+		double max_ang_delta = 0.0,
+		double old_bone_rotation = 0.0);
 }

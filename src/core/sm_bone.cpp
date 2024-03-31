@@ -435,7 +435,7 @@ void sm::bone::set_world_rotation(double theta) {
 	);
 }
 
-void  sm::bone::rotate_by(double theta, sm::maybe_node_ref axis) {
+void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis) {
 	if (!axis) {
 		axis = std::ref(parent_node());
 	}
@@ -443,23 +443,20 @@ void  sm::bone::rotate_by(double theta, sm::maybe_node_ref axis) {
 	old_rotation_tbl[this].rel_rotation += theta;
 	std::unordered_map<sm::bone*, double> new_world_rotation;
 
-	visit_bones(*axis,
+	traverse_branch_hierarchy(*axis, *this,
 		[&](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
-			if (!prev && &bone != this) {
-				return sm::visit_result::terminate_branch;
-			}
 			sm::node& u = (prev) ? bone.shared_node(*prev)->get() : axis->get();
 			sm::node& v = bone.opposite_node(u);
 			auto parent_world_rotation = prev ? new_world_rotation.at(&prev->get()) : 0;
-			v.set_world_pos(
-				transform(
-					u.world_pos() + sm::point{ old_rotation_tbl.at(&bone).length, 0.0 },
-					rotate_about_point_matrix(
-						u.world_pos(), 
-						old_rotation_tbl[&bone].rel_rotation + parent_world_rotation
-					)
+			auto new_v_pos = transform(
+				u.world_pos() + sm::point{ old_rotation_tbl.at(&bone).length, 0.0 },
+				rotate_about_point_matrix(
+					u.world_pos(),
+					old_rotation_tbl[&bone].rel_rotation + parent_world_rotation
 				)
 			);
+			new_v_pos = sm::apply_rotation_constraints(new_v_pos, *axis, prev, bone);
+			v.set_world_pos(new_v_pos);
 			new_world_rotation[&bone] = angle_from_u_to_v(u.world_pos(), v.world_pos());
 
 			return sm::visit_result::continue_traversal;

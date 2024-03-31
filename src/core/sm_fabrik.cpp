@@ -311,6 +311,30 @@ namespace {
 
 	}
 
+	sm::point apply_all_constraints(
+			const sm::point& curr_pos,
+			const fabrik_neighborhood& neighborhood,
+			bool apply_rot_constaints,
+			double max_ang_delta,
+			double old_bone_rotation ) {
+
+		sm::point new_pos = curr_pos;
+		if (apply_rot_constaints) {
+			new_pos = apply_rotation_constraints(neighborhood, new_pos);
+		}
+
+		if (max_ang_delta > 0.0) {
+			new_pos = constrain_angular_velocity(
+				neighborhood,
+				old_bone_rotation,
+				max_ang_delta,
+				new_pos
+			);
+		}
+
+		return new_pos;
+	}
+
 	void perform_one_fabrik_pass(sm::node& start_node, const sm::point& target_pt,
 		const std::unordered_map<sm::bone*, bone_info>& bone_tbl, bool use_constraints,
 		double max_ang_delta) {
@@ -327,19 +351,14 @@ namespace {
 				follower_node.world_pos(),
 				bone_tbl.at(&current_bone).length
 			);
-			
-			if (use_constraints) {
-				new_follower_pos = apply_rotation_constraints(neighborhood, new_follower_pos);
-			}
 
-			if (max_ang_delta > 0.0) {
-				new_follower_pos = constrain_angular_velocity(
-					neighborhood, 
-					bone_tbl.at(&current_bone).rotation, 
-					max_ang_delta, 
-					new_follower_pos
-				);
-			}
+			new_follower_pos = apply_all_constraints(
+				new_follower_pos,
+				neighborhood,
+				use_constraints,
+				max_ang_delta,
+				bone_tbl.at(&current_bone).rotation
+			);
 			
 			follower_node.set_world_pos(new_follower_pos);
 			return sm::visit_result::continue_traversal;
@@ -472,4 +491,23 @@ double sm::constrain_rotation(sm::bone& b, double theta) {
 		b
 	};
 	return ::apply_rotation_constraints(fi, theta).value_or(theta);
+}
+
+sm::point sm::apply_rotation_constraints(
+		const sm::point& curr_pos, 
+		sm::node& start_node, 
+		sm::maybe_bone_ref prev, 
+		sm::bone& current_bone, 
+		bool apply_rot_constaints, 
+		double max_ang_delta, 
+		double old_bone_rotation) {
+
+	fabrik_neighborhood neighborhood{ start_node, prev, current_bone };
+	return apply_all_constraints(
+		curr_pos, 
+		neighborhood, 
+		apply_rot_constaints,
+		max_ang_delta, 
+		old_bone_rotation
+	);
 }
