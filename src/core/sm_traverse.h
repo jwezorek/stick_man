@@ -41,13 +41,6 @@ namespace sm {
         bone_visitor_with_prev visit_bone = {});
     void dfs(bone& root, node_visitor_with_prev visit_node = {},
         bone_visitor_with_prev visit_bone = {});
-    void dfs(const node& root, const_node_visitor_with_prev visit_node = {},
-        const_bone_visitor_with_prev visit_bone = {});
-    void dfs(const bone& root, const_node_visitor_with_prev visit_node = {},
-        const_bone_visitor_with_prev visit_bone = {});
 
-    void visit_nodes(node& j, node_visitor_with_prev visit_node);
-    void visit_bones(node& j, bone_visitor_with_prev visit_node);
     void traverse_bone_hierarchy(node& src, bone_visitor_with_prev visit);
-    void traverse_branch_hierarchy( node& src_node, bone& src_bone, bone_visitor_with_prev visit );
 }

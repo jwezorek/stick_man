@@ -400,17 +400,16 @@ void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
 }
 
 ui::tool::node_locs get_branch_node_locs(sm::node& src, sm::bone& branch) {
-    std::unordered_map<mdl::handle, sm::point, mdl::handle_hash> old_locs;
-    visit_bones(src,
+    std::unordered_map<mdl::handle, sm::point, mdl::handle_hash> old_locs; 
+
+    sm::traverse_bone_hierarchy(src,
         [&](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
-            if (!prev && &bone != &branch) {
-                return sm::visit_result::terminate_branch;
-            }
             old_locs[mdl::to_handle(bone.child_node())] = bone.child_node().world_pos();
             old_locs[mdl::to_handle(bone.parent_node())] = bone.parent_node().world_pos();
             return sm::visit_result::continue_traversal;
         }
     );
+
     return old_locs |
         rv::transform(
             [](auto&& mv)->std::tuple<mdl::handle, sm::point> {

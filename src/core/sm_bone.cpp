@@ -25,17 +25,25 @@ namespace {
 
 	using bone_rotation_tbl = std::unordered_map<sm::bone*, rotation_info>;
 
-	bone_rotation_tbl create_bone_rotation_tbl(sm::bone& src, sm::node& axis) {
-		bone_rotation_tbl tbl;
-		sm::visit_bones(axis,
+	bone_rotation_tbl create_bone_rotation_tbl(
+			sm::node& axis, sm::bone& rotating_bone, double theta) {
+		bone_rotation_tbl tbl; 
+		sm::traverse_bone_hierarchy(axis,
 			[&](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
-				if (!prev && &bone != &src) {
-					return sm::visit_result::terminate_branch;
-				}
 				sm::node& u = (prev) ? bone.shared_node(*prev)->get() : axis;
 				sm::node& v = bone.opposite_node(u);
 				auto world_rot = sm::angle_from_u_to_v(u.world_pos(), v.world_pos());
 				auto rel_rot = (prev) ? world_rot - tbl[&prev->get()].world_rotation : world_rot;
+
+				if (&bone == &rotating_bone) {
+					rel_rot += theta;
+				}
+
+				if (prev.has_value() && (&prev->get() == &rotating_bone) &&
+					bone.has_node(axis)) {
+					rel_rot -= theta;
+				}
+
 				tbl[&bone] = {
 					bone.scaled_length(),
 					rel_rot,
@@ -43,7 +51,8 @@ namespace {
 				};
 				return sm::visit_result::continue_traversal;
 			}
-		);
+		); 
+
 		return tbl;
 	}
 }
@@ -293,7 +302,7 @@ std::vector<sm::bone_ref> sm::bone::sibling_bones() {
 			[this](bone_ref sib) {
 				return &sib.get() != this;
 			}
-	) | r::to< std::vector<sm::bone_ref>>();
+	) | r::to<std::vector<sm::bone_ref>>();
 }
 
 bool sm::bone::is_sibling(const bone& b) const
@@ -439,11 +448,10 @@ void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis) {
 	if (!axis) {
 		axis = std::ref(parent_node());
 	}
-	auto old_rotation_tbl = create_bone_rotation_tbl(*this, *axis);
-	old_rotation_tbl[this].rel_rotation += theta;
+	auto old_rotation_tbl = create_bone_rotation_tbl(*axis, *this, theta);
 	std::unordered_map<sm::bone*, double> new_world_rotation;
 
-	traverse_branch_hierarchy(*axis, *this,
+	traverse_bone_hierarchy(*axis,
 		[&](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
 			sm::node& u = (prev) ? bone.shared_node(*prev)->get() : axis->get();
 			sm::node& v = bone.opposite_node(u);

@@ -194,10 +194,9 @@ namespace {
     struct hierarchical_traversal_state {
         sm::maybe_const_node_ref src_node;
         std::unordered_set<sm::bone*> visited;
-        bool traversed_root;
 
         hierarchical_traversal_state(const sm::node& src) :
-            src_node(src), traversed_root(false)
+            src_node(src)
         {}
     };
 
@@ -208,52 +207,14 @@ namespace {
         if (parent) {
             neighbors.push_back(*parent);
         } else {
-            if (!state.traversed_root) {
-                r::copy(bone.sibling_bones(), std::back_inserter(neighbors));
-                state.traversed_root = true;
-            }
+            r::copy(bone.sibling_bones(), std::back_inserter(neighbors));
         }
         return neighbors |
             rv::filter(
                 [&](auto neighbor_ref) {
-                    auto& neighbor = neighbor_ref.get();
-                    if (state.src_node) {
-                        auto& src = state.src_node->get();
-                        if (bone.has_node(src) && neighbor.has_node(src)) {
-                            return false;
-                        }
-                    }
-                    return !state.visited.contains(&neighbor);
+                    return !state.visited.contains(&neighbor_ref.get());
                 }
         ) | r::to<std::vector<sm::bone_ref>>();
-    }
-
-    void hierarchical_traversal(sm::node& src, std::stack<hierarchy_item>& stack,
-            sm::bone_visitor_with_prev visit) {
-
-        hierarchical_traversal_state state(src);
-        while (!stack.empty()) {
-            auto item = stack.top();
-            stack.pop();
-
-            if (state.visited.contains(&item.curr.get())) {
-                continue;
-            }
-
-            auto result = visit(item.prev, item.curr);
-            state.visited.insert(&item.curr.get());
-
-            if (result == sm::visit_result::terminate_traversal) {
-                return;
-            }
-            else if (result == sm::visit_result::terminate_branch) {
-                continue;
-            }
-
-            for (const auto& neighbor : bone_hierarchy_neighbors(item.curr, state)) {
-                stack.push({ item.curr, neighbor });
-            }
-        }
     }
 }
 
@@ -330,46 +291,33 @@ void sm::dfs(bone& root, node_visitor_with_prev visit_node,
     );
 }
 
-void sm::dfs(const node& root, const_node_visitor_with_prev visit_node,
-    const_bone_visitor_with_prev visit_bone) {
-    dfs_aux<const sm::node, const sm::bone>(
-        std::ref(root),
-        visit_node,
-        visit_bone,
-        false
-    );
-}
-
-void sm::dfs(const bone& root, const_node_visitor_with_prev visit_node,
-    const_bone_visitor_with_prev visit_bone) {
-    dfs_aux<const sm::node, const sm::bone>(
-        std::ref(root),
-        visit_node,
-        visit_bone,
-        false
-    );
-}
-
-void sm::visit_nodes(node& j, node_visitor_with_prev visit_node) {
-    dfs(j, visit_node, bone_visitor_with_prev{});
-}
-
-void sm::visit_bones(node& j, bone_visitor_with_prev visit_bone) {
-    dfs(j, node_visitor_with_prev{}, visit_bone);
-}
-
 void sm::traverse_bone_hierarchy(node& src, bone_visitor_with_prev visit) {
     std::stack<hierarchy_item> stack;
     for (auto bone : src.adjacent_bones()) {
         stack.push({ std::nullopt, bone });
     }
-    hierarchical_traversal(src, stack, visit);
+
+    hierarchical_traversal_state state(src);
+    while (!stack.empty()) {
+        auto item = stack.top();
+        stack.pop();
+
+        if (state.visited.contains(&item.curr.get())) {
+            continue;
+        }
+
+        auto result = visit(item.prev, item.curr);
+        state.visited.insert(&item.curr.get());
+
+        if (result == sm::visit_result::terminate_traversal) {
+            return;
+        } else if (result == sm::visit_result::terminate_branch) {
+            continue;
+        }
+
+        for (const auto& neighbor : bone_hierarchy_neighbors(item.curr, state)) {
+            stack.push({ item.curr, neighbor });
+        }
+    }
 }
 
-void sm::traverse_branch_hierarchy(node& src, bone& src_bone, bone_visitor_with_prev visit) {
-
-    std::stack<hierarchy_item> stack;
-    stack.push( { std::nullopt, src_bone } );
-
-    hierarchical_traversal(src, stack, visit);
-}

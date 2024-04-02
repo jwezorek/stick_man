@@ -146,9 +146,7 @@ void ui::stick_man::debug() {
             return sm::visit_result::continue_traversal;
         };
 
-    if (node && bone) {
-        sm::traverse_branch_hierarchy(*node, *bone, visit);
-    } else if (node) {
+    if (node) {
         sm::traverse_bone_hierarchy(*node, visit);
     }
 }
