@@ -42,6 +42,7 @@ namespace ui {
                 sm::bone_ref bone;
                 double initial_theta;
                 std::unique_ptr<node_locs> old_locs;
+                sel_drag_mode mode;
             };
 
             struct trans_info {

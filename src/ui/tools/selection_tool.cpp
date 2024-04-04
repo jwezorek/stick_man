@@ -286,6 +286,14 @@ namespace {
 			QSizeF(width, height)
 		);
 	}
+
+    void do_rubberband_rotate(double theta, sm::bone_ref bone, sm::node_ref axis) {
+
+    }
+
+    void do_ragdoll_rotate(double theta, sm::bone_ref bone, sm::node_ref axis) {
+
+    }
 }
 
 ui::tool::select::select() :
@@ -457,7 +465,8 @@ std::optional<ui::tool::select::rot_info> ui::tool::select::get_rotation_info(
             std::make_unique<node_locs>(get_branch_node_locs(
                     parent_bone->get().parent_node(), parent_bone->get()
                 )
-            )
+            ),
+            settings.rotate_mode_
         };
     } else {
         auto nodes = rot_info_for_rotate_on_selection(model);
@@ -480,7 +489,8 @@ std::optional<ui::tool::select::rot_info> ui::tool::select::get_rotation_info(
                 get_branch_node_locs(
                     axis, lead_bone->get()
                 )
-            )
+            ),
+            settings.rotate_mode_
         };
     }
     return ri;
@@ -515,10 +525,22 @@ void ui::tool::select::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMous
 }
 
 void ui::tool::select::handle_rotation(canvas::scene& c, QPointF pt, const rot_info& ri) {
+
     auto theta = sm::normalize_angle(
             sm::angle_from_u_to_v(ri.axis.get().world_pos(), from_qt_pt(pt))
         ) - sm::angle_from_u_to_v(ri.axis.get().world_pos(), ri.rotating.get().world_pos());
-    ri.bone.get().rotate_by(theta, ri.axis);
+
+    switch (ri.mode) {
+        case sel_drag_mode::rigid:
+            ri.bone.get().rotate_by(theta, ri.axis);
+            break;
+        case sel_drag_mode::rubber_band:
+            do_rubberband_rotate(theta, ri.bone, ri.axis);
+            break;
+        case sel_drag_mode::rag_doll:
+            do_ragdoll_rotate(theta, ri.bone, ri.axis);
+            break;
+    }
     c.sync_to_model();
 }
 
