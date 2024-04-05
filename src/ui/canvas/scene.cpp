@@ -215,10 +215,8 @@ double ui::canvas::scene::scale() const {
 }
 
 void ui::canvas::scene::sync_to_model() {
-	auto itms = items();
-	
-    auto is_non_null = [](auto* p) {return p; };
-    for (auto* child : itms | rv::transform(to_stick_man) | rv::filter(is_non_null)) {
+    auto itms = items() | r::to<std::vector>();
+    for (auto* child : itms | rv::transform(to_stick_man) | rv::filter([](auto* p) {return p; })) {
         child->sync_to_model();
     }
 }
@@ -345,7 +343,7 @@ void ui::canvas::scene::clear() {
 }
 
 void ui::canvas::scene::sync_selection() {
-    auto itms = items();
+    auto itms = items() | r::to<std::vector>();
     for (auto* itm : as_range_view_of_type<ui::canvas::item::base>(itms)) {
         bool selected = selection_.contains(itm);
         itm->set_selected(selected);
@@ -463,11 +461,11 @@ ui::canvas::item::base* ui::canvas::scene::top_item(const QPointF& pt) const {
 }
 
 std::vector<ui::canvas::item::base*> ui::canvas::scene::items_in_rect(const QRectF& r) const {
-    return to_vector_of_type<ui::canvas::item::base>(items(r));
+    return qt_to_vector_of_type<ui::canvas::item::base>( items(r) );
 }
 
 std::vector<ui::canvas::item::base*> ui::canvas::scene::canvas_items() const {
-    return to_vector_of_type<ui::canvas::item::base>(items());
+    return qt_to_vector_of_type<ui::canvas::item::base>( items() );
 }
 
 std::vector<ui::canvas::item::node*> ui::canvas::scene::root_node_items() const {
@@ -481,15 +479,15 @@ std::vector<ui::canvas::item::node*> ui::canvas::scene::root_node_items() const 
 }
 
 std::vector<ui::canvas::item::node*> ui::canvas::scene::node_items() const {
-    return to_vector_of_type<item::node>(items());
+    return qt_to_vector_of_type<item::node>( items());
 }
 
 std::vector<ui::canvas::item::bone*> ui::canvas::scene::bone_items() const {
-    return to_vector_of_type<item::bone>(items());
+    return qt_to_vector_of_type<item::bone>( items() );
 }
 
 std::vector<ui::canvas::item::skeleton*> ui::canvas::scene::skeleton_items() const {
-    return to_vector_of_type<item::skeleton>(items());
+    return qt_to_vector_of_type<item::skeleton>( items() );
 }
 
 void ui::canvas::scene::keyPressEvent(QKeyEvent* event) {

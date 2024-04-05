@@ -201,6 +201,12 @@ namespace ui {
         return as_range_view_of_type<T>(collection) | std::ranges::to<std::vector<T*>>();
     }
 
+    template<typename T, typename U>
+    std::vector<T*> qt_to_vector_of_type(const U& qcollection) {
+        auto vec = qcollection | std::ranges::to<std::vector>();
+        return to_vector_of_type<T>(vec);
+    }
+
     QColor lerp_colors(const QColor& color1, const QColor& color2, qreal factor);
     QRectF rect_from_circle(QPointF center, double radius);
     void set_arc(

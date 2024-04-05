@@ -4,8 +4,6 @@ project(stick_man VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /external:W0 /system:W0")
-
 find_package(Boost 1.80 REQUIRED)
 if(Boost_FOUND)
     include_directories(${Boost_INCLUDE_DIRS}) 
