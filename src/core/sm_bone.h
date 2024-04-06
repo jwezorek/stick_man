@@ -122,7 +122,7 @@ namespace sm {
 		void clear_user_data();
 
 		void set_world_rotation(double theta);
-		void rotate_by(double theta, sm::maybe_node_ref axis = {});
+		void rotate_by(double theta, sm::maybe_node_ref axis = {}, bool just_this_bone = false);
 		void set_length(double len);
 	};
 

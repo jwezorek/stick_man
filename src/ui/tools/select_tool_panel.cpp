@@ -19,7 +19,7 @@ namespace {
 std::vector<QWidget*> ui::tool::select_tool_panel::rot_ctrls(bool include_master) {
     std::vector<QWidget*> ctrls = {
         rotate_on_pin_, rot_rag_doll_mode_,
-        rot_rubber_band_mode_, rot_rigid_mode_
+        rot_unique_mode_, rot_rigid_mode_
     };
     if (include_master) {
         ctrls.push_back(rotate_);
@@ -43,7 +43,7 @@ ui::tool::sel_drag_mode ui::tool::select_tool_panel::rot_mode() const {
     if (btns.empty()) {
         btns = {
             {rot_rag_doll_mode_, sel_drag_mode::rag_doll},
-            {rot_rubber_band_mode_, sel_drag_mode::rubber_band},
+            {rot_unique_mode_, sel_drag_mode::unique},
             {rot_rigid_mode_, sel_drag_mode::rigid}
         };
     }
@@ -75,7 +75,7 @@ ui::tool::select_tool_panel::select_tool_panel() : QWidget() {
     column->addLayout(indented_widget(1, rotate_ = new QRadioButton("rotate")));
     column->addLayout(indented_widget(2, rotate_on_pin_ = new QCheckBox("rotate on nearest selected")));
     column->addLayout(indented_widget(2, rot_rag_doll_mode_ = new QRadioButton("rag doll mode")));
-    column->addLayout(indented_widget(2, rot_rubber_band_mode_ = new QRadioButton("rubber band mode")));
+    column->addLayout(indented_widget(2, rot_unique_mode_ = new QRadioButton("unique bone mode")));
     column->addLayout(indented_widget(2, rot_rigid_mode_ = new QRadioButton("rigid mode")));
 
     column->addLayout(indented_widget(1, translate_ = new QRadioButton("translate")));
@@ -93,7 +93,7 @@ ui::tool::select_tool_panel::select_tool_panel() : QWidget() {
     translate_group_->addButton( trans_rigid_mode_ );
 
     rotate_group_->addButton( rot_rag_doll_mode_ );
-    rotate_group_->addButton( rot_rubber_band_mode_ );
+    rotate_group_->addButton( rot_unique_mode_ );
     rotate_group_->addButton( rot_rigid_mode_ );
 
     connect(rotate_, &QRadioButton::toggled,

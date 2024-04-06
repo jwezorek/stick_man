@@ -25,11 +25,13 @@ namespace {
 
 	using bone_rotation_tbl = std::unordered_map<sm::bone*, rotation_info>;
 
-	bone_rotation_tbl create_bone_rotation_tbl(
-			sm::node& axis, sm::bone& rotating_bone, double theta) {
+	bone_rotation_tbl create_bone_rotation_tbl( sm::node& axis, sm::bone& rotating_bone, 
+			double theta, bool just_this_bone) {
+
 		bone_rotation_tbl tbl; 
 		sm::traverse_bone_hierarchy(axis,
 			[&](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
+
 				sm::node& u = (prev) ? bone.shared_node(*prev)->get() : axis;
 				sm::node& v = bone.opposite_node(u);
 				auto world_rot = sm::angle_from_u_to_v(u.world_pos(), v.world_pos());
@@ -37,19 +39,16 @@ namespace {
 
 				if (&bone == &rotating_bone) {
 					rel_rot += theta;
+				} else if (prev.has_value() && (&prev->get() == &rotating_bone)) {
+					if (just_this_bone || bone.has_node(axis)) {
+						rel_rot -= theta;
+					}
 				}
+				
+				tbl[&bone] = { bone.scaled_length(), rel_rot, world_rot };
 
-				if (prev.has_value() && (&prev->get() == &rotating_bone) &&
-					bone.has_node(axis)) {
-					rel_rot -= theta;
-				}
-
-				tbl[&bone] = {
-					bone.scaled_length(),
-					rel_rot,
-					world_rot
-				};
 				return sm::visit_result::continue_traversal;
+
 			}
 		); 
 
@@ -444,11 +443,12 @@ void sm::bone::set_world_rotation(double theta) {
 	);
 }
 
-void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis) {
+void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_bone) {
+
 	if (!axis) {
 		axis = std::ref(parent_node());
 	}
-	auto old_rotation_tbl = create_bone_rotation_tbl(*axis, *this, theta);
+	auto old_rotation_tbl = create_bone_rotation_tbl(*axis, *this, theta, just_this_bone);
 	std::unordered_map<sm::bone*, double> new_world_rotation;
 
 	traverse_bone_hierarchy(*axis,

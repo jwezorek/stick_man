@@ -532,10 +532,10 @@ void ui::tool::select::handle_rotation(canvas::scene& c, QPointF pt, const rot_i
 
     switch (ri.mode) {
         case sel_drag_mode::rigid:
-            ri.bone.get().rotate_by(theta, ri.axis);
+            ri.bone.get().rotate_by(theta, ri.axis, false);
             break;
-        case sel_drag_mode::rubber_band:
-            do_rubberband_rotate(theta, ri.bone, ri.axis);
+        case sel_drag_mode::unique:
+            ri.bone.get().rotate_by(theta, ri.axis, true);
             break;
         case sel_drag_mode::rag_doll:
             do_ragdoll_rotate(theta, ri.bone, ri.axis);

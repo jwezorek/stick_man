@@ -10,7 +10,8 @@ namespace ui {
         enum class sel_drag_mode {
             rag_doll,
             rubber_band,
-            rigid
+            rigid,
+            unique
         };
 
         struct sel_drag_settings {
@@ -28,7 +29,7 @@ namespace ui {
             QRadioButton* rotate_;
             QCheckBox* rotate_on_pin_;
             QRadioButton* rot_rag_doll_mode_;
-            QRadioButton* rot_rubber_band_mode_;
+            QRadioButton* rot_unique_mode_;
             QRadioButton* rot_rigid_mode_;
             QRadioButton* translate_;
             QCheckBox* trans_selection_;
