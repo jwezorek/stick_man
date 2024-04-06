@@ -437,13 +437,13 @@ std::optional<ui::tool::rotation_state> ui::tool::select::get_rotation_state(
         if (!parent_bone) {
             return {};
         }
-        ri = rotation_state{
+        ri.emplace(
             parent_bone->get().parent_node(),
             parent_bone->get().child_node(),
             *parent_bone,
             parent_bone->get().world_rotation(),
             settings.rotate_mode_
-        };
+        );
     } else {
         auto nodes = rot_info_for_rotate_on_selection(model);
         if (!nodes) {
@@ -454,7 +454,7 @@ std::optional<ui::tool::rotation_state> ui::tool::select::get_rotation_state(
         if (!lead_bone) {
             return {};
         }
-        ri = rotation_state{
+        ri.emplace(
             axis, 
             rotating, 
             *lead_bone,
@@ -462,7 +462,7 @@ std::optional<ui::tool::rotation_state> ui::tool::select::get_rotation_state(
                 sm::angle_from_u_to_v(axis.get().world_pos(), rotating.get().world_pos())
             ),
             settings.rotate_mode_
-        };
+        );
     }
     return ri;
 }
