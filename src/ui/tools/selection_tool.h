@@ -8,6 +8,7 @@
 #include <variant>
 #include <memory>
 #include "select_tool_panel.h"
+#include "drag_state.h"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -26,45 +27,17 @@ namespace ui {
 
         class select_tool_panel;
 
-        using node_locs = std::vector<std::tuple<mdl::handle, sm::point>>;
-
         class select : public base {
         private:
-            enum rubber_band_type {
-                selection_rb,
-                translation_rb,
-                rotation_rb
-            };
-
-            struct rot_info {
-                sm::node_ref axis;
-                sm::node_ref rotating;
-                sm::bone_ref bone;
-                double initial_theta;
-                std::unique_ptr<node_locs> old_locs;
-                sel_drag_mode mode;
-            };
-
-            struct trans_info {
-                std::vector<sm::node_ref> selected;
-                std::vector<sm::node_ref> pinned;
-            };
-
-            struct drag_state {
-                QPointF pt;
-                canvas::item::rubber_band* rubber_band;
-                rubber_band_type type;
-                std::variant<std::monostate, rot_info, trans_info> extra;
-            };
 
             select_tool_panel* settings_panel_;
             std::optional<drag_state> drag_;
             std::optional<QPointF> click_pt_;
             mdl::project* project_;
 
-            void do_rotation_complete(const rot_info& ri);
-            void handle_rotation(canvas::scene& c, QPointF pt, const rot_info& ri);
-            void handle_translation(canvas::scene& c, const trans_info& ri);
+            void do_rotation_complete(const rotation_state& ri);
+            void handle_rotation(canvas::scene& c, QPointF pt, const rotation_state& ri);
+            void handle_translation(canvas::scene& c, const translation_state& ri);
             void handle_click(canvas::scene& c, QPointF pt, bool shift_down, bool alt_down);
             void handle_drag_complete(canvas::scene& c, bool shift_down, bool alt_down);
             void handle_select_drag(
@@ -76,7 +49,7 @@ namespace ui {
             ) const;
             bool is_dragging() const;
             void do_dragging(canvas::scene& canv, QPointF pt);
-            static std::optional<rot_info> get_rotation_info(ui::canvas::scene& canv, QPointF clicked_pt,
+            static std::optional<rotation_state> get_rotation_state(ui::canvas::scene& canv, QPointF clicked_pt,
                 const ui::tool::sel_drag_settings& settings);
 
         public:
