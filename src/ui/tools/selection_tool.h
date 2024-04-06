@@ -36,8 +36,8 @@ namespace ui {
             mdl::project* project_;
 
             void do_rotation_complete(const rotation_state& ri);
-            void handle_rotation(canvas::scene& c, QPointF pt, const rotation_state& ri);
-            void handle_translation(canvas::scene& c, const translation_state& ri);
+            void handle_rotation(canvas::scene& c, QPointF pt, rotation_state& ri);
+            void handle_translation(canvas::scene& c, translation_state& ri);
             void handle_click(canvas::scene& c, QPointF pt, bool shift_down, bool alt_down);
             void handle_drag_complete(canvas::scene& c, bool shift_down, bool alt_down);
             void handle_select_drag(

@@ -345,14 +345,14 @@ std::optional<ui::tool::drag_state> ui::tool::select::create_drag_state(
         {selection_rb, [&]()->std::optional<drag_state> {
                 auto* rb = ::create_rubber_band<canvas::item::rect_rubber_band>(canv, pt);
                 return drag_state{
-                    pt, rb, selection_rb, std::monostate{}
+                    from_qt_pt(pt), rb, selection_rb, std::monostate{}
                 };
             }
         },
         {translation_rb, [&]()->std::optional<drag_state> {
                 auto* rb = ::create_rubber_band<canvas::item::line_rubber_band>(canv, pt);
                 return drag_state{
-                    pt, rb, translation_rb, std::monostate{}
+                    from_qt_pt(pt), rb, translation_rb, std::monostate{}
                 };
             }
         },
@@ -364,16 +364,16 @@ std::optional<ui::tool::drag_state> ui::tool::select::create_drag_state(
                 }
                 auto* arb = static_cast<ui::canvas::item::arc_rubber_band*>(
                     ::create_rubber_band<canvas::item::arc_rubber_band>(canv, 
-                        to_qt_pt(ri->axis.get().world_pos())
+                        to_qt_pt(ri->axis().world_pos())
                     )
                 );
 
-                auto axis_pt = ui::to_qt_pt(ri->axis.get().world_pos());
-                auto rotating_pt = ui::to_qt_pt(ri->rotating.get().world_pos());
+                auto axis_pt = ui::to_qt_pt(ri->axis().world_pos());
+                auto rotating_pt = ui::to_qt_pt(ri->rotating().world_pos());
                 arb->set_radius( ui::distance( axis_pt, rotating_pt ) );
                 arb->set_from_theta( ui::angle_through_points(axis_pt, rotating_pt )  );
 
-                return drag_state{ pt, arb, rotation_rb, std::move(*ri) };
+                return drag_state{ from_qt_pt(pt), arb, rotation_rb, std::move(*ri) };
             }
         }
     };
@@ -390,41 +390,21 @@ void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
         drag_ = create_drag_state( *rb_type, canv, pt);
     }
     if (is_dragging()) {
-        drag_->pt = pt;
+        drag_->pt =from_qt_pt(pt);
         drag_->rubber_band->handle_drag(pt);
         std::visit(
             overload{
                 [](std::monostate) {},
-                [&](const rotation_state& ri) {
+                [&](rotation_state& ri) {
                     handle_rotation(canv, pt, ri);
                 },
-                [&](const translation_state& ti) {
+                [&](translation_state& ti) {
                     handle_translation(canv, ti);
                 }
             },
             drag_->extra
         );
     }
-}
-
-ui::tool::node_locs get_branch_node_locs(sm::node& src, sm::bone& branch) {
-    std::unordered_map<mdl::handle, sm::point, mdl::handle_hash> old_locs; 
-
-    sm::visit_bone_hierarchy(src,
-        [&](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
-            old_locs[mdl::to_handle(bone.child_node())] = bone.child_node().world_pos();
-            old_locs[mdl::to_handle(bone.parent_node())] = bone.parent_node().world_pos();
-            return sm::visit_result::continue_traversal;
-        }
-    );
-
-    return old_locs |
-        rv::transform(
-            [](auto&& mv)->std::tuple<mdl::handle, sm::point> {
-                const auto& [hnd, pt] = mv;
-                return { hnd,pt };
-            }
-        ) | r::to<std::vector>();
 }
 
 std::optional<ui::tool::rotation_state> ui::tool::select::get_rotation_state(
@@ -462,10 +442,6 @@ std::optional<ui::tool::rotation_state> ui::tool::select::get_rotation_state(
             parent_bone->get().child_node(),
             *parent_bone,
             parent_bone->get().world_rotation(),
-            std::make_unique<node_locs>(get_branch_node_locs(
-                    parent_bone->get().parent_node(), parent_bone->get()
-                )
-            ),
             settings.rotate_mode_
         };
     } else {
@@ -484,11 +460,6 @@ std::optional<ui::tool::rotation_state> ui::tool::select::get_rotation_state(
             *lead_bone,
             sm::normalize_angle(
                 sm::angle_from_u_to_v(axis.get().world_pos(), rotating.get().world_pos())
-            ),
-            std::make_unique<node_locs>(
-                get_branch_node_locs(
-                    axis, lead_bone->get()
-                )
             ),
             settings.rotate_mode_
         };
@@ -524,27 +495,27 @@ void ui::tool::select::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMous
 	canv.sync_to_model();
 }
 
-void ui::tool::select::handle_rotation(canvas::scene& c, QPointF pt, const rotation_state& ri) {
+void ui::tool::select::handle_rotation(canvas::scene& c, QPointF pt, rotation_state& ri) {
 
     auto theta = sm::normalize_angle(
-            sm::angle_from_u_to_v(ri.axis.get().world_pos(), from_qt_pt(pt))
-        ) - sm::angle_from_u_to_v(ri.axis.get().world_pos(), ri.rotating.get().world_pos());
+            sm::angle_from_u_to_v(ri.axis().world_pos(), from_qt_pt(pt))
+        ) - sm::angle_from_u_to_v(ri.axis().world_pos(), ri.rotating().world_pos());
 
-    switch (ri.mode) {
+    switch (ri.mode()) {
         case sel_drag_mode::rigid:
-            ri.bone.get().rotate_by(theta, ri.axis, false);
+            ri.bone().rotate_by(theta, ri.axis(), false);
             break;
         case sel_drag_mode::unique:
-            ri.bone.get().rotate_by(theta, ri.axis, true);
+            ri.bone().rotate_by(theta, ri.axis(), true);
             break;
         case sel_drag_mode::rag_doll:
-            do_ragdoll_rotate(theta, ri.bone, ri.axis);
+            //do_ragdoll_rotate(theta, ri.bone(), ri.axis());
             break;
     }
     c.sync_to_model();
 }
 
-void ui::tool::select::handle_translation(canvas::scene& c, const translation_state& ri) {
+void ui::tool::select::handle_translation(canvas::scene& c, translation_state& ri) {
 
 }
 
@@ -571,9 +542,9 @@ void ui::tool::select::handle_click(canvas::scene& canv, QPointF pt, bool shift_
 }
 
 void ui::tool::select::do_rotation_complete(const rotation_state& ri) {
-    auto new_locs = get_branch_node_locs(ri.axis, ri.bone);
+    const auto& new_locs = ri.current_node_locs();
     project_->transform_node_positions(
-        *ri.old_locs,
+        ri.old_node_locs(),
         new_locs
     );
 }
@@ -581,7 +552,7 @@ void ui::tool::select::do_rotation_complete(const rotation_state& ri) {
 void ui::tool::select::handle_drag_complete(canvas::scene& c, bool shift_down, bool alt_down) {
     switch (drag_->type) {
         case selection_rb:
-            handle_select_drag(c, QRectF(*click_pt_, drag_->pt), shift_down, alt_down);
+            handle_select_drag(c, QRectF(*click_pt_, to_qt_pt(drag_->pt)), shift_down, alt_down);
             return;
         case rotation_rb:
             do_rotation_complete(std::get<rotation_state>(drag_->extra));
