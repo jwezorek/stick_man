@@ -1,6 +1,6 @@
 #include "sm_skeleton.h"
 #include "sm_types.h"
-#include "sm_traverse.h"
+#include "sm_visit.h"
 #include "json.hpp"
 #include <cmath>
 #include <variant>

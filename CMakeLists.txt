@@ -49,7 +49,7 @@ add_executable(stick_man
     src/core/sm_bone.cpp
     src/core/sm_types.cpp
     src/core/sm_fabrik.cpp
-    src/core/sm_traverse.cpp
+    src/core/sm_visit.cpp
 
     src/model/project.cpp
     src/model/commands.cpp

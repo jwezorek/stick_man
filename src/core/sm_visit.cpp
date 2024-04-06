@@ -1,6 +1,6 @@
 #include <stack>
 #include <unordered_set>
-#include "sm_traverse.h"
+#include "sm_visit.h"
 #include "sm_bone.h"
 
 namespace r = std::ranges;
@@ -164,7 +164,7 @@ namespace {
     }
 }
 
-void sm::dfs(node& root, node_visitor visit_node, bone_visitor visit_bone, bool just_downstream) {
+void sm::visit_nodes_and_bones(node& root, node_visitor visit_node, bone_visitor visit_bone, bool just_downstream) {
     dfs_aux<sm::node, sm::bone>(
         std::ref(root),
         visit_node,
@@ -173,7 +173,7 @@ void sm::dfs(node& root, node_visitor visit_node, bone_visitor visit_bone, bool 
     );
 }
 
-void sm::dfs(bone& root, node_visitor visit_node, bone_visitor visit_bone, bool just_downstream) {
+void sm::visit_nodes_and_bones(bone& root, node_visitor visit_node, bone_visitor visit_bone, bool just_downstream) {
     dfs_aux<sm::node, sm::bone>(
         std::ref(root),
         visit_node,
@@ -182,7 +182,7 @@ void sm::dfs(bone& root, node_visitor visit_node, bone_visitor visit_bone, bool 
     );
 }
 
-void sm::dfs(const node& root, const_node_visitor visit_node, const_bone_visitor visit_bone, 
+void sm::visit_nodes_and_bones(const node& root, const_node_visitor visit_node, const_bone_visitor visit_bone, 
         bool just_downstream) {
     dfs_aux<const sm::node, const sm::bone>(
         std::ref(root),
@@ -192,7 +192,7 @@ void sm::dfs(const node& root, const_node_visitor visit_node, const_bone_visitor
     );
 }
 
-void sm::dfs(const bone& root, const_node_visitor visit_node,
+void sm::visit_nodes_and_bones(const bone& root, const_node_visitor visit_node,
         const_bone_visitor visit_bone, bool just_downstream) {
     dfs_aux<const sm::node, const sm::bone>(
         std::ref(root),
@@ -203,11 +203,11 @@ void sm::dfs(const bone& root, const_node_visitor visit_node,
 }
 
 void sm::visit_nodes(node& j, node_visitor visit_node, bool just_downstream) {
-    dfs(j, visit_node, {}, just_downstream);
+    visit_nodes_and_bones(j, visit_node, {}, just_downstream);
 }
 
 void sm::visit_bones(node& j, bone_visitor visit_bone, bool just_downstream) {
-    dfs(j, {}, visit_bone, just_downstream);
+    visit_nodes_and_bones(j, {}, visit_bone, just_downstream);
 }
 
 void sm::visit_bones(bone& b, bone_visitor visit_bone, bool just_downstream) {
@@ -215,7 +215,7 @@ void sm::visit_bones(bone& b, bone_visitor visit_bone, bool just_downstream) {
     visit_bones(b.child_node(), visit_bone, just_downstream);
 }
 
-void sm::traverse_bone_hierarchy(node& src, bone_visitor_with_prev visit) {
+void sm::visit_bone_hierarchy(node& src, bone_visitor_with_prev visit) {
     std::stack<hierarchy_item> stack;
     for (auto bone : src.adjacent_bones()) {
         stack.push({ std::nullopt, bone });

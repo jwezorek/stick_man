@@ -1,6 +1,6 @@
 #include "sm_fabrik.h"
 #include "sm_skeleton.h"
-#include "sm_traverse.h"
+#include "sm_visit.h"
 #include <unordered_set>
 #include <stack>
 #include <numbers>
@@ -66,7 +66,7 @@ namespace {
 			length_tbl[&b] = { b.scaled_length(), b.world_rotation() };
 			return sm::visit_result::continue_traversal;
 			};
-		sm::dfs(j, {}, visit_bone);
+		sm::visit_nodes_and_bones(j, {}, visit_bone);
 		return length_tbl;
 	}
 
@@ -365,7 +365,7 @@ namespace {
 		};
 
 		start_node.set_world_pos(target_pt);
-		sm::traverse_bone_hierarchy(start_node, perform_fabrik_on_bone);
+		sm::visit_bone_hierarchy(start_node, perform_fabrik_on_bone);
 	}
 
 	sm::result target_satisfaction_state(const targeted_node& tj, double tolerance) {

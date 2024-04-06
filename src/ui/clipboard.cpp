@@ -1,6 +1,6 @@
 #include "clipboard.h"
 #include "../core/sm_skeleton.h"
-#include "../core/sm_traverse.h"
+#include "../core/sm_visit.h"
 #include "../core/json.hpp"
 #include "canvas/node_item.h"
 #include "canvas/bone_item.h"
@@ -122,12 +122,7 @@ namespace {
                 return sm::visit_result::continue_traversal;
             };
 
-        sm::dfs(
-            root,
-            node_visitor,
-            bone_visitor,
-            true
-        );
+        sm::visit_nodes_and_bones( root, node_visitor, bone_visitor, true );
     }
 
     // this functions returns the sm::skeleton associated with the one-and-only-one selected
@@ -181,7 +176,7 @@ namespace {
                 continue;
             }
 
-            sm::dfs(
+            sm::visit_nodes_and_bones(
                 skel_ptr->root_node(),
                 [&](const sm::node& node)->sm::visit_result {
                     auto& ni = ui::canvas::item_from_model<ui::canvas::item::node>(node);

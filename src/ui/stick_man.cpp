@@ -17,7 +17,7 @@
 
 //debug
 #include "../core/sm_bone.h"
-#include "../core/sm_traverse.h"
+#include "../core/sm_visit.h"
 #include "canvas/bone_item.h"
 #include "canvas/node_item.h"
 
@@ -147,7 +147,7 @@ void ui::stick_man::debug() {
         };
 
     if (node) {
-        sm::traverse_bone_hierarchy(*node, visit);
+        sm::visit_bone_hierarchy(*node, visit);
     }
 }
 

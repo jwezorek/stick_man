@@ -2,7 +2,7 @@
 #include "sm_bone.h"
 #include "sm_skeleton.h"
 #include "sm_fabrik.h"
-#include "sm_traverse.h"
+#include "sm_visit.h"
 #include "qdebug.h"
 #include <unordered_map>
 
@@ -29,7 +29,7 @@ namespace {
 			double theta, bool just_this_bone) {
 
 		bone_rotation_tbl tbl; 
-		sm::traverse_bone_hierarchy(axis,
+		sm::visit_bone_hierarchy(axis,
 			[&](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
 
 				sm::node& u = (prev) ? bone.shared_node(*prev)->get() : axis;
@@ -451,7 +451,7 @@ void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_b
 	auto old_rotation_tbl = create_bone_rotation_tbl(*axis, *this, theta, just_this_bone);
 	std::unordered_map<sm::bone*, double> new_world_rotation;
 
-	traverse_bone_hierarchy(*axis,
+	visit_bone_hierarchy(*axis,
 		[&](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
 			sm::node& u = (prev) ? bone.shared_node(*prev)->get() : axis->get();
 			sm::node& v = bone.opposite_node(u);
@@ -475,7 +475,7 @@ void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_b
 void sm::bone::set_length(double len) {
     std::unordered_map<bone*, std::tuple<double,double>> bone_to_len_and_rot;
     std::vector<bone*> topo_order;
-    dfs(*this, {},
+    visit_nodes_and_bones(*this, {},
         [&](sm::bone& bone)->visit_result {
             bone_to_len_and_rot[&bone] = { bone.length(), bone.world_rotation() };
             topo_order.push_back(&bone);

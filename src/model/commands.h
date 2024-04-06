@@ -5,7 +5,7 @@
 #include <expected>
 #include <variant>
 #include "../core/sm_types.h" 
-#include "../core/sm_traverse.h" 
+#include "../core/sm_visit.h" 
 #include "project.h"
 #include <unordered_map>
 

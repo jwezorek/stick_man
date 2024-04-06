@@ -6,7 +6,7 @@
 #include "../util.h"
 #include "../../core/sm_skeleton.h"
 #include "../../core/sm_fabrik.h"
-#include "../../core/sm_traverse.h"
+#include "../../core/sm_visit.h"
 #include <unordered_map>
 #include <array>
 #include <numbers>
@@ -49,7 +49,7 @@ namespace {
 			}
 			return sm::visit_result::continue_traversal;
 			};
-		sm::dfs(node, visit_node, {}, false);
+		sm::visit_nodes_and_bones(node, visit_node, {}, false);
 		return pinned_nodes;
 	}
 

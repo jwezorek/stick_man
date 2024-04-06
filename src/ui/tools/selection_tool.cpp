@@ -11,7 +11,7 @@
 #include "../stick_man.h"
 #include "../../core/sm_skeleton.h"
 #include "../../core/sm_types.h"
-#include "../../core/sm_traverse.h"
+#include "../../core/sm_visit.h"
 #include <array>
 #include <ranges>
 #include <unordered_map>
@@ -74,7 +74,7 @@ namespace {
     std::unordered_set<sm::node*> all_selected_nodes(sm::node& start) {
         using namespace ui::canvas;
         std::unordered_set<sm::node*> selected;
-        sm::dfs(
+        sm::visit_nodes_and_bones(
             start,
             [&selected](sm::node& n)->sm::visit_result {
                 if (item_from_model<item::node>(n).is_selected()) {
@@ -97,7 +97,7 @@ namespace {
         auto selection = all_selected_nodes(start.get());
         std::unordered_map<sm::node*, int> visited;
         std::unordered_set<sm::node*> candidates;
-        sm::dfs(
+        sm::visit_nodes_and_bones(
             start.get(),
             [&](sm::node& n)->sm::visit_result {
                 if (&n == &start.get()) {
@@ -259,7 +259,7 @@ namespace {
 			return sm::visit_result::continue_traversal;
 			};
 
-		sm::dfs(**node_set.begin(), visit_node, visit_bone);
+		sm::visit_nodes_and_bones(**node_set.begin(), visit_node, visit_bone);
 		if (!possibly_a_skeleton) {
 			return {};
 		}
@@ -410,7 +410,7 @@ void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
 ui::tool::node_locs get_branch_node_locs(sm::node& src, sm::bone& branch) {
     std::unordered_map<mdl::handle, sm::point, mdl::handle_hash> old_locs; 
 
-    sm::traverse_bone_hierarchy(src,
+    sm::visit_bone_hierarchy(src,
         [&](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
             old_locs[mdl::to_handle(bone.child_node())] = bone.child_node().world_pos();
             old_locs[mdl::to_handle(bone.parent_node())] = bone.parent_node().world_pos();
