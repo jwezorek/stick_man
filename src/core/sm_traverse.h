@@ -37,10 +37,6 @@ namespace sm {
     void visit_bones(node& j, bone_visitor visit_node, bool just_downstream = true);
     void visit_bones(bone& b, bone_visitor visit_bone, bool just_downstream = true);
 
-    void dfs(node& root, node_visitor_with_prev visit_node = {},
-        bone_visitor_with_prev visit_bone = {});
-    void dfs(bone& root, node_visitor_with_prev visit_node = {},
-        bone_visitor_with_prev visit_bone = {});
 
     void traverse_bone_hierarchy(node& src, bone_visitor_with_prev visit);
 }
