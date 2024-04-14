@@ -4,6 +4,8 @@
 #include "../../model/handle.h"
 #include "../../core/sm_types.h"
 
+/*------------------------------------------------------------------------------------------------*/
+
 namespace ui {
 
     namespace canvas {
@@ -40,7 +42,6 @@ namespace ui {
                 sm::node_ref axis,
                 sm::node_ref rotating,
                 sm::bone_ref bone,
-                double initial_theta,
                 sel_drag_mode mode
             );
 

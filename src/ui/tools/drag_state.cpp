@@ -36,13 +36,16 @@ ui::tool::rotation_state::rotation_state(
         sm::node_ref axis, 
         sm::node_ref rotating, 
         sm::bone_ref bone, 
-        double initial_theta, 
         ui::tool::sel_drag_mode mode) :
 
             axis_(axis),
             rotating_(rotating),
             bone_(bone),
-            initial_theta_(initial_theta),
+            initial_theta_(
+                sm::normalize_angle(
+                    sm::angle_from_u_to_v(axis.get().world_pos(), rotating.get().world_pos())
+                )
+            ),
             mode_(mode),
             old_locs_(std::make_unique<node_locs>(node_locations(axis))),
             radius_(sm::distance(axis_.get().world_pos(), rotating_.get().world_pos())) {

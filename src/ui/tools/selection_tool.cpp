@@ -441,7 +441,6 @@ std::optional<ui::tool::rotation_state> ui::tool::select::get_rotation_state(
             parent_bone->get().parent_node(),
             parent_bone->get().child_node(),
             *parent_bone,
-            parent_bone->get().world_rotation(),
             settings.rotate_mode_
         );
     } else {
@@ -458,9 +457,6 @@ std::optional<ui::tool::rotation_state> ui::tool::select::get_rotation_state(
             axis, 
             rotating, 
             *lead_bone,
-            sm::normalize_angle(
-                sm::angle_from_u_to_v(axis.get().world_pos(), rotating.get().world_pos())
-            ),
             settings.rotate_mode_
         );
     }
