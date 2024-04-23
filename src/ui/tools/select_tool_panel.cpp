@@ -73,7 +73,7 @@ ui::tool::select_tool_panel::select_tool_panel() : QWidget() {
     column->addWidget(drag_behaviors_ = new QCheckBox("drag behaviors on"));
     
     column->addLayout(indented_widget(1, rotate_ = new QRadioButton("rotate")));
-    column->addLayout(indented_widget(2, rotate_on_pin_ = new QCheckBox("rotate on nearest selected")));
+    column->addLayout(indented_widget(2, rotate_on_pin_ = new QCheckBox("rotate on nearest pin")));
     column->addLayout(indented_widget(2, rot_rag_doll_mode_ = new QRadioButton("rag doll mode")));
     column->addLayout(indented_widget(2, rot_unique_mode_ = new QRadioButton("unique bone mode")));
     column->addLayout(indented_widget(2, rot_rigid_mode_ = new QRadioButton("rigid mode")));
@@ -83,6 +83,10 @@ ui::tool::select_tool_panel::select_tool_panel() : QWidget() {
     column->addLayout(indented_widget(2, trans_rag_doll_mode_ = new QRadioButton("rag doll mode")));
     column->addLayout(indented_widget(2, trans_rubber_band_mode_ = new QRadioButton("rubber band mode")));
     column->addLayout(indented_widget(2, trans_rigid_mode_ = new QRadioButton("rigid mode")));
+
+    column->addSpacerItem(new QSpacerItem(15, 15));
+    column->addWidget(pin_button_ = new QPushButton("pin selected nodes"));
+
     column->addStretch();
 
     toplevel_group_->addButton( rotate_ );
@@ -162,7 +166,7 @@ void ui::tool::select_tool_panel::init() {
 ui::tool::sel_drag_settings ui::tool::select_tool_panel::settings() const {
     return {
         .is_in_rotate_mode_ = rotate_->isChecked(),
-        .rotate_on_selected_ = rotate_on_pin_->isChecked(),
+        .rotate_on_pinned_ = rotate_on_pin_->isChecked(),
         .rotate_mode_ = rot_mode(),
         .trans_sel_ = trans_selection_->isChecked(),
         .trans_mode_ = trans_mode()
@@ -171,6 +175,10 @@ ui::tool::sel_drag_settings ui::tool::select_tool_panel::settings() const {
 
 bool ui::tool::select_tool_panel::has_drag_behavior() const {
     return drag_behaviors_->isChecked();
+}
+
+QPushButton& ui::tool::select_tool_panel::pin_button() const {
+    return *pin_button_;
 }
 
 

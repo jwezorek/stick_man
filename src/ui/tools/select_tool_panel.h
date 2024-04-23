@@ -10,7 +10,7 @@ namespace ui {
 
         struct sel_drag_settings {
             bool is_in_rotate_mode_;
-            bool rotate_on_selected_;
+            bool rotate_on_pinned_;
             sel_drag_mode rotate_mode_;
             bool trans_sel_;
             sel_drag_mode trans_mode_;
@@ -18,7 +18,7 @@ namespace ui {
       
 
         class select_tool_panel : public QWidget {
-
+            QPushButton* pin_button_;
             QCheckBox* drag_behaviors_;
             QRadioButton* rotate_;
             QCheckBox* rotate_on_pin_;
@@ -44,6 +44,7 @@ namespace ui {
             select_tool_panel();
             void init();
             sel_drag_settings settings() const;
+            QPushButton& pin_button() const;
             bool has_drag_behavior() const;
         };
 
