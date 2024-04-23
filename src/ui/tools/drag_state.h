@@ -57,6 +57,7 @@ namespace ui {
             const node_locs& old_node_locs() const;
             node_locs current_node_locs() const;
             sel_drag_mode mode() const;
+            double radius() const;
         };
 
         struct translation_state {

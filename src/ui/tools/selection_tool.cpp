@@ -12,6 +12,7 @@
 #include "../../core/sm_skeleton.h"
 #include "../../core/sm_types.h"
 #include "../../core/sm_visit.h"
+#include "../../core/sm_fabrik.h"
 #include <array>
 #include <ranges>
 #include <unordered_map>
@@ -287,12 +288,12 @@ namespace {
 		);
 	}
 
-    void do_rubberband_rotate(double theta, sm::bone_ref bone, sm::node_ref axis) {
+    void do_ragdoll_rotate(double theta, ui::tool::rotation_state& state) {
+        sm::point offset = state.radius() * sm::point( std::cos(theta), std::sin(theta) );
+        auto new_loc = state.axis().world_pos() + offset;
+        auto result = sm::perform_fabrik( state.rotating(), new_loc, state.axis());
 
-    }
-
-    void do_ragdoll_rotate(double theta, sm::bone_ref bone, sm::node_ref axis) {
-
+        //TODO: do something with 'result' here...
     }
 }
 
@@ -494,18 +495,20 @@ void ui::tool::select::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMous
 void ui::tool::select::handle_rotation(canvas::scene& c, QPointF pt, rotation_state& ri) {
 
     auto theta = sm::normalize_angle(
-            sm::angle_from_u_to_v(ri.axis().world_pos(), from_qt_pt(pt))
-        ) - sm::angle_from_u_to_v(ri.axis().world_pos(), ri.rotating().world_pos());
+        sm::angle_from_u_to_v(ri.axis().world_pos(), from_qt_pt(pt))
+    );
+    auto theta_diff = theta - 
+        sm::angle_from_u_to_v(ri.axis().world_pos(), ri.rotating().world_pos());
 
     switch (ri.mode()) {
         case sel_drag_mode::rigid:
-            ri.bone().rotate_by(theta, ri.axis(), false);
+            ri.bone().rotate_by(theta_diff, ri.axis(), false);
             break;
         case sel_drag_mode::unique:
-            ri.bone().rotate_by(theta, ri.axis(), true);
+            ri.bone().rotate_by(theta_diff, ri.axis(), true);
             break;
         case sel_drag_mode::rag_doll:
-            //do_ragdoll_rotate(theta, ri.bone(), ri.axis());
+            do_ragdoll_rotate(theta, ri);
             break;
     }
     c.sync_to_model();

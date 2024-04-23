@@ -483,6 +483,24 @@ sm::result sm::perform_fabrik(
 	//	result::fabrik_converged;
 }
 
+sm::result sm::perform_fabrik(
+		node_ref effector,
+		point effector_target,
+		std::optional<sm::node_ref> pin,
+		const fabrik_options& opts) {
+
+	std::vector<std::tuple<sm::node_ref, sm::point>> one_effector = {
+		{effector, effector_target}
+	};
+
+	std::vector<sm::node_ref> pinned;
+	if (pin) {
+		pinned.push_back(*pin);
+	}
+
+	return sm::perform_fabrik(one_effector, pinned, opts);
+}
+
 double sm::constrain_rotation(sm::bone& b, double theta) {
 
 	fabrik_neighborhood fi{

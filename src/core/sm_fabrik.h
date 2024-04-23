@@ -19,6 +19,13 @@ namespace sm {
 		const fabrik_options& opts = {}
 	);
 
+	result perform_fabrik(
+		node_ref effector,
+		point effector_target,
+		std::optional<sm::node_ref> pin,
+		const fabrik_options& opts = {}
+	);
+
 	double constrain_rotation(sm::bone& b, double theta);
 
 	sm::point apply_rotation_constraints(
