@@ -29,8 +29,9 @@ std::vector<QWidget*> ui::tool::select_tool_panel::rot_ctrls(bool include_master
 
 std::vector<QWidget*> ui::tool::select_tool_panel::trans_ctrls(bool include_master) {
     std::vector<QWidget*> ctrls = { 
-        trans_selection_, trans_rag_doll_mode_,
-        trans_rubber_band_mode_, trans_rigid_mode_
+        trans_rag_doll_mode_,
+        trans_rubber_band_mode_, 
+        trans_rigid_mode_
     };
     if (include_master) {
         ctrls.push_back(translate_);
@@ -79,7 +80,6 @@ ui::tool::select_tool_panel::select_tool_panel() : QWidget() {
     column->addLayout(indented_widget(2, rot_rigid_mode_ = new QRadioButton("rigid mode")));
 
     column->addLayout(indented_widget(1, translate_ = new QRadioButton("translate")));
-    column->addLayout(indented_widget(2, trans_selection_ = new QCheckBox("entire selection")));
     column->addLayout(indented_widget(2, trans_rag_doll_mode_ = new QRadioButton("rag doll mode")));
     column->addLayout(indented_widget(2, trans_rubber_band_mode_ = new QRadioButton("rubber band mode")));
     column->addLayout(indented_widget(2, trans_rigid_mode_ = new QRadioButton("rigid mode")));
@@ -168,7 +168,6 @@ ui::tool::sel_drag_settings ui::tool::select_tool_panel::settings() const {
         .is_in_rotate_mode_ = rotate_->isChecked(),
         .rotate_on_pinned_ = rotate_on_pin_->isChecked(),
         .rotate_mode_ = rot_mode(),
-        .trans_sel_ = trans_selection_->isChecked(),
         .trans_mode_ = trans_mode()
     };
 }

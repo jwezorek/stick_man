@@ -375,15 +375,20 @@ std::optional<ui::tool::drag_state> ui::tool::select::create_drag_state(
             }
         },
         {translation_rb, [&]()->std::optional<drag_state> {
+                auto state = create_translation_state(canv, pt, this->settings_panel_->settings());
+                if (!state) {
+                    return {};
+                }
+
                 auto* rb = ::create_rubber_band<canvas::item::line_rubber_band>(canv, pt);
                 return drag_state{
-                    from_qt_pt(pt), rb, translation_rb, std::monostate{}
+                    from_qt_pt(pt), rb, translation_rb, std::move(*state)
                 };
             }
         },
         {rotation_rb, 
             [&]()->std::optional<drag_state> {
-                auto ri = get_rotation_state(canv, pt, this->settings_panel_->settings());
+                auto ri = create_rotation_state(canv, pt, this->settings_panel_->settings());
                 if (!ri) {
                     return {};
                 }
@@ -419,12 +424,13 @@ void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
         drag_->rubber_band->handle_drag(pt);
         std::visit(
             overload{
-                [](std::monostate) {},
+                [](std::monostate) {
+                },
                 [&](rotation_state& ri) {
                     handle_rotation(canv, pt, ri);
                 },
                 [&](translation_state& ti) {
-                    handle_translation(canv, ti);
+                    handle_translation(canv, pt, ti);
                 }
             },
             drag_->extra
@@ -432,8 +438,9 @@ void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
     }
 }
 
-std::optional<ui::tool::rotation_state> ui::tool::select::get_rotation_state(
-            ui::canvas::scene& canv, QPointF clicked_pt, const ui::tool::sel_drag_settings& settings) {
+std::optional<ui::tool::rotation_state> ui::tool::select::create_rotation_state(
+        ui::canvas::scene& canv, QPointF clicked_pt, 
+        const ui::tool::sel_drag_settings& settings) {
     std::optional<rotation_state> ri;
 
     auto* item = canv.top_item(clicked_pt);
@@ -486,6 +493,12 @@ std::optional<ui::tool::rotation_state> ui::tool::select::get_rotation_state(
         );
     }
     return ri;
+}
+
+std::optional<ui::tool::translation_state> ui::tool::select::create_translation_state(
+        ui::canvas::scene& canv, QPointF clicked_pt,
+        const ui::tool::sel_drag_settings& settings) {
+    return {};
 }
 
 void ui::tool::select::pin_selection() {
@@ -551,8 +564,7 @@ void ui::tool::select::handle_rotation(canvas::scene& c, QPointF pt, rotation_st
     c.sync_to_model();
 }
 
-void ui::tool::select::handle_translation(canvas::scene& c, translation_state& ri) {
-
+void ui::tool::select::handle_translation(canvas::scene& c, QPointF pt, translation_state& state) {
 }
 
 void ui::tool::select::handle_click(
@@ -600,6 +612,10 @@ void ui::tool::select::do_rotation_complete(const rotation_state& ri) {
     );
 }
 
+void ui::tool::select::do_translation_complete(const translation_state& ri) {
+
+}
+
 void ui::tool::select::handle_drag_complete(canvas::scene& c, bool shift_down, bool alt_down) {
     switch (drag_->type) {
         case selection_rb:
@@ -609,6 +625,7 @@ void ui::tool::select::handle_drag_complete(canvas::scene& c, bool shift_down, b
             do_rotation_complete(std::get<rotation_state>(drag_->extra));
             return;
         case translation_rb:
+            do_translation_complete(std::get<translation_state>(drag_->extra));
             return;
     }
 }

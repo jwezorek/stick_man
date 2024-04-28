@@ -4,6 +4,8 @@
 #include "drag_state.h"
 #include <optional>
 
+/*------------------------------------------------------------------------------------------------*/
+
 namespace ui {
 
     namespace tool {
@@ -12,7 +14,6 @@ namespace ui {
             bool is_in_rotate_mode_;
             bool rotate_on_pinned_;
             sel_drag_mode rotate_mode_;
-            bool trans_sel_;
             sel_drag_mode trans_mode_;
         };
       
@@ -26,7 +27,6 @@ namespace ui {
             QRadioButton* rot_unique_mode_;
             QRadioButton* rot_rigid_mode_;
             QRadioButton* translate_;
-            QCheckBox* trans_selection_;
             QRadioButton* trans_rag_doll_mode_;
             QRadioButton* trans_rubber_band_mode_;
             QRadioButton* trans_rigid_mode_;

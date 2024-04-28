@@ -63,6 +63,7 @@ namespace ui {
         struct translation_state {
             std::vector<sm::node_ref> selected;
             std::vector<sm::node_ref> pinned;
+            sel_drag_mode mode;
         };
 
         enum rubber_band_type {

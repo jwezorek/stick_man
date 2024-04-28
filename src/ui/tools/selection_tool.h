@@ -37,8 +37,10 @@ namespace ui {
             canvas::manager* canvases_;
 
             void do_rotation_complete(const rotation_state& ri);
+            void do_translation_complete(const translation_state& ri);
+
             void handle_rotation(canvas::scene& c, QPointF pt, rotation_state& ri);
-            void handle_translation(canvas::scene& c, translation_state& ri);
+            void handle_translation(canvas::scene& c, QPointF pt, translation_state& ri);
             void handle_click(
                 canvas::scene& c, QPointF pt, bool shift_down, bool ctrl_down, bool alt_down
             );
@@ -52,9 +54,15 @@ namespace ui {
             ) const;
             bool is_dragging() const;
             void do_dragging(canvas::scene& canv, QPointF pt);
-            static std::optional<rotation_state> get_rotation_state(
+
+            static std::optional<rotation_state> create_rotation_state(
                 ui::canvas::scene& canv, QPointF clicked_pt,
                 const ui::tool::sel_drag_settings& settings);
+
+            static std::optional<translation_state> create_translation_state(
+                ui::canvas::scene& canv, QPointF clicked_pt,
+                const ui::tool::sel_drag_settings& settings);
+
             void pin_selection();
 
         public:
