@@ -27,6 +27,7 @@ add_executable(stick_man
     src/ui/tools/tool.cpp
     src/ui/tools/animate_tool.cpp
     src/ui/tools/selection_tool.cpp
+    src/ui/tools/drag_state.cpp
 
     src/ui/canvas/scene.cpp
     src/ui/canvas/node_item.cpp
@@ -62,8 +63,6 @@ add_executable(stick_man
     src/ui/util.cpp
 
     src/main.cpp
-    src/ui/tools/drag_state.h
-    src/ui/tools/drag_state.cpp
 )
 
 target_link_libraries(stick_man PRIVATE Qt6::Widgets  Eigen3::Eigen)
