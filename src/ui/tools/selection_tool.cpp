@@ -50,6 +50,10 @@ namespace {
         return found;
     }
 
+    std::vector<sm::skel_ref> skeletons_from_roots(const std::vector<sm::node_ref>& nodes) {
+        return {};
+    }
+
     sm::maybe_bone_ref find_bone_from_u_to_v(sm::node_ref u, sm::node_ref v) {
         auto adj = u.get().adjacent_bones();
         auto i = r::find_if(
@@ -318,6 +322,35 @@ namespace {
 
         //TODO: do something with 'result' here...
     }
+
+    std::tuple<sm::node_ref, sm::point> translation_anchor(mdl::skel_piece item, QPointF click_pt) {
+        auto anchor_node = std::visit(
+            overload{
+                [](sm::node_ref node)->sm::node_ref {
+                    return node;
+                },
+                [](sm::bone_ref bone)->sm::node_ref {
+                    return bone.get().parent_node();
+                },
+                [](sm::skel_ref skel)->sm::node_ref {
+                    return skel.get().root_node();
+                }
+            },
+            item
+        );
+        return { anchor_node, 
+            ui::from_qt_pt(click_pt) - anchor_node.get().world_pos() 
+        };
+    }
+
+    std::vector<sm::node_ref> selected_nodes_for_translation(
+            ui::canvas::scene& canv, QPointF clicked_pt) {
+        return {};
+    }
+
+    std::vector<sm::node_ref> pinned_nodes_for_translation() {
+        return {};
+    }
 }
 
 ui::tool::select::select() :
@@ -498,7 +531,23 @@ std::optional<ui::tool::rotation_state> ui::tool::select::create_rotation_state(
 std::optional<ui::tool::translation_state> ui::tool::select::create_translation_state(
         ui::canvas::scene& canv, QPointF clicked_pt,
         const ui::tool::sel_drag_settings& settings) {
-    return {};
+
+    auto* item = canv.top_item(clicked_pt);
+    if (!item) {
+        return {};
+    }
+    auto mode = settings.trans_mode_;
+    auto [anchor, offset] = translation_anchor(item->to_skeleton_piece(), clicked_pt );
+    auto selected_nodes = selected_nodes_for_translation( canv, clicked_pt );
+    auto pinned_nodes = pinned_nodes_for_translation();
+
+    return {{
+        std::move(selected_nodes),
+        std::move(pinned_nodes),
+        anchor,
+        offset,
+        mode
+    }};
 }
 
 void ui::tool::select::pin_selection() {
@@ -565,6 +614,22 @@ void ui::tool::select::handle_rotation(canvas::scene& c, QPointF pt, rotation_st
 }
 
 void ui::tool::select::handle_translation(canvas::scene& c, QPointF pt, translation_state& state) {
+    auto delta = from_qt_pt(pt) - state.anchor.get().world_pos();
+    switch (state.mode) {
+        case sel_drag_mode::rigid: {
+            auto translate = sm::translation_matrix(delta);
+            for (auto skel : skeletons_from_roots(state.moving)) {
+                skel.get().apply(translate);
+            }
+        }
+        break;
+
+        case sel_drag_mode::rubber_band:
+            break;
+        case sel_drag_mode::rag_doll:
+            break;
+    }
+    c.sync_to_model();
 }
 
 void ui::tool::select::handle_click(

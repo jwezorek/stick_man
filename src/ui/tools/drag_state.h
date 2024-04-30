@@ -61,8 +61,10 @@ namespace ui {
         };
 
         struct translation_state {
-            std::vector<sm::node_ref> selected;
+            std::vector<sm::node_ref> moving;
             std::vector<sm::node_ref> pinned;
+            sm::node_ref anchor;
+            sm::point anchor_offset;
             sel_drag_mode mode;
         };
 
