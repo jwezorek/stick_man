@@ -664,18 +664,24 @@ void ui::tool::select::handle_rotation(canvas::scene& c, QPointF pt, rotation_st
 }
 
 void ui::tool::select::handle_translation(canvas::scene& c, QPointF pt, translation_state& state) {
-    auto delta = from_qt_pt(pt) - (state.anchor.get().world_pos() + state.anchor_offset);
+    auto translate = sm::translation_matrix(
+        from_qt_pt(pt) - (state.anchor.get().world_pos() + state.anchor_offset)
+    );
     switch (state.mode) {
         case sel_drag_mode::rigid: {
-            auto translate = sm::translation_matrix(delta);
             for (auto skel : skeletons_from_nodes(state.moving)) {
                 skel.get().apply(translate);
             }
         }
         break;
 
-        case sel_drag_mode::rubber_band:
-            break;
+        case sel_drag_mode::rubber_band: {
+            for (auto skel : state.moving) {
+                skel.get().apply(translate);
+            }
+        }
+        break;
+
         case sel_drag_mode::rag_doll:
             break;
     }

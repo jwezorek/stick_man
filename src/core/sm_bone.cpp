@@ -399,48 +399,8 @@ void sm::bone::clear_user_data() {
 	user_data_.reset();
 }
 
-/*
-void sm::bone::rotate(double theta) {
-	set_rotation(
-		rotation() + theta
-	);
-}
-
-void sm::bone::set_rotation(double theta) {
-    //TODO
-}
-*/
-
 void sm::bone::set_world_rotation(double theta) {
-	bone_rotation_tbl rotation_tbl;
-	visit_bones(*this, 
-		[&](bone& b)->visit_result {
-			rotation_tbl[&b] = {
-				b.scaled_length(),
-				b.world_rotation()
-			};
-			return visit_result::continue_traversal;
-		}
-	);
-
-    rotation_tbl[this].world_rotation = theta;
-
-	visit_bones(*this,
-		[&](bone& b)->visit_result {
-
-			auto theta = rotation_tbl.at(&b).world_rotation;
-			theta = sm::constrain_rotation(b, theta);
-
-			auto rotate_about_u = rotate_about_point_matrix(
-				b.parent_node().world_pos(), theta);
-			auto v = b.parent_node().world_pos() + sm::point{ rotation_tbl.at(&b).length, 0.0 };
-			b.child_node().set_world_pos(
-				transform(v, rotate_about_u)
-			);
-
-			return visit_result::continue_traversal;
-		}
-	);
+	rotate_by(theta - world_rotation());
 }
 
 void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_bone) {
