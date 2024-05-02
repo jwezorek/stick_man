@@ -664,7 +664,7 @@ void ui::tool::select::handle_rotation(canvas::scene& c, QPointF pt, rotation_st
 }
 
 void ui::tool::select::handle_translation(canvas::scene& c, QPointF pt, translation_state& state) {
-    auto delta = from_qt_pt(pt) - state.anchor.get().world_pos();
+    auto delta = from_qt_pt(pt) - (state.anchor.get().world_pos() + state.anchor_offset);
     switch (state.mode) {
         case sel_drag_mode::rigid: {
             auto translate = sm::translation_matrix(delta);
