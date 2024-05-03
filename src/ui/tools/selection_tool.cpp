@@ -332,7 +332,14 @@ namespace {
         //TODO: do something with 'result' here...
     }
 
-    std::unordered_map<sm::node*, sm::point> translation_table(
+
+    // make a table mapping node's to the offset from their parents incorporating
+    // translations by delta on selected nodes but such that no nodes receive
+    // "double translations"; that is, if we need to translate both u and v and
+    // u is v's predecessor in the bone hierarchy traversal then only u should be
+    // translated in the table.
+
+    std::unordered_map<sm::node*, sm::point> rubber_band_translation_table(
             sm::node& src, const sm::point& delta, const std::vector<sm::node_ref>& selected) {
 
         std::unordered_map<sm::node*, sm::point> tbl;
@@ -382,7 +389,7 @@ namespace {
     void do_rubber_band_translate(sm::node& src,
             const sm::point& delta, const std::vector<sm::node_ref>& sel) {
 
-        auto tbl = translation_table(src, delta, sel);
+        auto tbl = rubber_band_translation_table(src, delta, sel);
         sm::visit_bone_hierarchy(src,
             [&](sm::maybe_bone_ref maybe_prev, sm::bone& bone)->sm::visit_result {
                 if (!maybe_prev) {
