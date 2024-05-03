@@ -332,6 +332,78 @@ namespace {
         //TODO: do something with 'result' here...
     }
 
+    std::unordered_map<sm::node*, sm::point> translation_table(
+            sm::node& src, const sm::point& delta, const std::vector<sm::node_ref>& selected) {
+
+        std::unordered_map<sm::node*, sm::point> tbl;
+        std::unordered_set<sm::node*> has_been_translated;
+        auto should_be_translated = selected | rv::transform(
+                [](auto ref) {return &ref.get(); }
+            )| r::to<std::unordered_set>();
+
+        auto visit_node = [&](sm::maybe_node_ref prev, sm::node& node) {
+                auto prev_pos = (prev) ? prev->get().world_pos() : sm::point{ 0,0 };
+                auto trans_offset = node.world_pos() - prev_pos;
+                bool was_translated = prev &&
+                    has_been_translated.contains(&(prev->get()));
+
+                if (should_be_translated.contains(&node) && !was_translated) {
+                    trans_offset += delta;
+                    was_translated = true;
+                }
+                if (was_translated) {
+                    has_been_translated.insert(&node);
+                }
+                tbl[&node] = trans_offset;
+            };
+
+        sm::visit_bone_hierarchy( src,
+            [&](sm::maybe_bone_ref maybe_prev, sm::bone& bone)->sm::visit_result {
+                if (!maybe_prev) {
+                    visit_node({}, src);
+                }
+
+                sm::node_ref prev_node = (maybe_prev) ?
+                    *bone.shared_node(maybe_prev->get()):
+                    sm::node_ref{src};
+
+                visit_node(
+                    prev_node,
+                    bone.opposite_node(prev_node)
+                );
+
+                return sm::visit_result::continue_traversal;
+            }
+        );
+
+        return tbl;
+    }
+
+    void do_rubber_band_translate(sm::node& src,
+            const sm::point& delta, const std::vector<sm::node_ref>& sel) {
+
+        auto tbl = translation_table(src, delta, sel);
+        sm::visit_bone_hierarchy(src,
+            [&](sm::maybe_bone_ref maybe_prev, sm::bone& bone)->sm::visit_result {
+                if (!maybe_prev) {
+                    src.set_world_pos(tbl.at(&src));
+                }
+
+                sm::node_ref prev_node = (maybe_prev) ?
+                    *bone.shared_node(maybe_prev->get()):
+                    sm::node_ref{ src };
+
+                auto& curr_node = bone.opposite_node(prev_node);
+                auto new_v_pos = prev_node.get().world_pos() + tbl.at(&curr_node);
+                new_v_pos = sm::apply_rotation_constraints(new_v_pos, src, maybe_prev, bone);
+
+                curr_node.set_world_pos( new_v_pos );
+
+                return sm::visit_result::continue_traversal;
+            }
+        );
+    }
+
     std::tuple<sm::node_ref, sm::point> translation_anchor(mdl::skel_piece item, QPointF click_pt) {
         auto anchor_node = std::visit(
             overload{
@@ -664,11 +736,10 @@ void ui::tool::select::handle_rotation(canvas::scene& c, QPointF pt, rotation_st
 }
 
 void ui::tool::select::handle_translation(canvas::scene& c, QPointF pt, translation_state& state) {
-    auto translate = sm::translation_matrix(
-        from_qt_pt(pt) - (state.anchor.get().world_pos() + state.anchor_offset)
-    );
+    auto delta = from_qt_pt(pt) - (state.anchor.get().world_pos() + state.anchor_offset);
     switch (state.mode) {
         case sel_drag_mode::rigid: {
+            auto translate = sm::translation_matrix(delta);
             for (auto skel : skeletons_from_nodes(state.moving)) {
                 skel.get().apply(translate);
             }
@@ -676,8 +747,8 @@ void ui::tool::select::handle_translation(canvas::scene& c, QPointF pt, translat
         break;
 
         case sel_drag_mode::rubber_band: {
-            for (auto skel : state.moving) {
-                skel.get().apply(translate);
+            for (auto skel : skeletons_from_nodes(state.moving)) {
+                do_rubber_band_translate(skel.get().root_node(), delta, state.moving);
             }
         }
         break;

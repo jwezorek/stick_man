@@ -277,8 +277,7 @@ const sm::node& sm::bone::child_node() const {
 sm::node& sm::bone::opposite_node(const node& j) {
 	if (&j == &u_) {
 		return v_;
-	}
-	else {
+	} else {
 		return u_;
 	}
 }
