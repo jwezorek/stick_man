@@ -411,6 +411,34 @@ namespace {
         );
     }
 
+    void do_ragdoll_translate(sm::skel_ref& skel,
+            const sm::point& delta, const std::vector<sm::node_ref>& sel, 
+            const std::unordered_set<sm::node*>& pinned ) {
+        
+        auto effectors = sel | rv::filter(
+                [&](auto node) {
+                    return &node.get().owner() == &skel.get();
+                }
+            ) | rv::transform(
+                [&](auto node)->std::tuple <sm::node_ref, sm::point> {
+                        return {
+                            node,
+                            node.get().world_pos() + delta
+                        };
+                    }
+            ) | r::to<std::vector>();
+
+        auto pinned_nodes = pinned | rv::transform(
+                [](auto* node_ptr)->sm::node_ref {
+                    return *node_ptr;
+                }
+            ) | r::to<std::vector>();
+
+        auto result = sm::perform_fabrik(effectors, pinned_nodes);
+
+        //TODO: do something with 'result' here...
+    }
+
     std::tuple<sm::node_ref, sm::point> translation_anchor(mdl::skel_piece item, QPointF click_pt) {
         auto anchor_node = std::visit(
             overload{
@@ -744,23 +772,33 @@ void ui::tool::select::handle_rotation(canvas::scene& c, QPointF pt, rotation_st
 
 void ui::tool::select::handle_translation(canvas::scene& c, QPointF pt, translation_state& state) {
     auto delta = from_qt_pt(pt) - (state.anchor.get().world_pos() + state.anchor_offset);
+    auto active_skeletons = skeletons_from_nodes(state.moving);
+
     switch (state.mode) {
         case sel_drag_mode::rigid: {
             auto translate = sm::translation_matrix(delta);
-            for (auto skel : skeletons_from_nodes(state.moving)) {
+            for (auto skel : active_skeletons) {
                 skel.get().apply(translate);
             }
         }
         break;
 
         case sel_drag_mode::rubber_band: {
-            for (auto skel : skeletons_from_nodes(state.moving)) {
+            for (auto skel : active_skeletons) {
                 do_rubber_band_translate(skel.get().root_node(), delta, state.moving);
             }
         }
         break;
 
         case sel_drag_mode::rag_doll:
+            for (auto skel : active_skeletons) {
+                do_ragdoll_translate(
+                    skel, 
+                    delta, 
+                    state.moving,
+                    all_pinned_nodes(skel.get().root_node())
+                );
+            }
             break;
     }
     c.sync_to_model();
