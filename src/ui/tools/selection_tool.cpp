@@ -570,9 +570,8 @@ std::optional<ui::tool::drag_state> ui::tool::select::create_drag_state(
                     return {};
                 }
 
-                auto* rb = ::create_rubber_band<canvas::item::line_rubber_band>(canv, pt);
                 return drag_state{
-                    from_qt_pt(pt), rb, translation_rb, std::move(*state)
+                    from_qt_pt(pt), nullptr, translation_rb, std::move(*state)
                 };
             }
         },
@@ -611,7 +610,9 @@ void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
     }
     if (is_dragging()) {
         drag_->pt =from_qt_pt(pt);
-        drag_->rubber_band->handle_drag(pt);
+        if (drag_->rubber_band) {
+            drag_->rubber_band->handle_drag(pt);
+        }
         std::visit(
             overload{
                 [](std::monostate) {
