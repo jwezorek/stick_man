@@ -14,7 +14,7 @@ namespace mdl {
     struct handle {
     private:
         template<sm::is_node_or_bone T>
-        std::expected<std::reference_wrapper<T>, sm::result> to_aux(
+        std::expected<sm::ref<T>, sm::result> to_aux(
                 sm::world& world) const {
             auto skel = world.skeleton(skel_name);
             if (!skel) {
@@ -64,7 +64,7 @@ namespace mdl {
         return ptrs |
             std::ranges::views::transform(
                 [](auto* ptr)->handle {
-                    return to_handle(std::ref(*ptr));
+                    return to_handle(sm::ref(*ptr));
                 }
             );
     }

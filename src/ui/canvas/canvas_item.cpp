@@ -55,7 +55,7 @@ void ui::canvas::item::base::set_selected(bool selected) {
 
 mdl::skel_piece ui::canvas::item::base::to_skeleton_piece() {
     return std::visit(
-        []<typename T>(std::reference_wrapper<const T> p)->mdl::skel_piece {
+        []<typename T>(sm::ref<const T> p)->mdl::skel_piece {
             return const_cast<T&>(p.get());
         },
         const_cast<const item::base*>(this)->to_skeleton_piece()

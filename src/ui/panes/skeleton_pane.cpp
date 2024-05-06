@@ -72,10 +72,10 @@ namespace{
 	mdl::skel_piece get_treeitem_var(QStandardItem* qsi) {
 		if (is_bone_treeitem(qsi)) {
 			auto* bone = get_treeitem_data<sm::bone>(qsi);
-			return { std::ref(*bone) };
+			return { sm::ref(*bone) };
 		} else {
 			auto* skeleton = get_treeitem_data<sm::skeleton>(qsi);
-			return { std::ref(*skeleton) };
+			return { sm::ref(*skeleton) };
 		}
 	}
 
@@ -126,7 +126,7 @@ namespace{
 			return sm::visit_result::continue_traversal;
 		};
 
-		sm::visit_bones(skel.get().root_node(), visit);
+		sm::visit_bones(skel->root_node(), visit);
 	}
 
 	bool is_same_bone_selection(const std::vector<ui::canvas::item::bone*>& canv_sel,
@@ -459,7 +459,7 @@ void ui::pane::skeleton::handle_canv_sel_change() {
 
 void ui::pane::skeleton::handle_tree_change(QStandardItem* item) {
     auto piece = get_treeitem_var(item);
-    auto old_name = std::visit([](auto p) {return p.get().name(); }, piece);
+    auto old_name = std::visit([](auto p) {return p->name(); }, piece);
     auto result = project_->rename(piece, item->text().toStdString());
     if (!result) {
         item->setText(old_name.c_str());

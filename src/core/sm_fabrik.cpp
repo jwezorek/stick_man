@@ -83,7 +83,7 @@ namespace {
 	std::vector<targeted_node> pinned_nodes(const std::vector<sm::node_ref>& pins) {
 		return pins | rv::transform(
 			[](sm::node_ref node)->targeted_node {
-				return targeted_node(node, node.get().world_pos());
+				return targeted_node(node, node->world_pos());
 			}
 		) | r::to<std::vector<targeted_node>>();
 	}
@@ -371,12 +371,12 @@ namespace {
 	sm::result target_satisfaction_state(const targeted_node& tj, double tolerance) {
 
 		// has it reached the target?
-		if (sm::distance(tj.node.get().world_pos(), tj.target_pos) < tolerance) {
+		if (sm::distance(tj.node->world_pos(), tj.target_pos) < tolerance) {
 			return sm::result::fabrik_target_reached;
 		}
 
 		// has it moved since the last iteration?
-		if (sm::distance(tj.node.get().world_pos(), tj.prev_pos.value()) < tolerance) {
+		if (sm::distance(tj.node->world_pos(), tj.prev_pos.value()) < tolerance) {
 			return sm::result::fabrik_converged;
 		}
 
@@ -400,7 +400,7 @@ namespace {
 
 	void  update_prev_positions(std::vector<targeted_node>& targeted_nodes) {
 		for (auto& tj : targeted_nodes) {
-			tj.prev_pos = tj.node.get().world_pos();
+			tj.prev_pos = tj.node->world_pos();
 		}
 	}
 

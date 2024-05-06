@@ -64,7 +64,7 @@ sm::node::node(skeleton& parent, const std::string& name, double x, double y) :
 {}
 
 void sm::node::set_parent(bone& b) {
-	parent_ = std::ref(b);
+	parent_ = sm::ref(b);
 }
 
 void sm::node::set_name(const std::string& new_name) {
@@ -72,7 +72,7 @@ void sm::node::set_name(const std::string& new_name) {
 }
 
 void sm::node::add_child(bone& b) {
-	children_.push_back(std::ref(b));
+	children_.push_back(sm::ref(b));
 }
 
 std::string sm::node::name() const {
@@ -87,14 +87,14 @@ sm::expected_node sm::node::copy_to(skeleton& skel) const {
         skel, name_,
         x_, y_
     );
-    skel.register_node(node.get());
+    skel.register_node(node);
     return node;
 }
 
 sm::maybe_bone_ref sm::node::parent_bone() {
 	return std::visit(
 		overloaded{
-			[](skel_ref skel)->maybe_bone_ref {return {}; },
+			[](skel_ref skel)->maybe_bone_ref { return {}; },
 			[](bone_ref bone)->maybe_bone_ref { return bone; }
 		},
 		parent_
@@ -105,8 +105,10 @@ sm::maybe_bone_ref sm::node::parent_bone() {
 sm::maybe_const_bone_ref sm::node::parent_bone() const {
 	return std::visit(
 		overloaded{
-			[](skel_ref skel)->maybe_const_bone_ref {return {}; },
-			[](bone_ref bone)->maybe_const_bone_ref { return bone; }
+			[](skel_ref skel)->maybe_const_bone_ref { return {}; },
+			[](bone_ref bone)->maybe_const_bone_ref { 
+				return const_bone_ref(bone.get());
+			}
 		},
 		parent_
 	);
@@ -144,10 +146,10 @@ sm::skeleton& sm::node::owner() {
 	return std::visit(
 		overloaded{
 			[](skel_ref skel)->sm::skeleton& { 
-                return skel.get(); 
+                return *skel; 
             },
 			[](bone_ref bone)->sm::skeleton& {
-				return bone.get().owner();
+				return bone->owner();
 			}
 		},
 		parent_
@@ -298,7 +300,7 @@ std::vector<sm::bone_ref> sm::bone::sibling_bones() {
 	return u_.child_bones() |
 		rv::filter(
 			[this](bone_ref sib) {
-				return &sib.get() != this;
+				return sib.ptr() != this;
 			}
 	) | r::to<std::vector<sm::bone_ref>>();
 }
@@ -405,7 +407,7 @@ void sm::bone::set_world_rotation(double theta) {
 void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_bone) {
 
 	if (!axis) {
-		axis = std::ref(parent_node());
+		axis = sm::ref(parent_node());
 	}
 	auto old_rotation_tbl = create_bone_rotation_tbl(*axis, *this, theta, just_this_bone);
 	std::unordered_map<sm::bone*, double> new_world_rotation;

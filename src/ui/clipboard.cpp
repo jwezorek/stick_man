@@ -81,7 +81,7 @@ namespace {
     void copy_connected_component(sm::world& dest, const auto& root,
             const skeleton_piece_set& selection, skeleton_piece_set& copied) {
 
-        bool is_selected = selection.contains(std::ref(root));
+        bool is_selected = selection.contains(sm::ref(root));
         auto is_part_of_component = [&](auto& itm)->bool {
                 return is_selected == selection.contains(itm);
             };
@@ -167,7 +167,7 @@ namespace {
         auto pieces_and_sel_state = selected_skeletons |
             rv::transform(
                 [](const sm::skeleton* p)->std::tuple<mdl::const_skel_piece, bool> {
-                    return { std::ref(*p), true };
+                    return { sm::ref(*p), true };
                 }
             ) | r::to<std::vector<std::tuple<mdl::const_skel_piece, bool>>>();
 
@@ -181,14 +181,14 @@ namespace {
                 [&](const sm::node& node)->sm::visit_result {
                     auto& ni = ui::canvas::item_from_model<ui::canvas::item::node>(node);
                     pieces_and_sel_state.emplace_back(
-                        std::ref(node), ni.is_selected()
+                        sm::ref(node), ni.is_selected()
                     );
                     return sm::visit_result::continue_traversal;
                 },
                 [&](const sm::bone& bone)->sm::visit_result {
                     auto& bi = ui::canvas::item_from_model<ui::canvas::item::bone>(bone);
                     pieces_and_sel_state.emplace_back(
-                        std::ref(bone), bi.is_selected()
+                        sm::ref(bone), bi.is_selected()
                     );
                     return sm::visit_result::continue_traversal;
                 },
@@ -229,10 +229,10 @@ namespace {
                 overload{
                     [&](sm::const_skel_ref skel) {
                         copied.insert(skel);
-                        auto new_skel = skel.get().copy_to(
+                        auto new_skel = skel->copy_to(
                             dest_world,
                             mdl::unique_skeleton_name(
-                                skel.get().name(), dest_world.skeleton_names()
+                                skel->name(), dest_world.skeleton_names()
                             )
                         );
                         if (!new_skel) {
@@ -262,7 +262,7 @@ namespace {
                                 return &skel.get();
                             },
                             [](auto node_or_bone)->const sm::skeleton* {
-                                auto& skel = node_or_bone.get().owner();
+                                auto& skel = node_or_bone->owner();
                                 return &skel;
                             }
                         },
@@ -317,7 +317,7 @@ namespace {
         };
 
         auto pts = world.skeletons() |
-            rv::transform([](auto s) {return s.get().root_node().world_pos(); });
+            rv::transform([](auto s) {return s->root_node().world_pos(); });
         for (auto pt : pts) {
             if (pt.y < lower_left.y || (pt.y == lower_left.y && pt.x < lower_left.x)) {
                 lower_left = pt;

@@ -360,12 +360,10 @@ std::string mdl::unique_skeleton_name(const std::string& old_name,
 
 bool mdl::identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2) {
     auto to_void_star = [](mdl::skel_piece sp) {
-        return std::visit(
-            [](auto& p)->void* {
-                return &p.get();
-            },
-            sp
-        );
+            return std::visit(
+                [](auto& p)->void* { return p.ptr(); },
+                sp
+            );
         };
     auto ptr1 = to_void_star(p1);
     auto ptr2 = to_void_star(p2);

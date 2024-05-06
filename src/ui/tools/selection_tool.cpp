@@ -53,7 +53,7 @@ namespace {
     std::vector<sm::skel_ref> skeletons_from_nodes(const std::vector<sm::node_ref>& nodes) {
         auto skels = nodes |
             rv::transform(
-                [](auto node) {return &node.get().owner(); }
+                [](auto node) {return &node->owner(); }
             ) | r::to<std::unordered_set>();
 
         return skels | rv::transform(
@@ -64,7 +64,7 @@ namespace {
     }
 
     sm::maybe_bone_ref find_bone_from_u_to_v(sm::node_ref u, sm::node_ref v) {
-        auto adj = u.get().adjacent_bones();
+        auto adj = u->adjacent_bones();
         auto i = r::find_if(
             adj,
             [&](auto bone)->bool {
@@ -77,7 +77,7 @@ namespace {
     int dist(std::unordered_map<sm::node*, int> visited, sm::node& u) {
         auto adj = u.adjacent_bones();
         for (auto adj_bone : adj) {
-            auto& v = adj_bone.get().opposite_node(u);
+            auto& v = adj_bone->opposite_node(u);
             if (visited.contains(&v)) {
                 return visited[&v] + 1;
             }
@@ -111,8 +111,8 @@ namespace {
         sm::node_ref start = std::visit(
             overload{
                 [](sm::node_ref node)->sm::node_ref {return node; },
-                [](sm::bone_ref bone)->sm::node_ref {return bone.get().parent_node(); },
-                [](sm::skel_ref skel)->sm::node_ref {return skel.get().root_node(); }
+                [](sm::bone_ref bone)->sm::node_ref {return bone->parent_node(); },
+                [](sm::skel_ref skel)->sm::node_ref {return skel->root_node(); }
             },
             piece
         );
@@ -163,7 +163,7 @@ namespace {
             }
         );
         return {
-            {std::ref(**min)},
+            {sm::ref(**min)},
             visited.at(*min)
         };
     }
@@ -185,8 +185,8 @@ namespace {
                 [](sm::bone_ref bone)->std::optional<node_pair> {
                     using namespace ui::canvas;
 
-                    auto& u = bone.get().parent_node();
-                    auto& v = bone.get().child_node();
+                    auto& u = bone->parent_node();
+                    auto& v = bone->child_node();
                     auto& item_u = item_from_model<item::node>(u);
                     auto& item_v = item_from_model<item::node>(v);
 
@@ -345,7 +345,7 @@ namespace {
         std::unordered_map<sm::node*, sm::point> tbl;
         std::unordered_set<sm::node*> has_been_translated;
         auto should_be_translated = selected | rv::transform(
-                [](auto ref) {return &ref.get(); }
+                [](auto ref) {return ref.ptr(); }
             )| r::to<std::unordered_set>();
 
         auto visit_node = [&](sm::maybe_node_ref prev, sm::node& node) {
@@ -401,7 +401,7 @@ namespace {
                     sm::node_ref{ src };
 
                 auto& curr_node = bone.opposite_node(prev_node);
-                auto new_v_pos = prev_node.get().world_pos() + tbl.at(&curr_node);
+                auto new_v_pos = prev_node->world_pos() + tbl.at(&curr_node);
                 new_v_pos = sm::apply_rotation_constraints(new_v_pos, src, maybe_prev, bone);
 
                 curr_node.set_world_pos( new_v_pos );
@@ -417,13 +417,13 @@ namespace {
         
         auto effectors = sel | rv::filter(
                 [&](auto node) {
-                    return &node.get().owner() == &skel.get();
+                    return &node->owner() == skel.ptr();
                 }
             ) | rv::transform(
                 [&](auto node)->std::tuple <sm::node_ref, sm::point> {
                         return {
                             node,
-                            node.get().world_pos() + delta
+                            node->world_pos() + delta
                         };
                     }
             ) | r::to<std::vector>();
@@ -446,16 +446,16 @@ namespace {
                     return node;
                 },
                 [](sm::bone_ref bone)->sm::node_ref {
-                    return bone.get().parent_node();
+                    return bone->parent_node();
                 },
                 [](sm::skel_ref skel)->sm::node_ref {
-                    return skel.get().root_node();
+                    return skel->root_node();
                 }
             },
             item
         );
         return { anchor_node, 
-            ui::from_qt_pt(click_pt) - anchor_node.get().world_pos() 
+            ui::from_qt_pt(click_pt) - anchor_node->world_pos() 
         };
     }
 
@@ -466,10 +466,10 @@ namespace {
                     return {node};
                 },
                 [](sm::bone_ref bone)->std::vector<sm::node_ref> {
-                    return { bone.get().parent_node(), bone.get().child_node() };
+                    return { bone->parent_node(), bone->child_node() };
                 },
                 [](sm::skel_ref skel)->std::vector<sm::node_ref> {
-                    return skel.get().nodes() | r::to<std::vector>();
+                    return skel->nodes() | r::to<std::vector>();
                 }
             },
             piece
@@ -481,7 +481,7 @@ namespace {
         for (auto* item : canv.selection()) {
             auto nodes_from_piece = skel_piece_to_nodes(item->to_skeleton_piece());
             r::copy(
-                nodes_from_piece | rv::transform( [](auto node) {return &node.get(); } ), 
+                nodes_from_piece | rv::transform( [](auto node) {return node.ptr(); } ), 
                 std::inserter(unique_nodes, unique_nodes.end())
             );
         }
@@ -645,7 +645,7 @@ std::optional<ui::tool::rotation_state> ui::tool::select::create_rotation_state(
         auto parent_bone = std::visit(
             overload{
                 [](sm::node_ref node)->sm::maybe_bone_ref {
-                    return node.get().parent_bone();
+                    return node->parent_bone();
                 },
                 [](sm::bone_ref bone)->sm::maybe_bone_ref {
                     return bone;
@@ -772,21 +772,21 @@ void ui::tool::select::handle_rotation(canvas::scene& c, QPointF pt, rotation_st
 }
 
 void ui::tool::select::handle_translation(canvas::scene& c, QPointF pt, translation_state& state) {
-    auto delta = from_qt_pt(pt) - (state.anchor.get().world_pos() + state.anchor_offset);
+    auto delta = from_qt_pt(pt) - (state.anchor->world_pos() + state.anchor_offset);
     auto active_skeletons = skeletons_from_nodes(state.moving);
 
     switch (state.mode) {
         case sel_drag_mode::rigid: {
             auto translate = sm::translation_matrix(delta);
             for (auto skel : active_skeletons) {
-                skel.get().apply(translate);
+                skel->apply(translate);
             }
         }
         break;
 
         case sel_drag_mode::rubber_band: {
             for (auto skel : active_skeletons) {
-                do_rubber_band_translate(skel.get().root_node(), delta, state.moving);
+                do_rubber_band_translate(skel->root_node(), delta, state.moving);
             }
         }
         break;
@@ -797,7 +797,7 @@ void ui::tool::select::handle_translation(canvas::scene& c, QPointF pt, translat
                     skel, 
                     delta, 
                     state.moving,
-                    all_pinned_nodes(skel.get().root_node())
+                    all_pinned_nodes(skel->root_node())
                 );
             }
             break;

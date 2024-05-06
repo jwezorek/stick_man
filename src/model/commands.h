@@ -82,10 +82,10 @@ namespace mdl {
         static void rename(project& proj, handle old_hnd, handle new_hnd) {
             auto& old_obj = old_hnd.to<T>(proj.world_);
             if (!new_hnd.piece_name.empty()) {
-                proj.rename_aux(std::ref(old_obj), new_hnd.piece_name);
+                proj.rename_aux(sm::ref(old_obj), new_hnd.piece_name);
             }
             else {
-                proj.rename_aux(std::ref(old_obj), new_hnd.skel_name);
+                proj.rename_aux(sm::ref(old_obj), new_hnd.skel_name);
             }
         }
 

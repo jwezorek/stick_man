@@ -52,13 +52,13 @@ ui::canvas::item::bone::bone(sm::bone& bone, double scale) :
 }
 
 ui::canvas::item::node& ui::canvas::item::bone::parent_node_item() const {
-    return std::any_cast<std::reference_wrapper<ui::canvas::item::node>>(
+    return std::any_cast<sm::ref<ui::canvas::item::node>>(
         model_.parent_node().get_user_data()
     );
 }
 
 ui::canvas::item::node& ui::canvas::item::bone::child_node_item() const {
-    return std::any_cast<std::reference_wrapper<ui::canvas::item::node>>(
+    return std::any_cast<sm::ref<ui::canvas::item::node>>(
         model_.child_node().get_user_data()
     );
 }
@@ -86,7 +86,7 @@ void ui::canvas::item::bone::sync_rotation_constraint_to_model() {
 
 mdl::const_skel_piece ui::canvas::item::bone::to_skeleton_piece() const {
     const auto& bone = model();
-    return std::ref(bone);
+    return sm::ref(bone);
 }
 
 void ui::canvas::item::bone::sync_item_to_model() {

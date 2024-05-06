@@ -107,7 +107,7 @@ namespace {
 		using name_table_t = std::multimap<std::string, T*>;
 		return itms | rv::transform(
 				[](auto r)->name_table_t::value_type {
-					return { r.get().name(), &r.get() };
+					return { r->name(), r.ptr() };
 				}
 			) | r::to<name_table_t>();
 	}
@@ -260,13 +260,13 @@ sm::expected_skel sm::skeleton::copy_to(world& other_world, const std::string& n
         return new_skel;
     }
     for (auto node : nodes()) {
-        auto new_node = node.get().copy_to(*new_skel);
-        if (node.get().is_root()) {
+        auto new_node = node->copy_to(*new_skel);
+        if (node->is_root()) {
             new_skel->get().set_root(new_node->get());
         }
     }
     for (auto bone : bones()) {
-        bone.get().copy_to(*new_skel);
+        bone->copy_to(*new_skel);
     }
     return new_skel;
 }
@@ -304,7 +304,7 @@ sm::result sm::skeleton::from_json(sm::world& w, const json& jobj) {
                 auto new_node = w.create_node(
                     *this, jobj["name"], pos["x"].get<double>(), pos["y"].get<double>()
                 );
-                return { jobj["name"], &new_node.get() };
+                return { jobj["name"], new_node.ptr() };
                 }
         ) | r::to<nodes_tbl>();
 
@@ -358,7 +358,7 @@ json sm::skeleton::to_json() const {
 
 void sm::skeleton::set_root(sm::node& new_root)
 {
-    root_ = std::ref(new_root);
+    root_ = sm::ref(new_root);
 }
 
 void sm::skeleton::set_owner(sm::world& owner)
@@ -397,7 +397,7 @@ const sm::world& sm::skeleton::owner() const {
 
 void sm::skeleton::apply(matrix& mat) {
     for (auto node : nodes()) {
-        node.get().apply(mat);
+        node->apply(mat);
     }
 }
 
@@ -448,7 +448,7 @@ sm::expected_skel sm::world::create_skeleton(const std::string& name) {
     auto& skel = *skeletons_[name];
     skel.set_name(name);
 
-    return std::ref(skel);
+    return sm::ref(skel);
 }
 
 sm::expected_skel sm::world::skeleton(const std::string& name) {
@@ -457,7 +457,7 @@ sm::expected_skel sm::world::skeleton(const std::string& name) {
     if (!skel) {
         return std::unexpected(skel.error());
     }
-    return std::ref(const_cast<sm::skeleton&>(skel->get()));
+    return sm::ref(const_cast<sm::skeleton&>(skel->get()));
 }
 
 sm::expected_const_skel sm::world::skeleton(const std::string& name) const {
@@ -528,7 +528,7 @@ sm::result sm::world::delete_skeleton(const std::string& skel_name) {
 
 std::vector<std::string> sm::world::skeleton_names() const {
 	return skeletons() |
-		rv::transform([](auto skel) {return skel.get().name(); }) |
+		rv::transform([](auto skel) {return skel->name(); }) |
 		r::to< std::vector<std::string>>();
 }
 
@@ -643,7 +643,7 @@ json sm::world::to_json() const {
 
 void sm::world::apply(matrix& mat) {
     for (auto skel : skeletons()) {
-        skel.get().apply(mat);
+        skel->apply(mat);
     }
 }
 

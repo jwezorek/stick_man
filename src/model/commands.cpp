@@ -114,7 +114,7 @@ mdl::commands::replace_skeleton_state::replace_skeleton_state(const std::string&
         canvas_name(canv),
         replacee_names(replacees) {
     for (auto skel : replacers) {
-        skel.get().copy_to(replacements);
+        skel->copy_to(replacements);
     }
 }
 
@@ -186,7 +186,7 @@ mdl::commands::transform_nodes_and_bones_state::transform_nodes_and_bones_state(
 
     for (auto* node_ptr : downstream_envelope(node_set)) {
         auto& node = *node_ptr;
-        auto handle = to_handle( std::ref(node) );
+        auto handle = to_handle( sm::ref(node) );
         nodes.push_back(handle);
         old_node_to_position[handle] = node.world_pos();
     }

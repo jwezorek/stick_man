@@ -50,7 +50,7 @@ namespace ui {
             public:
                 has_stick_man_model(U& model) : model_(model) {
                     auto* derived = static_cast<T*>(this);
-                    model.set_user_data(std::ref(*derived));
+                    model.set_user_data(sm::ref(*derived));
                 }
                 U& model() { return model_; }
                 const U& model() const { return model_; }
@@ -73,7 +73,7 @@ namespace ui {
         // U is a model type (node, bone, or skeleton) and is deduced.
         template<typename T, typename U>
         T& item_from_model(U& model_obj) {
-            return std::any_cast<std::reference_wrapper<T>>(model_obj.get_user_data());
+            return std::any_cast<sm::ref<T>>(model_obj.get_user_data());
         }
 
         bool has_canvas_item(const auto& model_obj) {
@@ -95,7 +95,7 @@ namespace ui {
         auto to_model_refs(auto&& items) {
             return items | std::ranges::views::transform(
                 [](auto* item) {
-                    return std::ref(item->model());
+                    return sm::ref(item->model());
                 }
             );
         }

@@ -26,13 +26,13 @@ namespace {
             bone_visit_(b) {
         }
 
-        sm::visit_result operator()(std::reference_wrapper<V> j_ref) {
+        sm::visit_result operator()(sm::ref<V> j_ref) {
             return (node_visit_) ?
                 node_visit_(j_ref) :
                 sm::visit_result::continue_traversal;
         }
 
-        sm::visit_result operator()(std::reference_wrapper<E> b_ref) {
+        sm::visit_result operator()(sm::ref<E> b_ref) {
             return (bone_visit_) ?
                 bone_visit_(b_ref) :
                 sm::visit_result::continue_traversal;
@@ -47,8 +47,8 @@ namespace {
             downstream_(downstream)
         {}
 
-        std::vector<sm::node_or_bone<V, E>> operator()(std::reference_wrapper<V> j_ref) {
-            auto& node = j_ref.get();
+        std::vector<sm::node_or_bone<V, E>> operator()(sm::ref<V> j_ref) {
+            auto& node = *j_ref;
             auto neighbors = node.child_bones() |
                 rv::transform(
                     [](auto child)->sm::node_or_bone<V, E> {
@@ -63,13 +63,13 @@ namespace {
             return neighbors;
         }
 
-        std::vector<sm::node_or_bone<V, E>> operator()(std::reference_wrapper<E> b_ref) {
-            auto& bone = b_ref.get();
+        std::vector<sm::node_or_bone<V, E>> operator()(sm::ref<E> b_ref) {
+            auto& bone = *b_ref;
             std::vector<sm::node_or_bone<V, E>> neighbors;
             if (!downstream_) {
-                neighbors.push_back(std::ref(bone.parent_node()));
+                neighbors.push_back(sm::ref(bone.parent_node()));
             }
-            neighbors.push_back(std::ref(bone.child_node()));
+            neighbors.push_back(sm::ref(bone.child_node()));
             return neighbors;
         }
     };
@@ -80,8 +80,8 @@ namespace {
     template<typename V, typename E>
     uint64_t get_id(const sm::node_or_bone<V, E>& var) {
         auto ptr = std::visit(
-            []<typename T>(std::reference_wrapper<T> val_ref)->void* {
-            auto& val = val_ref.get();
+            []<typename T>(sm::ref<T> val_ref)->void* {
+            auto& val = *val_ref;
             return reinterpret_cast<void*>(
                 const_cast<std::remove_cv<T>::type*>(&val)
                 );
@@ -158,7 +158,7 @@ namespace {
         return neighbors |
             rv::filter(
                 [&](auto neighbor_ref) {
-                    return !state.visited.contains(&neighbor_ref.get());
+                    return !state.visited.contains( neighbor_ref.ptr() );
                 }
         ) | r::to<std::vector<sm::bone_ref>>();
     }
@@ -166,7 +166,7 @@ namespace {
 
 void sm::visit_nodes_and_bones(node& root, node_visitor visit_node, bone_visitor visit_bone, bool just_downstream) {
     dfs_aux<sm::node, sm::bone>(
-        std::ref(root),
+        sm::ref(root),
         visit_node,
         visit_bone,
         just_downstream
@@ -175,7 +175,7 @@ void sm::visit_nodes_and_bones(node& root, node_visitor visit_node, bone_visitor
 
 void sm::visit_nodes_and_bones(bone& root, node_visitor visit_node, bone_visitor visit_bone, bool just_downstream) {
     dfs_aux<sm::node, sm::bone>(
-        std::ref(root),
+        sm::ref(root),
         visit_node,
         visit_bone,
         just_downstream
@@ -185,7 +185,7 @@ void sm::visit_nodes_and_bones(bone& root, node_visitor visit_node, bone_visitor
 void sm::visit_nodes_and_bones(const node& root, const_node_visitor visit_node, const_bone_visitor visit_bone, 
         bool just_downstream) {
     dfs_aux<const sm::node, const sm::bone>(
-        std::ref(root),
+        sm::ref(root),
         visit_node,
         visit_bone,
         just_downstream
@@ -195,7 +195,7 @@ void sm::visit_nodes_and_bones(const node& root, const_node_visitor visit_node, 
 void sm::visit_nodes_and_bones(const bone& root, const_node_visitor visit_node,
         const_bone_visitor visit_bone, bool just_downstream) {
     dfs_aux<const sm::node, const sm::bone>(
-        std::ref(root),
+        sm::ref(root),
         visit_node,
         visit_bone,
         just_downstream
@@ -226,12 +226,12 @@ void sm::visit_bone_hierarchy(node& src, bone_visitor_with_prev visit) {
         auto item = stack.top();
         stack.pop();
 
-        if (state.visited.contains(&item.curr.get())) {
+        if (state.visited.contains( item.curr.ptr() )) {
             continue;
         }
 
         auto result = visit(item.prev, item.curr);
-        state.visited.insert(&item.curr.get());
+        state.visited.insert( item.curr.ptr() );
 
         if (result == sm::visit_result::terminate_traversal) {
             return;

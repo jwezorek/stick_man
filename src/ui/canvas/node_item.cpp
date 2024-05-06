@@ -97,5 +97,5 @@ QGraphicsItem* ui::canvas::item::node::item_body() {
 
 mdl::const_skel_piece ui::canvas::item::node::to_skeleton_piece() const {
     auto& node = model();
-    return std::ref(node);
+    return sm::const_node_ref(node);
 }

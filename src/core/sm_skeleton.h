@@ -80,13 +80,13 @@ namespace sm {
         void apply(matrix& mat);
 
         template <is_node_or_bone T>
-        std::optional<std::reference_wrapper<T>> get_by_name(const std::string& name) const {
+        std::optional<sm::ref<T>> get_by_name(const std::string& name) const {
             if constexpr (std::is_same<T, sm::node>::value) {
-                return nodes_.contains(name) ? std::ref(*nodes_.at(name)) : 
-                    std::optional<std::reference_wrapper<T>>{};
+                return nodes_.contains(name) ? sm::ref(*nodes_.at(name)) : 
+                    std::optional<sm::ref<T>>{};
             } else if constexpr (std::is_same<T, sm::bone>::value) {
-                return bones_.contains(name) ? std::ref(*bones_.at(name)) : 
-                    std::optional<std::reference_wrapper<T>>{};
+                return bones_.contains(name) ? sm::ref(*bones_.at(name)) : 
+                    std::optional<sm::ref<T>>{};
             } else {
                 static_assert(std::is_same<T, T>::value,
                     "skeleton::get_by_name, unsupported type");

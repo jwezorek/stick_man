@@ -43,12 +43,12 @@ ui::tool::rotation_state::rotation_state(
             bone_(bone),
             initial_theta_(
                 sm::normalize_angle(
-                    sm::angle_from_u_to_v(axis.get().world_pos(), rotating.get().world_pos())
+                    sm::angle_from_u_to_v(axis->world_pos(), rotating->world_pos())
                 )
             ),
             mode_(mode),
             old_locs_(std::make_unique<node_locs>(node_locations(axis))),
-            radius_(sm::distance(axis_.get().world_pos(), rotating_.get().world_pos())) {
+            radius_(sm::distance(axis_->world_pos(), rotating_->world_pos())) {
 }
 
 const sm::node& ui::tool::rotation_state::axis() const {

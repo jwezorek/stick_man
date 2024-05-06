@@ -116,8 +116,8 @@ namespace {
         return bones |
             rv::transform(
                 [](sm::const_bone_ref bone)->ui::canvas::item::bone& {
-                    return std::any_cast<std::reference_wrapper<ui::canvas::item::bone>>(
-                        bone.get().get_user_data()
+                    return std::any_cast<sm::ref<ui::canvas::item::bone>>(
+                        bone->get_user_data()
                     );
                 }
         );
@@ -523,15 +523,15 @@ void ui::canvas::scene::wheelEvent(QGraphicsSceneWheelEvent* event) {
 std::optional<mdl::skel_piece> ui::canvas::selected_single_model(const scene& canv) {
 	auto* skel_item = canv.selected_skeleton();
 	if (skel_item) {
-		return mdl::skel_piece{ std::ref(skel_item->model()) };
+		return mdl::skel_piece{ sm::ref(skel_item->model()) };
 	}
 	auto bones = canv.selected_bones();
 	auto nodes = canv.selected_nodes();
 	if (bones.size() == 1 && nodes.empty()) {
-		return mdl::skel_piece{ std::ref(bones.front()->model()) };
+		return mdl::skel_piece{ sm::ref(bones.front()->model()) };
 	}
 	if (nodes.size() == 1 && bones.empty()) {
-		return mdl::skel_piece{ std::ref(nodes.front()->model()) };
+		return mdl::skel_piece{ sm::ref(nodes.front()->model()) };
 	}
 	return {};
 }

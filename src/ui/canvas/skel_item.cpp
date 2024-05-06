@@ -82,7 +82,7 @@ QGraphicsItem* ui::canvas::item::skeleton::item_body() {
 
 mdl::const_skel_piece ui::canvas::item::skeleton::to_skeleton_piece() const {
     auto& skel = model();
-    return std::ref(skel);
+    return sm::const_skel_ref(skel);
 }
 
 ui::canvas::item::skeleton::skeleton(sm::skeleton& skel, double scale) :

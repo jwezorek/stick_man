@@ -67,7 +67,7 @@ namespace {
         proj.transform(
             mdl::to_handles(rv::all(ordered)) | r::to<std::vector<mdl::handle>>(),
             [new_length](sm::bone_ref bone) {
-                bone.get().set_length(new_length);
+                bone->set_length(new_length);
             }
         );
     }
@@ -78,7 +78,7 @@ namespace {
         proj.transform(
             mdl::to_handles(rv::all(ordered)) | r::to<std::vector<mdl::handle>>(),
             [theta](sm::bone_ref bone) {
-                bone.get().set_world_rotation(theta);
+                bone->set_world_rotation(theta);
             }
         );
     }

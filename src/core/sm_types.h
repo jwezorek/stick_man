@@ -13,6 +13,38 @@
 
 namespace sm {
 
+    template <typename T>
+    struct ref : public std::reference_wrapper<T> {
+
+        ref(T& t) : std::reference_wrapper<T>(t) {
+        }
+
+        template<typename U>
+        ref(ref<U> r) : std::reference_wrapper<T>(r) {
+
+        }
+
+        T* operator->() {
+            return &this->get();
+        }
+
+        const T* operator->() const {
+            return &this->get();
+        }
+
+        T* ptr() {
+            return &this->get();
+        }
+
+        const T* ptr() const {
+            return &this->get();
+        }
+
+        auto& operator*() {
+            return this->get();
+        }
+    };
+
     struct point {
         double x;
         double y;
@@ -83,15 +115,15 @@ namespace sm {
 	class skeleton;
 	class world;
 
-	using bone_ref = std::reference_wrapper<bone>;
-	using node_ref = std::reference_wrapper<node>;
-	using skel_ref = std::reference_wrapper<skeleton>;
-	using world_ref = std::reference_wrapper<world>;
+	using bone_ref = ref<bone>;
+	using node_ref = ref<node>;
+	using skel_ref = ref<skeleton>;
+	using world_ref = ref<world>;
 
-	using const_bone_ref = std::reference_wrapper<const bone>;
-	using const_node_ref = std::reference_wrapper<const node>;
-	using const_skel_ref = std::reference_wrapper<const skeleton>;
-	using const_world_ref = std::reference_wrapper<const world>;
+	using const_bone_ref = ref<const bone>;
+	using const_node_ref = ref<const node>;
+	using const_skel_ref = ref<const skeleton>;
+	using const_world_ref = ref<const world>;
 	
 	using maybe_bone_ref = std::optional<bone_ref>;
 	using maybe_node_ref = std::optional<node_ref>;
@@ -141,5 +173,5 @@ namespace sm {
         std::same_as<T, sm::skeleton>;
 
     template<typename V, typename E>
-    using node_or_bone = std::variant<std::reference_wrapper<V>, std::reference_wrapper<E>>;
+    using node_or_bone = std::variant<sm::ref<V>, sm::ref<E>>;
 }
