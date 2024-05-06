@@ -43,6 +43,10 @@ namespace sm {
         auto& operator*() {
             return this->get();
         }
+
+        const auto& operator*() const {
+            return this->get();
+        }
     };
 
     struct point {
