@@ -234,6 +234,8 @@ mdl::command mdl::commands::make_transform_bones_or_nodes_command(
                     bone.set_rotation_constraint(
                         rot_con.start_angle, rot_con.span_angle, rot_con.relative_to_parent
                     );
+                } else if (state->old_bone_to_rotcon.empty() && bone.rotation_constraint()) {
+                    bone.remove_rotation_constraint();
                 }
             }
             emit proj.refresh_canvas(proj, state->canvas, false);

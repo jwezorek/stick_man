@@ -24,7 +24,7 @@ namespace {
         proj.transform(
             mdl::to_handles(ui::canvas::to_model_ptrs(canv.selected_bones())) |
             r::to<std::vector<mdl::handle>>(),
-            [&](sm::bone& bone) {
+            [=](sm::bone& bone) {
                 bone.set_rotation_constraint(start, span, is_parent_relative);
             }
         );
@@ -34,7 +34,7 @@ namespace {
         proj.transform(
             mdl::to_handles(ui::canvas::to_model_ptrs(canv.selected_bones())) |
             r::to<std::vector<mdl::handle>>(),
-            [](sm::bone& bone) {
+            [=](sm::bone& bone) {
                 bone.remove_rotation_constraint();
             }
         );
@@ -260,8 +260,7 @@ void ui::pane::props::bones::add_or_delete_constraint(mdl::project& proj, ui::ca
         constraint_box_->set(
             true, k_default_rot_constraint_min, k_default_rot_constraint_span
         );
-    }
-    else {
+    } else {
         remove_rot_constraints(proj, canv);
         constraint_box_->hide();
     }
