@@ -131,24 +131,6 @@ void ui::stick_man::exit() {
 }
 
 void ui::stick_man::debug() {
-    auto& canv = canvases().active_canvas();
-    auto bones = canvas::to_model_ptrs(canv.selected_bones()) | r::to<std::vector>();
-    auto nodes = canvas::to_model_ptrs(canv.selected_nodes()) | r::to<std::vector>();
-
-    sm::bone* bone = (!bones.empty()) ? bones.front() : nullptr;
-    sm::node* node = (!nodes.empty()) ? nodes.front() : nullptr;
-    auto visit = [](sm::maybe_bone_ref prev, sm::bone& b)->sm::visit_result {
-            qDebug() << "{ " <<
-                ((prev) ? prev->get().name() : std::string("<nil>")) <<
-                " , " <<
-                b.name() <<
-                " }";
-            return sm::visit_result::continue_traversal;
-        };
-
-    if (node) {
-        sm::visit_bone_hierarchy(*node, visit);
-    }
 }
 
 void ui::stick_man::insert_new_tab() {
