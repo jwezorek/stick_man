@@ -25,6 +25,7 @@ namespace {
     const auto k_dark_gridline_color = QColor::fromRgb(220, 220, 220);
     const auto k_light_gridline_color = QColor::fromRgb(240, 240, 240);
     constexpr int k_ribbon_height = 35;
+    constexpr double k_zoom_base = 1.5;
 
     QGraphicsView::DragMode to_qt_drag_mode(ui::canvas::drag_mode dm) {
         switch (dm) {
@@ -200,7 +201,7 @@ void ui::canvas::scene::focusOutEvent(QFocusEvent* focusEvent) {
     }
 }
 
-void ui::canvas::scene::set_scale(double scale, std::optional<QPointF> center) {
+void ui::canvas::scene::set_scale_aux(double scale, std::optional<QPointF> center) {
     auto& view = this->view();
     view.resetTransform();
     view.scale(scale, -scale);
@@ -210,8 +211,19 @@ void ui::canvas::scene::set_scale(double scale, std::optional<QPointF> center) {
     sync_to_model();
 }
 
+void ui::canvas::scene::set_scale(double scale, std::optional<QPointF> center) {
+    zoom_level_ = {};
+    set_scale_aux(scale, center);
+}
+
 double ui::canvas::scene::scale() const {
     return view().transform().m11();
+}
+
+void ui::canvas::scene::set_zoom_level(int zoom, std::optional<QPointF> pt) {
+    auto scale = std::pow(k_zoom_base, static_cast<double>(zoom));
+    zoom_level_ = zoom;
+    set_scale_aux(scale, pt);
 }
 
 void ui::canvas::scene::sync_to_model() {
@@ -488,6 +500,21 @@ std::vector<ui::canvas::item::bone*> ui::canvas::scene::bone_items() const {
 
 std::vector<ui::canvas::item::skeleton*> ui::canvas::scene::skeleton_items() const {
     return qt_to_vector_of_type<item::skeleton>( items() );
+}
+
+std::optional<int> ui::canvas::scene::zoom_level() const
+{
+    return zoom_level_;
+}
+
+int ui::canvas::scene::closest_zoom_level() const
+{
+    auto scale = this->scale();
+    return static_cast<int>(
+            std::round(
+                std::log(scale) / std::log(k_zoom_base)
+            )
+        );
 }
 
 void ui::canvas::scene::keyPressEvent(QKeyEvent* event) {

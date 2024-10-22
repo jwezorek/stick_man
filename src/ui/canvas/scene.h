@@ -68,11 +68,11 @@ namespace ui {
         private:
 
             constexpr static auto k_grid_line_spacing = 10;
-            double scale_ = 1.0;
             QString status_line_;
             selection_set selection_;
             tool::input_handler& inp_handler_;
             item::rubber_band* rubber_band_;
+            std::optional<int> zoom_level_;
 
             void sync_selection();
             QGraphicsView& view();
@@ -90,7 +90,7 @@ namespace ui {
             void drawBackground(QPainter* painter, const QRectF& rect) override;
             void drawForeground(QPainter* painter, const QRectF& rect) override;
             void focusOutEvent(QFocusEvent* focusEvent) override;
-
+            void set_scale_aux(double scale, std::optional<QPointF> pt = {});
         public:
 
             scene(tool::input_handler& inp_handler);
@@ -106,6 +106,10 @@ namespace ui {
 
             void set_scale(double scale, std::optional<QPointF> pt = {});
             double scale() const;
+            void set_zoom_level(int zoom, std::optional<QPointF> pt = {});
+            std::optional<int> zoom_level() const;
+            int closest_zoom_level() const;
+
             void sync_to_model();
 
             const selection_set& selection() const;
