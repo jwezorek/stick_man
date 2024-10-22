@@ -28,6 +28,16 @@ namespace rv = std::ranges::views;
 
 namespace {
 
+    void to_do(const std::string& msg) {
+        QMessageBox msgBox;
+        msgBox.setWindowTitle("TODO");
+        msgBox.setText(msg.c_str());
+        msgBox.setIcon(QMessageBox::Information);
+        msgBox.setStandardButtons(QMessageBox::Ok);
+        msgBox.exec();
+    }
+
+
     void setDarkTitleBar(WId window) {
     #ifdef Q_OS_WIN
         BOOL USE_DARK_MODE = true;
@@ -121,12 +131,10 @@ void ui::stick_man::exit() {
 		else if (response == QMessageBox::Discard) {
 
 		} else {
-			// User cancelled quitting
 			return;
 		}
 	}
 
-	// Quit the application
 	QCoreApplication::quit();
 }
 
@@ -143,6 +151,16 @@ void ui::stick_man::insert_new_tab() {
     }
     project_.add_new_tab(new_tab_name);
 }
+
+void ui::stick_man::create_animation() {
+    to_do("create animation");
+}
+
+void ui::stick_man::create_pose()
+{
+    to_do("create pose");
+}
+
 
 ui::tool::manager& ui::stick_man::tool_mgr() {
     return tool_mgr_;
@@ -261,10 +279,19 @@ void ui::stick_man::insert_view_menu() {
 }
 
 void ui::stick_man::insert_project_menu() {
-    auto project_menu = menuBar()->addMenu(tr("Project"));
-    QAction* new_tab_action = new QAction(tr("Insert new skeleton tab"), this);
+    auto project_menu = menuBar()->addMenu(tr("Stick Man"));
+
+    auto* new_tab_action = new QAction(tr("Insert new canvas"), this);
+    auto* new_animation = new QAction("Create new animation", this);
+    auto* new_pose = new QAction("Create new pose", this);
+
     project_menu->addAction(new_tab_action);
+    project_menu->addAction(new_animation);
+    project_menu->addAction(new_pose);
+
     connect(new_tab_action, &QAction::triggered, this, &stick_man::insert_new_tab);
+    connect(new_animation, &QAction::triggered, this, &stick_man::create_animation);
+    connect(new_pose, &QAction::triggered, this, &stick_man::create_pose);
 }
 
 void ui::stick_man::createMainMenu()

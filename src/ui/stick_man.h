@@ -31,6 +31,8 @@ namespace ui {
         void do_redo();
 
         void insert_new_tab();
+        void create_animation();
+        void create_pose();
         void debug();
 
         tool::manager& tool_mgr();
