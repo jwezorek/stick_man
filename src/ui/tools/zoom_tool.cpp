@@ -4,6 +4,9 @@
 #include <QRegularExpression>
 #include <qdebug.h>
 
+namespace r = std::ranges;
+namespace rv = std::ranges::views;
+
 namespace {
 
 }
@@ -14,9 +17,14 @@ void ui::tool::zoom::handleButtonClick(int level)
 {
 }
 
-void ui::tool::zoom::do_zoom(double scale) {
+void ui::tool::zoom::do_zoom(double scale) const {
     auto& canv = canvases_->active_canvas();
     canv.set_scale(scale);
+    magnify_->sync_zoom_text(scale);
+}
+
+std::vector<int> ui::tool::zoom::magnification_levels() const {
+    return magnify_->magnification_levels();
 }
 
 ui::tool::zoom::zoom() :
@@ -102,6 +110,15 @@ void ui::tool::zoom_combobox::sync_zoom_text(double scale) {
         }
         lineEdit()->clear();
     }
+}
+
+std::vector<int> ui::tool::zoom_combobox::magnification_levels() const
+{
+    return scales_ | rv::transform(
+        [](double scale)->int {
+            return static_cast<int>(scale * 100.0);
+        }
+    ) | r::to<std::vector>();
 }
 
 void ui::tool::zoom_combobox::onEditingFinished() {

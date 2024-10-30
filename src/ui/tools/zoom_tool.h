@@ -24,6 +24,7 @@ namespace ui {
             zoom_combobox(QWidget* parent = nullptr);
             double nth_scale(int n) const;
             void sync_zoom_text(double scale);
+            std::vector<int> magnification_levels() const;
 
         signals:
             
@@ -42,14 +43,15 @@ namespace ui {
             canvas::manager* canvases_;
 
             void handleButtonClick(int level);
-
-            void do_zoom(double scale);
+            
 
         public:
             zoom();
             void init(canvas::manager& canvases, mdl::project& model) override;
             void mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
-            virtual QWidget* settings_widget() override;
+            virtual QWidget* settings_widget() override; 
+            std::vector<int> magnification_levels() const;
+            void do_zoom(double scale) const;
         };
     }
 

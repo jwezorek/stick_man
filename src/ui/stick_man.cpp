@@ -5,6 +5,8 @@
 #include "panes/tool_settings_pane.h"
 #include "canvas/canvas_item.h"
 #include "canvas/canvas_manager.h"
+#include "tools/tool_manager.h"
+#include "tools/zoom_tool.h"
 #include "util.h"
 #include "clipboard.h"
 #include <QtWidgets>
@@ -273,9 +275,34 @@ void ui::stick_man::update_undo_and_redo(bool can_redo, bool can_undo) {
 
 void ui::stick_man::insert_view_menu() {
     auto view_menu = menuBar()->addMenu(tr("View"));
-    QAction* view_action = new QAction(tr("foo"), this);
-    view_menu->addAction(view_action);
-    connect(view_action, &QAction::triggered, this, &stick_man::debug);
+    QMenu* magnification_menu = view_menu->addMenu(tr("Magnification"));
+
+    // Create an action group to make the actions mutually exclusive (like radio buttons)
+    QActionGroup* magnification_group = new QActionGroup(this);
+    magnification_group->setExclusive(true);
+
+    const auto* zoom_tool = static_cast<const tool::zoom*>(
+        &tool_mgr_.tool_from_id(tool::id::zoom)
+    );
+
+    // Create actions for each magnification level
+    auto zoom_levels = zoom_tool->magnification_levels();
+    for (auto level : zoom_levels) {
+        auto level_str = std::to_string(level) + "%";
+        QAction* action = new QAction(level_str.c_str(), this);
+        action->setCheckable(true);
+        if (level == 100) {
+            action->setChecked(true);  // Set default magnification to 100%
+        }
+        magnification_group->addAction(action);
+        magnification_menu->addAction(action);
+
+        // Connect each action to a slot if you want to handle magnification changes
+        connect(action, &QAction::triggered, this, [=]() {
+            double scale = level / 100.0;
+            zoom_tool->do_zoom(scale);
+        });
+    }
 }
 
 void ui::stick_man::insert_project_menu() {

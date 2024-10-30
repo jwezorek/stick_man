@@ -33,6 +33,7 @@ namespace ui {
             std::span<const fields> tool_info() const;
             bool has_current_tool() const;
             base& current_tool() const;
+            const base& tool_from_id(id id) const;
             void set_current_tool(canvas::manager& canvases, id id);
         signals:
             void current_tool_changed(base& new_tool);

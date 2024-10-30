@@ -95,6 +95,15 @@ ui::tool::base& ui::tool::manager::current_tool() const {
     return *tool_registry_.at(curr_item_index_);
 }
 
+const ui::tool::base& ui::tool::manager::tool_from_id(id id) const {
+    for (const auto& reg : tool_registry_) {
+        if (reg->id() == id) {
+            return *reg;
+        }
+    }
+    throw std::runtime_error("tool not found");
+}
+
 void ui::tool::manager::set_current_tool(canvas::manager& canvases, id id) {
     int new_tool_index = index_from_id(id);
     if (new_tool_index == curr_item_index_) {
