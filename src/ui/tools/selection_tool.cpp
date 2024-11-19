@@ -842,16 +842,17 @@ void ui::tool::select::handle_click(
     canv.set_selection(clicked_item, true);
 }
 
-void ui::tool::select::do_rotation_complete(const rotation_state& ri) {
+void ui::tool::select::do_rotation_complete(canvas::scene& canv, const rotation_state& ri) {
     const auto& new_locs = ri.current_node_locs();
     project_->transform_node_positions(
         ri.old_node_locs(),
         new_locs
     );
+    canv.sync_selection();
 }
 
-void ui::tool::select::do_translation_complete(const translation_state& ri) {
-
+void ui::tool::select::do_translation_complete(canvas::scene& canv, const translation_state& ri) {
+    canv.sync_selection();
 }
 
 void ui::tool::select::handle_drag_complete(canvas::scene& c, bool shift_down, bool alt_down) {
@@ -860,10 +861,10 @@ void ui::tool::select::handle_drag_complete(canvas::scene& c, bool shift_down, b
             handle_select_drag(c, QRectF(*click_pt_, to_qt_pt(drag_->pt)), shift_down, alt_down);
             return;
         case rotation_rb:
-            do_rotation_complete(std::get<rotation_state>(drag_->extra));
+            do_rotation_complete(c, std::get<rotation_state>(drag_->extra));
             return;
         case translation_rb:
-            do_translation_complete(std::get<translation_state>(drag_->extra));
+            do_translation_complete(c, std::get<translation_state>(drag_->extra));
             return;
     }
 }

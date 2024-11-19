@@ -74,7 +74,7 @@ namespace ui {
             item::rubber_band* rubber_band_;
             std::optional<int> zoom_level_;
 
-            void sync_selection();
+            
             QGraphicsView& view();
             const QGraphicsView& view() const;
             void set_drag_mode(drag_mode dm);
@@ -134,6 +134,7 @@ namespace ui {
             void subtract_from_selection(item::base* itm, bool sync = false);
             void set_selection(std::span<item::base*> itms, bool sync = false);
             void set_selection(item::base* itm, bool sync = false);
+            void sync_selection();
             void clear_selection();
             void clear();
             void show_status_line(const QString& txt);

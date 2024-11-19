@@ -36,8 +36,8 @@ namespace ui {
             mdl::project* project_;
             canvas::manager* canvases_;
 
-            void do_rotation_complete(const rotation_state& ri);
-            void do_translation_complete(const translation_state& ri);
+            void do_rotation_complete(canvas::scene& c, const rotation_state& ri);
+            void do_translation_complete(canvas::scene& c, const translation_state& ri);
 
             void handle_rotation(canvas::scene& c, QPointF pt, rotation_state& ri);
             void handle_translation(canvas::scene& c, QPointF pt, translation_state& ri);

@@ -34,6 +34,15 @@ ui::tool::zoom::zoom() :
 
 void ui::tool::zoom::init(canvas::manager& canvases, mdl::project& model) {
     canvases_ = &canvases;
+    settings_ = new QWidget();
+    auto* flow = new ui::FlowLayout(settings_);
+    flow->addWidget(new QLabel("magnify"));
+    flow->addWidget(magnify_ = new zoom_combobox());
+    magnify_->connect(magnify_, &zoom_combobox::zoom_changed,
+        [&](double scale) {
+            do_zoom(scale);
+        }
+    );
 }
 
 void ui::tool::zoom::mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {
@@ -45,18 +54,7 @@ void ui::tool::zoom::mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEven
 }
 
 QWidget* ui::tool::zoom::settings_widget() {
-    
-    if (!settings_) { 
-        settings_ = new QWidget();
-        auto* flow = new ui::FlowLayout(settings_);
-        flow->addWidget(new QLabel("magnify"));
-        flow->addWidget(magnify_ = new zoom_combobox());
-        magnify_->connect(magnify_, &zoom_combobox::zoom_changed,
-            [&](double scale) {
-                do_zoom(scale);
-            }
-        );
-    }
+   
     return settings_;
 }
 
