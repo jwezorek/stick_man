@@ -333,20 +333,42 @@ ui::pane::skeleton::skeleton(ui::stick_man* mw) :
         project_(nullptr),
 		QDockWidget(tr(""), mw) {
 
-    setTitleBarWidget( custom_title_bar("skeleton view") );
+	setTitleBarWidget(custom_title_bar("skeleton view"));
 
-	QSplitter* splitter = new QSplitter();
-    splitter->setOrientation(Qt::Vertical);
+	// Create a QTabWidget
+	QTabWidget* tab_widget = new QTabWidget(this);
 
-    splitter->addWidget(skeleton_tree_ = create_skeleton_tree());
-    splitter->addWidget(sel_properties_ = new selection_properties(
-            [mw]()->ui::canvas::scene& {
-                return mw->canvases().active_canvas();
-            },
-            this
-        )
-    );
-    setWidget(splitter);
+	// Create the skeleton pane (with QSplitter)
+	QSplitter* skeleton_splitter = new QSplitter();
+	skeleton_splitter->setOrientation(Qt::Vertical);
+
+	skeleton_splitter->addWidget(skeleton_tree_ = create_skeleton_tree());
+	skeleton_splitter->addWidget(sel_properties_ = new selection_properties(
+		[mw]()->ui::canvas::scene& {
+			return mw->canvases().active_canvas();
+		},
+		this
+	)
+	);
+
+	QWidget* skeleton_tab = new QWidget();
+	QVBoxLayout* skeleton_layout = new QVBoxLayout();
+	skeleton_layout->addWidget(skeleton_splitter);
+	skeleton_tab->setLayout(skeleton_layout);
+
+	// Add panes to the tab widget
+	tab_widget->addTab(skeleton_tab, tr("Skeleton"));
+
+	QWidget* animations_tab = new QWidget();
+	animations_tab->setLayout(new QVBoxLayout()); // Placeholder layout
+	tab_widget->addTab(animations_tab, tr("Animations"));
+
+	QWidget* skins_tab = new QWidget();
+	skins_tab->setLayout(new QVBoxLayout()); // Placeholder layout
+	tab_widget->addTab(skins_tab, tr("Skins"));
+
+	// Set the tab widget as the main widget of the dock
+	setWidget(tab_widget);
 
 	connect_tree_change_handler();
 }
