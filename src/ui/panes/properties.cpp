@@ -60,7 +60,7 @@ namespace {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::pane::selection_properties::selection_properties(const props::current_canvas_fn& fn,
-            pane::main_skeleton* sp) :
+            pane::skeleton* sp) :
         skel_pane_(sp),
 		props_{
 			{selection_type::none, new props::no_properties(fn, this)},
@@ -122,6 +122,6 @@ void ui::pane::selection_properties::init(canvas::manager& canvases, mdl::projec
     );
 }
 
-ui::pane::main_skeleton& ui::pane::selection_properties::skel_pane() {
+ui::pane::skeleton& ui::pane::selection_properties::skel_pane() {
     return *skel_pane_;
 }

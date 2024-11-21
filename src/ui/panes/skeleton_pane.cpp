@@ -36,25 +36,13 @@ ui::pane::skeleton::skeleton(ui::stick_man* mw) :
 
 	// Create a QTabWidget
 	QTabWidget* tab_widget = new QTabWidget(this);
+	tab_widget->tabBar()->setDocumentMode(true);
+	tab_widget->tabBar()->setExpanding(true);
+	tab_widget->setTabPosition(QTabWidget::South);
 
-	// Create the skeleton pane (with QSplitter)
-	main_skel_pane_ = new main_skeleton(mw);
-
-	QWidget* skeleton_tab = new QWidget();
-	QVBoxLayout* skeleton_layout = new QVBoxLayout();
-	skeleton_layout->addWidget(main_skel_pane_);
-	skeleton_tab->setLayout(skeleton_layout);
-
-	// Add panes to the tab widget
-	tab_widget->addTab(skeleton_tab, tr("Skeleton"));
-
-	QWidget* animations_tab = new QWidget();
-	animations_tab->setLayout(new QVBoxLayout()); // Placeholder layout
-	tab_widget->addTab(animations_tab, tr("Animations"));
-
-	QWidget* skins_tab = new QWidget();
-	skins_tab->setLayout(new QVBoxLayout()); // Placeholder layout
-	tab_widget->addTab(skins_tab, tr("Skins"));
+	tab_widget->addTab(main_skel_pane_ = new main_skeleton(this, mw), tr("skeleton"));
+	tab_widget->addTab(new QWidget(), tr("animation"));
+	tab_widget->addTab(new QWidget(), tr("skin"));
 
 	// Set the tab widget as the main widget of the dock
 	setWidget(tab_widget);

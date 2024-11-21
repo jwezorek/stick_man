@@ -19,9 +19,12 @@ namespace ui {
 
     namespace pane {
 
+        class skeleton;
+
         class main_skeleton : public QSplitter {
             friend class skeleton;
 
+            skeleton* parent_;
             canvas::manager* canvases_;
             mdl::project* project_;
             QTreeView* skeleton_tree_;
@@ -62,7 +65,7 @@ namespace ui {
 
         public:
 
-            main_skeleton(ui::stick_man* mgr);
+            main_skeleton(skeleton* parent, ui::stick_man* mgr);
             selection_properties& sel_properties();
             void init(canvas::manager& canvases, mdl::project& proj);
             bool validate_props_name_change(const std::string& new_name);

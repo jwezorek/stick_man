@@ -487,7 +487,8 @@ void ui::pane::main_skeleton::disconnect_tree_sel_handler() {
 }
 
 
-ui::pane::main_skeleton::main_skeleton(ui::stick_man* mw) :
+ui::pane::main_skeleton::main_skeleton(ui::pane::skeleton* parent, ui::stick_man* mw) :
+		parent_(parent),
 		canvases_(nullptr),
 		project_(nullptr) {
 
@@ -499,7 +500,7 @@ ui::pane::main_skeleton::main_skeleton(ui::stick_man* mw) :
 			[mw]()->ui::canvas::scene& {
 				return mw->canvases().active_canvas();
 			},
-			this
+			parent_
 		)
 	);
 
