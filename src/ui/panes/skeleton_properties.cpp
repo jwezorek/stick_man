@@ -2,7 +2,9 @@
 #include "../canvas/scene.h"
 #include "../canvas/skel_item.h"
 #include "skeleton_pane.h"
-#include "main_skeleton.h"
+#include "main_skeleton_pane.h"
+
+/*------------------------------------------------------------------------------------------------*/
 
 ui::pane::props::skeletons::skeletons(
         const current_canvas_fn& fn,  selection_properties* parent) :

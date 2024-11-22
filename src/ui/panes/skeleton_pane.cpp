@@ -1,5 +1,5 @@
 #include "skeleton_pane.h"
-#include "main_skeleton.h"
+#include "main_skeleton_pane.h"
 #include "../util.h"
 #include "../canvas/skel_item.h"
 #include "../canvas/bone_item.h"
@@ -40,7 +40,7 @@ ui::pane::skeleton::skeleton(ui::stick_man* mw) :
 	tab_widget->tabBar()->setExpanding(true);
 	tab_widget->setTabPosition(QTabWidget::South);
 
-	tab_widget->addTab(main_skel_pane_ = new main_skeleton(this, mw), tr("skeleton"));
+	tab_widget->addTab(main_skel_pane_ = new main_skeleton_pane(this, mw), tr("skeleton"));
 	tab_widget->addTab(new QWidget(), tr("animation"));
 	tab_widget->addTab(new QWidget(), tr("skin"));
 

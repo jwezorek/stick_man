@@ -9,7 +9,7 @@
 #include "../canvas/canvas_manager.h"
 #include "../util.h"
 #include "../stick_man.h"
-#include "main_skeleton.h"
+#include "main_skeleton_pane.h"
 #include "../../model/project.h"
 #include "../../model/handle.h"
 #include <unordered_map>

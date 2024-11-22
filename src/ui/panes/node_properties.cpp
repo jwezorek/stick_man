@@ -3,7 +3,7 @@
 #include "../canvas/scene.h"
 #include "../canvas/node_item.h"
 #include "skeleton_pane.h"
-#include "main_skeleton.h"
+#include "main_skeleton_pane.h"
 #include <ranges>
 
 namespace r = std::ranges;
