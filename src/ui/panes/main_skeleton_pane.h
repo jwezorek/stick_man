@@ -5,6 +5,7 @@
 #include <QtWidgets>
 #include "../../core/sm_types.h"
 #include "properties.h"
+#include "tree_view.h"
 #include <functional>
 
 /*------------------------------------------------------------------------------------------------*/
@@ -27,7 +28,7 @@ namespace ui {
             skeleton* parent_;
             canvas::manager* canvases_;
             mdl::project* project_;
-            QTreeView* skeleton_tree_;
+            tree_view* skeleton_tree_;
             selection_properties* sel_properties_;
 
             QMetaObject::Connection tree_sel_conn_;
@@ -56,7 +57,6 @@ namespace ui {
             void handle_rename(mdl::skel_piece piece, const std::string& new_name);
             void traverse_tree_items(const std::function<void(QStandardItem*)>& visitor);
 
-            QTreeView* create_skeleton_tree();
             std::vector<QStandardItem*> selected_items() const;
             canvas::scene& canvas();
 

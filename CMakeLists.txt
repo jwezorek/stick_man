@@ -46,6 +46,7 @@ add_executable(stick_man
     src/ui/panes/bone_properties.cpp
     src/ui/panes/props_box.cpp
     src/ui/panes/main_skeleton_pane.cpp
+    src/ui/panes/tree_view.cpp
 
     src/core/sm_skeleton.cpp
     src/core/sm_bone.cpp

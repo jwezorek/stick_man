@@ -440,43 +440,6 @@ void ui::pane::main_skeleton_pane::disconnect_tree_change_handler() {
 	disconnect(tree_conn_);
 }
 
-QTreeView* ui::pane::main_skeleton_pane::create_skeleton_tree() {
-	QStandardItemModel* model = new QStandardItemModel();
-	QTreeView* treeView = new QTreeView();
-	treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
-	treeView->setModel(model);
-	treeView->setHeaderHidden(true);
-
-	treeView->setStyleSheet(
-		R"(
-			QTreeView::branch:has-siblings:!adjoins-item {
-				border-image: url(:images/vline.png) 0;
-			}
-
-			QTreeView::branch:has-siblings:adjoins-item {
-				border-image: url(:images/branch-more.png) 0;
-			}
-
-			QTreeView::branch:!has-children:!has-siblings:adjoins-item {
-				border-image: url(:images/branch-end.png) 0;
-			}
-
-			QTreeView::branch:has-children:!has-siblings:closed,
-			QTreeView::branch:closed:has-children:has-siblings {
-					border-image: none;
-					image: url(:images/branch-closed.png);
-			}
-
-			QTreeView::branch:open:has-children:!has-siblings,
-			QTreeView::branch:open:has-children:has-siblings  {
-					border-image: none;
-					image: url(:images/branch-open.png);
-			}
-		 )"
-	);
-	return treeView;
-}
-
 void ui::pane::main_skeleton_pane::connect_tree_sel_handler() {
 	tree_sel_conn_ = connect(skeleton_tree_->selectionModel(), &QItemSelectionModel::selectionChanged,
 		this, &ui::pane::main_skeleton_pane::handle_tree_selection_change);
@@ -486,7 +449,6 @@ void ui::pane::main_skeleton_pane::disconnect_tree_sel_handler() {
 	disconnect(tree_sel_conn_);
 }
 
-
 ui::pane::main_skeleton_pane::main_skeleton_pane(ui::pane::skeleton* parent, ui::stick_man* mw) :
 		parent_(parent),
 		canvases_(nullptr),
@@ -494,7 +456,7 @@ ui::pane::main_skeleton_pane::main_skeleton_pane(ui::pane::skeleton* parent, ui:
 
 	this->setOrientation(Qt::Vertical);
 
-	this->addWidget(skeleton_tree_ = create_skeleton_tree());
+	this->addWidget(skeleton_tree_ = new tree_view());
 	this->addWidget(
 		sel_properties_ = new selection_properties(
 			[mw]()->ui::canvas::scene& {
