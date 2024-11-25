@@ -1,5 +1,6 @@
 #include "skeleton_pane.h"
 #include "main_skeleton_pane.h"
+#include "animation_skeleton_pane.h"
 #include "../util.h"
 #include "../canvas/skel_item.h"
 #include "../canvas/bone_item.h"
@@ -41,7 +42,7 @@ ui::pane::skeleton::skeleton(ui::stick_man* mw) :
 	tab_widget->setTabPosition(QTabWidget::South);
 
 	tab_widget->addTab(main_skel_pane_ = new main_skeleton_pane(this, mw), tr("skeleton"));
-	tab_widget->addTab(new QWidget(), tr("animation"));
+	tab_widget->addTab(anim_skel_pane_ = new animation_skeleton_pane(this, mw), tr("animation"));
 
 	// Set the tab widget as the main widget of the dock
 	setWidget(tab_widget);
@@ -55,6 +56,7 @@ void ui::pane::skeleton::init(canvas::manager& canvases, mdl::project& proj) {
 	project_ = &proj;
 	canvases_ = &canvases;
 	main_skel_pane_->init(canvases, proj);
+	anim_skel_pane_->init(canvases, proj);
 }
 
 bool ui::pane::skeleton::validate_props_name_change(const std::string& new_name) {

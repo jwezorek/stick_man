@@ -13,8 +13,8 @@
 
 namespace ui {
 
-    class manager;
     class stick_man;
+
     namespace canvas {
         class manager;
     }
