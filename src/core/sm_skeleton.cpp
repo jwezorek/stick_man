@@ -1,6 +1,7 @@
 #include "sm_skeleton.h"
 #include "sm_types.h"
 #include "sm_visit.h"
+#include "sm_animation.h"
 #include "json.hpp"
 #include <cmath>
 #include <variant>
@@ -385,6 +386,14 @@ void sm::skeleton::register_bone(sm::bone& new_bone) {
 
 bool sm::skeleton::empty() const {
     return !root_.has_value();
+}
+
+const std::vector<sm::animation>& sm::skeleton::animations() const {
+    return animations_;
+}
+
+void sm::skeleton::insert_animation(const animation& anim) {
+    animations_.push_back( anim );
 }
 
 sm::world& sm::skeleton::owner() {

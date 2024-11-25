@@ -14,6 +14,7 @@
 #include <variant>
 #include "sm_types.h"
 #include "sm_bone.h"
+#include "sm_animation.h"
 #include "json_fwd.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
@@ -37,6 +38,7 @@ namespace sm {
 		std::any user_data_;
         nodes_tbl nodes_;
 		bones_tbl bones_;
+        std::vector<animation> animations_;
 
 	protected:
         skeleton(world& w);
@@ -68,6 +70,9 @@ namespace sm {
 		auto bones() { return detail::to_range_view<bone_ref>(bones_); }
 		auto nodes() const { return detail::to_range_view<const_node_ref>(nodes_); }
 		auto bones() const { return detail::to_range_view<const_bone_ref>(bones_); }
+
+        const std::vector<animation>& animations() const;
+        void insert_animation(const animation& anim);
 
 		sm::world& owner();
 		const sm::world& owner() const;

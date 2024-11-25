@@ -352,26 +352,6 @@ void ui::pane::main_skeleton_pane::select_item(QStandardItem* item, bool select 
 
 }
 
-void ui::pane::main_skeleton_pane::connect_canv_cont_handler() {
-	canv_content_conn_ = connect(canvases_, &canvas::manager::canvas_refresh,
-		this, &ui::pane::main_skeleton_pane::sync_with_model
-	);
-}
-
-void ui::pane::main_skeleton_pane::disconnect_canv_cont_handler() {
-	disconnect(canv_content_conn_);
-}
-
-void ui::pane::main_skeleton_pane::connect_canv_sel_handler() {
-	auto& canv = canvas();
-	canv_sel_conn_ = connect(&canv.manager(), &ui::canvas::manager::selection_changed,
-		this, &ui::pane::main_skeleton_pane::handle_canv_sel_change
-	);
-}
-
-void ui::pane::main_skeleton_pane::disconnect_canv_sel_handler() {
-	disconnect(canv_sel_conn_);
-}
 
 void ui::pane::main_skeleton_pane::select_items(const std::vector<QStandardItem*>& items, bool emit_signal) {
 	if (!emit_signal) {
@@ -430,58 +410,39 @@ ui::canvas::scene& ui::pane::main_skeleton_pane::canvas() {
 	return canvases_->active_canvas();
 }
 
-void ui::pane::main_skeleton_pane::connect_tree_change_handler() {
-	auto* model = static_cast<QStandardItemModel*>(skeleton_tree_->model());
-	tree_conn_ = connect(model, &QStandardItemModel::itemChanged, this,
-		&main_skeleton_pane::handle_tree_change
+const ui::pane::tree_view& ui::pane::main_skeleton_pane::skel_tree() const {
+	return *skeleton_tree_;
+}
+
+QWidget* ui::pane::main_skeleton_pane::create_content(skeleton* parent) {
+	QSplitter* splitter = new QSplitter();
+	splitter->setOrientation(Qt::Vertical);
+	splitter->addWidget(
+		skeleton_tree_ = new tree_view()
 	);
-}
-void ui::pane::main_skeleton_pane::disconnect_tree_change_handler() {
-	disconnect(tree_conn_);
-}
-
-void ui::pane::main_skeleton_pane::connect_tree_sel_handler() {
-	tree_sel_conn_ = connect(skeleton_tree_->selectionModel(), &QItemSelectionModel::selectionChanged,
-		this, &ui::pane::main_skeleton_pane::handle_tree_selection_change);
-}
-
-void ui::pane::main_skeleton_pane::disconnect_tree_sel_handler() {
-	disconnect(tree_sel_conn_);
-}
-
-ui::pane::main_skeleton_pane::main_skeleton_pane(ui::pane::skeleton* parent, ui::stick_man* mw) :
-		parent_(parent),
-		canvases_(nullptr),
-		project_(nullptr) {
-
-	this->setOrientation(Qt::Vertical);
-
-	this->addWidget(skeleton_tree_ = new tree_view());
-	this->addWidget(
+	splitter->addWidget(
 		sel_properties_ = new selection_properties(
-			[mw]()->ui::canvas::scene& {
-				return mw->canvases().active_canvas();
+			[this]()->ui::canvas::scene& {
+				return main_wnd_->canvases().active_canvas();
 			},
 			parent_
 		)
 	);
+	return splitter;
+}
 
-	connect_tree_change_handler();
+ui::pane::main_skeleton_pane::main_skeleton_pane(ui::pane::skeleton* parent, ui::stick_man* mw) :
+	abstract_skeleton_pane(parent),
+	main_wnd_(mw) {
+	
 }
 
 ui::pane::selection_properties& ui::pane::main_skeleton_pane::sel_properties() {
 	return *sel_properties_;
 }
 
-void ui::pane::main_skeleton_pane::init(canvas::manager& canvases, mdl::project& proj) {
-	project_ = &proj;
-	canvases_ = &canvases;
+void ui::pane::main_skeleton_pane::init_aux(canvas::manager& canvases, mdl::project& proj) {
 	sel_properties_->init(canvases, proj);
-
-	connect_canv_cont_handler();
-	connect_canv_sel_handler();
-	connect_tree_sel_handler();
-
 	connect(project_, &mdl::project::name_changed, this, &main_skeleton_pane::handle_rename);
 }
 

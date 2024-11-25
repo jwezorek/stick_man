@@ -42,12 +42,9 @@ ui::pane::skeleton::skeleton(ui::stick_man* mw) :
 
 	tab_widget->addTab(main_skel_pane_ = new main_skeleton_pane(this, mw), tr("skeleton"));
 	tab_widget->addTab(new QWidget(), tr("animation"));
-	tab_widget->addTab(new QWidget(), tr("skin"));
 
 	// Set the tab widget as the main widget of the dock
 	setWidget(tab_widget);
-
-	main_skel_pane_->connect_tree_change_handler();
 }
 
 ui::pane::selection_properties& ui::pane::skeleton::sel_properties() {

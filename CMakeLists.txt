@@ -47,12 +47,14 @@ add_executable(stick_man
     src/ui/panes/props_box.cpp
     src/ui/panes/main_skeleton_pane.cpp
     src/ui/panes/tree_view.cpp
+    src/ui/panes/abstract_skeleton_pane.cpp
 
     src/core/sm_skeleton.cpp
     src/core/sm_bone.cpp
     src/core/sm_types.cpp
     src/core/sm_fabrik.cpp
     src/core/sm_visit.cpp
+    src/core/sm_animation.cpp
 
     src/model/project.cpp
     src/model/commands.cpp

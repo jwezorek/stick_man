@@ -1,5 +1,6 @@
 #pragma once
 
+#include "abstract_skeleton_pane.h"
 #include "../canvas/scene.h"
 #include <QWidget>
 #include <QtWidgets>
@@ -22,52 +23,34 @@ namespace ui {
 
         class skeleton;
 
-        class main_skeleton_pane : public QSplitter {
+        class main_skeleton_pane : public abstract_skeleton_pane {
             friend class skeleton;
 
-            skeleton* parent_;
-            canvas::manager* canvases_;
-            mdl::project* project_;
             tree_view* skeleton_tree_;
             selection_properties* sel_properties_;
-
-            QMetaObject::Connection tree_sel_conn_;
-            QMetaObject::Connection tree_conn_;
-            QMetaObject::Connection canv_sel_conn_;
-            QMetaObject::Connection canv_content_conn_;
+            ui::stick_man* main_wnd_;
 
             void expand_selected_items();
-
-            void connect_tree_sel_handler();
-            void disconnect_tree_sel_handler();
-
-            void connect_canv_sel_handler();
-            void disconnect_canv_sel_handler();
-
-            void connect_canv_cont_handler();
-            void disconnect_canv_cont_handler();
-
-            void connect_tree_change_handler();
-            void disconnect_tree_change_handler();
-
-            void sync_with_model(sm::world& model);
-            void handle_canv_sel_change();
-            void handle_tree_change(QStandardItem* item);
-            void handle_tree_selection_change(const QItemSelection&, const QItemSelection&);
             void handle_rename(mdl::skel_piece piece, const std::string& new_name);
             void traverse_tree_items(const std::function<void(QStandardItem*)>& visitor);
-
             std::vector<QStandardItem*> selected_items() const;
             canvas::scene& canvas();
-
             void select_item(QStandardItem* item, bool select);
             void select_items(const std::vector<QStandardItem*>& items, bool emit_signal = true);
+
+            const tree_view& skel_tree() const override;
+            QWidget* create_content(skeleton* parent) override;
+            void handle_canv_sel_change() override;
+            void handle_tree_change(QStandardItem* item) override;
+            void handle_tree_selection_change( 
+                const QItemSelection&, const QItemSelection&) override;
+            void sync_with_model(sm::world& model) override;
+            void init_aux(canvas::manager& canvases, mdl::project& proj) override;
 
         public:
 
             main_skeleton_pane(skeleton* parent, ui::stick_man* mgr);
             selection_properties& sel_properties();
-            void init(canvas::manager& canvases, mdl::project& proj);
             bool validate_props_name_change(const std::string& new_name);
         };
 
