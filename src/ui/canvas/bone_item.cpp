@@ -12,6 +12,7 @@ namespace {
     constexpr auto k_bone_zorder = 5;
 
     QPolygonF bone_polygon(double length, double node_radius, double scale) {
+        qDebug() << scale;
         auto r = static_cast<float>(node_radius * scale);
         auto d = static_cast<float>(length);
         auto x1 = (r * r) / d;

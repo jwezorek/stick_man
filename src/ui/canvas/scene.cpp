@@ -274,19 +274,19 @@ bool ui::canvas::scene::is_status_line_visible() const {
 
 ui::canvas::item::node* ui::canvas::scene::insert_item(sm::node& node) {
 	ui::canvas::item::node* ni;
-	addItem(ni = new item::node(node, 1.0 / scale()));
+	addItem(ni = new item::node(node, scale()));
 	return ni;
 }
 
 ui::canvas::item::bone* ui::canvas::scene::insert_item(sm::bone& bone) {
 	ui::canvas::item::bone* bi;
-	addItem(bi = new item::bone(bone, 1.0 / scale()));
+	addItem(bi = new item::bone(bone, scale()));
 	return bi;
 }
 
 ui::canvas::item::skeleton* ui::canvas::scene::insert_item(sm::skeleton& skel) {
 	ui::canvas::item::skeleton* si;
-	addItem(si = new item::skeleton(skel, 1.0 / scale()));
+	addItem(si = new item::skeleton(skel, scale()));
 	return si;
 }
 
