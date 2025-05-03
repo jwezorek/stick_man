@@ -2,18 +2,137 @@
 
 /*------------------------------------------------------------------------------------------------*/
 
-sm::animation::animation(const std::string& name) : name_(name) {
+sm::animation::animation(const std::string& name) : name_(name) {}
 
+void sm::animation::insert(const sm::animation_event& event) {
+    auto overlapping = timeline_.query_overlapping(
+        { event.start_time, event.start_time + event.duration }
+    );
+    std::vector<sm::animation_event> same_start;
+
+    for (auto& [iv, ev] : overlapping) {
+        if (ev.start_time == event.start_time)
+            same_start.push_back(ev);
+    }
+
+    std::sort(same_start.begin(), same_start.end(), 
+            [](const sm::animation_event& a, const sm::animation_event& b) {
+            return a.index < b.index;
+        }
+    );
+
+    if (event.index < -1 || event.index > static_cast<int>(same_start.size())) {
+        throw std::invalid_argument("insert: index out of bounds for given start_time");
+    }
+
+    sm::animation_event ev = event;
+
+    if (event.index == -1) {
+        ev.index = static_cast<int>(same_start.size());
+    } else {
+        if (event.index < static_cast<int>(same_start.size()) &&
+            same_start[event.index].index != event.index) {
+            throw std::invalid_argument("insert: non-contiguous index for given start_time");
+        }
+
+        for (auto& e : same_start | std::views::reverse) {
+            if (e.index >= event.index) {
+                timeline_.remove({ e.start_time, e.start_time + e.duration }, e);
+                ++e.index;
+                timeline_.insert({ e.start_time, e.start_time + e.duration }, e);
+            }
+        }
+    }
+
+    timeline_.insert({ ev.start_time, ev.start_time + ev.duration }, ev);
 }
 
-void sm::animation::insert(int start_time, const animation_event& event) {
-    timeline_[start_time].push_back(event);
+void sm::animation::set(
+        int start_time, int index, int duration, const sm::animation_action& action) {
+
+    auto overlapping = timeline_.query_overlapping({ start_time, start_time + 1 });
+
+    for (auto& [iv, ev] : overlapping) {
+        if (ev.start_time == start_time && ev.index == index) {
+            timeline_.remove(iv, ev);
+            ev.duration = duration;
+            ev.action = action;
+            timeline_.insert({ ev.start_time, ev.start_time + ev.duration }, ev);
+            return;
+        }
+    }
+
+    throw std::out_of_range("set: no such animation_event at given start_time and index");
 }
 
-void sm::animation::set(int start_time, const animation_event& event, int index) {
-    timeline_.at(start_time).at(index) = event;
+void sm::animation::move(int start_time, int index, int new_index) {
+    auto overlapping = timeline_.query_overlapping({ start_time, start_time + 1 });
+
+    std::vector<sm::animation_event> same_start;
+    for (auto& [iv, ev] : overlapping) {
+        if (ev.start_time == start_time)
+            same_start.push_back(ev);
+    }
+
+    std::sort(same_start.begin(), same_start.end(), 
+        [](const sm::animation_event& a, const sm::animation_event& b) {
+            return a.index < b.index;
+        }
+    );
+
+    if (index < 0 || index >= static_cast<int>(same_start.size()) ||
+        new_index < 0 || new_index >= static_cast<int>(same_start.size())) {
+        throw std::out_of_range("move: index or new_index out of range");
+    }
+
+    sm::animation_event moving = same_start[index];
+
+    for (auto& ev : same_start) {
+        timeline_.remove({ ev.start_time, ev.start_time + ev.duration }, ev);
+    }
+
+    same_start.erase(same_start.begin() + index);
+    same_start.insert(same_start.begin() + new_index, moving);
+
+    for (int i = 0; i < static_cast<int>(same_start.size()); ++i) {
+        same_start[i].index = i;
+        timeline_.insert(
+            { same_start[i].start_time, same_start[i].start_time + same_start[i].duration }, 
+            same_start[i]
+        );
+    }
 }
 
-std::vector<sm::animation_event> sm::animation::events(int start_time) const {
-    return timeline_.at(start_time);
+std::vector<sm::animation_event> sm::animation::events() const {
+    std::vector<sm::animation_event> result;
+    for (const auto& [iv, ev] : timeline_.entries()) {
+        result.push_back(ev);
+    }
+
+    std::sort(result.begin(), result.end(), 
+        [](const sm::animation_event& a, const sm::animation_event& b) {
+            return std::tie(a.start_time, a.index) < std::tie(b.start_time, b.index);
+        }
+    );
+
+    return result;
+}
+
+std::vector<sm::animation_event> sm::animation::events_at_time(int start_time) const {
+    return events_in_range(start_time, 1);
+}
+
+std::vector<sm::animation_event> sm::animation::events_in_range(int start_time, int duration) const {
+    std::vector<sm::animation_event> result;
+    for (const auto& [iv, ev] : timeline_.query_overlapping({ start_time, start_time + duration })) {
+        result.push_back(ev);
+    }
+
+    std::sort(result.begin(), result.end(), 
+        [](const sm::animation_event& a, const sm::animation_event& b) {
+            return std::tie(a.start_time, a.index) < std::tie(b.start_time, b.index);
+        }
+    );
+
+    return result;
 }
