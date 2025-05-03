@@ -3,8 +3,6 @@
 #include <cassert>
 #include <compare>
 #include <concepts>
-#include <functional>
-#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -37,7 +35,8 @@ namespace sm {
         using interval_type = interval<K>;
         using entry_type = std::pair<interval_type, V>;
 
-        interval_tree() = default;
+        interval_tree() = default; 
+        ~interval_tree() = default;
 
         interval_tree(const interval_tree& other) {
             root_ = clone_node(other.root_);
@@ -49,6 +48,9 @@ namespace sm {
             }
             return *this;
         }
+
+        interval_tree(interval_tree&&) noexcept = default;
+        interval_tree& operator=(interval_tree&&) noexcept = default;
 
         void insert(K start, K end, const V& val) {
             insert({ start, end }, val);
