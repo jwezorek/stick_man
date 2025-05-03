@@ -61,6 +61,8 @@ namespace sm {
         std::vector<animation_event> events() const;
         std::vector<animation_event> events_at_time(int start_time) const;
         std::vector<animation_event> events_in_range(int start_time, int duration) const;
+
+        void perform_timestep(skeleton& skel, int time, int duration) const;
     };
 
 }

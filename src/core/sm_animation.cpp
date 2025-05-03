@@ -1,6 +1,30 @@
 #include "sm_animation.h"
+#include <ranges>
+
+namespace r = std::ranges;
+namespace rv = std::ranges::views;
 
 /*------------------------------------------------------------------------------------------------*/
+
+namespace {
+
+    int next_event_transition_time(
+            const std::vector<sm::animation_event>& events, int curr_time, int duration) {
+        auto end_times = events | rv::transform(
+            [](auto&& event) {
+                return event.start_time + event.duration;
+            }
+        ) | r::to<std::vector>();
+        end_times.push_back(curr_time + duration);
+        return r::min(end_times);
+    }
+
+    void apply_event_to_skeleton(
+            sm::skeleton& skel, const sm::animation_event& event, int time, int duration) {
+        // visit event.action and perform appropiate trasnformation on skel
+    }
+}
+
 
 sm::animation::animation(const std::string& name) : name_(name) {}
 
@@ -135,4 +159,24 @@ std::vector<sm::animation_event> sm::animation::events_in_range(int start_time, 
     );
 
     return result;
+}
+
+void sm::animation::perform_timestep(skeleton& skel, int start_time, int duration) const {
+
+    auto events = events_in_range(start_time, duration);
+    auto t = start_time;
+    auto end_time = start_time + duration;
+    int time_remaining = duration;
+
+    while (time_remaining > 0) {
+        int next_t = next_event_transition_time(events, t, time_remaining);
+        int time_slice = next_t - t;
+        for (const auto& event : events) {
+            if (t >= event.start_time && t < next_t) {
+                apply_event_to_skeleton(skel, event, t, time_slice);
+            }
+        }
+        t = next_t;
+        time_remaining = end_time - t;
+    }
 }
