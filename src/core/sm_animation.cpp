@@ -8,6 +8,26 @@ namespace rv = std::ranges::views;
 
 namespace {
 
+    struct animation_event_visitor {
+        int curr_time;
+        int duration;
+        sm::skeleton& skeleton;
+
+        animation_event_visitor(sm::skeleton& skel, int time, int dur) :
+            skeleton(skel),
+            curr_time(time),
+            duration(dur)
+        { }
+
+        void operator()(const sm::rotation& rot) {
+
+        }
+
+        void operator()(const sm::translation& trans) {
+
+        }
+    };
+
     int next_event_transition_time(
             const std::vector<sm::animation_event>& events, int curr_time, int duration) {
         auto end_times = events | rv::transform(
@@ -19,12 +39,12 @@ namespace {
         return r::min(end_times);
     }
 
-    void apply_event_to_skeleton(
-            sm::skeleton& skel, const sm::animation_event& event, int time, int duration) {
-        // visit event.action and perform appropiate trasnformation on skel
+    void perform_action_on_skeleton(
+            sm::skeleton& skel, const sm::animation_action& action, int time, int duration) {
+        animation_event_visitor visitor(skel, time, duration);
+        std::visit( visitor, action);
     }
 }
-
 
 sm::animation::animation(const std::string& name) : name_(name) {}
 
@@ -173,7 +193,7 @@ void sm::animation::perform_timestep(skeleton& skel, int start_time, int duratio
         int time_slice = next_t - t;
         for (const auto& event : events) {
             if (t >= event.start_time && t < next_t) {
-                apply_event_to_skeleton(skel, event, t, time_slice);
+                perform_action_on_skeleton(skel, event.action, t, time_slice);
             }
         }
         t = next_t;
