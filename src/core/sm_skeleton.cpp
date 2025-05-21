@@ -267,7 +267,10 @@ sm::expected_skel sm::skeleton::copy_to(world& other_world, const std::string& n
         }
     }
     for (auto bone : bones()) {
-        bone->copy_to(*new_skel);
+        auto result = bone->copy_to(*new_skel);
+        if (!result) {
+            return std::unexpected(result.error());
+        }
     }
     return new_skel;
 }
@@ -330,6 +333,42 @@ sm::result sm::skeleton::from_json(sm::world& w, const json& jobj) {
                 return { b->get().name(), &b->get() };
             }
         ) | r::to<bones_tbl>();
+
+    if (jobj.contains("animations")) {
+        for (const auto& anim_json : jobj["animations"]) {
+            sm::animation anim(anim_json["name"]);
+            const auto& events_json = anim_json["events"];
+
+            for (const auto& ev : events_json) {
+                animation_event event;
+                event.start_time = ev["start_time"];
+                event.duration = ev["duration"];
+                event.index = ev.contains("index") ? ev["index"].get<int>() : 0;
+                std::string type = ev["type"];
+
+                if (type == "rotate") {
+                    event.action = sm::rotation{
+                        .axis = ev["axis"].get<std::string>(),
+                        .rotor = ev["rotor"].get<std::string>(),
+                        .theta = ev["angle"].get<double>()
+                    };
+                } else if (type == "translate") {
+                    // Stub implementation
+                    event.action = sm::translation{
+                        .subject = ev["subject"].get<std::string>(),
+                        .offset = sm::point{0.0, 0.0} // Placeholder
+                    };
+                }
+                else {
+                    throw std::runtime_error("Unknown animation event type: " + type);
+                }
+
+                anim.insert(event);
+            }
+
+            insert_animation(anim);
+        }
+    }
 
     root_ = *nodes_.at(jobj["root"]);
 
