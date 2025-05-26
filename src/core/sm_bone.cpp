@@ -54,6 +54,25 @@ namespace {
 
 		return tbl;
 	}
+
+	bool is_bone_from_u_to_v(sm::bone_ref src_bone, sm::node_ref u, sm::node_ref v) {
+		bool found = false;
+		sm::visit_bones(
+			src_bone.get(),
+			[&](sm::bone& visited_bone)->sm::visit_result {
+				if (&visited_bone != &src_bone.get() && visited_bone.has_node(u.get())) {
+					return sm::visit_result::terminate_branch;
+				}
+				if (visited_bone.has_node(v.get())) {
+					found = true;
+					return sm::visit_result::terminate_traversal;
+				}
+				return sm::visit_result::continue_traversal;
+			},
+			false
+		);
+		return found;
+	}
 }
 
 sm::node::node(skeleton& parent, const std::string& name, double x, double y) :
@@ -454,4 +473,15 @@ void sm::bone::set_length(double len) {
         auto new_child_node_pos = bone->parent_node().world_pos() + offset;
         bone->child_node().set_world_pos(new_child_node_pos);
     }
+}
+
+sm::maybe_bone_ref sm::find_bone_from_u_to_v(sm::node_ref u, sm::node_ref v) {
+	auto adj = u->adjacent_bones();
+	auto i = r::find_if(
+		adj,
+		[&](auto bone)->bool {
+			return is_bone_from_u_to_v(bone, u, v);
+		}
+	);
+	return (i != adj.end()) ? *i : sm::maybe_bone_ref{};
 }

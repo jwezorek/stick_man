@@ -114,7 +114,7 @@ mdl::commands::replace_skeleton_state::replace_skeleton_state(const std::string&
         canvas_name(canv),
         replacee_names(replacees) {
     for (auto skel : replacers) {
-        skel->copy_to(replacements);
+        (void) skel->copy_to(replacements);
     }
 }
 
@@ -127,7 +127,7 @@ mdl::command mdl::commands::make_replace_skeletons_command(
         [state](mdl::project& proj) {
             if (state->replacees.empty()) {
                 for (const auto& skel_name : state->replacee_names) {
-                    proj.world_.skeleton(skel_name)->get().copy_to(state->replacees);
+                    (void) proj.world_.skeleton(skel_name)->get().copy_to(state->replacees);
                 }
             }
             state->replacement_names.clear();

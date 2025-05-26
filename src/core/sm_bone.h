@@ -126,4 +126,9 @@ namespace sm {
 		void set_length(double len);
 	};
 
+	// Returns the first bone adjacent to node `u` that lies on a directed path from `u` to `v`.
+	// Traverses downstream from each candidate bone and succeeds if `v` is reachable.
+
+	sm::maybe_bone_ref find_bone_from_u_to_v(sm::node_ref u, sm::node_ref v);
+
 }

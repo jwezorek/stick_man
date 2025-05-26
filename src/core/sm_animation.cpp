@@ -1,4 +1,5 @@
 #include "sm_animation.h"
+#include "sm_skeleton.h"
 #include <ranges>
 
 namespace r = std::ranges;
@@ -9,18 +10,34 @@ namespace rv = std::ranges::views;
 namespace {
 
     struct animation_event_visitor {
-        int curr_time;
-        int duration;
         sm::skeleton& skeleton;
+        int curr_time;
+        int timeslice_duration;
+        int total_duration;
 
-        animation_event_visitor(sm::skeleton& skel, int time, int dur) :
+        animation_event_visitor(
+                sm::skeleton& skel, int current_time, int timeslice_dur, int total_dur) :
             skeleton(skel),
-            curr_time(time),
-            duration(dur)
+            curr_time(current_time),
+            timeslice_duration(timeslice_dur),
+            total_duration(total_dur)
         { }
 
         void operator()(const sm::rotation& rot) {
-
+            auto axis = skeleton.get_by_name<sm::node>(rot.axis);
+            auto rotor = skeleton.get_by_name<sm::node>(rot.rotor);
+            if (!axis || !rotor) {
+                throw std::runtime_error("bad rotation event");
+            }
+            auto lead_bone = sm::find_bone_from_u_to_v(*axis, *rotor);
+            if (!lead_bone) {
+                throw std::runtime_error("bad rotation event");
+            }
+            auto& bone = lead_bone->get();
+            auto percent_of_full_event =
+                static_cast<double>(timeslice_duration) / static_cast<double>(total_duration);
+            auto angle_delta = percent_of_full_event * rot.theta;
+            bone.rotate_by(angle_delta, axis, false);
         }
 
         void operator()(const sm::translation& trans) {
@@ -40,8 +57,9 @@ namespace {
     }
 
     void perform_action_on_skeleton(
-            sm::skeleton& skel, const sm::animation_action& action, int time, int duration) {
-        animation_event_visitor visitor(skel, time, duration);
+            sm::skeleton& skel, const sm::animation_action& action, 
+            int time, int timeslice_duration, int total_duration) {
+        animation_event_visitor visitor(skel, time, timeslice_duration, total_duration);
         std::visit( visitor, action);
     }
 }
@@ -193,7 +211,7 @@ void sm::animation::perform_timestep(skeleton& skel, int start_time, int duratio
         int time_slice = next_t - t;
         for (const auto& event : events) {
             if (t >= event.start_time && t < next_t) {
-                perform_action_on_skeleton(skel, event.action, t, time_slice);
+                perform_action_on_skeleton(skel, event.action, t, time_slice, event.duration);
             }
         }
         t = next_t;

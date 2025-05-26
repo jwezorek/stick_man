@@ -695,5 +695,16 @@ void sm::world::apply(matrix& mat) {
     }
 }
 
+std::vector<sm::skel_ref> sm::skeletons_from_nodes(const std::vector<sm::node_ref>& nodes) {
+    auto skels = nodes |
+        rv::transform(
+            [](auto node) {return &node->owner(); }
+        ) | r::to<std::unordered_set>();
 
+    return skels | rv::transform(
+        [](auto* ptr)->sm::skel_ref {
+            return *ptr;
+        }
+    ) | r::to<std::vector>();
+}
 

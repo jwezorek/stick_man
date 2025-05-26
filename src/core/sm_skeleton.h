@@ -147,4 +147,6 @@ namespace sm {
 		auto skeletons() const { return detail::to_range_view<const_skel_ref>(skeletons_); }
     };
 
+	std::vector<sm::skel_ref> skeletons_from_nodes(const std::vector<sm::node_ref>& nodes);
+
 }

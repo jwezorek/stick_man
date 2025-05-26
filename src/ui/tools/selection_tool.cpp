@@ -31,49 +31,6 @@ namespace {
 
     template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
 
-    bool is_bone_from_u_to_v(sm::bone_ref src_bone, sm::node_ref u, sm::node_ref v) {
-        bool found = false;
-        sm::visit_bones(
-            src_bone.get(),
-            [&](sm::bone& visited_bone)->sm::visit_result {
-                if (&visited_bone != &src_bone.get() && visited_bone.has_node(u.get())) {
-                    return sm::visit_result::terminate_branch;
-                }
-                if (visited_bone.has_node(v.get())) {
-                    found = true;
-                    return sm::visit_result::terminate_traversal;
-                }
-                return sm::visit_result::continue_traversal;
-            },
-            false
-        );
-        return found;
-    }
-
-    std::vector<sm::skel_ref> skeletons_from_nodes(const std::vector<sm::node_ref>& nodes) {
-        auto skels = nodes |
-            rv::transform(
-                [](auto node) {return &node->owner(); }
-            ) | r::to<std::unordered_set>();
-
-        return skels | rv::transform(
-                [](auto* ptr)->sm::skel_ref {
-                    return *ptr;
-                }
-            ) | r::to<std::vector>();
-    }
-
-    sm::maybe_bone_ref find_bone_from_u_to_v(sm::node_ref u, sm::node_ref v) {
-        auto adj = u->adjacent_bones();
-        auto i = r::find_if(
-            adj,
-            [&](auto bone)->bool {
-                return is_bone_from_u_to_v(bone, u, v);
-            }
-        );
-        return (i != adj.end()) ? *i : sm::maybe_bone_ref{};
-    }
-
     int dist(std::unordered_map<sm::node*, int> visited, sm::node& u) {
         auto adj = u.adjacent_bones();
         for (auto adj_bone : adj) {
