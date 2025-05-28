@@ -10,6 +10,7 @@
 #include "util.h"
 #include "clipboard.h"
 #include <QtWidgets>
+#include <QSettings>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -40,13 +41,23 @@ namespace {
     }
 
 
-    void setDarkTitleBar(WId window) {
+    void set_dark_titlebar(WId window) {
     #ifdef Q_OS_WIN
         BOOL USE_DARK_MODE = true;
         DwmSetWindowAttribute(
             (HWND)window, DWMWINDOWATTRIBUTE::DWMWA_USE_IMMERSIVE_DARK_MODE,
             &USE_DARK_MODE, sizeof(USE_DARK_MODE));
     #endif
+    }
+
+    QString get_last_directory() {
+        QSettings settings("adventure_lab", "stick_man");
+        return settings.value("lastDirectory", QDir::homePath()).toString();
+    }
+
+    void set_last_directory(const QString& path) {
+        QSettings settings("adventure_lab", "stick_man");
+        settings.setValue("lastDirectory", path);
     }
 }
 
@@ -58,7 +69,7 @@ ui::stick_man::stick_man(QWidget* parent) :
 		anim_pane_(new pane::animation(this)),
 		tool_pane_(new pane::tool_settings(this)),
 		skel_pane_(new pane::skeleton(this)) {
-    setDarkTitleBar(winId());
+    set_dark_titlebar(winId());
 
     setDockNestingEnabled(true);
     addDockWidget(Qt::LeftDockWidgetArea, tool_pal_);
@@ -76,11 +87,13 @@ ui::stick_man::stick_man(QWidget* parent) :
 
 void ui::stick_man::open()
 {
-	QString filePath = QFileDialog::getOpenFileName(
-		this, "Open stick man", QDir::homePath(), "stick man JSON (*.smj);;All Files (*)");
+    auto dir = get_last_directory();
+	auto path = QFileDialog::getOpenFileName(
+		this, "Open stick man", dir, "stick man JSON (*.smj);;All Files (*)");
 
-	if (!filePath.isEmpty()) {
-		QFile file(filePath);
+	if (!path.isEmpty()) {
+        set_last_directory(QFileInfo(path).absolutePath());
+		QFile file(path);
 		if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
 			QTextStream in(&file);
 			QString content = in.readAll();
@@ -97,16 +110,18 @@ void ui::stick_man::open()
 }
 
 void ui::stick_man::save() {
-	
+    to_do("save");
 }
 
 void ui::stick_man::save_as() {
-	QString filePath = QFileDialog::getSaveFileName(
-		this, "Save stick man As", QDir::homePath(), "stick man JSON (*.smj);;All Files (*)");
+    auto dir = get_last_directory();
+	QString path = QFileDialog::getSaveFileName(
+		this, "Save stick man As", dir, "stick man JSON (*.smj);;All Files (*)");
 
-	if (!filePath.isEmpty()) {
+	if (! path.isEmpty()) {
+        set_last_directory(QFileInfo(path).absolutePath());
 		// Perform the actual save operation
-		QFile file(filePath);
+		QFile file(path);
 		if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
 			QTextStream out(&file);
 			out << project_.to_json().c_str();
