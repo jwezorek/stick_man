@@ -241,11 +241,11 @@ void ui::canvas::scene::set_contents(const std::vector<sm::skel_ref>& contents) 
         insert_item(skel);
 
         for (auto node : skel.nodes()) {
-            addItem(new ui::canvas::item::node(node.get(), scale()));
+            insert_item(node);
         }
 
         for (auto bone : skel.bones()) {
-            addItem(new ui::canvas::item::bone(bone.get(), scale()));
+            insert_item(bone);
         }
     }
 
@@ -473,7 +473,7 @@ ui::canvas::item::base* ui::canvas::scene::top_item(const QPointF& pt) const {
 }
 
 std::vector<ui::canvas::item::base*> ui::canvas::scene::items_in_rect(const QRectF& r) const {
-    return qt_to_vector_of_type<ui::canvas::item::base>( items(r) );
+    return qt_to_vector_of_type<ui::canvas::item::base>( items(r.normalized()) );
 }
 
 std::vector<ui::canvas::item::base*> ui::canvas::scene::canvas_items() const {
