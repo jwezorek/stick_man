@@ -72,6 +72,7 @@ namespace sm {
 		auto bones() const { return detail::to_range_view<const_bone_ref>(bones_); }
 
         const std::vector<animation>& animations() const;
+        const animation& get_animation(const std::string& animation) const;
         void insert_animation(const animation& anim);
 
 		sm::world& owner();

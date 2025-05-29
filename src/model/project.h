@@ -49,7 +49,9 @@ namespace mdl {
     public:
         project();
 
-        const sm::world& world() const;        
+        const sm::world& world() const;    
+        sm::world& world();
+
         bool can_undo() const;
         bool can_redo() const;
         auto tabs() const {
@@ -73,7 +75,7 @@ namespace mdl {
 
         void undo();
         void redo();
-        sm::world& world();
+
         bool add_new_tab(const std::string& name);
         auto skeletons_on_tab(std::string_view name) {
             namespace rv = std::ranges::views;

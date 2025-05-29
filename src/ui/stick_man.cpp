@@ -63,6 +63,7 @@ namespace {
 
 ui::stick_man::stick_man(QWidget* parent) :
 		QMainWindow(parent),
+        anim_(this),
 		was_shown_(false),
 		has_fully_layed_out_widgets_(false),
 		tool_pal_(new pane::tools(this)),
@@ -170,7 +171,9 @@ void ui::stick_man::insert_new_tab() {
 }
 
 void ui::stick_man::create_animation() {
-    to_do("create animation");
+    auto skel = *project_.world().skeleton("foo");
+    anim_.set(*skel, skel->get_animation("test_anim"));
+    anim_.start_playback();
 }
 
 void ui::stick_man::create_pose()

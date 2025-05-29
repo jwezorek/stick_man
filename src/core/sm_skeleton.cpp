@@ -431,6 +431,10 @@ const std::vector<sm::animation>& sm::skeleton::animations() const {
     return animations_;
 }
 
+const sm::animation& sm::skeleton::get_animation(const std::string& anim) const {
+    return *r::find_if(animations_, [&](const auto& a) {return a.name() == anim; });
+}
+
 void sm::skeleton::insert_animation(const animation& anim) {
     animations_.push_back( anim );
 }

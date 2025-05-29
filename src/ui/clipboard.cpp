@@ -114,10 +114,10 @@ namespace {
                     dest_skel = create_skeleton(dest, bone.owner().name());
                 }
                 if (!dest_skel->get_by_name<sm::node>(bone.parent_node().name())) {
-                    bone.parent_node().copy_to( *dest_skel );
+                    (void) bone.parent_node().copy_to( *dest_skel );
                 }
-                bone.child_node().copy_to( *dest_skel );
-                bone.copy_to( *dest_skel );
+                (void) bone.child_node().copy_to( *dest_skel );
+                (void) bone.copy_to( *dest_skel );
 
                 return sm::visit_result::continue_traversal;
             };

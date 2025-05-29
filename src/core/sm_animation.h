@@ -55,6 +55,7 @@ namespace sm {
     public:
         animation(const std::string& name);
 
+        std::string name() const;
         void insert(const animation_event& event);
         void set(int start_time, int index, int duration, const animation_action& action);
         void move(int start_time, int index, int new_index);

@@ -66,6 +66,10 @@ namespace {
 
 sm::animation::animation(const std::string& name) : name_(name) {}
 
+std::string sm::animation::name() const {
+    return name_;
+}
+
 void sm::animation::insert(const sm::animation_event& event) {
     auto overlapping = timeline_.query_overlapping(
         { event.start_time, event.start_time + event.duration }
@@ -208,7 +212,12 @@ void sm::animation::perform_timestep(skeleton& skel, int start_time, int duratio
 
     while (time_remaining > 0) {
         int next_t = next_event_transition_time(events, t, time_remaining);
+
         int time_slice = next_t - t;
+        if (time_slice == 0) {
+            break;
+        }
+
         for (const auto& event : events) {
             if (t >= event.start_time && t < next_t) {
                 perform_action_on_skeleton(skel, event.action, t, time_slice, event.duration);

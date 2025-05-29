@@ -3,6 +3,7 @@
 #include <QtWidgets/QMainWindow>
 #include "canvas/scene.h"
 #include "tools/tool_manager.h"
+#include "animation_controller.h"
 #include "../model/project.h"
 
 /*------------------------------------------------------------------------------------------------*/
@@ -63,6 +64,8 @@ namespace ui {
 		bool has_fully_layed_out_widgets_;
         QAction* undo_action_;
         QAction* redo_action_;
+
+        animation_controller anim_;
     };
 
 }
