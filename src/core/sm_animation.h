@@ -5,6 +5,7 @@
 #include <vector>
 #include <stdexcept>
 #include <algorithm>
+#include <unordered_map>
 #include "sm_types.h"
 #include "sm_interval_tree.h"
 
@@ -44,6 +45,23 @@ namespace sm {
 
     using time_interval = sm::interval<int>;
 
+    using pose = std::vector<point>;
+
+    class baked_animation {
+        friend class animation;
+
+        int time_step_;
+        std::vector<pose> poses_at_time_;
+
+        baked_animation(int timestep, const std::vector<pose>& poses);
+
+        static pose interpolate(const pose& from, const pose& to, double t);
+
+    public:
+        pose operator[](int time) const;
+        pose operator[](int time);
+    };
+
     class skeleton;
 
     class animation {
@@ -62,8 +80,9 @@ namespace sm {
         std::vector<animation_event> events() const;
         std::vector<animation_event> events_at_time(int start_time) const;
         std::vector<animation_event> events_in_range(int start_time, int duration) const;
-
+        int duration() const;
         void perform_timestep(skeleton& skel, int time, int duration) const;
-    };
 
+        baked_animation bake(const skeleton& skel, int time_step) const;
+    };
 }

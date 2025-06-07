@@ -6,7 +6,7 @@
 #include <optional>
 #include <functional>
 #include <span>
-#include <unordered_map>
+#include <map>
 #include <expected>
 #include <tuple>
 #include <any>
@@ -29,8 +29,8 @@ namespace sm {
         friend class bone;
 	private:
 
-        using nodes_tbl = std::unordered_map<std::string, node*>;
-        using bones_tbl = std::unordered_map<std::string, bone*>;
+        using nodes_tbl = std::map<std::string, node*>;
+        using bones_tbl = std::map<std::string, bone*>;
 
 		world_ref owner_;
 		std::string name_;

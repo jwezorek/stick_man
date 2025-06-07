@@ -45,15 +45,27 @@ namespace {
         }
     };
 
-    int next_event_transition_time(
-            const std::vector<sm::animation_event>& events, int curr_time, int duration) {
-        auto end_times = events | rv::transform(
-            [](auto&& event) {
-                return event.start_time + event.duration;
-            }
-        ) | r::to<std::vector>();
-        end_times.push_back(curr_time + duration);
-        return r::min(end_times);
+    int next_event_boundary_time(
+            const std::vector<sm::animation_event>& events,
+            int curr_time,
+            int duration) {
+
+        std::vector<std::array<int, 2>> boundaries = events | rv::transform(
+                [](const auto& ev) {
+                    return std::array{ ev.start_time, ev.start_time + ev.duration };
+                }
+            ) | r::to<std::vector>();
+
+        auto times = rv::join(
+                boundaries
+            ) | rv::filter(
+                [=](int t) {
+                    return t > curr_time && t <= curr_time + duration;
+                }
+            ) | r::to<std::vector>();
+        times.push_back(curr_time + duration);
+
+        return r::min(times);
     }
 
     void perform_action_on_skeleton(
@@ -203,27 +215,84 @@ std::vector<sm::animation_event> sm::animation::events_in_range(int start_time, 
     return result;
 }
 
-void sm::animation::perform_timestep(skeleton& skel, int start_time, int duration) const {
+int sm::animation::duration() const {
+    auto [interval, last_event] = timeline_.back();
+    return last_event.start_time + last_event.duration;
+}
 
-    auto events = events_in_range(start_time, duration);
-    auto t = start_time;
-    auto end_time = start_time + duration;
-    int time_remaining = duration;
+void sm::animation::perform_timestep(skeleton& skel, int ts_start_time, int ts_duration) const {
+
+    auto events = events_in_range(ts_start_time, ts_duration);
+    auto t = ts_start_time;
+    auto end_time = std::min(ts_start_time + ts_duration, duration());
+    int time_remaining = ts_duration;
 
     while (time_remaining > 0) {
-        int next_t = next_event_transition_time(events, t, time_remaining);
-
+        int next_t = next_event_boundary_time(events, t, time_remaining);
         int time_slice = next_t - t;
-        if (time_slice == 0) {
-            break;
-        }
-
         for (const auto& event : events) {
-            if (t >= event.start_time && t < next_t) {
+            auto event_end_time = event.start_time + event.duration;
+            if (event.start_time <= t && t < event_end_time) {
                 perform_action_on_skeleton(skel, event.action, t, time_slice, event.duration);
             }
         }
         t = next_t;
         time_remaining = end_time - t;
     }
+
+}
+
+sm::baked_animation sm::animation::bake(const skeleton& skel, int time_step) const {
+    return baked_animation(0, {});
+}
+
+sm::baked_animation::baked_animation(int timestep, const std::vector<pose>& poses) : 
+        time_step_{ timestep }, poses_at_time_{ poses } {
+    if (time_step_ <= 0) {
+        throw std::invalid_argument("time_step must be positive");
+    }
+}
+
+/*------------------------------------------------------------------------------------------------*/
+
+sm::pose sm::baked_animation::interpolate(const sm::pose& from, const sm::pose& to, double t) {
+
+    if (from.size() != to.size()) {
+        throw std::invalid_argument("pose size mismatch in interpolation");
+    }
+
+    return rv::zip(from, to) | rv::transform(
+            [t](const auto& pair) {
+                const auto& [p0, p1] = pair;
+                return point{
+                    p0.x * (1.0 - t) + p1.x * t,
+                    p0.y * (1.0 - t) + p1.y * t
+                };
+            }
+        ) | r::to<std::vector<point>>();
+}
+
+sm::pose sm::baked_animation::operator[](int time) const {
+
+    if (poses_at_time_.empty()) {
+        throw std::out_of_range("animation is empty");
+    }
+
+    int max_time = static_cast<int>(poses_at_time_.size() - 1) * time_step_;
+    if (time <= 0) {
+        return poses_at_time_.front();
+    }
+    if (time >= max_time) {
+        return poses_at_time_.back();
+    }
+
+    int index = time / time_step_;
+    int remainder = time % time_step_;
+
+    if (remainder == 0) {
+        return poses_at_time_[index];
+    }
+
+    double t = static_cast<double>(remainder) / time_step_;
+    return interpolate(poses_at_time_[index], poses_at_time_[index + 1], t);
 }

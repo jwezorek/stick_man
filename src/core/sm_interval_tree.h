@@ -79,6 +79,28 @@ namespace sm {
             return result;
         }
 
+        const entry_type& front() const {
+            const node* n = root_.get();
+            if (!n) throw std::out_of_range("interval_tree::front() const: tree is empty");
+            while (n->left) n = n->left.get();
+            return reinterpret_cast<const entry_type&>(n->iv);
+        }
+
+        const entry_type& back() const {
+            const node* n = root_.get();
+            if (!n) throw std::out_of_range("interval_tree::back() const: tree is empty");
+            while (n->right) n = n->right.get();
+            return reinterpret_cast<const entry_type&>(n->iv);
+        }
+
+        entry_type& front() {
+            return const_cast<entry_type&>(std::as_const(*this).front());
+        }
+
+        entry_type& back() {
+            return const_cast<entry_type&>(std::as_const(*this).back());
+        }
+
     private:
         struct node;
         using node_ptr = std::unique_ptr<node>;
