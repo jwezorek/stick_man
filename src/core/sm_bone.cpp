@@ -1,6 +1,7 @@
 #include "sm_types.h"
 #include "sm_bone.h"
 #include "sm_skeleton.h"
+#include "sm_world.h"
 #include "sm_fabrik.h"
 #include "sm_visit.h"
 #include "qdebug.h"

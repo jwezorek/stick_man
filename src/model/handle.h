@@ -4,6 +4,7 @@
 #include <variant>
 #include "../core/sm_types.h"
 #include "../core/sm_skeleton.h"
+#include "../core/sm_world.h"
 
 namespace mdl {
 
