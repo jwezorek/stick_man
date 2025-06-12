@@ -1,6 +1,5 @@
 #include "sm_skeleton.h"
 #include "sm_world.h"
-#include "sm_util.h"
 #include "json.hpp"
 #include <ranges>
 #include <unordered_set>

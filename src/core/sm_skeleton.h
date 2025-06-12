@@ -13,6 +13,7 @@
 #include <ranges>
 #include <variant>
 #include "sm_types.h"
+#include "sm_node.h"
 #include "sm_bone.h"
 #include "sm_animation.h"
 #include "json_fwd.hpp"

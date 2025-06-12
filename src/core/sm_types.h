@@ -178,4 +178,7 @@ namespace sm {
 
     template<typename V, typename E>
     using node_or_bone = std::variant<sm::ref<V>, sm::ref<E>>;
+
+    template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
+    template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 }

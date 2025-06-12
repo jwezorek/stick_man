@@ -51,7 +51,9 @@ add_executable(stick_man
     src/ui/panes/animation_skeleton_pane.cpp
 
     src/core/sm_skeleton.cpp
+    src/core/sm_node.cpp
     src/core/sm_bone.cpp
+    src/core/sm_world.cpp
     src/core/sm_types.cpp
     src/core/sm_fabrik.cpp
     src/core/sm_visit.cpp
@@ -69,8 +71,7 @@ add_executable(stick_man
     src/ui/animation_controller.cpp
 
     src/main.cpp
-    src/core/sm_world.cpp
-    src/core/sm_util.cpp
+    
 )
 
 target_link_libraries(stick_man PRIVATE Qt6::Widgets  Eigen3::Eigen)

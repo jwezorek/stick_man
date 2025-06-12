@@ -1,6 +1,7 @@
 #include <stack>
 #include <unordered_set>
 #include "sm_visit.h"
+#include "sm_node.h"
 #include "sm_bone.h"
 
 namespace r = std::ranges;

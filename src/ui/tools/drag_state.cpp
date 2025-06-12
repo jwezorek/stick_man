@@ -1,4 +1,5 @@
 #include "drag_state.h"
+#include "../../core/sm_node.h"
 #include "../../core/sm_bone.h"
 #include "../../core/sm_visit.h"
 
