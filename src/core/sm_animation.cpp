@@ -1,5 +1,6 @@
 #include "sm_animation.h"
 #include "sm_skeleton.h"
+#include "sm_world.h"
 #include <ranges>
 
 namespace r = std::ranges;
@@ -243,10 +244,22 @@ void sm::animation::perform_timestep(skeleton& skel, int ts_start_time, int ts_d
 }
 
 sm::baked_animation sm::animation::bake(const skeleton& skel, int time_step) const {
-    return baked_animation(0, {});
+    sm::world world;
+    auto& s = **(skel.copy_to(world));
+    auto n = (duration() + time_step - 1) / time_step;
+
+    std::vector<pose> poses;
+    poses.reserve(n);
+
+    for (auto time : rv::iota(0, n) | rv::transform([&](int i) {return i * time_step;})) {
+        poses.push_back(s.current_pose());
+        this->perform_timestep(s, time, time_step);
+    }
+
+    return baked_animation(time_step, std::move(poses));
 }
 
-sm::baked_animation::baked_animation(int timestep, const std::vector<pose>& poses) : 
+sm::baked_animation::baked_animation(int timestep, std::vector<pose>&& poses) : 
         time_step_{ timestep }, poses_at_time_{ poses } {
     if (time_step_ <= 0) {
         throw std::invalid_argument("time_step must be positive");
@@ -272,6 +285,10 @@ sm::pose sm::baked_animation::interpolate(const sm::pose& from, const sm::pose& 
         ) | r::to<std::vector<point>>();
 }
 
+sm::baked_animation::baked_animation() : time_step_(0)
+{
+}
+
 sm::pose sm::baked_animation::operator[](int time) const {
 
     if (poses_at_time_.empty()) {
@@ -295,4 +312,13 @@ sm::pose sm::baked_animation::operator[](int time) const {
 
     double t = static_cast<double>(remainder) / time_step_;
     return interpolate(poses_at_time_[index], poses_at_time_[index + 1], t);
+}
+
+void sm::baked_animation::clear() {
+    time_step_ = 0;
+    poses_at_time_.clear();
+}
+
+bool sm::baked_animation::empty() const {
+    return time_step_ == 0;
 }

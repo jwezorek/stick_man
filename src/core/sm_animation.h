@@ -53,13 +53,15 @@ namespace sm {
         int time_step_;
         std::vector<pose> poses_at_time_;
 
-        baked_animation(int timestep, const std::vector<pose>& poses);
+        baked_animation(int timestep, std::vector<pose>&& poses);
 
         static pose interpolate(const pose& from, const pose& to, double t);
 
     public:
+        baked_animation();
         pose operator[](int time) const;
-        pose operator[](int time);
+        void clear();
+        bool empty() const;
     };
 
     class skeleton;

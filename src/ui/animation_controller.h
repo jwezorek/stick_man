@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QTimer>
+#include "../core/sm_animation.h"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -30,7 +31,8 @@ namespace ui {
     private:
         QTimer animation_timer_;
         sm::skeleton* skel_;
-        const sm::animation* anim_;
+        //const sm::animation* anim_;
+        sm::baked_animation animation_;
         int current_time_ms_ = 0;
         int timestep_ms_ = 16; // ~60 FPS
     };
