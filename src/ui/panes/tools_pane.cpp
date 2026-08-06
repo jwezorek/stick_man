@@ -1,3 +1,5 @@
+#include <QWidget>
+#include <QtWidgets>
 #include "tools_pane.h"
 #include "../stick_man.h"
 #include "../util.h"
@@ -13,6 +15,9 @@ namespace rv = std::ranges::views;
 namespace ui {
 
     class tool_btn : public QPushButton {
+
+        Q_OBJECT
+
     private:
         ui::tool::id id_;
         QString bkgd_color_str_;
@@ -105,3 +110,4 @@ void ui::pane::tools::handle_tool_click(canvas::manager& canvases, tool_btn* btn
     tools_.set_current_tool(canvases, btn->id() );
 }
 
+#include "tools_pane.moc"

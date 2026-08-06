@@ -9,7 +9,7 @@ if(Boost_FOUND)
     include_directories(${Boost_INCLUDE_DIRS}) 
 endif()
 
-find_package(Eigen3 3.3 REQUIRED)
+find_package(Eigen3  REQUIRED)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 set(CMAKE_AUTOMOC ON)
