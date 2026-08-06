@@ -23,6 +23,9 @@ namespace ui {
                 const QItemSelection&, const QItemSelection&) override;
             void sync_with_model(sm::world& model) override;
             void init_aux(canvas::manager& canvases, mdl::project& proj) override;
+            void on_tree_context_menu(const QPoint& point);
+            void handle_add_new_pose(QStandardItem* skeleton_item);
+            void handle_add_new_animation(QStandardItem* skeleton_item);
 
         public:
             animation_skeleton_pane(skeleton* parent, ui::stick_man* mgr);

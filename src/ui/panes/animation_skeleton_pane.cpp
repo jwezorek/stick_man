@@ -13,14 +13,44 @@ namespace {
 
 }
 
-const ui::pane::tree_view& ui::pane::animation_skeleton_pane::skel_tree() const
-{
+const ui::pane::tree_view& ui::pane::animation_skeleton_pane::skel_tree() const {
     return *skel_tree_;
+}
+
+void ui::pane::animation_skeleton_pane::on_tree_context_menu(const QPoint& point)
+{
+    QModelIndex index = skel_tree_->indexAt(point);
+    if (!index.isValid()) {
+        return;  // no item at the click location
+    }
+
+    // Get the corresponding QStandardItem from the index
+    QStandardItemModel* model = static_cast<QStandardItemModel*>(skel_tree_->model());
+    QStandardItem* item = model->itemFromIndex(index);
+
+    // Create the context menu
+    QMenu contextMenu(skel_tree_);
+    QAction* addPoseAction = contextMenu.addAction("Add new pose");
+    QAction* addAnimationAction = contextMenu.addAction("Add new animation");
+
+    // Show the context menu at the cursor position
+    QAction* selectedAction = contextMenu.exec(skel_tree_->viewport()->mapToGlobal(point));
+
+    if (selectedAction == addPoseAction) {
+        handle_add_new_pose(item);
+    }
+    else if (selectedAction == addAnimationAction) {
+        handle_add_new_animation(item);
+    }
 }
 
 QWidget* ui::pane::animation_skeleton_pane::create_content(skeleton* parent)
 {
-    return skel_tree_ = new tree_view();
+    skel_tree_ = new tree_view();
+	skel_tree_->setContextMenuPolicy(Qt::CustomContextMenu);
+	connect(skel_tree_, &QTreeView::customContextMenuRequested, this,
+		&animation_skeleton_pane::on_tree_context_menu);
+	return skel_tree_;
 }
 
 void ui::pane::animation_skeleton_pane::handle_canv_sel_change()
@@ -62,4 +92,18 @@ ui::pane::animation_skeleton_pane::animation_skeleton_pane(skeleton* parent, ui:
     abstract_skeleton_pane(parent),
     skel_tree_(nullptr)
 {
+}
+
+void ui::pane::animation_skeleton_pane::handle_add_new_pose(QStandardItem* skeleton_item)
+{
+    QString skeletonName = skeleton_item->text();
+    // TODO: Implement logic for adding a new pose to the skeleton
+    qDebug() << "Adding new pose to skeleton:" << skeletonName;
+}
+
+void ui::pane::animation_skeleton_pane::handle_add_new_animation(QStandardItem* skeleton_item)
+{
+    QString skeletonName = skeleton_item->text();
+    // TODO: Implement logic for adding a new animation to the skeleton
+    qDebug() << "Adding new animation to skeleton:" << skeletonName;
 }
