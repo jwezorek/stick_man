@@ -107,7 +107,7 @@ namespace {
 		const auto& curr = fi.current_bone;
 		auto curr_constraint = curr.rotation_constraint();
 
-		if (curr_constraint) {
+		if (curr_constraint && curr_constraint->relative_to_parent) {
 			if (curr.parent_bone() && &curr.parent_bone()->get() != &pred_bone) {
 				return {};
 			}
@@ -389,13 +389,38 @@ namespace {
 			result == sm::result::fabrik_converged;
 	}
 
-	bool found_ik_solution(std::span<targeted_node> targeted_nodes, double tolerance) {
+	bool all_targets_settled(std::span<targeted_node> targeted_nodes, double tolerance) {
 		auto unsatisfied = r::find_if(targeted_nodes,
 			[tolerance](const auto& tj)->bool {
 				return !is_satisfied(tj, tolerance);
 			}
 		);
 		return (unsatisfied == targeted_nodes.end());
+	}
+
+	sm::result fabrik_result(std::span<targeted_node> targeted_nodes, double tolerance) {
+		bool target_reached = false;
+		bool converged = false;
+
+		for (const auto& targeted_node : targeted_nodes) {
+			switch (target_satisfaction_state(targeted_node, tolerance)) {
+			case sm::result::fabrik_target_reached:
+				target_reached = true;
+				break;
+
+			case sm::result::fabrik_converged:
+				converged = true;
+				break;
+
+			default:
+				return sm::result::fabrik_no_solution_found;
+			}
+		}
+
+		if (target_reached && converged) {
+			return sm::result::fabrik_mixed;
+		}
+		return target_reached ? sm::result::fabrik_target_reached : sm::result::fabrik_converged;
 	}
 
 	void  update_prev_positions(std::vector<targeted_node>& targeted_nodes) {
@@ -418,7 +443,32 @@ namespace {
 					opts.max_ang_delta
 				);
 			}
-		} while (!found_ik_solution(targeted_nodes, opts.tolerance));
+		} while (!all_targets_settled(targeted_nodes, opts.tolerance));
+	}
+
+	sm::result validate_fabrik_inputs(
+		const std::vector<std::tuple<sm::node_ref, sm::point>>& effectors,
+		const std::vector<sm::node_ref>& pins) {
+
+		if (effectors.empty()) {
+			return sm::result::fabrik_no_solution_found;
+		}
+
+		auto& owner = std::get<0>(effectors.front())->owner();
+		for (const auto& effector : effectors) {
+			auto node = std::get<0>(effector);
+			if (&node->owner() != &owner) {
+				return sm::result::cross_skeleton_bone;
+			}
+		}
+
+		for (const auto& node : pins) {
+			if (&node->owner() != &owner) {
+				return sm::result::cross_skeleton_bone;
+			}
+		}
+
+		return sm::result::success;
 	}
 }
 
@@ -433,6 +483,11 @@ sm::result sm::perform_fabrik(
 	const std::vector<std::tuple<node_ref, point>>& effectors,
 	const std::vector<sm::node_ref>& pins,
 	const fabrik_options& opts) {
+
+	auto validation_result = validate_fabrik_inputs(effectors, pins);
+	if (validation_result != result::success) {
+		return validation_result;
+	}
 
 	auto bone_tbl = build_bone_table(std::get<0>(effectors.front()));
 	auto targeted_nodes = pinned_nodes(pins);
@@ -469,18 +524,20 @@ sm::result sm::perform_fabrik(
 		update_prev_positions(targeted_nodes);
 
 		// reach for targets from effectors...
-		solve_for_multiple_targets(effectors_and_targets, bone_tbl, opts, !has_pinned_nodes);
+		solve_for_multiple_targets(
+			effectors_and_targets,
+			bone_tbl,
+			opts,
+			!has_pinned_nodes || opts.forw_reaching_constraints
+		);
 
 		// reach for pinned locations from pinned nodes
 		if (has_pinned_nodes) {
 			solve_for_multiple_targets(pinned_nodes, bone_tbl, opts, true);
 		}
-	} while (!found_ik_solution(targeted_nodes, opts.tolerance));
+	} while (!all_targets_settled(targeted_nodes, opts.tolerance));
 
-	return result::fabrik_target_reached; //TODO
-	//return (target_satisfaction_state(targeted_nodes, opts.tolerance) == result::fabrik_target_reached) ?
-	//	result::fabrik_target_reached :
-	//	result::fabrik_converged;
+	return fabrik_result(targeted_nodes, opts.tolerance);
 }
 
 sm::result sm::perform_fabrik(
