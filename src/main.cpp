@@ -12,7 +12,6 @@ int main(int argc, char* argv[])
     QApplication app(argc, argv);
     setDarkTheme();
     ui::stick_man window;
-    window.setMinimumSize(QSize(800, 600));
     window.showMaximized();
     return app.exec();
 }
