@@ -1,5 +1,4 @@
 #pragma once
-
 #include <QWidget>
 #include <QtWidgets>
 #include <string>
@@ -9,6 +8,7 @@
 #include <string_view>
 #include <memory>
 #include <stack>
+#include <cstddef>
 #include "../core/sm_skeleton.h"
 #include "handle.h"
 
@@ -22,7 +22,6 @@ namespace mdl {
         std::function<void(project&)> redo;
         std::function<void(project&)> undo;
     };
-
     class project : public QObject {
 
         friend class commands;
@@ -34,7 +33,8 @@ namespace mdl {
 
         std::stack<command> redo_stack_;
         std::stack<command> undo_stack_;
-
+        std::size_t next_node_name_ = 1;
+        std::size_t next_bone_name_ = 1;
         void delete_skeleton_from_canvas_table(const std::string& tab, const sm::object_id& skel);
         void clear_redo_stack();
         void execute_command(const command& cmd);
@@ -45,10 +45,11 @@ namespace mdl {
             const std::vector<sm::skel_ref>& replacements,
             std::vector<sm::object_id>* new_ids_of_replacements);
         void clear();
-
+        std::string next_default_node_name();
+        std::string next_default_bone_name();
+        void advance_default_name_counters_from_world();
     public:
         project();
-
         const sm::world& world() const;
         bool can_undo() const;
         bool can_redo() const;
@@ -70,7 +71,6 @@ namespace mdl {
         bool has_tab(const std::string& str) const;
         std::string to_json() const;
         std::string canvas_name_from_skeleton(const sm::object_id& skel) const;
-
         void undo();
         void redo();
         sm::world& world();
@@ -98,12 +98,10 @@ namespace mdl {
             const std::function<void(sm::node&)>& fn);
         void transform(const std::vector<handle>& nodes,
             const std::function<void(sm::bone&)>& fn);
-
         using node_locs = std::vector<std::tuple<handle, sm::point>>;
         void transform_node_positions(
             const node_locs& old_locs, const node_locs& new_locs
         );
-
     signals:
         void tab_created_or_deleted(const std::string& name, bool created);
         void pre_new_bone_added(sm::node& u, sm::node& v);
@@ -114,6 +112,5 @@ namespace mdl {
         void name_changed(skel_piece piece, const std::string& new_name);
         void refresh_undo_redo_state(bool, bool);
     };
-
     bool identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2);
 }

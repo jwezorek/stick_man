@@ -1,5 +1,4 @@
 #pragma once
-
 #include <string>
 #include <vector>
 #include <memory>
@@ -23,7 +22,6 @@
 namespace sm {
 
     class world;
-
     class skeleton : public detail::enable_protected_make_unique<skeleton> {
         friend class world;
         friend class node;
@@ -31,7 +29,6 @@ namespace sm {
     private:
         using nodes_tbl = std::unordered_map<object_id, node*>;
         using bones_tbl = std::unordered_map<object_id, bone*>;
-
         const object_id id_;
         world_ref owner_;
         std::string name_;
@@ -40,7 +37,6 @@ namespace sm {
         nodes_tbl nodes_;
         bones_tbl bones_;
         std::vector<animation> animations_;
-
     protected:
         skeleton(world& w, object_id id);
         skeleton(world& w, object_id id, const std::string& name, double x, double y);
@@ -52,7 +48,6 @@ namespace sm {
         void register_node(sm::node& new_node);
         void register_bone(sm::bone& new_bone);
         void set_owner(world& owner);
-
     public:
         const object_id& id() const noexcept;
         std::string name() const;
@@ -63,15 +58,13 @@ namespace sm {
         std::any get_user_data() const;
         void set_user_data(std::any data);
         void clear_user_data();
-
         // Model snapshots preserve object identity.
         expected_skel copy_to(world& w, const std::string& new_name = "") const;
         // Editor duplication creates fresh identity and remaps internal references.
         expected_skel duplicate_to(world& w, const std::string& new_name = "") const;
 
-        result set_name(bone& bone, const std::string& new_name);
-        result set_name(node& node, const std::string& new_name);
-
+        void set_name(bone& bone, const std::string& new_name);
+        void set_name(node& node, const std::string& new_name);
         auto nodes() { return detail::to_range_view<node_ref>(nodes_); }
         auto bones() { return detail::to_range_view<bone_ref>(bones_); }
         auto nodes() const { return detail::to_range_view<const_node_ref>(nodes_); }
@@ -82,7 +75,7 @@ namespace sm {
 
         sm::world& owner();
         const sm::world& owner() const;
-
+        // Compatibility/display convenience only; never use labels as identity.
         template <is_node_or_bone T>
         bool contains(const std::string& name) const {
             return get_by_name<T>(name).has_value();
@@ -98,7 +91,6 @@ namespace sm {
         }
 
         void apply(matrix& mat);
-
         template <is_node_or_bone T>
         std::optional<sm::ref<T>> get(const object_id& id) const {
             if constexpr (std::is_same_v<T, sm::node>) {
@@ -114,8 +106,7 @@ namespace sm {
             }
             return {};
         }
-
-        // Convenience only. Names are labels and may be non-unique; this returns the first match.
+        // Compatibility/display lookup only. Names are labels and may be non-unique; this returns the first match.
         template <is_node_or_bone T>
         std::optional<sm::ref<T>> get_by_name(const std::string& name) const {
             if constexpr (std::is_same_v<T, sm::node>) {
@@ -134,7 +125,6 @@ namespace sm {
             return {};
         }
     };
-
     class world {
         friend class skeleton;
         friend class node;
@@ -145,14 +135,12 @@ namespace sm {
         std::vector<std::unique_ptr<node>> nodes_;
         std::vector<std::unique_ptr<bone>> bones_;
         skeleton_tbl skeletons_;
-
         node_ref create_node(skeleton& parent, object_id id, const std::string& name, double x, double y);
         node_ref create_node(skeleton& parent, const std::string& name, double x, double y);
         node_ref create_node(skeleton& parent, double x, double y);
         expected_bone create_bone_in_skeleton(object_id id, const std::string& bone_name, node& u, node& v);
         expected_bone create_bone_in_skeleton(const std::string& bone_name, node& u, node& v);
         expected_skel create_skeleton_with_id(object_id id, const std::string& name);
-
     public:
         world();
         world(world&& other);
@@ -160,7 +148,6 @@ namespace sm {
         world(const world& other) = delete;
         world& operator=(const world& other) = delete;
         ~world() = default;
-
         void clear();
         bool empty() const;
         skeleton& create_skeleton(double x, double y);
@@ -168,16 +155,16 @@ namespace sm {
         expected_skel create_skeleton(const std::string& name);
         expected_skel skeleton(const object_id& id);
         expected_const_skel skeleton(const object_id& id) const;
+        // Compatibility/display lookup only; these return the first matching label.
         expected_skel skeleton(const std::string& name);
         expected_const_skel skeleton(const std::string& name) const;
-
         result delete_skeleton(const object_id& id);
 
         std::vector<std::string> skeleton_names() const;
         bool contains_skeleton(const object_id& id) const;
+        // Compatibility/display convenience only; labels are not identity.
         bool contains_skeleton(const std::string& name) const;
-        result set_name(sm::skeleton& skel, const std::string& new_name);
-
+        void set_name(sm::skeleton& skel, const std::string& new_name);
         expected_bone create_bone(const std::string& name, node& u, node& v);
         expected_bone create_bone(object_id id, const std::string& name, node& u, node& v);
         result from_json_str(const std::string& js);
@@ -185,7 +172,6 @@ namespace sm {
         std::string to_json_str() const;
         nlohmann::json to_json() const;
         void apply(matrix& mat);
-
         auto skeletons() { return detail::to_range_view<skel_ref>(skeletons_); }
         auto skeletons() const { return detail::to_range_view<const_skel_ref>(skeletons_); }
     };

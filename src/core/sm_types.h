@@ -1,5 +1,4 @@
 #pragma once
-
 #include <Eigen/Dense>
 #include <expected>
 #include <optional>
@@ -21,7 +20,6 @@ namespace sm {
 
         template<typename U>
         ref(ref<U> r) : std::reference_wrapper<T>(r) {
-
         }
 
         T* operator->() {
@@ -48,7 +46,6 @@ namespace sm {
             return this->get();
         }
     };
-
     struct point {
         double x;
         double y;
@@ -66,7 +63,6 @@ namespace sm {
     bool operator==(const point& p1, const point& p2);
 
     using matrix = Eigen::Matrix<double, 3, 3>;
-
     point transform(const point& pt, const matrix& mat);
     matrix rotation_matrix(double theta);
     matrix rotation_matrix(double cos_theta, double sin_theta);
@@ -80,7 +76,6 @@ namespace sm {
 	double angular_distance(double theta1, double theta2);
 	sm::matrix rotate_about_point_matrix(const sm::point& pt, double theta);
 	double angle_from_u_to_v(const sm::point& u, const sm::point& v);
-
 	struct angle_range {
 		double start_angle;
 		double span_angle;
@@ -96,12 +91,11 @@ namespace sm {
 
 	std::vector<sm::angle_range> intersect_angle_ranges(
 		const angle_range& a, const angle_range& b);
-
 	enum class result {
 		success,
 		multi_parent_node,
 		cyclic_bones,
-		non_unique_name,
+		duplicate_id,
 		not_found,
 		no_parent,
 		out_of_bounds,
@@ -123,12 +117,11 @@ namespace sm {
 	using node_ref = ref<node>;
 	using skel_ref = ref<skeleton>;
 	using world_ref = ref<world>;
-
 	using const_bone_ref = ref<const bone>;
 	using const_node_ref = ref<const node>;
 	using const_skel_ref = ref<const skeleton>;
 	using const_world_ref = ref<const world>;
-	
+
 	using maybe_bone_ref = std::optional<bone_ref>;
 	using maybe_node_ref = std::optional<node_ref>;
     using maybe_skel_ref = std::optional<skel_ref>;
@@ -139,9 +132,8 @@ namespace sm {
 	using expected_node = std::expected<node_ref, result>;
 	using expected_skel = std::expected<skel_ref, result>;
     using expected_const_skel = std::expected<const_skel_ref, result>;
-
     namespace detail {
-        template <typename T> 
+        template <typename T>
         class enable_protected_make_unique {
         protected:
             template <typename... Args>
@@ -154,7 +146,6 @@ namespace sm {
                 return std::make_unique<make_unique_enabler>(std::forward<Args>(args)...);
             }
         };
-
         template<typename T>
         auto to_range_view(auto& tbl) {
             return tbl | std::ranges::views::transform(
@@ -170,7 +161,6 @@ namespace sm {
 
     template <typename T>
     concept is_node_or_bone_ref = std::same_as<T, sm::node_ref> || std::same_as<T, sm::bone_ref>;
-
     template <typename T>
     concept is_skel_piece = std::same_as<T, sm::node> ||
         std::same_as<T, sm::bone> ||

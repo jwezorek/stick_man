@@ -20,7 +20,6 @@ using namespace std::placeholders;
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
 using json = nlohmann::json;
-
 /*------------------------------------------------------------------------------------------------*/
 
 namespace {
@@ -29,7 +28,6 @@ namespace {
         auto [lhs, rhs] = r::mismatch(prefix, str);
         return lhs == prefix.end();
     }
-
     std::vector<int> extract_prefixed_integers(
         const std::string& prefix, const std::vector<std::string>& names) {
         auto n = prefix.size();
@@ -49,7 +47,6 @@ namespace {
             [](int v) { return v > 0; }
         ) | r::to<std::vector<int>>();
     }
-
     int smallest_excluded_positive_integer(const std::vector<int>& nums) {
         int n = static_cast<int>(nums.size()) + 1;
         std::vector<bool> appears(n, false);
@@ -65,14 +62,12 @@ namespace {
         }
         return static_cast<int>(std::distance(appears.begin(), first_false));
     }
-
     std::string unique_name(const std::string& prefix, const std::vector<std::string>& names) {
         std::string prefix_with_hyphen = prefix + "-";
         auto ids_taken = extract_prefixed_integers(prefix_with_hyphen, names);
         auto index = smallest_excluded_positive_integer(ids_taken);
         return prefix + "-" + std::to_string(index);
     }
-
     sm::object_id parsed_id(const json& obj, const char* key) {
         if (!obj.contains(key)) {
             return sm::object_id::generate();
@@ -83,7 +78,6 @@ namespace {
         }
         return *parsed;
     }
-
     sm::node* node_from_reference(sm::skeleton& skel, const json& ref) {
         auto str = ref.get<std::string>();
         if (auto id = sm::object_id::from_string(str); id) {
@@ -97,7 +91,6 @@ namespace {
         }
         return nullptr;
     }
-
     json node_to_json(const sm::node& node) {
         return {
             {"id", node.id().to_string()},
@@ -105,7 +98,6 @@ namespace {
             {"pos", {{"x", node.world_x()}, {"y", node.world_y()}}}
         };
     }
-
     json bone_to_json(const sm::bone& bone) {
         json bone_json = {
             {"id", bone.id().to_string()},
@@ -122,7 +114,6 @@ namespace {
         }
         return bone_json;
     }
-
     json animation_event_to_json(const sm::animation_event& event) {
         return std::visit(sm::overloaded{
             [](const sm::rotation& rotation)->json {
@@ -144,7 +135,6 @@ namespace {
             }
             }, event);
     }
-
     sm::animation_event animation_event_from_json(const json& event) {
         auto type = event.at("type").get<std::string>();
         if (type == "rotation") {
@@ -173,7 +163,6 @@ namespace {
         }
         throw std::runtime_error("unknown animation event type");
     }
-
     sm::animation_event remap_event(
         const sm::animation_event& event,
         const std::unordered_map<sm::object_id, sm::object_id>& ids) {
@@ -195,7 +184,6 @@ namespace {
             }
             }, event);
     }
-
 }
 
 /*------------------------------------------------------------------------------------------------*/
@@ -208,7 +196,6 @@ sm::skeleton::skeleton(world& w, object_id id, const std::string& name, double x
     auto root = w.create_node(*this, x, y);
     register_node(root);
 }
-
 void sm::skeleton::on_new_bone(sm::bone& b) {
     nodes_.clear();
     bones_.clear();
@@ -225,7 +212,6 @@ void sm::skeleton::on_new_bone(sm::bone& b) {
         true
     );
 }
-
 const sm::object_id& sm::skeleton::id() const noexcept { return id_; }
 
 std::string sm::skeleton::name() const { return name_; }
@@ -234,7 +220,6 @@ void sm::skeleton::set_name(const std::string& str) { name_ = str; }
 
 sm::node& sm::skeleton::root_node() { return root_.value(); }
 const sm::node& sm::skeleton::root_node() const { return root_.value(); }
-
 std::any sm::skeleton::get_user_data() const { return user_data_; }
 void sm::skeleton::set_user_data(std::any data) { user_data_ = data; }
 void sm::skeleton::clear_user_data() { user_data_.reset(); }
@@ -245,7 +230,6 @@ sm::expected_skel sm::skeleton::copy_to(world& other_world, const std::string& n
     if (!new_skel) {
         return new_skel;
     }
-
     auto& dest = new_skel->get();
     for (auto node : nodes()) {
         auto copied = node->copy_to(dest);
@@ -254,7 +238,6 @@ sm::expected_skel sm::skeleton::copy_to(world& other_world, const std::string& n
         }
     }
     dest.set_root(dest.get<sm::node>(root_node().id())->get());
-
     for (auto bone : bones()) {
         auto copied = bone->copy_to(dest);
         if (!copied) {
@@ -268,7 +251,6 @@ sm::expected_skel sm::skeleton::copy_to(world& other_world, const std::string& n
     dest.user_data_ = user_data_;
     return new_skel;
 }
-
 sm::expected_skel sm::skeleton::duplicate_to(world& other_world, const std::string& new_name) const {
     auto label = new_name.empty() ? name_ : new_name;
     auto new_skel = other_world.create_skeleton(label);
@@ -279,7 +261,6 @@ sm::expected_skel sm::skeleton::duplicate_to(world& other_world, const std::stri
     auto& dest = new_skel->get();
     std::unordered_map<object_id, object_id> id_map;
     id_map.emplace(id_, dest.id());
-
     for (auto node : nodes()) {
         auto new_id = object_id::generate();
         id_map.emplace(node->id(), new_id);
@@ -288,7 +269,6 @@ sm::expected_skel sm::skeleton::duplicate_to(world& other_world, const std::stri
         dest.register_node(copied);
     }
     dest.set_root(dest.get<sm::node>(id_map.at(root_node().id()))->get());
-
     for (auto bone : bones()) {
         auto new_id = object_id::generate();
         id_map.emplace(bone->id(), new_id);
@@ -306,7 +286,6 @@ sm::expected_skel sm::skeleton::duplicate_to(world& other_world, const std::stri
         }
         dest.register_bone(copied->get());
     }
-
     for (const auto& anim : animations_) {
         animation new_anim(object_id::generate(), anim.name_);
         id_map.emplace(anim.id_, new_anim.id_);
@@ -319,15 +298,12 @@ sm::expected_skel sm::skeleton::duplicate_to(world& other_world, const std::stri
     }
     return new_skel;
 }
-
-sm::result sm::skeleton::set_name(bone& bone, const std::string& new_name) {
+void sm::skeleton::set_name(bone& bone, const std::string& new_name) {
     bone.set_name(new_name);
-    return result::success;
 }
 
-sm::result sm::skeleton::set_name(node& node, const std::string& new_name) {
+void sm::skeleton::set_name(node& node, const std::string& new_name) {
     node.set_name(new_name);
-    return result::success;
 }
 
 sm::result sm::skeleton::from_json(sm::world& w, const json& jobj) {
@@ -335,7 +311,6 @@ sm::result sm::skeleton::from_json(sm::world& w, const json& jobj) {
     nodes_.clear();
     bones_.clear();
     animations_.clear();
-
     for (const auto& node_json : jobj.at("nodes")) {
         const auto& pos = node_json.at("pos");
         auto new_node = w.create_node(
@@ -349,7 +324,6 @@ sm::result sm::skeleton::from_json(sm::world& w, const json& jobj) {
         }
         nodes_[new_node->id()] = new_node.ptr();
     }
-
     for (const auto& bone_json : jobj.at("bones")) {
         auto* u = node_from_reference(*this, bone_json.at("u"));
         auto* v = node_from_reference(*this, bone_json.at("v"));
@@ -371,13 +345,11 @@ sm::result sm::skeleton::from_json(sm::world& w, const json& jobj) {
         }
         bones_[b->get().id()] = &b->get();
     }
-
     auto* root = node_from_reference(*this, jobj.at("root"));
     if (!root) {
         return sm::result::invalid_json;
     }
     root_ = *root;
-
     if (jobj.contains("animations")) {
         for (const auto& anim_json : jobj.at("animations")) {
             animation anim(parsed_id(anim_json, "id"), anim_json.at("name").get<std::string>());
@@ -390,7 +362,6 @@ sm::result sm::skeleton::from_json(sm::world& w, const json& jobj) {
             animations_.push_back(std::move(anim));
         }
     }
-
     return sm::result::success;
 }
 
@@ -404,7 +375,6 @@ json sm::skeleton::to_json() const {
     for (auto bone : this->bones()) {
         bones.push_back(bone_to_json(*bone));
     }
-
     json animations = json::array();
     for (const auto& anim : animations_) {
         json timeline = json::array();
@@ -421,7 +391,6 @@ json sm::skeleton::to_json() const {
             {"timeline", timeline}
             });
     }
-
     return {
         {"id", id_.to_string()},
         {"name", name_},
@@ -434,7 +403,6 @@ json sm::skeleton::to_json() const {
 
 void sm::skeleton::set_root(sm::node& new_root) { root_ = sm::ref(new_root); }
 void sm::skeleton::set_owner(sm::world& owner) { owner_ = owner; }
-
 void sm::skeleton::register_node(sm::node& new_node) {
     if (nodes_.contains(new_node.id()) || &new_node.owner() != this) {
         throw std::runtime_error("sm::skeleton::register_node failed");
@@ -444,14 +412,12 @@ void sm::skeleton::register_node(sm::node& new_node) {
         root_ = new_node;
     }
 }
-
 void sm::skeleton::register_bone(sm::bone& new_bone) {
     if (bones_.contains(new_bone.id()) || &new_bone.owner() != this) {
         throw std::runtime_error("sm::skeleton::register_bone failed");
     }
     bones_[new_bone.id()] = &new_bone;
 }
-
 bool sm::skeleton::empty() const { return !root_.has_value(); }
 const std::vector<sm::animation>& sm::skeleton::animations() const { return animations_; }
 void sm::skeleton::insert_animation(const animation& anim) { animations_.push_back(anim); }
@@ -463,7 +429,6 @@ void sm::skeleton::apply(matrix& mat) {
         node->apply(mat);
     }
 }
-
 /*------------------------------------------------------------------------------------------------*/
 
 sm::world::world() {}
@@ -479,7 +444,6 @@ sm::world& sm::world::operator=(world&& other) {
     }
     return *this;
 }
-
 void sm::world::clear() {
     skeletons_.clear();
     bones_.clear();
@@ -487,7 +451,6 @@ void sm::world::clear() {
 }
 
 bool sm::world::empty() const { return skeletons_.empty(); }
-
 sm::skeleton& sm::world::create_skeleton(double x, double y) {
     auto new_name = unique_name("skeleton", skeleton_names());
     auto id = object_id::generate();
@@ -500,19 +463,17 @@ sm::skeleton& sm::world::create_skeleton(double x, double y) {
 }
 
 sm::skeleton& sm::world::create_skeleton(const point& pt) { return create_skeleton(pt.x, pt.y); }
-
 sm::expected_skel sm::world::create_skeleton_with_id(object_id id, const std::string& name) {
     if (skeletons_.contains(id)) {
-        return std::unexpected(result::non_unique_name);
+        return std::unexpected(result::duplicate_id);
     }
     auto [it, inserted] = skeletons_.emplace(id, skeleton::make_unique(*this, id));
     if (!inserted) {
-        return std::unexpected(result::non_unique_name);
+        return std::unexpected(result::duplicate_id);
     }
     it->second->set_name(name);
     return sm::ref(*it->second);
 }
-
 sm::expected_skel sm::world::create_skeleton(const std::string& name) {
     return create_skeleton_with_id(object_id::generate(), name);
 }
@@ -525,7 +486,6 @@ sm::expected_skel sm::world::skeleton(const object_id& id) {
     }
     return sm::ref(const_cast<sm::skeleton&>(skel->get()));
 }
-
 sm::expected_const_skel sm::world::skeleton(const object_id& id) const {
     auto iter = skeletons_.find(id);
     if (iter == skeletons_.end()) {
@@ -533,7 +493,6 @@ sm::expected_const_skel sm::world::skeleton(const object_id& id) const {
     }
     return *iter->second;
 }
-
 sm::expected_skel sm::world::skeleton(const std::string& name) {
     auto const_this = const_cast<const world*>(this);
     auto skel = const_this->skeleton(name);
@@ -542,8 +501,8 @@ sm::expected_skel sm::world::skeleton(const std::string& name) {
     }
     return sm::ref(const_cast<sm::skeleton&>(skel->get()));
 }
-
 sm::expected_const_skel sm::world::skeleton(const std::string& name) const {
+    // Label lookup is for display/legacy compatibility only. Names are not identity.
     for (const auto& [id, skel] : skeletons_) {
         if (skel->name() == name) {
             return *skel;
@@ -551,7 +510,6 @@ sm::expected_const_skel sm::world::skeleton(const std::string& name) const {
     }
     return std::unexpected(sm::result::not_found);
 }
-
 template<typename T>
 void delete_ptrs_if(std::vector<std::unique_ptr<T>>& vec, std::function<bool(const T&)> predicate) {
     vec.erase(std::remove_if(vec.begin(), vec.end(),
@@ -564,7 +522,6 @@ sm::result sm::world::delete_skeleton(const object_id& id) {
         return sm::result::not_found;
     }
     auto& skel = skel_ref->get();
-
     // Capture membership before destroying anything.  node::owner() can follow a
     // parent bone, so asking a node for its owner after its parent bone has been
     // deleted dereferences a dangling bone_ref.  The skeleton's tables already
@@ -575,7 +532,6 @@ sm::result sm::world::delete_skeleton(const object_id& id) {
     for (const auto& [bone_id, bone] : skel.bones_) {
         bones_to_delete.insert(bone);
     }
-
     std::unordered_set<const sm::node*> nodes_to_delete;
     nodes_to_delete.reserve(skel.nodes_.size());
     for (const auto& [node_id, node] : skel.nodes_) {
@@ -586,7 +542,6 @@ sm::result sm::world::delete_skeleton(const object_id& id) {
         [&bones_to_delete](const std::unique_ptr<sm::bone>& bone) {
             return bones_to_delete.contains(bone.get());
         }), bones_.end());
-
     nodes_.erase(std::remove_if(nodes_.begin(), nodes_.end(),
         [&nodes_to_delete](const std::unique_ptr<sm::node>& node) {
             return nodes_to_delete.contains(node.get());
@@ -601,18 +556,15 @@ std::vector<std::string> sm::world::skeleton_names() const {
         rv::transform([](auto skel) { return skel->name(); }) |
         r::to<std::vector<std::string>>();
 }
-
 bool sm::world::contains_skeleton(const object_id& id) const { return skeletons_.contains(id); }
 
 bool sm::world::contains_skeleton(const std::string& name) const {
     return r::any_of(skeletons_, [&](const auto& pair) { return pair.second->name() == name; });
 }
 
-sm::result sm::world::set_name(sm::skeleton& skel, const std::string& new_name) {
+void sm::world::set_name(sm::skeleton& skel, const std::string& new_name) {
     skel.set_name(new_name);
-    return result::success;
 }
-
 sm::node_ref sm::world::create_node(sm::skeleton& parent, object_id id,
     const std::string& name, double x, double y) {
     if (parent.contains<node>(id)) {
@@ -626,11 +578,9 @@ sm::node_ref sm::world::create_node(sm::skeleton& parent, const std::string& nam
     double x, double y) {
     return create_node(parent, object_id::generate(), name, x, y);
 }
-
 sm::node_ref sm::world::create_node(sm::skeleton& parent, double x, double y) {
     return create_node(parent, "root", x, y);
 }
-
 sm::expected_bone sm::world::create_bone_in_skeleton(
     object_id id, const std::string& bone_name, node& u, node& v) {
     if (!v.is_root()) {
@@ -642,12 +592,11 @@ sm::expected_bone sm::world::create_bone_in_skeleton(
         return std::unexpected(sm::result::cross_skeleton_bone);
     }
     if (skel_u.contains<bone>(id)) {
-        return std::unexpected(sm::result::non_unique_name);
+        return std::unexpected(sm::result::duplicate_id);
     }
     bones_.push_back(bone::make_unique(id, bone_name, u, v));
     return *bones_.back();
 }
-
 sm::expected_bone sm::world::create_bone_in_skeleton(
     const std::string& bone_name, node& u, node& v) {
     return create_bone_in_skeleton(object_id::generate(), bone_name, u, v);
@@ -656,7 +605,6 @@ sm::expected_bone sm::world::create_bone_in_skeleton(
 sm::expected_bone sm::world::create_bone(const std::string& bone_name, node& u, node& v) {
     return create_bone(object_id::generate(), bone_name, u, v);
 }
-
 sm::expected_bone sm::world::create_bone(object_id id, const std::string& bone_name, node& u, node& v) {
     if (!v.is_root()) {
         return std::unexpected(sm::result::multi_parent_node);
@@ -668,12 +616,10 @@ sm::expected_bone sm::world::create_bone(object_id id, const std::string& bone_n
         return std::unexpected(sm::result::cyclic_bones);
     }
     if (skel_u.contains<bone>(id) || skel_v.contains<bone>(id)) {
-        return std::unexpected(sm::result::non_unique_name);
+        return std::unexpected(sm::result::duplicate_id);
     }
-
     skeletons_.erase(skel_v.id());
-    std::string name = bone_name.empty() ? "bone-1" : bone_name;
-    bones_.push_back(bone::make_unique(id, name, u, v));
+    bones_.push_back(bone::make_unique(id, bone_name, u, v));
     skel_u.on_new_bone(*bones_.back());
     return *bones_.back();
 }
@@ -686,7 +632,6 @@ sm::result sm::world::from_json_str(const std::string& str) {
         return sm::result::invalid_json;
     }
 }
-
 sm::result sm::world::from_json(const json& stick_man) {
     try {
         clear();
@@ -710,7 +655,6 @@ sm::result sm::world::from_json(const json& stick_man) {
     }
     return sm::result::success;
 }
-
 std::string sm::world::to_json_str() const { return to_json().dump(4); }
 
 json sm::world::to_json() const {

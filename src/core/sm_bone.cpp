@@ -16,7 +16,6 @@ namespace {
 
 	template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 	template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
-
 	struct rotation_info {
 		double length;
 		double rel_rotation;
@@ -25,18 +24,16 @@ namespace {
 
 	using bone_rotation_tbl = std::unordered_map<sm::bone*, rotation_info>;
 
-	bone_rotation_tbl create_bone_rotation_tbl( sm::node& axis, sm::bone& rotating_bone, 
+	bone_rotation_tbl create_bone_rotation_tbl( sm::node& axis, sm::bone& rotating_bone,
 			double theta, bool just_this_bone) {
 
-		bone_rotation_tbl tbl; 
+		bone_rotation_tbl tbl;
 		sm::visit_bone_hierarchy(axis,
 			[&](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
-
 				sm::node& u = (prev) ? bone.shared_node(*prev)->get() : axis;
 				sm::node& v = bone.opposite_node(u);
 				auto world_rot = sm::angle_from_u_to_v(u.world_pos(), v.world_pos());
 				auto rel_rot = (prev) ? world_rot - tbl[&prev->get()].world_rotation : world_rot;
-
 				if (&bone == &rotating_bone) {
 					rel_rot += theta;
 				} else if (prev.has_value() && (&prev->get() == &rotating_bone)) {
@@ -44,18 +41,17 @@ namespace {
 						rel_rot -= theta;
 					}
 				}
-				
+
 				tbl[&bone] = { bone.scaled_length(), rel_rot, world_rot };
 
 				return sm::visit_result::continue_traversal;
 
 			}
-		); 
+		);
 
 		return tbl;
 	}
 }
-
 sm::node::node(skeleton& parent, object_id id, const std::string& name, double x, double y) :
 	id_(id),
 	parent_(parent),
@@ -83,10 +79,9 @@ const sm::object_id& sm::node::id() const noexcept {
 std::string sm::node::name() const {
 	return name_;
 }
-
 sm::expected_node sm::node::copy_to(skeleton& skel) const {
     if (skel.contains<node>(id_)) {
-        return std::unexpected(sm::result::non_unique_name);
+        return std::unexpected(sm::result::duplicate_id);
     }
     auto node = skel.owner().create_node(skel, id_, name_, x_, y_);
     skel.register_node(node);
@@ -102,13 +97,12 @@ sm::maybe_bone_ref sm::node::parent_bone() {
 		parent_
 	);
 }
-
 // TODO: get rid of duplicate code
 sm::maybe_const_bone_ref sm::node::parent_bone() const {
 	return std::visit(
 		overloaded{
 			[](skel_ref skel)->maybe_const_bone_ref { return {}; },
-			[](bone_ref bone)->maybe_const_bone_ref { 
+			[](bone_ref bone)->maybe_const_bone_ref {
 				return const_bone_ref(bone.get());
 			}
 		},
@@ -119,7 +113,6 @@ sm::maybe_const_bone_ref sm::node::parent_bone() const {
 std::vector<sm::bone_ref> sm::node::child_bones() {
 	return children_;
 }
-
 std::vector<sm::const_bone_ref> sm::node::child_bones() const {
 	return children_ |
 		rv::transform([](const auto& c) {return sm::const_bone_ref(c); }) |
@@ -136,19 +129,17 @@ std::vector<sm::bone_ref> sm::node::adjacent_bones() {
 	bones.shrink_to_fit();
 	return bones;
 }
-
 std::vector<sm::const_bone_ref> sm::node::adjacent_bones() const {
 	auto* non_const_this = const_cast<sm::node*>(this);
 	return non_const_this->adjacent_bones() |
 		rv::transform([](const auto& c) {return sm::const_bone_ref(c); }) |
 		r::to< std::vector<sm::const_bone_ref>>();
 }
-
 sm::skeleton& sm::node::owner() {
 	return std::visit(
 		overloaded{
-			[](skel_ref skel)->sm::skeleton& { 
-                return *skel; 
+			[](skel_ref skel)->sm::skeleton& {
+                return *skel;
             },
 			[](bone_ref bone)->sm::skeleton& {
 				return bone->owner();
@@ -170,7 +161,6 @@ double sm::node::world_x() const {
 double sm::node::world_y() const {
 	return y_;
 }
-
 void sm::node::set_world_pos(const point& pt) {
 	x_ = pt.x;
 	y_ = pt.y;
@@ -197,7 +187,6 @@ void sm::node::set_user_data(std::any data) {
 void  sm::node::clear_user_data() {
 	user_data_.reset();
 }
-
 bool sm::node::is_root() const {
 	return std::holds_alternative<skel_ref>(parent_);
 }
@@ -214,7 +203,6 @@ sm::bone::bone(object_id id, std::string name, sm::node& u, sm::node& v) :
 void sm::bone::set_name(const std::string& new_name) {
 	name_ = new_name;
 }
-
 sm::result sm::bone::set_rotation_constraint(double start, double span, bool relative_to_parent) {
 	if (relative_to_parent && !parent_bone()) {
 		return result::no_parent;
@@ -230,7 +218,6 @@ std::optional<sm::rot_constraint> sm::bone::rotation_constraint() const {
 void sm::bone::remove_rotation_constraint() {
 	rot_constraint_ = {};
 }
-
 const sm::object_id& sm::bone::id() const noexcept {
     return id_;
 }
@@ -242,15 +229,14 @@ std::string sm::bone::name() const {
 sm::expected_bone sm::bone::copy_to(skeleton& skel) const
 {
     if (skel.contains<bone>(id_)) {
-        return std::unexpected(result::non_unique_name);
+        return std::unexpected(result::duplicate_id);
     }
 
     auto u = skel.get<node>(parent_node().id());
     auto v = skel.get<node>(child_node().id());
     if (!u || !v) {
-        return std::unexpected(result::no_parent);
+        return std::unexpected(result::not_found);
     }
-
     auto bone = skel.owner().create_bone_in_skeleton(id_, name_, u->get(), v->get());
     if (rot_constraint_) {
         bone->get().set_rotation_constraint(
@@ -267,7 +253,6 @@ sm::expected_bone sm::bone::copy_to(skeleton& skel) const
 sm::node& sm::bone::parent_node() {
 	return u_;
 }
-
 const sm::node& sm::bone::parent_node() const {
 	auto* non_const_this = const_cast<sm::bone*>(this);
 	return non_const_this->parent_node();
@@ -289,7 +274,6 @@ sm::node& sm::bone::opposite_node(const node& j) {
 		return u_;
 	}
 }
-
 bool sm::bone::has_node(const sm::node& j) const {
 	return &u_ == &j || &v_ == &j;
 }
@@ -308,9 +292,8 @@ std::vector<sm::bone_ref> sm::bone::sibling_bones() {
 			[this](bone_ref sib) {
 				return sib.ptr() != this;
 			}
-	) | r::to<std::vector<sm::bone_ref>>();
+		) | r::to<std::vector<sm::bone_ref>>();
 }
-
 bool sm::bone::is_sibling(const bone& b) const
 {
 	return &parent_node() == &b.parent_node();
@@ -328,7 +311,6 @@ sm::skeleton& sm::bone::owner() {
 const sm::skeleton& sm::bone::owner() const {
 	return parent_node().owner();
 }
-
 sm::maybe_node_ref sm::bone::shared_node(const bone& b) {
 	auto* b_u = &b.parent_node();
 	auto* b_v = &b.child_node();
@@ -345,7 +327,6 @@ sm::maybe_const_node_ref sm::bone::shared_node(const bone& b) const {
 	auto* non_const_this = const_cast<sm::bone*>(this);
 	return non_const_this->shared_node(b);
 }
-
 std::tuple<sm::point, sm::point> sm::bone::line_segment() const {
 	return { u_.world_pos(), v_.world_pos() };
 }
@@ -365,7 +346,6 @@ double sm::bone::world_rotation() const {
 		(v.x - u.x)
 	);
 }
-
 double sm::bone::rotation() const {
 	auto parent = parent_bone();
 	if (!parent) {
@@ -385,7 +365,6 @@ double sm::bone::scale() const {
 double sm::bone::absolute_scale() const {
 	return scaled_length() / length();
 }
-
 sm::maybe_const_bone_ref  sm::bone::parent_bone() const {
 	return u_.parent_bone();
 }
@@ -409,7 +388,6 @@ void sm::bone::clear_user_data() {
 void sm::bone::set_world_rotation(double theta) {
 	rotate_by(theta - world_rotation());
 }
-
 void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_bone) {
 
 	if (!axis) {
@@ -417,7 +395,6 @@ void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_b
 	}
 	auto old_rotation_tbl = create_bone_rotation_tbl(*axis, *this, theta, just_this_bone);
 	std::unordered_map<sm::bone*, double> new_world_rotation;
-
 	visit_bone_hierarchy(*axis,
 		[&](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
 			sm::node& u = (prev) ? bone.shared_node(*prev)->get() : axis->get();
@@ -433,12 +410,10 @@ void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_b
 			new_v_pos = sm::apply_rotation_constraints(new_v_pos, *axis, prev, bone);
 			v.set_world_pos(new_v_pos);
 			new_world_rotation[&bone] = angle_from_u_to_v(u.world_pos(), v.world_pos());
-
 			return sm::visit_result::continue_traversal;
 		}
 	);
 }
-
 void sm::bone::set_length(double len) {
     std::unordered_map<bone*, std::tuple<double,double>> bone_to_len_and_rot;
     std::vector<bone*> topo_order;
