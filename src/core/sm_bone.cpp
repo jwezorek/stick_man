@@ -3,8 +3,8 @@
 #include "sm_skeleton.h"
 #include "sm_fabrik.h"
 #include "sm_visit.h"
-#include "qdebug.h"
 #include <unordered_map>
+#include <cmath>
 
 using namespace std::placeholders;
 namespace r = std::ranges;
@@ -56,7 +56,8 @@ namespace {
 	}
 }
 
-sm::node::node(skeleton& parent, const std::string& name, double x, double y) :
+sm::node::node(skeleton& parent, object_id id, const std::string& name, double x, double y) :
+	id_(id),
 	parent_(parent),
 	name_(name),
 	x_(x),
@@ -75,18 +76,19 @@ void sm::node::add_child(bone& b) {
 	children_.push_back(sm::ref(b));
 }
 
+const sm::object_id& sm::node::id() const noexcept {
+    return id_;
+}
+
 std::string sm::node::name() const {
 	return name_;
 }
 
 sm::expected_node sm::node::copy_to(skeleton& skel) const {
-    if (skel.contains<node>(name_)) {
+    if (skel.contains<node>(id_)) {
         return std::unexpected(sm::result::non_unique_name);
     }
-    auto node = skel.owner().create_node(
-        skel, name_,
-        x_, y_
-    );
+    auto node = skel.owner().create_node(skel, id_, name_, x_, y_);
     skel.register_node(node);
     return node;
 }
@@ -202,8 +204,8 @@ bool sm::node::is_root() const {
 
 /*------------------------------------------------------------------------------------------------*/
 
-sm::bone::bone(std::string name, sm::node& u, sm::node& v) :
-	name_(name), u_(u), v_(v) {
+sm::bone::bone(object_id id, std::string name, sm::node& u, sm::node& v) :
+	id_(id), name_(name), u_(u), v_(v) {
 	v.set_parent(*this);
 	u.add_child(*this);
 	length_ = scaled_length();
@@ -229,23 +231,27 @@ void sm::bone::remove_rotation_constraint() {
 	rot_constraint_ = {};
 }
 
+const sm::object_id& sm::bone::id() const noexcept {
+    return id_;
+}
+
 std::string sm::bone::name() const {
 	return name_;
 }
 
 sm::expected_bone sm::bone::copy_to(skeleton& skel) const
 {
-    if (skel.contains<bone>(name_)) {
+    if (skel.contains<bone>(id_)) {
         return std::unexpected(result::non_unique_name);
     }
 
-    auto u = skel.get_by_name<node>(parent_node().name());
-    auto v = skel.get_by_name<node>(child_node().name());
+    auto u = skel.get<node>(parent_node().id());
+    auto v = skel.get<node>(child_node().id());
     if (!u || !v) {
         return std::unexpected(result::no_parent);
     }
 
-    auto bone = skel.owner().create_bone_in_skeleton(name_, u->get(), v->get());
+    auto bone = skel.owner().create_bone_in_skeleton(id_, name_, u->get(), v->get());
     if (rot_constraint_) {
         bone->get().set_rotation_constraint(
             rot_constraint_->start_angle,

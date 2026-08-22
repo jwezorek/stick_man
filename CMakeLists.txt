@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Boost 1.80 REQUIRED)
 if(Boost_FOUND)
-    include_directories(${Boost_INCLUDE_DIRS}) 
+    include_directories(${Boost_INCLUDE_DIRS})
 endif()
 
 find_package(Eigen3  REQUIRED)
@@ -17,7 +17,6 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 add_executable(stick_man
-
     src/ui/tools/tool_manager.cpp
     src/ui/tools/zoom_tool.cpp
     src/ui/tools/pan_tool.cpp
@@ -28,7 +27,6 @@ add_executable(stick_man
     src/ui/tools/animate_tool.cpp
     src/ui/tools/selection_tool.cpp
     src/ui/tools/drag_state.cpp
-
     src/ui/canvas/scene.cpp
     src/ui/canvas/node_item.cpp
     src/ui/canvas/bone_item.cpp
@@ -36,7 +34,6 @@ add_executable(stick_man
     src/ui/canvas/rubber_band.cpp
     src/ui/canvas/canvas_item.cpp
     src/ui/canvas/canvas_manager.cpp
-
     src/ui/panes/tools_pane.cpp
     src/ui/panes/skeleton_pane.cpp
     src/ui/panes/tool_settings_pane.cpp
@@ -49,13 +46,13 @@ add_executable(stick_man
     src/ui/panes/tree_view.cpp
     src/ui/panes/abstract_skeleton_pane.cpp
     src/ui/panes/animation_skeleton_pane.cpp
-
     src/core/sm_skeleton.cpp
     src/core/sm_bone.cpp
     src/core/sm_types.cpp
     src/core/sm_fabrik.cpp
     src/core/sm_visit.cpp
     src/core/sm_animation.cpp
+    src/core/sm_object_id.cpp
 
     src/model/project.cpp
     src/model/commands.cpp
@@ -71,7 +68,6 @@ add_executable(stick_man
 )
 
 target_link_libraries(stick_man PRIVATE Qt6::Widgets  Eigen3::Eigen)
-
 set_target_properties(stick_man PROPERTIES
     WIN32_EXECUTABLE ON
     MACOSX_BUNDLE ON

@@ -1,6 +1,4 @@
 #include "project.h"
-#include "../ui/canvas/scene.h"
-#include "../ui/canvas/canvas_item.h"
 #include "commands.h"
 #include "../core/sm_skeleton.h"
 #include "../core/json.hpp"
@@ -16,96 +14,79 @@ namespace rv = std::ranges::views;
 
 namespace {
 
-    template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
-
-    json tabs_to_json(const std::unordered_map<std::string, std::vector<std::string>>& tabs) {
-        return tabs |
-            rv::transform(
-                [](const auto& item)->json {
-                    const auto& [key, val] = item;
-                    json json_pair = {
-                        {"tab", key},
-                        {"skeletons",  rv::all(val) | r::to<json>()}
-                    };
-                    return json_pair;
-                }
-        ) | r::to<json>();
+    json tabs_to_json(const std::unordered_map<std::string, std::vector<sm::object_id>>& tabs) {
+        json result = json::array();
+        for (const auto& [tab, skeletons] : tabs) {
+            json ids = json::array();
+            for (const auto& id : skeletons) {
+                ids.push_back(id.to_string());
+            }
+            result.push_back({{"tab", tab}, {"skeletons", ids}});
+        }
+        return result;
     }
 
-    std::unordered_map<std::string, std::vector<std::string>> tabs_from_json(const json& tabs_json) {
-        std::unordered_map<std::string, std::vector<std::string>> tabs;
-        for (const auto json_pair : tabs_json) {
-            tabs[json_pair["tab"]] = json_pair["skeletons"] | r::to<std::vector<std::string>>();
+    using tab_table = std::unordered_map<std::string, std::vector<sm::object_id>>;
+
+    tab_table tabs_from_json(const json& tabs_json, const sm::world& world) {
+        tab_table tabs;
+        for (const auto& json_pair : tabs_json) {
+            auto& ids = tabs[json_pair.at("tab").get<std::string>()];
+            for (const auto& skel_ref : json_pair.at("skeletons")) {
+                auto str = skel_ref.get<std::string>();
+                if (auto id = sm::object_id::from_string(str); id) {
+                    if (!world.skeleton(*id)) {
+                        throw std::runtime_error("tab references missing skeleton ID");
+                    }
+                    ids.push_back(*id);
+                } else {
+                    // Legacy project files stored skeleton names on tabs.
+                    auto skel = world.skeleton(str);
+                    if (!skel) {
+                        throw std::runtime_error("tab references missing legacy skeleton name");
+                    }
+                    ids.push_back(skel->get().id());
+                }
+            }
         }
         return tabs;
     }
 
-    using tab_table = std::unordered_map<std::string, std::vector<std::string>>;
-
     std::optional<std::tuple<tab_table, sm::world>> json_to_project_components(
             const std::string& str) {
         try {
-
             json proj = json::parse(str);
-            auto new_tabs = tabs_from_json(proj["tabs"]);
             sm::world new_world;
-            auto result = new_world.from_json(proj["world"]);
-
+            auto result = new_world.from_json(proj.at("world"));
             if (result != sm::result::success) {
-                throw result;
+                return {};
             }
-
-            return { {new_tabs, std::move(new_world) } };
-
+            auto new_tabs = tabs_from_json(proj.at("tabs"), new_world);
+            return {{std::move(new_tabs), std::move(new_world)}};
         } catch (...) {
             return {};
-        };
+        }
     }
 
-    std::string get_prefix(const std::string& name) {
-        if (!name.contains('-')) {
-            return name;
-        }
-        int n = static_cast<int>(name.size());
-        int i;
-        bool at_least_one_digit = false;
-        for (i = n - 1; i >= 0; --i) {
-            if (!std::isdigit(name[i])) {
-                break;
-            }
-            else {
-                at_least_one_digit = true;
-            }
-        }
-        if (!at_least_one_digit || i < 0) {
-            return name;
-        }
-        if (name[i] != '-') {
-            return name;
-        }
-        return name.substr(0, i);
-    }
+
 }
 
 /*------------------------------------------------------------------------------------------------*/
 
-void mdl::project::delete_skeleton_name_from_canvas_table(
-        const std::string& tab, const std::string& skel) {
+void mdl::project::delete_skeleton_from_canvas_table(
+        const std::string& tab, const sm::object_id& skel) {
     auto iter_tab = tabs_.find(tab);
     if (iter_tab == tabs_.end()) {
         return;
     }
     auto& skel_group = iter_tab->second;
-    auto iter_skel = r::find_if(skel_group, [skel](auto str) {return str == skel; });
-    if (iter_skel == skel_group.end()) {
-        return;
+    auto iter_skel = r::find(skel_group, skel);
+    if (iter_skel != skel_group.end()) {
+        skel_group.erase(iter_skel);
     }
-    skel_group.erase(iter_skel);
 }
 
-void mdl::project::clear_redo_stack() {
-    redo_stack_ = {};
-}
+void mdl::project::clear_redo_stack() { redo_stack_ = {}; }
 
 void mdl::project::execute_command(const command& cmd) {
     clear_redo_stack();
@@ -114,16 +95,10 @@ void mdl::project::execute_command(const command& cmd) {
     emit refresh_undo_redo_state(can_redo(), can_undo());
 }
 
-mdl::project::project()
-{}
+mdl::project::project() {}
 
-const sm::world& mdl::project::world() const {
-    return world_;
-}
-
-sm::world& mdl::project::world() {
-    return world_;
-}
+const sm::world& mdl::project::world() const { return world_; }
+sm::world& mdl::project::world() { return world_; }
 
 void mdl::project::clear() {
     tabs_.clear();
@@ -140,7 +115,6 @@ void mdl::project::undo() {
     undo_stack_.pop();
     cmd.undo(*this);
     redo_stack_.push(cmd);
-
     emit refresh_undo_redo_state(can_redo(), can_undo());
 }
 
@@ -152,222 +126,144 @@ void mdl::project::redo() {
     redo_stack_.pop();
     cmd.redo(*this);
     undo_stack_.push(cmd);
-
     emit refresh_undo_redo_state(can_redo(), can_undo());
 }
 
-bool mdl::project::can_undo() const {
-    return !undo_stack_.empty();
-}
+bool mdl::project::can_undo() const { return !undo_stack_.empty(); }
+bool mdl::project::can_redo() const { return !redo_stack_.empty(); }
+bool mdl::project::has_tab(const std::string& str) const { return tabs_.contains(str); }
 
-bool mdl::project::can_redo() const {
-    return !redo_stack_.empty();
-}
-
-bool mdl::project::has_tab(const std::string& str) const {
-    return tabs_.contains(str);
-}
-
-std::span<const std::string> mdl::project::skel_names_on_tab(std::string_view name) const {
+std::span<const sm::object_id> mdl::project::skel_ids_on_tab(std::string_view name) const {
     return tabs_.at(std::string(name));
 }
 
 std::string mdl::project::to_json() const {
     json stick_man_project = {
-        {"version", 0.0},
+        {"version", 1.0},
         {"tabs", tabs_to_json(tabs_)},
         {"world", world_.to_json()}
     };
-
     return stick_man_project.dump(4);
 }
 
 bool mdl::project::from_json(const std::string& str) {
-
     auto comps = json_to_project_components(str);
     if (!comps) {
         return false;
     }
 
     clear();
-    tabs_ = std::get<0>(*comps);
+    tabs_ = std::move(std::get<0>(*comps));
     world_ = std::move(std::get<1>(*comps));
-
     emit new_project_opened(*this);
     return true;
 }
 
-bool mdl::project::add_new_tab(const std::string& tab_name)
-{
+bool mdl::project::add_new_tab(const std::string& tab_name) {
     if (has_tab(tab_name)) {
         return false;
     }
-    execute_command(
-        commands::make_add_tab_command(tab_name)
-    );
+    execute_command(commands::make_add_tab_command(tab_name));
     return true;
 }
 
-void mdl::project::add_bone(const std::string& tab, 
+void mdl::project::add_bone(const std::string& tab,
         const handle& u, const handle& v) {
-    execute_command(
-        commands::make_add_bone_command(tab, u, v)
-    );
+    execute_command(commands::make_add_bone_command(tab, u, v));
 }
 
 void mdl::project::add_new_skeleton_root(const std::string& tab, sm::point loc) {
-    execute_command(
-        commands::make_create_node_command(tab, loc)
-    );
+    execute_command(commands::make_create_node_command(tab, loc));
 }
 
-//TODO: maintain a skeleton -> canvas table...
-std::string mdl::project::canvas_name_from_skeleton(const std::string& skel) const {
+std::string mdl::project::canvas_name_from_skeleton(const sm::object_id& skel) const {
     for (const auto& [canv_name, skels] : tabs_) {
-        for (auto skel_name : skels) {
-            if (skel == skel_name) {
-                return canv_name;
-            }
+        if (r::find(skels, skel) != skels.end()) {
+            return canv_name;
         }
     }
     return {};
 }
 
-void mdl::project::rename_aux(skel_piece piece_var, const std::string& new_name)
-{
+void mdl::project::rename_aux(skel_piece piece_var, const std::string& new_name) {
     auto result = std::visit(
         [&](auto ref)->sm::result {
             auto& piece = ref.get();
-            auto& owner_skel = piece.owner();
-            return owner_skel.set_name(piece, new_name);
+            return piece.owner().set_name(piece, new_name);
         },
         piece_var
     );
     if (result != sm::result::success) {
-        throw std::runtime_error("mod::project::rename_aux");
+        throw std::runtime_error("mdl::project::rename_aux");
     }
-    
     emit name_changed(piece_var, new_name);
 }
 
-bool mdl::project::can_rename(skel_piece piece, const std::string& new_name) {
-    return std::visit(
-        overload{
-            [new_name](sm::is_node_or_bone_ref auto node_or_bone_ref)->bool {
-                const auto& node_or_bone = node_or_bone_ref.get();
-                using value_type = std::remove_cvref_t<decltype(node_or_bone)>;
-                const auto& skel = node_or_bone.owner();
-                return !skel.contains<value_type>(new_name);
-            } ,
-            [new_name](sm::skel_ref itm)->bool {
-                const auto& skel = itm.get();
-                const auto& world = skel.owner();
-                return !world.contains_skeleton(new_name);
-            }
-        },
-        piece
-    );
+bool mdl::project::can_rename(skel_piece, const std::string&) {
+    return true;
 }
 
 bool mdl::project::rename(skel_piece piece, const std::string& new_name) {
-    if (!can_rename(piece, new_name)) {
-        return false;
-    }
-
     std::visit(
         [this, piece, new_name](auto ref) {
             using value_type = std::remove_cvref_t<decltype(ref.get())>;
-            execute_command(
-                commands::make_rename_command<value_type>(ref, new_name)
-            );
+            execute_command(commands::make_rename_command<value_type>(ref, new_name));
         },
         piece
     );
-
     return true;
 }
 
 void mdl::project::transform(const std::vector<handle>& nodes,
         const std::function<void(sm::node&)>& fn) {
-    execute_command(
-        commands::make_transform_bones_or_nodes_command(*this, nodes, {}, fn, {})
-    );
+    execute_command(commands::make_transform_bones_or_nodes_command(*this, nodes, {}, fn, {}));
 }
 
 void mdl::project::transform(const std::vector<handle>& bones,
         const std::function<void(sm::bone&)>& fn) {
-    execute_command(
-        commands::make_transform_bones_or_nodes_command(*this, {}, bones, {}, fn)
-    );
+    execute_command(commands::make_transform_bones_or_nodes_command(*this, {}, bones, {}, fn));
 }
 
-void mdl::project::transform_node_positions(const node_locs& old_locs, const node_locs& new_locs)
-{
-    execute_command(
-        commands::make_transform_node_positions_command(*this, old_locs, new_locs)
-    );
+void mdl::project::transform_node_positions(
+        const node_locs& old_locs, const node_locs& new_locs) {
+    execute_command(commands::make_transform_node_positions_command(*this, old_locs, new_locs));
 }
 
 void mdl::project::replace_skeletons_aux(const std::string& canvas_name,
-        const std::vector<std::string>& replacees,
+        const std::vector<sm::object_id>& replacees,
         const std::vector<sm::skel_ref>& replacements,
-        std::vector<std::string>* new_names) {
+        std::vector<sm::object_id>* new_ids) {
 
-    for (auto replacee : replacees) {
+    for (const auto& replacee : replacees) {
         if (canvas_name_from_skeleton(replacee) != canvas_name) {
             throw std::runtime_error("replace_skeletons must be called on a single canvas");
         }
-        delete_skeleton_name_from_canvas_table(canvas_name, replacee);
+        delete_skeleton_from_canvas_table(canvas_name, replacee);
         world_.delete_skeleton(replacee);
-
     }
-    bool should_rename = new_names != nullptr;
+
     for (auto replacement : replacements) {
-        auto& skel = replacement.get();
-        auto new_skel = skel.copy_to(
-            world_, 
-            should_rename ? unique_skeleton_name(skel.name(), world_.skeleton_names()) : ""
-        );
+        auto new_skel = replacement->copy_to(world_);
         if (!new_skel) {
             throw std::runtime_error("skeleton copy failed");
         }
-        if (should_rename) {
-            new_names->push_back(new_skel->get().name());
+        if (new_ids) {
+            new_ids->push_back(new_skel->get().id());
         }
-        tabs_[canvas_name].push_back(new_skel->get().name());
+        tabs_[canvas_name].push_back(new_skel->get().id());
     }
 
     emit refresh_canvas(*this, canvas_name, true);
 }
 
 void mdl::project::replace_skeletons(const std::string& canvas_name,
-        const std::vector<std::string>& replacees,
+        const std::vector<sm::object_id>& replacees,
         const std::vector<sm::skel_ref>& replacements) {
-    execute_command(
-        commands::make_replace_skeletons_command(canvas_name, replacees, replacements)
-    );
+    execute_command(commands::make_replace_skeletons_command(canvas_name, replacees, replacements));
 }
 
-std::string mdl::unique_skeleton_name(const std::string& old_name,
-    const std::vector<std::string>& used_names) {
-    auto is_not_unique = r::find_if(used_names,
-        [old_name](auto&& str) {return str == old_name; }
-    ) != used_names.end();
-    return (is_not_unique) ?
-        ui::make_unique_name(used_names, get_prefix(old_name)) :
-        old_name;
-}
+
 
 bool mdl::identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2) {
-    auto to_void_star = [](mdl::skel_piece sp) {
-            return std::visit(
-                [](auto& p)->void* { return p.ptr(); },
-                sp
-            );
-        };
-    auto ptr1 = to_void_star(p1);
-    auto ptr2 = to_void_star(p2);
-
-    return ptr1 == ptr2;
+    return mdl::to_handle(p1) == mdl::to_handle(p2);
 }
-

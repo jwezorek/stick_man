@@ -1,9 +1,9 @@
 #pragma once
 
-#include <string>
 #include <variant>
 #include "../core/sm_types.h"
 #include "../core/sm_skeleton.h"
+#include "../core/sm_object_id.hpp"
 
 namespace mdl {
 
@@ -14,37 +14,35 @@ namespace mdl {
     struct handle {
     private:
         template<sm::is_node_or_bone T>
-        std::expected<sm::ref<T>, sm::result> to_aux(
-                sm::world& world) const {
-            auto skel = world.skeleton(skel_name);
+        std::expected<sm::ref<T>, sm::result> to_aux(sm::world& world) const {
+            auto skel = world.skeleton(skeleton_id);
             if (!skel) {
                 return std::unexpected(skel.error());
             }
-
-            auto maybe_piece = skel->get().get_by_name<T>(piece_name);
-            if (!maybe_piece) {
+            auto piece = skel->get().get<T>(object_id);
+            if (!piece) {
                 return std::unexpected(sm::result::not_found);
             }
-            return *maybe_piece;
+            return *piece;
         }
 
         sm::expected_skel to_skeleton(sm::world& world) const;
-    public:
-        std::string skel_name;
-        std::string piece_name;
 
-        bool operator==(const handle& hand) const;
+    public:
+        sm::object_id skeleton_id;
+        sm::object_id object_id;
+
+        bool operator==(const handle& hand) const = default;
 
         template<sm::is_skel_piece T>
         T& to(sm::world& world) const {
-            if constexpr (std::is_same<T, sm::skeleton>::value) {
+            if constexpr (std::is_same_v<T, sm::skeleton>) {
                 auto val = to_skeleton(world);
                 if (!val) {
                     throw std::runtime_error("invalid handle to skeleton");
                 }
                 return val->get();
-            }
-            else {
+            } else {
                 auto val = to_aux<T>(world);
                 if (!val) {
                     throw std::runtime_error("invalid handle to node/bone");
@@ -55,7 +53,7 @@ namespace mdl {
     };
 
     struct handle_hash {
-        size_t operator()(const handle& hand) const;
+        size_t operator()(const handle& hand) const noexcept;
     };
 
     handle to_handle(const skel_piece& piece);

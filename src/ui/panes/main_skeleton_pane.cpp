@@ -446,23 +446,6 @@ void ui::pane::main_skeleton_pane::init_aux(canvas::manager& canvases, mdl::proj
 	connect(project_, &mdl::project::name_changed, this, &main_skeleton_pane::handle_rename);
 }
 
-bool ui::pane::main_skeleton_pane::validate_props_name_change(const std::string& new_name) {
-	auto model_item = selected_single_model(canvas());
-	if (!model_item) {
-		return false;
-	}
-	return std::visit(
-		[new_name](auto model_ref)->bool {
-			auto& model = model_ref.get();
-			using T = std::remove_cvref_t<decltype(model)>;
-			auto& owner = model.owner();
-			if constexpr (std::is_same<T, sm::skeleton>::value) {
-				return !owner.contains_skeleton(new_name);
-			}
-			else {
-				return !owner.contains<T>(new_name);
-			}
-		},
-		*model_item
-	);
+bool ui::pane::main_skeleton_pane::validate_props_name_change(const std::string&) {
+    return selected_single_model(canvas()).has_value();
 }

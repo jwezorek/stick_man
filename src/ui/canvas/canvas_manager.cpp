@@ -8,11 +8,11 @@ namespace rv = std::ranges::views;
 
 namespace {
 
-    ui::canvas::item::skeleton* named_skeleton_item(ui::canvas::scene& canv, const std::string& str) {
+    ui::canvas::item::skeleton* skeleton_item_by_id(ui::canvas::scene& canv, const sm::object_id& id) {
         auto skels = canv.skeleton_items();
         auto iter = r::find_if(skels,
-            [str](auto* skel)->bool {
-                return str == skel->model().name();
+            [&id](auto* skel)->bool {
+                return id == skel->model().id();
             }
         );
         if (iter == skels.end()) {
@@ -125,7 +125,7 @@ void ui::canvas::manager::add_or_delete_tab(const std::string& name, bool should
 
 void ui::canvas::manager::prepare_to_add_bone(sm::node& u, sm::node& v) {
     auto& canv = active_canvas();
-    auto* deletee = named_skeleton_item(canv, v.owner().name());
+    auto* deletee = skeleton_item_by_id(canv, v.owner().id());
     if (deletee) {
         canv.delete_item(deletee, false);
     }

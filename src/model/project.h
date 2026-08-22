@@ -29,47 +29,47 @@ namespace mdl {
 
         Q_OBJECT
 
-        std::unordered_map<std::string, std::vector<std::string>> tabs_;
+        std::unordered_map<std::string, std::vector<sm::object_id>> tabs_;
         sm::world world_;
 
         std::stack<command> redo_stack_;
         std::stack<command> undo_stack_;
 
-        void delete_skeleton_name_from_canvas_table(const std::string& tab, const std::string& skel);
+        void delete_skeleton_from_canvas_table(const std::string& tab, const sm::object_id& skel);
         void clear_redo_stack();
         void execute_command(const command& cmd);
         void rename_aux(skel_piece piece, const std::string& new_name);
         bool can_rename(skel_piece piece, const std::string& new_name);
         void replace_skeletons_aux(const std::string& canvas_name,
-            const std::vector<std::string>& replacees,
+            const std::vector<sm::object_id>& replacees,
             const std::vector<sm::skel_ref>& replacements,
-            std::vector<std::string>* new_names_of_replacements);
+            std::vector<sm::object_id>* new_ids_of_replacements);
         void clear();
 
     public:
         project();
 
-        const sm::world& world() const;        
+        const sm::world& world() const;
         bool can_undo() const;
         bool can_redo() const;
         auto tabs() const {
             namespace rv = std::ranges::views;
-            return tabs_ | rv::transform([](auto&& p) {return p.first; });
+            return tabs_ | rv::transform([](auto&& p) { return p.first; });
         }
-        std::span<const std::string> skel_names_on_tab(std::string_view name) const;
+        std::span<const sm::object_id> skel_ids_on_tab(std::string_view name) const;
         auto skeletons_on_tab(std::string_view name) const {
             namespace rv = std::ranges::views;
-            return skel_names_on_tab(name) |
+            return skel_ids_on_tab(name) |
                 rv::transform(
-                    [this](const std::string& str)->sm::const_skel_ref {
-                        auto s = world_.skeleton(str);
+                    [this](const sm::object_id& id)->sm::const_skel_ref {
+                        auto s = world_.skeleton(id);
                         return s->get();
                     }
             );
         }
         bool has_tab(const std::string& str) const;
         std::string to_json() const;
-        std::string canvas_name_from_skeleton(const std::string& skel) const;
+        std::string canvas_name_from_skeleton(const sm::object_id& skel) const;
 
         void undo();
         void redo();
@@ -86,15 +86,15 @@ namespace mdl {
                 );
         }
         bool from_json(const std::string& str);
-        void add_bone(const std::string& tab, 
+        void add_bone(const std::string& tab,
             const handle& node_u, const handle& node_v);
         void add_new_skeleton_root(const std::string& tab, sm::point loc);
         bool rename(skel_piece piece, const std::string& new_name);
         void replace_skeletons(const std::string& canvas_name,
-            const std::vector<std::string>& replacees,
+            const std::vector<sm::object_id>& replacees,
             const std::vector<sm::skel_ref>& replacements
         );
-        void transform(const std::vector<handle>& nodes, 
+        void transform(const std::vector<handle>& nodes,
             const std::function<void(sm::node&)>& fn);
         void transform(const std::vector<handle>& nodes,
             const std::function<void(sm::bone&)>& fn);
@@ -115,6 +115,5 @@ namespace mdl {
         void refresh_undo_redo_state(bool, bool);
     };
 
-    std::string unique_skeleton_name(const std::string& old_name, const std::vector<std::string>& used_names);
     bool identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2);
 }

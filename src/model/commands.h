@@ -4,8 +4,8 @@
 #include <string>
 #include <expected>
 #include <variant>
-#include "../core/sm_types.h" 
-#include "../core/sm_visit.h" 
+#include "../core/sm_types.h"
+#include "../core/sm_visit.h"
 #include "project.h"
 #include <unordered_map>
 
@@ -18,13 +18,13 @@ namespace mdl {
     private:
 
         template<typename T>
-        using handle_table = std::unordered_map< handle, T, handle_hash>;
-
+        using handle_table = std::unordered_map<handle, T, handle_hash>;
 
         struct create_node_state {
             std::string canvas_name;
-            std::string skeleton;
+            sm::object_id skeleton;
             sm::point loc;
+            sm::world snapshot;
         };
 
         struct add_bone_state {
@@ -32,27 +32,29 @@ namespace mdl {
             handle u_hnd;
             handle v_hnd;
             sm::world original;
-            std::string merged;
+            sm::object_id merged;
+            sm::object_id bone_id;
 
-            add_bone_state(const std::string& str, 
+            add_bone_state(const std::string& str,
                 const handle& u_hnd,
                 const handle& v_hnd);
         };
 
         struct rename_state {
-            handle old_handle;
-            handle new_handle;
+            handle object;
+            std::string old_name;
+            std::string new_name;
         };
 
         struct replace_skeleton_state {
             std::string canvas_name;
-            std::vector<std::string> replacee_names;
+            std::vector<sm::object_id> replacee_ids;
             sm::world replacees;
-            std::vector<std::string> replacement_names;
+            std::vector<sm::object_id> replacement_ids;
             sm::world replacements;
 
             replace_skeleton_state(const std::string& canv,
-                const std::vector<std::string>& replacees,
+                const std::vector<sm::object_id>& replacees,
                 const std::vector<sm::skel_ref>& replacements);
         };
 
@@ -79,30 +81,22 @@ namespace mdl {
         };
 
         template<sm::is_skel_piece T>
-        static void rename(project& proj, handle old_hnd, handle new_hnd) {
-            auto& old_obj = old_hnd.to<T>(proj.world_);
-            if (!new_hnd.piece_name.empty()) {
-                proj.rename_aux(sm::ref(old_obj), new_hnd.piece_name);
-            }
-            else {
-                proj.rename_aux(sm::ref(old_obj), new_hnd.skel_name);
-            }
+        static void rename(project& proj, const handle& hnd, const std::string& name) {
+            auto& obj = hnd.to<T>(proj.world_);
+            proj.rename_aux(sm::ref(obj), name);
         }
 
         template<sm::is_skel_piece T>
-        static command make_rename_command(skel_piece piece, const std::string& new_name) {
-            auto old_handle = to_handle(piece);
-            auto new_handle = (old_handle.piece_name.empty()) ?
-                handle{ new_name, {} } :
-                handle{ old_handle.skel_name, new_name };
-            auto state = std::make_shared<rename_state>(old_handle, new_handle);
+        static command make_rename_command(sm::ref<T> piece, const std::string& new_name) {
+            auto state = std::make_shared<rename_state>(
+                to_handle(skel_piece{piece}), piece->name(), new_name);
 
             return {
                 [state](mdl::project& proj) {
-                    rename<T>(proj, state->old_handle, state->new_handle);
+                    rename<T>(proj, state->object, state->new_name);
                 },
                 [state](mdl::project& proj) {
-                    rename<T>(proj, state->new_handle, state->old_handle);
+                    rename<T>(proj, state->object, state->old_name);
                 }
             };
         }
@@ -112,7 +106,7 @@ namespace mdl {
             const handle& u_hnd, const handle& v_hnd);
         static command make_replace_skeletons_command(
             const std::string& canvas_name,
-            const std::vector<std::string>& replacees,
+            const std::vector<sm::object_id>& replacees,
             const std::vector<sm::skel_ref>& replacements
         );
         static command make_transform_bones_or_nodes_command(

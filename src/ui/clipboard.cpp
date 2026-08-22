@@ -70,12 +70,8 @@ namespace {
     };
 
     sm::skeleton* create_skeleton(sm::world& dest, const std::string& skel_name) {
-        std::string name = skel_name;
-        if (dest.contains_skeleton(name)) {
-            name = mdl::unique_skeleton_name(name, dest.skeleton_names());
-        }
-        auto skel = dest.create_skeleton(name);
-        return &(skel->get());
+        auto skel = dest.create_skeleton(skel_name);
+        return skel ? &skel->get() : nullptr;
     }
 
     void copy_connected_component(sm::world& dest, const auto& root,
@@ -96,7 +92,7 @@ namespace {
                 if (!dest_skel) {
                     dest_skel = create_skeleton(dest, node.owner().name());
                 }
-                if (!dest_skel->contains<sm::node>(node.name())) {
+                if (!dest_skel->contains<sm::node>(node.id())) {
                     bool is_root = dest_skel->empty();
                     auto copy = node.copy_to(*dest_skel);
                 }
@@ -113,7 +109,7 @@ namespace {
                 if (!dest_skel) {
                     dest_skel = create_skeleton(dest, bone.owner().name());
                 }
-                if (!dest_skel->get_by_name<sm::node>(bone.parent_node().name())) {
+                if (!dest_skel->get<sm::node>(bone.parent_node().id())) {
                     bone.parent_node().copy_to( *dest_skel );
                 }
                 bone.child_node().copy_to( *dest_skel );
@@ -229,12 +225,7 @@ namespace {
                 overload{
                     [&](sm::const_skel_ref skel) {
                         copied.insert(skel);
-                        auto new_skel = skel->copy_to(
-                            dest_world,
-                            mdl::unique_skeleton_name(
-                                skel->name(), dest_world.skeleton_names()
-                            )
-                        );
+                        auto new_skel = skel->copy_to(dest_world);
                         if (!new_skel) {
                             throw std::runtime_error("unable to make new skeleton");
                         }
@@ -287,9 +278,9 @@ namespace {
         if (op == selection_operation::cut || op == selection_operation::del) {
             auto replacees = relavent_skels | rv::transform(
                     [](const auto* skel) {
-                        return skel->name();
+                        return skel->id();
                     }
-                ) | r::to<std::vector<std::string>>();
+                ) | r::to<std::vector<sm::object_id>>();
             auto replacements = unselected.skeletons() | r::to<std::vector<sm::skel_ref>>();
             project.replace_skeletons(canv.tab_name(), replacees, replacements);
         }

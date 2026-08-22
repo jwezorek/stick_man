@@ -2,9 +2,16 @@
 
 /*------------------------------------------------------------------------------------------------*/
 
-sm::animation::animation(const std::string& name) : name_(name) {
-
+sm::animation::animation(const std::string& name) :
+    id_(object_id::generate()), name_(name) {
 }
+
+sm::animation::animation(object_id id, const std::string& name) :
+    id_(id), name_(name) {
+}
+
+const sm::object_id& sm::animation::id() const noexcept { return id_; }
+const std::string& sm::animation::name() const noexcept { return name_; }
 
 void sm::animation::insert(int start_time, const animation_event& event) {
     timeline_[start_time].push_back(event);
