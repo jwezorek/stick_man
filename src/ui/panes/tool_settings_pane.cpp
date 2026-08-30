@@ -1,6 +1,7 @@
 #include "tool_settings_pane.h"
+#include "../native_title_bar.h"
 #include "../tools/tool_manager.h"
-#include "../util.h"
+#include <QIcon>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -9,14 +10,14 @@ namespace{
 }
 
 ui::pane::tool_settings::tool_settings(QMainWindow* wnd) :
-    QDockWidget(tr(""), wnd),
+    QDockWidget(tr("Tool Settings"), wnd),
     scroll_area_(new QScrollArea(this)),
     contents_host_(new QWidget()),
     contents_layout_(new QVBoxLayout(contents_host_)),
     current_contents_(nullptr) {
 
-    setTitleBarWidget(custom_title_bar("tool"));
-
+    setWindowIcon(QIcon(":/images/arrow_icon.png"));
+    native_title_bar::install(this);
     contents_layout_->setContentsMargins(0, 0, 0, 0);
     contents_layout_->setAlignment(Qt::AlignTop);
 
@@ -27,10 +28,7 @@ ui::pane::tool_settings::tool_settings(QMainWindow* wnd) :
     setWidget(scroll_area_);
 }
 
-void ui::pane::tool_settings::set_tool(QString tool_name, QWidget* contents) {
-
-    ui::set_custom_title_bar_txt(this, tool_name + " tool");
-
+void ui::pane::tool_settings::set_tool(QString, QWidget* contents) {
     if (current_contents_ == contents) {
         return;
     }
@@ -51,7 +49,6 @@ void ui::pane::tool_settings::set_tool(QString tool_name, QWidget* contents) {
     contents_layout_->addWidget(current_contents_);
     current_contents_->show();
 }
-
 void ui::pane::tool_settings::on_current_tool_changed(tool::base& tool) {
     tool.populate_settings(this);
 }

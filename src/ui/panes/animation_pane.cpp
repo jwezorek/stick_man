@@ -1,5 +1,6 @@
 #include "animation_pane.h"
-#include "../util.h"
+#include "../native_title_bar.h"
+#include <QIcon>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -8,8 +9,9 @@ namespace {
 }
 
 ui::pane::animation::animation(QMainWindow* wnd) :
-        QDockWidget(tr(""), wnd) {
-    setTitleBarWidget( custom_title_bar("animation") );
+        QDockWidget(tr("Animation"), wnd) {
+    setWindowIcon(QIcon(":/images/move_icon.png"));
+    native_title_bar::install(this);
 
     setWidget(new QWidget());
 }

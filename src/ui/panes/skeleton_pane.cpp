@@ -1,7 +1,7 @@
 #include "skeleton_pane.h"
 #include "main_skeleton_pane.h"
 #include "animation_skeleton_pane.h"
-#include "../util.h"
+#include "../native_title_bar.h"
 #include "../canvas/skel_item.h"
 #include "../canvas/bone_item.h"
 #include "../canvas/scene.h"
@@ -12,6 +12,7 @@
 #include "../../core/sm_bone.h"
 #include "../../core/sm_skeleton.h"
 #include "../../core/sm_visit.h"
+#include <QIcon>
 #include <numbers>
 #include <ranges>
 #include <unordered_map>
@@ -21,7 +22,6 @@
 #include <type_traits>
 #include <qDebug>
 #include <stack>
-
 using namespace std::placeholders;
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
@@ -31,10 +31,10 @@ namespace rv = std::ranges::views;
 ui::pane::skeleton::skeleton(ui::stick_man* mw) :
 	canvases_(nullptr),
 	project_(nullptr),
-	QDockWidget(tr(""), mw) {
+	QDockWidget(tr("Skeleton"), mw) {
 
-	setTitleBarWidget(custom_title_bar("skeleton view"));
-
+	setWindowIcon(QIcon(":/images/add_bone_icon.png"));
+	native_title_bar::install(this);
 	// Create a QTabWidget
 	QTabWidget* tab_widget = new QTabWidget(this);
 	tab_widget->tabBar()->setDocumentMode(true);
@@ -47,7 +47,6 @@ ui::pane::skeleton::skeleton(ui::stick_man* mw) :
 	// Set the tab widget as the main widget of the dock
 	setWidget(tab_widget);
 }
-
 ui::pane::selection_properties& ui::pane::skeleton::sel_properties() {
 	return main_skel_pane_->sel_properties();
 }

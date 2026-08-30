@@ -3,6 +3,7 @@
 #include "tools_pane.h"
 #include "../stick_man.h"
 #include "../util.h"
+#include "../native_title_bar.h"
 #include <ranges>
 #include <vector>
 #include <tuple>
@@ -17,7 +18,6 @@ namespace ui {
     class tool_btn : public QPushButton {
 
         Q_OBJECT
-
     private:
         ui::tool::id id_;
         QString bkgd_color_str_;
@@ -30,7 +30,6 @@ namespace ui {
             bkgd_color_str_ = palette().color(QWidget::backgroundRole()).name();
             setStyleSheet("QToolTip {  background-color: black; color: white; border: black solid 1px}");
         }
-
         void deactivate() {
             setStyleSheet("background-color: " + bkgd_color_str_);
         }
@@ -47,17 +46,12 @@ namespace ui {
 }
 
 ui::pane::tools::tools(QMainWindow* wnd) :
-        QDockWidget(tr(""), wnd),
+        QDockWidget(tr("Tools"), wnd),
         tools_(static_cast<stick_man*>(wnd)->tool_mgr()) {
-
-    auto title_bar = new QLabel("");
-    title_bar->setPixmap(QPixmap(":/images/tool_palette_thumb.png"));
-    title_bar->setStyleSheet(QString("background-color: ") + 
-        palette().color(QWidget::backgroundRole()).name());
-    setTitleBarWidget(title_bar);
+    setWindowIcon(QIcon(":/images/tool_palette_thumb.png"));
+    native_title_bar::install(this);
 
     auto layout = new ui::FlowLayout(nullptr, -1,1,0);
-
     for (const auto& [id, name, rsrc] : tools_.tool_info()) {
         auto tool = new tool_btn(id, rsrc);
         layout->addWidget(tool);
@@ -72,9 +66,8 @@ ui::pane::tools::tools(QMainWindow* wnd) :
     auto* widget = new QWidget(this);
     widget->setLayout(layout);
     this->setWidget(widget);
-
     connect(this, &QDockWidget::topLevelChanged,
-        [this]() { 
+        [this]() {
             if (isFloating()) {
                 this->adjustSize();
             }
@@ -92,7 +85,6 @@ ui::tool_btn* ui::pane::tools::tool_from_id(tool::id id)
         [id](auto ptr) {return ptr->id() == id; }
     );
 }
-
 void ui::pane::tools::handle_tool_click(canvas::manager& canvases, tool_btn* btn) {
 
     tool::id current_tool_id = (tools_.has_current_tool()) ?
@@ -101,7 +93,7 @@ void ui::pane::tools::handle_tool_click(canvas::manager& canvases, tool_btn* btn
     if (btn->id() == current_tool_id) {
         return;
     }
-    
+
     if (current_tool_id != tool::id::none) {
         tool_from_id(current_tool_id)->deactivate();
     }
@@ -109,5 +101,4 @@ void ui::pane::tools::handle_tool_click(canvas::manager& canvases, tool_btn* btn
     btn->activate();
     tools_.set_current_tool(canvases, btn->id() );
 }
-
 #include "tools_pane.moc"

@@ -9,6 +9,8 @@ void setDarkTheme();
 
 int main(int argc, char* argv[])
 {
+    qDebug() << QT_VERSION_STR;
+
     QApplication app(argc, argv);
     setDarkTheme();
     ui::stick_man window;
