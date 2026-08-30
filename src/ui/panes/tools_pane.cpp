@@ -1,18 +1,16 @@
-#include <QWidget>
 #include <QtWidgets>
 #include "tools_pane.h"
 #include "../stick_man.h"
-#include "../util.h"
 #include <ranges>
-#include <vector>
-#include <tuple>
 
 namespace r = std::ranges;
-namespace rv = std::ranges::views;
 
 /*------------------------------------------------------------------------------------------------*/
+
 namespace ui {
+
     class tool_btn : public QPushButton {
+
         Q_OBJECT
     private:
         ui::tool::id id_;
@@ -24,47 +22,33 @@ namespace ui {
             setIconSize(QSize(32, 32));
             setFixedSize(QSize(42, 42));
             bkgd_color_str_ = palette().color(QWidget::backgroundRole()).name();
+            setStyleSheet("QToolTip {  background-color: black; color: white; border: black solid 1px}");
         }
         void deactivate() {
             setStyleSheet("background-color: " + bkgd_color_str_);
         }
+
         void activate() {
-            setStyleSheet("background-color: " + k_accent_color.name());
+			setStyleSheet("background-color: " + k_accent_color.name());
         }
+
         tool::id id() const {
             return id_;
         }
     };
 
-    // The standard FlowLayout reports height-for-width, which makes a docked
-    // QDockWidget treat the height required for all wrapped rows as a minimum
-    // height. The Tools pane should simply flow into whatever geometry the
-    // user gives it, so suppress that size hint here while keeping FlowLayout's
-    // normal setGeometry()/wrapping behavior.
-    class tools_flow_layout : public FlowLayout {
-    public:
-        using FlowLayout::FlowLayout;
-
-        bool hasHeightForWidth() const override {
-            return false;
-        }
-
-        int heightForWidth(int) const override {
-            return -1;
-        }
-    };
 }
 
 ui::pane::tools::tools(QMainWindow* wnd) :
-        QDockWidget(tr("Tools"), wnd),
+        QToolBar(tr("Tools"), wnd),
         tools_(static_cast<stick_man*>(wnd)->tool_mgr()) {
-    setWindowIcon(QIcon(":/images/tool_palette_thumb.png"));
-    setFeatures(QDockWidget::DockWidgetMovable);
+    setAllowedAreas(Qt::AllToolBarAreas);
+    setMovable(true);
+    setFloatable(true);
 
-    auto layout = new ui::tools_flow_layout(nullptr, -1, 1, 0);
     for (const auto& [id, name, rsrc] : tools_.tool_info()) {
         auto tool = new tool_btn(id, rsrc);
-        layout->addWidget(tool);
+        addWidget(tool);
         connect(tool, &QPushButton::clicked,
             [wnd, this, tool]() {
                 handle_tool_click(static_cast<stick_man*>(wnd)->canvases(), tool);
@@ -72,10 +56,6 @@ ui::pane::tools::tools(QMainWindow* wnd) :
         );
         tool->setToolTip(name);
     }
-
-    auto* widget = new QWidget(this);
-    widget->setLayout(layout);
-    this->setWidget(widget);
 }
 
 ui::tool_btn* ui::pane::tools::tool_from_id(tool::id id)
@@ -88,10 +68,11 @@ ui::tool_btn* ui::pane::tools::tool_from_id(tool::id id)
         [id](auto ptr) {return ptr->id() == id; }
     );
 }
-
 void ui::pane::tools::handle_tool_click(canvas::manager& canvases, tool_btn* btn) {
+
     tool::id current_tool_id = (tools_.has_current_tool()) ?
         tools_.current_tool().id() : tool::id::none;
+
     if (btn->id() == current_tool_id) {
         return;
     }
@@ -101,7 +82,6 @@ void ui::pane::tools::handle_tool_click(canvas::manager& canvases, tool_btn* btn
     }
 
     btn->activate();
-    tools_.set_current_tool(canvases, btn->id());
+    tools_.set_current_tool(canvases, btn->id() );
 }
-
 #include "tools_pane.moc"
