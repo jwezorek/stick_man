@@ -11,7 +11,6 @@ namespace r = std::ranges;
 namespace rv = std::ranges::views;
 
 /*------------------------------------------------------------------------------------------------*/
-
 namespace ui {
     class tool_btn : public QPushButton {
         Q_OBJECT
@@ -37,14 +36,32 @@ namespace ui {
         }
     };
 
+    // The standard FlowLayout reports height-for-width, which makes a docked
+    // QDockWidget treat the height required for all wrapped rows as a minimum
+    // height. The Tools pane should simply flow into whatever geometry the
+    // user gives it, so suppress that size hint here while keeping FlowLayout's
+    // normal setGeometry()/wrapping behavior.
+    class tools_flow_layout : public FlowLayout {
+    public:
+        using FlowLayout::FlowLayout;
+
+        bool hasHeightForWidth() const override {
+            return false;
+        }
+
+        int heightForWidth(int) const override {
+            return -1;
+        }
+    };
 }
+
 ui::pane::tools::tools(QMainWindow* wnd) :
         QDockWidget(tr("Tools"), wnd),
         tools_(static_cast<stick_man*>(wnd)->tool_mgr()) {
     setWindowIcon(QIcon(":/images/tool_palette_thumb.png"));
     setFeatures(QDockWidget::DockWidgetMovable);
 
-    auto layout = new ui::FlowLayout(nullptr, -1,1,0);
+    auto layout = new ui::tools_flow_layout(nullptr, -1, 1, 0);
     for (const auto& [id, name, rsrc] : tools_.tool_info()) {
         auto tool = new tool_btn(id, rsrc);
         layout->addWidget(tool);
@@ -55,10 +72,12 @@ ui::pane::tools::tools(QMainWindow* wnd) :
         );
         tool->setToolTip(name);
     }
+
     auto* widget = new QWidget(this);
     widget->setLayout(layout);
     this->setWidget(widget);
 }
+
 ui::tool_btn* ui::pane::tools::tool_from_id(tool::id id)
 {
     if (id == tool::id::none) {
@@ -69,6 +88,7 @@ ui::tool_btn* ui::pane::tools::tool_from_id(tool::id id)
         [id](auto ptr) {return ptr->id() == id; }
     );
 }
+
 void ui::pane::tools::handle_tool_click(canvas::manager& canvases, tool_btn* btn) {
     tool::id current_tool_id = (tools_.has_current_tool()) ?
         tools_.current_tool().id() : tool::id::none;
@@ -81,6 +101,7 @@ void ui::pane::tools::handle_tool_click(canvas::manager& canvases, tool_btn* btn
     }
 
     btn->activate();
-    tools_.set_current_tool(canvases, btn->id() );
+    tools_.set_current_tool(canvases, btn->id());
 }
+
 #include "tools_pane.moc"
