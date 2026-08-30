@@ -20,7 +20,6 @@
 #include <numbers>
 #include <functional>
 #include <qDebug>
-
 using namespace std::placeholders;
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
@@ -30,7 +29,6 @@ namespace rv = std::ranges::views;
 namespace {
 
     template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
-
     bool is_bone_from_u_to_v(sm::bone_ref src_bone, sm::node_ref u, sm::node_ref v) {
         bool found = false;
         sm::visit_bones(
@@ -49,7 +47,6 @@ namespace {
         );
         return found;
     }
-
     std::vector<sm::skel_ref> skeletons_from_nodes(const std::vector<sm::node_ref>& nodes) {
         auto skels = nodes |
             rv::transform(
@@ -57,12 +54,11 @@ namespace {
             ) | r::to<std::unordered_set>();
 
         return skels | rv::transform(
-                [](auto* ptr)->sm::skel_ref {
-                    return *ptr;
-                }
-            ) | r::to<std::vector>();
+            [](auto* ptr)->sm::skel_ref {
+                return *ptr;
+            }
+        ) | r::to<std::vector>();
     }
-
     sm::maybe_bone_ref find_bone_from_u_to_v(sm::node_ref u, sm::node_ref v) {
         auto adj = u->adjacent_bones();
         auto i = r::find_if(
@@ -73,7 +69,6 @@ namespace {
         );
         return (i != adj.end()) ? *i : sm::maybe_bone_ref{};
     }
-
     int dist(std::unordered_map<sm::node*, int> visited, sm::node& u) {
         auto adj = u.adjacent_bones();
         for (auto adj_bone : adj) {
@@ -84,7 +79,6 @@ namespace {
         }
         return -1;
     }
-
     std::unordered_set<sm::node*> all_pinned_nodes(sm::node& start) {
         using namespace ui::canvas;
         std::unordered_set<sm::node*> pinned;
@@ -96,17 +90,12 @@ namespace {
                 }
                 return sm::visit_result::continue_traversal;
             },
-            [&pinned](sm::bone& b)->sm::visit_result {
-                if (item_from_model<item::bone>(b).is_selected()) {
-                    pinned.insert(&b.parent_node());
-                    pinned.insert(&b.child_node());
-                }
+            [](sm::bone&)->sm::visit_result {
                 return sm::visit_result::continue_traversal;
             }
         );
         return pinned;
     }
-
     bool has_pinned_nodes(mdl::skel_piece piece) {
         sm::node_ref start = std::visit(
             overload{
@@ -117,19 +106,18 @@ namespace {
             piece
         );
         bool found = false;
-        sm::visit_nodes( start.get(), 
+        sm::visit_nodes(start.get(),
             [&](sm::node& node)->sm::visit_result {
                 if (ui::canvas::item_from_model<ui::canvas::item::node>(node).is_pinned()) {
                     found = true;
                     return sm::visit_result::terminate_traversal;
                 }
                 return sm::visit_result::continue_traversal;
-            }, 
+            },
             false
         );
         return found;
     }
-
     std::tuple<sm::maybe_node_ref, int> find_closest_pinned_node(sm::node_ref start) {
         auto pinned_nodes = all_pinned_nodes(start.get());
         std::unordered_map<sm::node*, int> visited;
@@ -140,7 +128,8 @@ namespace {
                 if (&n == &start.get()) {
                     visited[&n] = 0;
                     return sm::visit_result::continue_traversal;
-                } else {
+                }
+                else {
                     visited[&n] = dist(visited, n);
                 }
                 if (pinned_nodes.contains(&n)) {
@@ -167,7 +156,6 @@ namespace {
             visited.at(*min)
         };
     }
-
     using node_pair = std::tuple<sm::node_ref, sm::node_ref>;
     std::optional<node_pair> rot_info_for_rotate_on_pin(const mdl::skel_piece& model) {
         return std::visit(
@@ -184,12 +172,10 @@ namespace {
                 },
                 [](sm::bone_ref bone)->std::optional<node_pair> {
                     using namespace ui::canvas;
-
                     auto& u = bone->parent_node();
                     auto& v = bone->child_node();
                     auto& item_u = item_from_model<item::node>(u);
                     auto& item_v = item_from_model<item::node>(v);
-
                     if (item_u.is_pinned() && item_v.is_pinned()) {
                         return { {u, v} };
                     }
@@ -203,7 +189,7 @@ namespace {
                     }
                     if (&(closest_to_v->get()) != &u) {
                         return { {*closest_to_v, u } };
-                    } 
+                    }
                     return {};
                 },
                 [](sm::skel_ref bone)->std::optional<node_pair> {
@@ -214,7 +200,6 @@ namespace {
         );
         return {};
     }
-
     template<typename T>
     ui::canvas::item::rubber_band* create_rubber_band(ui::canvas::scene& canv, QPointF pt) {
         auto* rb = new T(pt);
@@ -226,109 +211,102 @@ namespace {
         canv.removeItem(dynamic_cast<QGraphicsItem*>(rb));
         delete rb;
     }
+    void deselect_skeleton(ui::canvas::scene& canv) {
+        canv.filter_selection(
+            [](ui::canvas::item::base* itm)->bool {
+                return dynamic_cast<ui::canvas::item::skeleton*>(itm) == nullptr;
+            }
+        );
+    }
 
-	void deselect_skeleton(ui::canvas::scene& canv) {
-		canv.filter_selection(
-			[](ui::canvas::item::base* itm)->bool {
-				return dynamic_cast<ui::canvas::item::skeleton*>(itm) == nullptr;
-			}
-		);
-	}
+    auto just_nodes_and_bones(std::span<ui::canvas::item::base*> itms) {
+        return itms | rv::filter(
+            [](auto* ptr)->bool {
+                return dynamic_cast<ui::canvas::item::node*>(ptr) ||
+                    dynamic_cast<ui::canvas::item::bone*>(ptr);
+            }
+        );
+    }
+    template<typename T>
+    auto items_to_model_set(auto abstract_items) {
+        using U = typename T::model_type;
+        return abstract_items | rv::transform(
+            [](ui::canvas::item::base* aci)->U* {
+                auto item_ptr = dynamic_cast<T*>(aci);
+                if (!item_ptr) {
+                    return nullptr;
+                }
+                return &(item_ptr->model());
+            }
+        ) | rv::filter(
+            [](auto* ptr) { return ptr;  }
+        ) | r::to<std::unordered_set<U*>>();
+    }
 
-	auto just_nodes_and_bones(std::span<ui::canvas::item::base*> itms) {
-		return itms | rv::filter(
-			[](auto* ptr)->bool {
-				return dynamic_cast<ui::canvas::item::node*>(ptr) ||
-					dynamic_cast<ui::canvas::item::bone*>(ptr);
-			}
-		);
-	}
+    std::optional<sm::skel_ref> as_skeleton(auto itms) {
+        auto node_set = items_to_model_set<ui::canvas::item::node>(itms);
+        auto bone_set = items_to_model_set<ui::canvas::item::bone>(itms);
 
-	template<typename T>
-	auto items_to_model_set(auto abstract_items) {
-		using U = typename T::model_type;
-		return abstract_items | rv::transform(
-			[](ui::canvas::item::base* aci)->U* {
-				auto item_ptr = dynamic_cast<T*>(aci);
-				if (!item_ptr) {
-					return nullptr;
-				}
-				return &(item_ptr->model());
-			}
-		) | rv::filter(
-			[](auto* ptr) { return ptr;  }
-		) | r::to<std::unordered_set<U*>>();
-	}
+        if (node_set.empty() || bone_set.empty()) {
+            return {};
+        }
 
-	std::optional<sm::skel_ref> as_skeleton(auto itms) {
+        // mathematics!
+        if (bone_set.size() != node_set.size() - 1) {
+            return {};
+        }
 
-		auto node_set = items_to_model_set<ui::canvas::item::node>(itms);
-		auto bone_set = items_to_model_set<ui::canvas::item::bone>(itms);
+        bool possibly_a_skeleton = true;
+        size_t bone_count = 0;
+        size_t node_count = 0;
+        auto visit_node = [&](sm::node& node)->sm::visit_result {
+            ++node_count;
+            if (!node_set.contains(&node)) {
+                possibly_a_skeleton = false;
+                return sm::visit_result::terminate_traversal;
+            }
+            return sm::visit_result::continue_traversal;
+            };
 
-		if (node_set.empty() || bone_set.empty()) {
-			return {};
-		}
+        auto visit_bone = [&](sm::bone& bone)->sm::visit_result {
+            ++bone_count;
+            if (!bone_set.contains(&bone)) {
+                possibly_a_skeleton = false;
+                return sm::visit_result::terminate_traversal;
+            }
+            return sm::visit_result::continue_traversal;
+            };
+        sm::visit_nodes_and_bones(**node_set.begin(), visit_node, visit_bone);
+        if (!possibly_a_skeleton) {
+            return {};
+        }
 
-		// mathematics!
-		if (bone_set.size() != node_set.size() - 1) {
-			return {};
-		}
+        if (node_set.size() == node_count && bone_set.size() == bone_count) {
+            return (*node_set.begin())->owner();
+        }
 
-		bool possibly_a_skeleton = true;
-		size_t bone_count = 0;
-		size_t node_count = 0;
+        return {};
+    }
 
-		auto visit_node = [&](sm::node& node)->sm::visit_result {
-			++node_count;
-			if (!node_set.contains(&node)) {
-				possibly_a_skeleton = false;
-				return sm::visit_result::terminate_traversal;
-			}
-			return sm::visit_result::continue_traversal;
-			};
+    std::optional<QRectF> points_to_rect(QPointF pt1, QPointF pt2) {
+        auto width = std::abs(pt1.x() - pt2.x());
+        auto height = std::abs(pt1.y() - pt2.y());
 
-		auto visit_bone = [&](sm::bone& bone)->sm::visit_result {
-			++bone_count;
-			if (!bone_set.contains(&bone)) {
-				possibly_a_skeleton = false;
-				return sm::visit_result::terminate_traversal;
-			}
-			return sm::visit_result::continue_traversal;
-			};
-
-		sm::visit_nodes_and_bones(**node_set.begin(), visit_node, visit_bone);
-		if (!possibly_a_skeleton) {
-			return {};
-		}
-
-		if (node_set.size() == node_count && bone_set.size() == bone_count) {
-			return (*node_set.begin())->owner();
-		}
-
-		return {};
-	}
-
-	std::optional<QRectF> points_to_rect(QPointF pt1, QPointF pt2) {
-		auto width = std::abs(pt1.x() - pt2.x());
-		auto height = std::abs(pt1.y() - pt2.y());
-
-		if (width == 0.0f && height == 0.0f) {
-			return {};
-		}
-
-		auto left = std::min(pt1.x(), pt2.x());
-		auto bottom = std::min(pt1.y(), pt2.y());
-		return QRectF(
-			QPointF(left, bottom),
-			QSizeF(width, height)
-		);
-	}
+        if (width == 0.0f && height == 0.0f) {
+            return {};
+        }
+        auto left = std::min(pt1.x(), pt2.x());
+        auto bottom = std::min(pt1.y(), pt2.y());
+        return QRectF(
+            QPointF(left, bottom),
+            QSizeF(width, height)
+        );
+    }
 
     void do_ragdoll_rotate(double theta, ui::tool::rotation_state& state) {
-        sm::point offset = state.radius() * sm::point( std::cos(theta), std::sin(theta) );
+        sm::point offset = state.radius() * sm::point(std::cos(theta), std::sin(theta));
         auto new_loc = state.axis().world_pos() + offset;
-        auto result = sm::perform_fabrik( state.rotating(), new_loc, state.axis());
-
+        auto result = sm::perform_fabrik(state.rotating(), new_loc, state.axis());
         //TODO: do something with 'result' here...
     }
 
@@ -338,47 +316,42 @@ namespace {
     // "double translations"; that is, if we need to translate both u and v and
     // u is v's predecessor in the bone hierarchy traversal then only u should be
     // translated in the table.
-
     std::unordered_map<sm::node*, sm::point> rubber_band_translation_table(
-            sm::node& src, const sm::point& delta, const std::vector<sm::node_ref>& selected) {
+        sm::node& src, const sm::point& delta, const std::vector<sm::node_ref>& selected) {
 
         std::unordered_map<sm::node*, sm::point> tbl;
         std::unordered_set<sm::node*> has_been_translated;
         auto should_be_translated = selected | rv::transform(
-                [](auto ref) {return ref.ptr(); }
-            )| r::to<std::unordered_set>();
-
+            [](auto ref) {return ref.ptr(); }
+        ) | r::to<std::unordered_set>();
         auto visit_node = [&](sm::maybe_node_ref prev, sm::node& node) {
-                auto prev_pos = (prev) ? prev->get().world_pos() : sm::point{ 0,0 };
-                auto trans_offset = node.world_pos() - prev_pos;
-                bool was_translated = prev &&
-                    has_been_translated.contains(&(prev->get()));
-
-                if (should_be_translated.contains(&node) && !was_translated) {
-                    trans_offset += delta;
-                    was_translated = true;
-                }
-                if (was_translated) {
-                    has_been_translated.insert(&node);
-                }
-                tbl[&node] = trans_offset;
+            auto prev_pos = (prev) ? prev->get().world_pos() : sm::point{ 0,0 };
+            auto trans_offset = node.world_pos() - prev_pos;
+            bool was_translated = prev &&
+                has_been_translated.contains(&(prev->get()));
+            if (should_be_translated.contains(&node) && !was_translated) {
+                trans_offset += delta;
+                was_translated = true;
+            }
+            if (was_translated) {
+                has_been_translated.insert(&node);
+            }
+            tbl[&node] = trans_offset;
             };
-
-        sm::visit_bone_hierarchy( src,
+        sm::visit_bone_hierarchy(src,
             [&](sm::maybe_bone_ref maybe_prev, sm::bone& bone)->sm::visit_result {
                 if (!maybe_prev) {
                     visit_node({}, src);
                 }
 
                 sm::node_ref prev_node = (maybe_prev) ?
-                    *bone.shared_node(maybe_prev->get()):
-                    sm::node_ref{src};
+                    *bone.shared_node(maybe_prev->get()) :
+                    sm::node_ref{ src };
 
                 visit_node(
                     prev_node,
                     bone.opposite_node(prev_node)
                 );
-
                 return sm::visit_result::continue_traversal;
             }
         );
@@ -387,8 +360,7 @@ namespace {
     }
 
     void do_rubber_band_translate(sm::node& src,
-            const sm::point& delta, const std::vector<sm::node_ref>& sel) {
-
+        const sm::point& delta, const std::vector<sm::node_ref>& sel) {
         auto tbl = rubber_band_translation_table(src, delta, sel);
         sm::visit_bone_hierarchy(src,
             [&](sm::maybe_bone_ref maybe_prev, sm::bone& bone)->sm::visit_result {
@@ -397,48 +369,44 @@ namespace {
                 }
 
                 sm::node_ref prev_node = (maybe_prev) ?
-                    *bone.shared_node(maybe_prev->get()):
+                    *bone.shared_node(maybe_prev->get()) :
                     sm::node_ref{ src };
-
                 auto& curr_node = bone.opposite_node(prev_node);
                 auto new_v_pos = prev_node->world_pos() + tbl.at(&curr_node);
                 new_v_pos = sm::apply_rotation_constraints(new_v_pos, src, maybe_prev, bone);
 
-                curr_node.set_world_pos( new_v_pos );
+                curr_node.set_world_pos(new_v_pos);
 
                 return sm::visit_result::continue_traversal;
             }
         );
     }
-
     void do_ragdoll_translate(sm::skel_ref& skel,
-            const sm::point& delta, const std::vector<sm::node_ref>& sel, 
-            const std::unordered_set<sm::node*>& pinned ) {
-        
-        auto effectors = sel | rv::filter(
-                [&](auto node) {
-                    return &node->owner() == skel.ptr();
-                }
-            ) | rv::transform(
-                [&](auto node)->std::tuple <sm::node_ref, sm::point> {
-                        return {
-                            node,
-                            node->world_pos() + delta
-                        };
-                    }
-            ) | r::to<std::vector>();
+        const sm::point& delta, const std::vector<sm::node_ref>& sel,
+        const std::unordered_set<sm::node*>& pinned) {
 
+        auto effectors = sel | rv::filter(
+            [&](auto node) {
+                return &node->owner() == skel.ptr();
+            }
+        ) | rv::transform(
+            [&](auto node)->std::tuple <sm::node_ref, sm::point> {
+                return {
+                    node,
+                    node->world_pos() + delta
+                };
+            }
+        ) | r::to<std::vector>();
         auto pinned_nodes = pinned | rv::transform(
-                [](auto* node_ptr)->sm::node_ref {
-                    return *node_ptr;
-                }
-            ) | r::to<std::vector>();
+            [](auto* node_ptr)->sm::node_ref {
+                return *node_ptr;
+            }
+        ) | r::to<std::vector>();
 
         auto result = sm::perform_fabrik(effectors, pinned_nodes);
 
         //TODO: do something with 'result' here...
     }
-
     std::tuple<sm::node_ref, sm::point> translation_anchor(mdl::skel_piece item, QPointF click_pt) {
         auto anchor_node = std::visit(
             overload{
@@ -454,11 +422,10 @@ namespace {
             },
             item
         );
-        return { anchor_node, 
-            ui::from_qt_pt(click_pt) - anchor_node->world_pos() 
+        return { anchor_node,
+            ui::from_qt_pt(click_pt) - anchor_node->world_pos()
         };
     }
-
     std::vector<sm::node_ref> skel_piece_to_nodes(mdl::skel_piece piece) {
         return std::visit(
             overload{
@@ -475,48 +442,43 @@ namespace {
             piece
         );
     }
-
     std::vector<sm::node_ref> selection_to_nodes(ui::canvas::scene& canv) {
         std::unordered_set<sm::node*> unique_nodes;
         for (auto* item : canv.selection()) {
             auto nodes_from_piece = skel_piece_to_nodes(item->to_skeleton_piece());
             r::copy(
-                nodes_from_piece | rv::transform( [](auto node) {return node.ptr(); } ), 
+                nodes_from_piece | rv::transform([](auto node) {return node.ptr(); }),
                 std::inserter(unique_nodes, unique_nodes.end())
             );
         }
         return unique_nodes | rv::transform(
-                [](auto* node_ptr)->sm::node_ref {
-                    return *node_ptr;
-                }
-            ) | r::to<std::vector>();
+            [](auto* node_ptr)->sm::node_ref {
+                return *node_ptr;
+            }
+        ) | r::to<std::vector>();
     }
-
     std::vector<sm::node_ref> selected_nodes_for_translation(
-            ui::canvas::scene& canv, QPointF clicked_pt) {
+        ui::canvas::scene& canv, QPointF clicked_pt) {
         auto* clicked_item = canv.top_item(clicked_pt);
         if (!clicked_item || !clicked_item->is_selected()) {
             return skel_piece_to_nodes(clicked_item->to_skeleton_piece());
         }
         return selection_to_nodes(canv);
     }
-
     std::vector<sm::node_ref> pinned_nodes_for_translation(ui::canvas::scene& canv) {
         return canv.node_items() | rv::filter(
-                [](auto* node) { return node->is_pinned(); }
-            ) | rv::transform(
-                [](auto* node)->sm::node_ref { return node->model();  }
-            ) | r::to<std::vector>();
+            [](auto* node) { return node->is_pinned(); }
+        ) | rv::transform(
+            [](auto* node)->sm::node_ref { return node->model();  }
+        ) | r::to<std::vector>();
     }
 }
 
 ui::tool::select::select() :
     settings_panel_(nullptr),
     project_(nullptr),
-    base("selection", "arrow_icon.png", ui::tool::id::selection) {
-}
-
-void ui::tool::select::init(canvas::manager& canvases, mdl::project& model) { 
+    base("selection", "arrow_icon.png", ui::tool::id::selection) {}
+void ui::tool::select::init(canvas::manager& canvases, mdl::project& model) {
     project_ = &model;
     canvases_ = &canvases;
 }
@@ -525,8 +487,7 @@ void ui::tool::select::activate(canvas::manager& canv_mgr) {
     drag_ = {};
 }
 
-void ui::tool::select::keyReleaseEvent(canvas::scene & c, QKeyEvent * event) {
-}
+void ui::tool::select::keyReleaseEvent(canvas::scene& c, QKeyEvent* event) {}
 
 void ui::tool::select::mousePressEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
     click_pt_ = event->scenePos();
@@ -535,9 +496,8 @@ void ui::tool::select::mousePressEvent(canvas::scene& canv, QGraphicsSceneMouseE
 bool  ui::tool::select::is_dragging() const {
     return drag_.has_value();
 }
-
 std::optional<ui::tool::rubber_band_type> ui::tool::select::kind_of_rubber_band(
-        canvas::scene& canv, QPointF pt) {
+    canvas::scene& canv, QPointF pt) {
     auto* selected_item = canv.top_item(pt);
     if (!selected_item) {
         return selection_rb;
@@ -551,11 +511,9 @@ std::optional<ui::tool::rubber_band_type> ui::tool::select::kind_of_rubber_band(
     }
     return translation_rb;
 }
-
 std::optional<ui::tool::drag_state> ui::tool::select::create_drag_state(
-        rubber_band_type typ, ui::canvas::scene& canv, QPointF pt) const {
+    rubber_band_type typ, ui::canvas::scene& canv, QPointF pt) const {
     using drag_state_fn = std::function<std::optional<drag_state>()>;
-
     const std::unordered_map<rubber_band_type, drag_state_fn> tbl = {
         {selection_rb, [&]()->std::optional<drag_state> {
                 auto* rb = ::create_rubber_band<canvas::item::rect_rubber_band>(canv, pt);
@@ -569,47 +527,44 @@ std::optional<ui::tool::drag_state> ui::tool::select::create_drag_state(
                 if (!state) {
                     return {};
                 }
-
                 return drag_state{
                     from_qt_pt(pt), nullptr, translation_rb, std::move(*state)
                 };
             }
         },
-        {rotation_rb, 
+        {rotation_rb,
             [&]()->std::optional<drag_state> {
                 auto ri = create_rotation_state(canv, pt, this->settings_panel_->settings());
                 if (!ri) {
                     return {};
                 }
                 auto* arb = static_cast<ui::canvas::item::arc_rubber_band*>(
-                    ::create_rubber_band<canvas::item::arc_rubber_band>(canv, 
+                    ::create_rubber_band<canvas::item::arc_rubber_band>(canv,
                         to_qt_pt(ri->axis().world_pos())
                     )
                 );
-
                 auto axis_pt = ui::to_qt_pt(ri->axis().world_pos());
                 auto rotating_pt = ui::to_qt_pt(ri->rotating().world_pos());
-                arb->set_radius( ui::distance( axis_pt, rotating_pt ) );
-                arb->set_from_theta( ui::angle_through_points(axis_pt, rotating_pt )  );
+                arb->set_radius(ui::distance(axis_pt, rotating_pt));
+                arb->set_from_theta(ui::angle_through_points(axis_pt, rotating_pt));
 
                 return drag_state{ from_qt_pt(pt), arb, rotation_rb, std::move(*ri) };
             }
         }
     };
-    
+
     return tbl.at(typ)();
 }
-
 void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
     auto rb_type = kind_of_rubber_band(canv, pt);
     if (!rb_type) {
         return;
     }
     if (!is_dragging()) {
-        drag_ = create_drag_state( *rb_type, canv, pt);
+        drag_ = create_drag_state(*rb_type, canv, pt);
     }
     if (is_dragging()) {
-        drag_->pt =from_qt_pt(pt);
+        drag_->pt = from_qt_pt(pt);
         if (drag_->rubber_band) {
             drag_->rubber_band->handle_drag(pt);
         }
@@ -628,10 +583,9 @@ void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
         );
     }
 }
-
 std::optional<ui::tool::rotation_state> ui::tool::select::create_rotation_state(
-        ui::canvas::scene& canv, QPointF clicked_pt, 
-        const ui::tool::sel_drag_settings& settings) {
+    ui::canvas::scene& canv, QPointF clicked_pt,
+    const ui::tool::sel_drag_settings& settings) {
     std::optional<rotation_state> ri;
 
     auto* item = canv.top_item(clicked_pt);
@@ -640,7 +594,6 @@ std::optional<ui::tool::rotation_state> ui::tool::select::create_rotation_state(
     }
 
     auto model = item->to_skeleton_piece();
-
     if (!settings.rotate_on_pinned_ || !has_pinned_nodes(model)) {
         auto parent_bone = std::visit(
             overload{
@@ -656,7 +609,6 @@ std::optional<ui::tool::rotation_state> ui::tool::select::create_rotation_state(
             },
             model
         );
-
         if (!parent_bone) {
             return {};
         }
@@ -666,7 +618,8 @@ std::optional<ui::tool::rotation_state> ui::tool::select::create_rotation_state(
             *parent_bone,
             settings.rotate_mode_
         );
-    } else {
+    }
+    else {
         auto nodes = rot_info_for_rotate_on_pin(model);
         if (!nodes) {
             return {};
@@ -677,37 +630,34 @@ std::optional<ui::tool::rotation_state> ui::tool::select::create_rotation_state(
             return {};
         }
         ri.emplace(
-            axis, 
-            rotating, 
+            axis,
+            rotating,
             *lead_bone,
             settings.rotate_mode_
         );
     }
     return ri;
 }
-
 std::optional<ui::tool::translation_state> ui::tool::select::create_translation_state(
-        ui::canvas::scene& canv, QPointF clicked_pt,
-        const ui::tool::sel_drag_settings& settings) {
-
+    ui::canvas::scene& canv, QPointF clicked_pt,
+    const ui::tool::sel_drag_settings& settings) {
     auto* item = canv.top_item(clicked_pt);
     if (!item) {
         return {};
     }
     auto mode = settings.trans_mode_;
-    auto [anchor, offset] = translation_anchor(item->to_skeleton_piece(), clicked_pt );
-    auto selected_nodes = selected_nodes_for_translation( canv, clicked_pt );
+    auto [anchor, offset] = translation_anchor(item->to_skeleton_piece(), clicked_pt);
+    auto selected_nodes = selected_nodes_for_translation(canv, clicked_pt);
     auto pinned_nodes = pinned_nodes_for_translation(canv);
 
-    return {{
+    return { {
         std::move(selected_nodes),
         std::move(pinned_nodes),
         anchor,
         offset,
         mode
-    }};
+    } };
 }
-
 void ui::tool::select::pin_selection() {
     auto& canvas = canvases_->active_canvas();
     auto nodes = canvas.selected_nodes();
@@ -719,7 +669,6 @@ void ui::tool::select::pin_selection() {
         selected_node_item->set_pinned(!pinned);
     }
 }
-
 void ui::tool::select::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
     QPointF pt = event->scenePos();
     if (is_dragging()) {
@@ -727,94 +676,87 @@ void ui::tool::select::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEv
         return;
     }
     if (click_pt_ && distance(*click_pt_, pt) > 3.0) {
-         do_dragging(canv, pt);
-         return;
+        do_dragging(canv, pt);
+        return;
     }
 }
-
 void ui::tool::select::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
-    
+
     bool shift_down = event->modifiers().testFlag(Qt::ShiftModifier);
     bool ctrl_down = event->modifiers().testFlag(Qt::ControlModifier);
     bool alt_down = event->modifiers().testFlag(Qt::AltModifier);
-
     if (is_dragging()) {
         handle_drag_complete(canv, shift_down, ctrl_down);
         destroy_rubber_band(canv, drag_->rubber_band);
         drag_ = {};
-    } else {
+    }
+    else {
         handle_click(canv, event->scenePos(), shift_down, ctrl_down, alt_down);
     }
     click_pt_ = {};
-	canv.sync_to_model();
+    canv.sync_to_model();
 }
 
 void ui::tool::select::handle_rotation(canvas::scene& c, QPointF pt, rotation_state& ri) {
-
     auto theta = sm::normalize_angle(
         sm::angle_from_u_to_v(ri.axis().world_pos(), from_qt_pt(pt))
     );
-    auto theta_diff = theta - 
+    auto theta_diff = theta -
         sm::angle_from_u_to_v(ri.axis().world_pos(), ri.rotating().world_pos());
-
     switch (ri.mode()) {
-        case sel_drag_mode::rigid:
-            ri.bone().rotate_by(theta_diff, ri.axis(), false);
-            break;
-        case sel_drag_mode::unique:
-            ri.bone().rotate_by(theta_diff, ri.axis(), true);
-            break;
-        case sel_drag_mode::rag_doll:
-            do_ragdoll_rotate(theta, ri);
-            break;
+    case sel_drag_mode::rigid:
+        ri.bone().rotate_by(theta_diff, ri.axis(), false);
+        break;
+    case sel_drag_mode::unique:
+        ri.bone().rotate_by(theta_diff, ri.axis(), true);
+        break;
+    case sel_drag_mode::rag_doll:
+        do_ragdoll_rotate(theta, ri);
+        break;
     }
     c.sync_to_model();
 }
-
 void ui::tool::select::handle_translation(canvas::scene& c, QPointF pt, translation_state& state) {
     auto delta = from_qt_pt(pt) - (state.anchor->world_pos() + state.anchor_offset);
     auto active_skeletons = skeletons_from_nodes(state.moving);
 
     switch (state.mode) {
-        case sel_drag_mode::rigid: {
-            auto translate = sm::translation_matrix(delta);
-            for (auto skel : active_skeletons) {
-                skel->apply(translate);
-            }
+    case sel_drag_mode::rigid: {
+        auto translate = sm::translation_matrix(delta);
+        for (auto skel : active_skeletons) {
+            skel->apply(translate);
+        }
+    }
+                             break;
+    case sel_drag_mode::rubber_band: {
+        for (auto skel : active_skeletons) {
+            do_rubber_band_translate(skel->root_node(), delta, state.moving);
+        }
+    }
+                                   break;
+    case sel_drag_mode::rag_doll:
+        for (auto skel : active_skeletons) {
+            do_ragdoll_translate(
+                skel,
+                delta,
+                state.moving,
+                all_pinned_nodes(skel->root_node())
+            );
         }
         break;
-
-        case sel_drag_mode::rubber_band: {
-            for (auto skel : active_skeletons) {
-                do_rubber_band_translate(skel->root_node(), delta, state.moving);
-            }
-        }
-        break;
-
-        case sel_drag_mode::rag_doll:
-            for (auto skel : active_skeletons) {
-                do_ragdoll_translate(
-                    skel, 
-                    delta, 
-                    state.moving,
-                    all_pinned_nodes(skel->root_node())
-                );
-            }
-            break;
     }
     c.sync_to_model();
 }
 
 void ui::tool::select::handle_click(
-        canvas::scene& canv, QPointF pt, bool shift_down, bool ctrl_down, bool alt_down) {
-
+    canvas::scene& canv, QPointF pt, bool shift_down, bool ctrl_down, bool alt_down) {
     auto clicked_item = canv.top_item(pt);
     if (!clicked_item) {
         canv.clear_selection();
         return;
     }
 
-	deselect_skeleton(canv);
+    deselect_skeleton(canv);
 
     if (alt_down) {
         auto clicked_node = dynamic_cast<ui::canvas::item::node*>(clicked_item);
@@ -823,12 +765,12 @@ void ui::tool::select::handle_click(
         }
         if (!clicked_node->is_pinned()) {
             clicked_node->set_pinned(true);
-        } else {
+        }
+        else {
             clicked_node->set_pinned(false);
         }
         return;
     }
-
     if (shift_down && !ctrl_down) {
         canv.add_to_selection(clicked_item, true);
         return;
@@ -841,7 +783,6 @@ void ui::tool::select::handle_click(
 
     canv.set_selection(clicked_item, true);
 }
-
 void ui::tool::select::do_rotation_complete(canvas::scene& canv, const rotation_state& ri) {
     const auto& new_locs = ri.current_node_locs();
     project_->transform_node_positions(
@@ -854,46 +795,43 @@ void ui::tool::select::do_rotation_complete(canvas::scene& canv, const rotation_
 void ui::tool::select::do_translation_complete(canvas::scene& canv, const translation_state& ri) {
     canv.sync_selection();
 }
-
 void ui::tool::select::handle_drag_complete(canvas::scene& c, bool shift_down, bool alt_down) {
     switch (drag_->type) {
-        case selection_rb:
-            handle_select_drag(c, QRectF(*click_pt_, to_qt_pt(drag_->pt)), shift_down, alt_down);
-            return;
-        case rotation_rb:
-            do_rotation_complete(c, std::get<rotation_state>(drag_->extra));
-            return;
-        case translation_rb:
-            do_translation_complete(c, std::get<translation_state>(drag_->extra));
-            return;
+    case selection_rb:
+        handle_select_drag(c, QRectF(*click_pt_, to_qt_pt(drag_->pt)), shift_down, alt_down);
+        return;
+    case rotation_rb:
+        do_rotation_complete(c, std::get<rotation_state>(drag_->extra));
+        return;
+    case translation_rb:
+        do_translation_complete(c, std::get<translation_state>(drag_->extra));
+        return;
     }
 }
-
 void ui::tool::select::handle_select_drag(canvas::scene& canv, QRectF rect, bool shift_down, bool ctrl_down) {
     auto clicked_items = canv.items_in_rect(rect);
     if (clicked_items.empty()) {
         canv.clear_selection();
         return;
     }
-
-	auto maybe_skeleton = as_skeleton(just_nodes_and_bones(clicked_items));
-	if (maybe_skeleton) {
-		ui::canvas::item::skeleton* skel_item = nullptr;
-		if (maybe_skeleton->get().get_user_data().has_value()) {
-			skel_item = &(canvas::item_from_model<canvas::item::skeleton>(maybe_skeleton->get()));
-		} else {
-			skel_item = canv.insert_item(maybe_skeleton->get());
-		}
-		canv.set_selection(skel_item, true);
-		return;
-	}
-
-	clicked_items = just_nodes_and_bones(clicked_items) |
-		r::to<std::vector<ui::canvas::item::base*>>();
-	if (clicked_items.empty()) {
-		canv.clear_selection();
-		return;
-	}
+    auto maybe_skeleton = as_skeleton(just_nodes_and_bones(clicked_items));
+    if (maybe_skeleton) {
+        ui::canvas::item::skeleton* skel_item = nullptr;
+        if (maybe_skeleton->get().get_user_data().has_value()) {
+            skel_item = &(canvas::item_from_model<canvas::item::skeleton>(maybe_skeleton->get()));
+        }
+        else {
+            skel_item = canv.insert_item(maybe_skeleton->get());
+        }
+        canv.set_selection(skel_item, true);
+        return;
+    }
+    clicked_items = just_nodes_and_bones(clicked_items) |
+        r::to<std::vector<ui::canvas::item::base*>>();
+    if (clicked_items.empty()) {
+        canv.clear_selection();
+        return;
+    }
 
     if (shift_down && !ctrl_down) {
         canv.add_to_selection(clicked_items, true);
@@ -905,9 +843,8 @@ void ui::tool::select::handle_select_drag(canvas::scene& canv, QRectF rect, bool
         return;
     }
 
-    canv.set_selection( clicked_items, true );
+    canv.set_selection(clicked_items, true);
 }
-
 void ui::tool::select::deactivate(canvas::manager& canv_mgr) {
     canv_mgr.set_drag_mode(ui::canvas::drag_mode::none);
 }
