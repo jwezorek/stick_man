@@ -13,7 +13,6 @@ namespace rv = std::ranges::views;
 /*------------------------------------------------------------------------------------------------*/
 
 namespace ui {
-
     class tool_btn : public QPushButton {
         Q_OBJECT
     private:
@@ -31,20 +30,20 @@ namespace ui {
             setStyleSheet("background-color: " + bkgd_color_str_);
         }
         void activate() {
-			setStyleSheet("background-color: " + k_accent_color.name());
+            setStyleSheet("background-color: " + k_accent_color.name());
         }
-
         tool::id id() const {
             return id_;
         }
     };
 
 }
-
 ui::pane::tools::tools(QMainWindow* wnd) :
         QDockWidget(tr("Tools"), wnd),
         tools_(static_cast<stick_man*>(wnd)->tool_mgr()) {
     setWindowIcon(QIcon(":/images/tool_palette_thumb.png"));
+    setFeatures(QDockWidget::DockWidgetMovable);
+
     auto layout = new ui::FlowLayout(nullptr, -1,1,0);
     for (const auto& [id, name, rsrc] : tools_.tool_info()) {
         auto tool = new tool_btn(id, rsrc);
@@ -59,13 +58,6 @@ ui::pane::tools::tools(QMainWindow* wnd) :
     auto* widget = new QWidget(this);
     widget->setLayout(layout);
     this->setWidget(widget);
-    connect(this, &QDockWidget::topLevelChanged,
-        [this]() {
-            if (isFloating()) {
-                this->adjustSize();
-            }
-        }
-    );
 }
 ui::tool_btn* ui::pane::tools::tool_from_id(tool::id id)
 {
@@ -78,7 +70,6 @@ ui::tool_btn* ui::pane::tools::tool_from_id(tool::id id)
     );
 }
 void ui::pane::tools::handle_tool_click(canvas::manager& canvases, tool_btn* btn) {
-
     tool::id current_tool_id = (tools_.has_current_tool()) ?
         tools_.current_tool().id() : tool::id::none;
     if (btn->id() == current_tool_id) {

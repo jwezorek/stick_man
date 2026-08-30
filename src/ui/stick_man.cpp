@@ -10,6 +10,8 @@
 #include "util.h"
 #include "clipboard.h"
 #include <QtWidgets>
+#include <QPainter>
+#include <QTimer>
 
 //debug
 #include "../core/sm_bone.h"
@@ -23,6 +25,60 @@ namespace r = std::ranges;
 namespace rv = std::ranges::views;
 
 namespace {
+    constexpr int k_dock_title_icon_size = 11;
+
+    QIcon make_dock_close_icon(const QColor& color) {
+        QPixmap pixmap(k_dock_title_icon_size, k_dock_title_icon_size);
+        pixmap.fill(Qt::transparent);
+
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(QPen(color, 1.5, Qt::SolidLine, Qt::RoundCap));
+        painter.drawLine(QPointF(2.0, 2.0), QPointF(9.0, 9.0));
+        painter.drawLine(QPointF(9.0, 2.0), QPointF(2.0, 9.0));
+        return QIcon(pixmap);
+    }
+
+    QIcon make_dock_float_icon(const QColor& color) {
+        QPixmap pixmap(k_dock_title_icon_size, k_dock_title_icon_size);
+        pixmap.fill(Qt::transparent);
+
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(QPen(color, 1.25, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
+        painter.drawRect(QRectF(1.5, 3.5, 6.0, 6.0));
+        painter.drawRect(QRectF(3.5, 1.5, 6.0, 6.0));
+        return QIcon(pixmap);
+    }
+
+    void apply_dock_title_icons(QDockWidget* dock) {
+        const auto color = dock->palette().color(QPalette::WindowText);
+
+        if (auto* float_button = dock->findChild<QAbstractButton*>("qt_dockwidget_floatbutton")) {
+            float_button->setIcon(make_dock_float_icon(color));
+        }
+        if (auto* close_button = dock->findChild<QAbstractButton*>("qt_dockwidget_closebutton")) {
+            close_button->setIcon(make_dock_close_icon(color));
+        }
+    }
+
+    void install_dock_title_icons(QDockWidget* dock) {
+        apply_dock_title_icons(dock);
+        QTimer::singleShot(0, dock, [dock]() {
+            apply_dock_title_icons(dock);
+        });
+        QObject::connect(dock, &QDockWidget::topLevelChanged, dock,
+            [dock](bool floating) {
+                if (!floating) {
+                    // QDockWidget refreshes its standard icons while changing
+                    // docking state, so replace them after it has re-docked.
+                    QTimer::singleShot(0, dock, [dock]() {
+                        apply_dock_title_icons(dock);
+                    });
+                }
+            });
+    }
+
     void to_do(const std::string& msg) {
         QMessageBox msgBox;
         msgBox.setWindowTitle("TODO");
@@ -46,7 +102,15 @@ ui::stick_man::stick_man(QWidget* parent) :
     addDockWidget(Qt::RightDockWidgetArea, skel_pane_);
     addDockWidget(Qt::BottomDockWidgetArea, anim_pane_);
 
+    install_dock_title_icons(tool_pane_);
+    install_dock_title_icons(skel_pane_);
+    install_dock_title_icons(anim_pane_);
+
     setCentralWidget(canvases_ = new canvas::manager(tool_mgr_));
+
+    // Keep the tool palette close to the width of its single button column.
+    // QMainWindow will clamp this to the dock title bar's minimum width.
+    resizeDocks({ tool_pal_ }, { tool_pal_->widget()->sizeHint().width() }, Qt::Horizontal);
     createMainMenu();
     canvases_->init(project_);
 	skel_pane_->init(*canvases_, project_);
