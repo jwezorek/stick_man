@@ -1,5 +1,4 @@
 #include "tool_settings_pane.h"
-#include "../native_title_bar.h"
 #include "../tools/tool_manager.h"
 #include <QIcon>
 
@@ -15,9 +14,7 @@ ui::pane::tool_settings::tool_settings(QMainWindow* wnd) :
     contents_host_(new QWidget()),
     contents_layout_(new QVBoxLayout(contents_host_)),
     current_contents_(nullptr) {
-
     setWindowIcon(QIcon(":/images/arrow_icon.png"));
-    native_title_bar::install(this);
     contents_layout_->setContentsMargins(0, 0, 0, 0);
     contents_layout_->setAlignment(Qt::AlignTop);
 
@@ -27,7 +24,6 @@ ui::pane::tool_settings::tool_settings(QMainWindow* wnd) :
     scroll_area_->setWidget(contents_host_);
     setWidget(scroll_area_);
 }
-
 void ui::pane::tool_settings::set_tool(QString, QWidget* contents) {
     if (current_contents_ == contents) {
         return;
@@ -42,7 +38,6 @@ void ui::pane::tool_settings::set_tool(QString, QWidget* contents) {
     if (!current_contents_) {
         return;
     }
-
     if (current_contents_->parentWidget() != contents_host_) {
         current_contents_->setParent(contents_host_);
     }

@@ -1,5 +1,4 @@
 #pragma once
-
 #include "../core/sm_types.h"
 #include <QWidget>
 #include <QtWidgets>
@@ -15,14 +14,12 @@ namespace ui {
 	const QColor k_accent_color = QColor::fromRgb(64, 53, 130);
 
 	QWidget* horz_separator();
-
     class FlowLayout : public QLayout
     {
     public:
         explicit FlowLayout(QWidget* parent, int margin = -1, int hSpacing = -1, int vSpacing = -1);
         explicit FlowLayout(int margin = -1, int hSpacing = -1, int vSpacing = -1);
         ~FlowLayout();
-
         void addItem(QLayoutItem* item) override;
         int horizontalSpacing() const;
         int verticalSpacing() const;
@@ -35,7 +32,6 @@ namespace ui {
         void setGeometry(const QRect& rect) override;
         QSize sizeHint() const override;
         QLayoutItem* takeAt(int index) override;
-
     private:
         int doLayout(const QRect& rect, bool testOnly) const;
         int smartSpacing(QStyle::PixelMetric pm) const;
@@ -53,7 +49,6 @@ namespace ui {
 	using string_edit_validator = std::function<bool(const std::string&)>;
 	class string_edit : public QLineEdit {
 		Q_OBJECT
-
 		void keyPressEvent(QKeyEvent* e) override;
 		void focusInEvent(QFocusEvent* event) override;
 		void focusOutEvent(QFocusEvent* event) override;
@@ -68,7 +63,6 @@ namespace ui {
 	signals:
 		void value_changed(std::string val);
 	};
-
 	class labeled_field : public QWidget {
 		QLabel* lbl_;
 		string_edit* val_;
@@ -91,7 +85,6 @@ namespace ui {
     class number_edit : public QLineEdit {
 
         Q_OBJECT
-
         void keyPressEvent(QKeyEvent* e) override;
         void focusInEvent(QFocusEvent* event) override;
         void focusOutEvent(QFocusEvent* event) override;
@@ -103,7 +96,6 @@ namespace ui {
         double default_val_;
         int  decimals_;
         std::optional<double> old_val_;
-
     public:
         number_edit(double val, double default_val, double min, double max, int decimals);
         bool is_indeterminate() const;
@@ -119,14 +111,12 @@ namespace ui {
     class labeled_numeric_val : public QWidget {
 
         number_edit* num_edit_;
-
     public:
-        labeled_numeric_val(QString txt, double val, 
-                double min = 0.0, double max = 1.0, int decimals = 2, 
+        labeled_numeric_val(QString txt, double val,
+                double min = 0.0, double max = 1.0, int decimals = 2,
                 bool horz = true);
         number_edit* num_edit() const;
     };
-
     class TabWidget : public QTabWidget
     {
         class TabBar : public QTabBar
@@ -149,7 +139,6 @@ namespace ui {
 		double min;
 		double max;
 	};
-
 	class tabbed_values : public TabWidget {
 
 		Q_OBJECT
@@ -159,7 +148,6 @@ namespace ui {
 		std::vector<std::vector<number_edit*>> num_editors_;
 
 		void handle_value_changed(number_edit* num_edit);
-
 	protected:
 		virtual double to_nth_tab(int n, int field, double val) = 0;
 		virtual double from_nth_tab(int n, int field, double val) = 0;
@@ -169,7 +157,6 @@ namespace ui {
 	public:
 		tabbed_values(QWidget* parent, const std::vector<std::string>& tabs,
 			const std::vector<field_info>& fields, int hgt);
-
 		int num_tabs() const;
 		int num_fields() const;
 
@@ -182,10 +169,7 @@ namespace ui {
 		void value_changed(int field_index);
 	};
 
-    QWidget* custom_title_bar(const QString& lbl);
-    void set_custom_title_bar_txt(QDockWidget* pane, const QString& txt);
     void clear_layout(QLayout* layout, bool deleteWidgets = true);
-
     template<typename T, typename U>
     auto as_range_view_of_type(const U& collection) {
         return collection |
@@ -195,7 +179,6 @@ namespace ui {
                 [](T* ptr)->bool { return ptr;  }
             );
     }
-
     template<typename T, typename U>
     std::vector<T*> to_vector_of_type(const U& collection) {
         return as_range_view_of_type<T>(collection) | std::ranges::to<std::vector<T*>>();
@@ -206,7 +189,6 @@ namespace ui {
         auto vec = qcollection | std::ranges::to<std::vector>();
         return to_vector_of_type<T>(vec);
     }
-
     QColor lerp_colors(const QColor& color1, const QColor& color2, qreal factor);
     QRectF rect_from_circle(QPointF center, double radius);
     void set_arc(
@@ -230,10 +212,8 @@ namespace ui {
     std::string make_unique_name(const std::vector<std::string>& used_names,
         const std::string& prefix);
     void to_text_file(const std::string& file_path, const std::string& text);
-
     std::string query_for_valid_string(QWidget* parent, const std::function<bool(const std::string&)>& predicate,
         const std::string& title, const std::string& prompt);
-
     constexpr double k_tolerance = 0.00005;
     std::optional<double> get_unique_val(auto vals, double tolerance = k_tolerance) {
         using namespace std::placeholders;

@@ -3,7 +3,6 @@
 #include "tools_pane.h"
 #include "../stick_man.h"
 #include "../util.h"
-#include "../native_title_bar.h"
 #include <ranges>
 #include <vector>
 #include <tuple>
@@ -16,7 +15,6 @@ namespace rv = std::ranges::views;
 namespace ui {
 
     class tool_btn : public QPushButton {
-
         Q_OBJECT
     private:
         ui::tool::id id_;
@@ -28,12 +26,10 @@ namespace ui {
             setIconSize(QSize(32, 32));
             setFixedSize(QSize(42, 42));
             bkgd_color_str_ = palette().color(QWidget::backgroundRole()).name();
-            setStyleSheet("QToolTip {  background-color: black; color: white; border: black solid 1px}");
         }
         void deactivate() {
             setStyleSheet("background-color: " + bkgd_color_str_);
         }
-
         void activate() {
 			setStyleSheet("background-color: " + k_accent_color.name());
         }
@@ -49,8 +45,6 @@ ui::pane::tools::tools(QMainWindow* wnd) :
         QDockWidget(tr("Tools"), wnd),
         tools_(static_cast<stick_man*>(wnd)->tool_mgr()) {
     setWindowIcon(QIcon(":/images/tool_palette_thumb.png"));
-    native_title_bar::install(this);
-
     auto layout = new ui::FlowLayout(nullptr, -1,1,0);
     for (const auto& [id, name, rsrc] : tools_.tool_info()) {
         auto tool = new tool_btn(id, rsrc);
@@ -62,7 +56,6 @@ ui::pane::tools::tools(QMainWindow* wnd) :
         );
         tool->setToolTip(name);
     }
-
     auto* widget = new QWidget(this);
     widget->setLayout(layout);
     this->setWidget(widget);
@@ -74,7 +67,6 @@ ui::pane::tools::tools(QMainWindow* wnd) :
         }
     );
 }
-
 ui::tool_btn* ui::pane::tools::tool_from_id(tool::id id)
 {
     if (id == tool::id::none) {
@@ -89,7 +81,6 @@ void ui::pane::tools::handle_tool_click(canvas::manager& canvases, tool_btn* btn
 
     tool::id current_tool_id = (tools_.has_current_tool()) ?
         tools_.current_tool().id() : tool::id::none;
-
     if (btn->id() == current_tool_id) {
         return;
     }

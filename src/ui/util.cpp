@@ -12,7 +12,6 @@ namespace r = std::ranges;
 namespace rv = std::ranges::views;
 
 namespace {
-
     int first_positive_integer_not_in_set(const std::unordered_set<int>& set) {
         int n = static_cast<int>(set.size());
         for (int i = 1; i <= n + 1; i++) {
@@ -28,7 +27,6 @@ namespace {
         if (num_str.empty()) {
             return {};
         }
-
         for (auto ch : num_str) {
             if (!std::isdigit(ch)) {
                 return {};
@@ -43,43 +41,7 @@ namespace {
             theta * ((180.0 * 16.0) / std::numbers::pi)
             );
     }
-
-    class title_bar : public QWidget {
-        QLabel* label_;
-    public:
-        title_bar(const QString& lbl) {
-            auto vert = new QVBoxLayout();
-            vert->setContentsMargins(0, 0, 0, 0);
-
-            auto horz = new QHBoxLayout();
-            horz->setContentsMargins(0, 0, 0, 0);
-
-            auto icon = new QLabel();
-            icon->setPixmap(QPixmap(":/images/tool_palette_thumb.png"));
-            horz->addWidget(icon);
-            horz->addWidget(label_ = new QLabel(lbl));
-            horz->addStretch();
-
-            QFrame* line = new QFrame();
-            line->setFrameShape(QFrame::HLine);
-            line->setFrameShadow(QFrame::Sunken);
-            line->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-            QString styleSheet = "QFrame { background-color: #7c7c7c; }";
-            line->setStyleSheet(styleSheet);
-
-            vert->addLayout(horz);
-            vert->addWidget(line);
-
-            setLayout(vert);
-        }
-
-        void set_text(const QString& str) {
-            label_->setText(str);
-        }
-    };
-
 }
-
 std::string ui::get_prefixed_string(const std::string& prefix, const std::string& str,
         char separator) {
     if (str.size() <= prefix.size()) {
@@ -94,7 +56,6 @@ std::string ui::get_prefixed_string(const std::string& prefix, const std::string
     auto num_str_sz = str.size() - prefix.size() - 1;
     return str.substr(prefix.size() + 1, num_str_sz);
 };
-
 /*------------------------------------------------------------------------------------------------*/
 
 ui::FlowLayout::FlowLayout(QWidget* parent, int margin, int hSpacing, int vSpacing)
@@ -108,7 +69,6 @@ ui::FlowLayout::FlowLayout(int margin, int hSpacing, int vSpacing)
 {
     setContentsMargins(margin, margin, margin, margin);
 }
-
 ui::FlowLayout::~FlowLayout()
 {
     QLayoutItem* item;
@@ -129,7 +89,6 @@ int ui::FlowLayout::horizontalSpacing() const
         return smartSpacing(QStyle::PM_LayoutHorizontalSpacing);
     }
 }
-
 int ui::FlowLayout::verticalSpacing() const
 {
     if (m_vSpace >= 0) {
@@ -155,7 +114,6 @@ QLayoutItem* ui::FlowLayout::takeAt(int index)
         return itemList.takeAt(index);
     return nullptr;
 }
-
 Qt::Orientations ui::FlowLayout::expandingDirections() const
 {
     return { };
@@ -182,7 +140,6 @@ QSize ui::FlowLayout::sizeHint() const
 {
     return minimumSize();
 }
-
 QSize ui::FlowLayout::minimumSize() const
 {
     QSize size;
@@ -193,7 +150,6 @@ QSize ui::FlowLayout::minimumSize() const
     size += QSize(margins.left() + margins.right(), margins.top() + margins.bottom());
     return size;
 }
-
 int ui::FlowLayout::doLayout(const QRect& rect, bool testOnly) const
 {
     int left, top, right, bottom;
@@ -203,7 +159,6 @@ int ui::FlowLayout::doLayout(const QRect& rect, bool testOnly) const
     int y = effectiveRect.y();
     int lineHeight = 0;
     //! [9]
-
     //! [10]
     for (QLayoutItem* item : qAsConst(itemList)) {
         const QWidget* wid = item->widget();
@@ -224,7 +179,6 @@ int ui::FlowLayout::doLayout(const QRect& rect, bool testOnly) const
             nextX = x + item->sizeHint().width() + spaceX;
             lineHeight = 0;
         }
-
         if (!testOnly)
             item->setGeometry(QRect(QPoint(x, y), item->sizeHint()));
 
@@ -233,7 +187,6 @@ int ui::FlowLayout::doLayout(const QRect& rect, bool testOnly) const
     }
     return y + lineHeight - rect.y() + bottom;
 }
-
 int ui::FlowLayout::smartSpacing(QStyle::PixelMetric pm) const
 {
     QObject* parent = this->parent();
@@ -248,7 +201,6 @@ int ui::FlowLayout::smartSpacing(QStyle::PixelMetric pm) const
 }
 
 /*------------------------------------------------------------------------------------------------*/
-
 ui::hyperlink_button::hyperlink_button(QString txt) :
 		QPushButton(txt) {
 	// Set the hyperlink appearance using a stylesheet
@@ -264,7 +216,6 @@ ui::hyperlink_button::hyperlink_button(QString txt) :
                 text-decoration: underline;
                 color: yellow;
             }
-
             QPushButton#hyperlinkButton:pressed {
                 text-decoration: underline;
                 border: 1px solid yellow;
@@ -275,7 +226,6 @@ ui::hyperlink_button::hyperlink_button(QString txt) :
 }
 
 /*------------------------------------------------------------------------------------------------*/
-
 ui::labeled_field::labeled_field(QString lbl, QString val) {
 	auto* layout = new QHBoxLayout(this);
 	layout->addWidget(lbl_ = new QLabel(lbl+":"));
@@ -294,7 +244,6 @@ void ui::labeled_field::set_label(QString str) {
 void ui::labeled_field::set_value(QString str) {
 	val_->setText(str);
 }
-
 void ui::labeled_field::set_color(QColor color) {
 	QString colorString = QString("color: %1;").arg(color.name());
 	val_->setStyleSheet(colorString);
@@ -308,7 +257,6 @@ ui::labeled_hyperlink::labeled_hyperlink(QString lbl, QString val) {
 	layout->addWidget(val_ = new hyperlink_button(val));
 	layout->addStretch();
 }
-
 ui::hyperlink_button* ui::labeled_hyperlink::hyperlink() {
 	return val_;
 }
@@ -329,7 +277,6 @@ std::string ui::string_edit::value() const {
 void ui::string_edit::set_validator(string_edit_validator fn) {
 	valid_fn_ = fn;
 }
-
 void ui::string_edit::focusInEvent(QFocusEvent* event) {
 	QLineEdit::focusInEvent(event);
 	old_val_ = value();
@@ -350,7 +297,6 @@ void ui::string_edit::handle_done_editing() {
 		old_val_ = {};
 	}
 }
-
 ui::string_edit::string_edit(const std::string& str, string_edit_validator valid_fn) :
 		QLineEdit(str.c_str()),
 		valid_fn_(valid_fn) {
@@ -358,7 +304,6 @@ ui::string_edit::string_edit(const std::string& str, string_edit_validator valid
 }
 
 /*------------------------------------------------------------------------------------------------*/
-
 double ui::number_edit::to_acceptable_value(double v) const {
     auto validr = static_cast<const QDoubleValidator*>(validator());
     if (v < validr->bottom()) {
@@ -368,7 +313,6 @@ double ui::number_edit::to_acceptable_value(double v) const {
     }
     return v;
 }
-
 void ui::number_edit::make_acceptable_value() {
     auto old_val = value();
     auto new_val = old_val;
@@ -385,12 +329,11 @@ void ui::number_edit::handle_done_editing() {
     }
     old_val_ = value();
 }
-
 void ui::number_edit::keyPressEvent(QKeyEvent* e) {
     QLineEdit::keyPressEvent(e);
     if (e->key() == Qt::Key_Return) {
         handle_done_editing();
-    } 
+    }
 }
 
 void ui::number_edit::focusInEvent(QFocusEvent* event)
@@ -404,7 +347,6 @@ void ui::number_edit::focusOutEvent(QFocusEvent* event)
     QLineEdit::focusOutEvent(event);
     handle_done_editing();
 }
-
 ui::number_edit::number_edit(double val, double default_val, double min, double max, int decimals) :
         default_val_(default_val),
         decimals_(decimals) {
@@ -418,7 +360,6 @@ ui::number_edit::number_edit(double val, double default_val, double min, double 
 bool ui::number_edit::is_indeterminate() const {
     return text() == "";
 }
-
 void ui::number_edit::set_indeterminate() {
     setText("");
 }
@@ -438,7 +379,6 @@ void ui::number_edit::set_value(std::optional<double> v) {
         set_value(*v);
     }
 }
-
 std::optional<double> ui::number_edit::value() const {
     if (is_indeterminate()) {
         return {};
@@ -448,7 +388,7 @@ std::optional<double> ui::number_edit::value() const {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::TabWidget::TabBar::TabBar(QWidget* a_parent) : 
+ui::TabWidget::TabBar::TabBar(QWidget* a_parent) :
         QTabBar(a_parent) {
     setWidth(size().width());
 }
@@ -457,15 +397,14 @@ QSize ui::TabWidget::TabBar::tabSizeHint(int index) const
 {
     return QSize(_size.width() / (count() ? count() : 1), size().height());
 }
-
 void ui::TabWidget::TabBar::setWidth(int a_width)
 {
     _size = QSize(a_width, size().height());
     QTabBar::resize(_size);
 }
 
-ui::TabWidget::TabWidget(QWidget* a_parent) : 
-        _tabBar(new TabBar(this)), 
+ui::TabWidget::TabWidget(QWidget* a_parent) :
+        _tabBar(new TabBar(this)),
         QTabWidget(a_parent) {
     setTabBar(_tabBar);
 }
@@ -476,11 +415,10 @@ void ui::TabWidget::resizeEvent(QResizeEvent* e)  {
 }
 
 /*------------------------------------------------------------------------------------------------*/
-
 ui::labeled_numeric_val::labeled_numeric_val(QString txt, double val, double min,
         double max, int decimals, bool horz) {
     auto layout = (horz) ?
-        static_cast<QLayout*>(new QHBoxLayout(this)) : 
+        static_cast<QLayout*>(new QHBoxLayout(this)) :
         static_cast<QLayout*>(new QVBoxLayout(this));
     layout->addWidget(new QLabel(txt));
     layout->addWidget(num_edit_ = new number_edit(val, 0, min, max, decimals));
@@ -489,7 +427,6 @@ ui::labeled_numeric_val::labeled_numeric_val(QString txt, double val, double min
 ui::number_edit* ui::labeled_numeric_val::num_edit() const {
     return num_edit_;
 }
-
 /*------------------------------------------------------------------------------------------------*/
 
 QWidget* ui::horz_separator()
@@ -499,15 +436,6 @@ QWidget* ui::horz_separator()
 	line->setFrameShadow(QFrame::Sunken);
 	line->setLineWidth(1);
 	return line;
-}
-
-QWidget* ui::custom_title_bar(const QString& lbl) {
-    return new title_bar(lbl);
-}
-
-void ui::set_custom_title_bar_txt(QDockWidget* pane, const QString& txt) {
-    auto* tb = static_cast<title_bar*>(pane->titleBarWidget());
-    tb->set_text(txt);
 }
 
 void ui::clear_layout(QLayout* layout, bool deleteWidgets)
@@ -523,7 +451,6 @@ void ui::clear_layout(QLayout* layout, bool deleteWidgets)
         delete item;
     }
 }
-
 QColor ui::lerp_colors(const QColor& color1, const QColor& color2, double factor) {
     auto r1 = color1.red();
     auto g1 = color1.green();
@@ -534,7 +461,6 @@ QColor ui::lerp_colors(const QColor& color1, const QColor& color2, double factor
     auto g2 = color2.green();
     auto b2 = color2.blue();
     auto a2 = color2.alpha();
-
     int red = std::round(r1 + (r2 - r1) * factor);
     int green = std::round(g1 + (g2 - g1) * factor);
     int blue = std::round(b1 + (b2 - b1) * factor);
@@ -547,7 +473,6 @@ QRectF ui::rect_from_circle(QPointF center, double radius) {
     auto topleft = center - QPointF(radius, radius);
     return { topleft, QSizeF(2.0 * radius, 2.0 * radius) };
 }
-
 void ui::set_arc(
 		QGraphicsEllipseItem* gei, QPointF center, double radius,
 		double start_theta, double span_theta) {
@@ -563,7 +488,6 @@ double ui::radians_to_degrees(double radians) {
 double ui::degrees_to_radians(double degrees) {
 	return degrees * (std::numbers::pi_v<double> / 180.0);
 }
-
 QPointF ui::to_qt_pt(const sm::point& pt) {
 	return { pt.x, pt.y };
 }
@@ -580,7 +504,6 @@ double ui::angle_through_points(QPointF origin, QPointF pt) {
 double ui::distance(QPointF p1, QPointF p2) {
 	return sm::distance(from_qt_pt(p1), from_qt_pt(p2));
 }
-
 double ui::normalize_angle(double theta) {
 	auto cosine = std::cos(theta);
 	auto sine = std::sin(theta);
@@ -598,7 +521,6 @@ double ui::clamp_above(double v, double floor) {
 double ui::clamp_below(double v, double ceiling) {
 	return (v < ceiling) ? v : ceiling;
 }
-
 double ui::clamp(double v, double floor, double ceiling) {
 	return clamp_below(clamp_above(v, floor), ceiling);
 }
@@ -609,7 +531,6 @@ ui::tabbed_values::tabbed_values(QWidget* parent, const std::vector<std::string>
 			const std::vector<field_info>& fields, int hgt) :
 		TabWidget(parent),
 		num_editors_{ tabs.size(), std::vector<number_edit*>{fields.size(), nullptr }} {
-
 	setTabPosition(QTabWidget::South);
 	setFixedHeight(hgt);
 
@@ -619,7 +540,6 @@ ui::tabbed_values::tabbed_values(QWidget* parent, const std::vector<std::string>
 		if (tab_index == 0) {
 			primary_tab_ = tab;
 		}
-
 		QVBoxLayout* column;
 		tab->setLayout(column = new QVBoxLayout());
 		for (const auto& [field_index, field] : rv::enumerate(fields)) {
@@ -644,7 +564,6 @@ ui::tabbed_values::tabbed_values(QWidget* parent, const std::vector<std::string>
 		addTab(tab, tab_name.c_str());
 	}
 }
-
 int ui::tabbed_values::num_tabs() const {
 	return static_cast<int>(num_editors_.size());
 }
@@ -662,7 +581,6 @@ void  ui::tabbed_values::set_value(int field, std::optional<double> tab0_val) {
 		set_value(i, field, tab0_val);
 	}
 }
-
 void ui::tabbed_values::lock_to_primary_tab() {
 	setCurrentWidget(primary_tab_);
 	for (int i = 1; i < num_tabs(); ++i) {
@@ -675,8 +593,7 @@ void ui::tabbed_values::unlock() {
 		setTabEnabled(i, true);
 	}
 }
-
-void ui::tabbed_values::set_value(int tab_index, int field_index, 
+void ui::tabbed_values::set_value(int tab_index, int field_index,
 		std::optional<double> tab_zero_val)
 {
 	if (tab_zero_val) {
@@ -687,7 +604,6 @@ void ui::tabbed_values::set_value(int tab_index, int field_index,
 		num_editors_[tab_index][field_index]->set_value(tab_zero_val);
 	}
 }
-
 std::tuple<int, int> ui::tabbed_values::indices_from_editor(const number_edit* num_edit) const {
 	for (int tab_index = 0; tab_index < num_tabs(); ++tab_index) {
 		for (int field_index = 0; field_index < num_fields(); ++field_index) {
@@ -698,7 +614,6 @@ std::tuple<int, int> ui::tabbed_values::indices_from_editor(const number_edit* n
 	}
 	throw std::runtime_error("error in tabbed_values");
 }
-
 std::optional<double> ui::tabbed_values::get_tab_zero_value(int tab_index, int field_index)
 {
 	auto tab_n_val = num_editors_[tab_index][field_index]->value();
@@ -707,7 +622,6 @@ std::optional<double> ui::tabbed_values::get_tab_zero_value(int tab_index, int f
 	}
 	return from_nth_tab(tab_index, field_index, *tab_n_val);
 }
-
 void ui::tabbed_values::handle_value_changed(number_edit* num_edit) {
 	auto [tab_index, field_index] = indices_from_editor(num_edit);
 	auto new_tab0_val = get_tab_zero_value(tab_index, field_index);
@@ -718,7 +632,6 @@ void ui::tabbed_values::handle_value_changed(number_edit* num_edit) {
 	}
 	emit value_changed(field_index);
 }
-
 std::string ui::make_unique_name(const std::vector<std::string>& used_names,
         const std::string& prefix) {
     auto index_set = used_names | rv::transform(
@@ -734,7 +647,6 @@ std::string ui::make_unique_name(const std::vector<std::string>& used_names,
             return maybe_num.value();
         }
     ) | r::to<std::unordered_set<int>>();
-
     auto index = first_positive_integer_not_in_set(index_set);
     return prefix + "-" + std::to_string(index);
 }
@@ -749,8 +661,7 @@ void ui::to_text_file(const std::string& file_path, const std::string& text) {
     outputFile << text;
     outputFile.close();
 }
-
-std::string ui::query_for_valid_string(QWidget* parent, 
+std::string ui::query_for_valid_string(QWidget* parent,
         const std::function<bool(const std::string&)>& predicate,
         const std::string& title,
         const std::string& prompt) {
@@ -762,11 +673,9 @@ std::string ui::query_for_valid_string(QWidget* parent,
     QLineEdit lineEdit;
     QPushButton okButton("OK");
     QPushButton cancelButton("Cancel");
-
     // Add widgets to the layout
     layout.addRow(prompt.c_str(), &lineEdit);
     layout.addRow(&okButton, &cancelButton);
-
     // Connect "OK" button to the slot that checks the predicate
     QObject::connect(&okButton, &QPushButton::clicked, [&]() {
         const std::string userInput = lineEdit.text().toStdString();
@@ -777,7 +686,6 @@ std::string ui::query_for_valid_string(QWidget* parent,
             // Handle case where the predicate is not satisfied (you can display an error message here)
         }
         });
-
     // Connect "Cancel" button to reject the dialog
     QObject::connect(&cancelButton, &QPushButton::clicked, [&]() {
         dialog.reject(); // Close the dialog with QDialog::Rejected result
@@ -787,7 +695,6 @@ std::string ui::query_for_valid_string(QWidget* parent,
     QObject::connect(&lineEdit, &QLineEdit::textChanged, [&](const QString& text) {
         okButton.setEnabled(predicate(text.toStdString()));
         });
-
     // Show the dialog and wait for user input
     const int result = dialog.exec();
     return (result == QDialog::Accepted) ?

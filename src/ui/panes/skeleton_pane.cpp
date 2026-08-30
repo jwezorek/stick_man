@@ -1,7 +1,6 @@
 #include "skeleton_pane.h"
 #include "main_skeleton_pane.h"
 #include "animation_skeleton_pane.h"
-#include "../native_title_bar.h"
 #include "../canvas/skel_item.h"
 #include "../canvas/bone_item.h"
 #include "../canvas/scene.h"
@@ -25,16 +24,13 @@
 using namespace std::placeholders;
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
-
 /*------------------------------------------------------------------------------------------------*/
 
 ui::pane::skeleton::skeleton(ui::stick_man* mw) :
 	canvases_(nullptr),
 	project_(nullptr),
 	QDockWidget(tr("Skeleton"), mw) {
-
 	setWindowIcon(QIcon(":/images/add_bone_icon.png"));
-	native_title_bar::install(this);
 	// Create a QTabWidget
 	QTabWidget* tab_widget = new QTabWidget(this);
 	tab_widget->tabBar()->setDocumentMode(true);
@@ -43,7 +39,6 @@ ui::pane::skeleton::skeleton(ui::stick_man* mw) :
 
 	tab_widget->addTab(main_skel_pane_ = new main_skeleton_pane(this, mw), tr("skeleton"));
 	tab_widget->addTab(anim_skel_pane_ = new animation_skeleton_pane(this, mw), tr("animation"));
-
 	// Set the tab widget as the main widget of the dock
 	setWidget(tab_widget);
 }
@@ -57,7 +52,6 @@ void ui::pane::skeleton::init(canvas::manager& canvases, mdl::project& proj) {
 	main_skel_pane_->init(canvases, proj);
 	anim_skel_pane_->init(canvases, proj);
 }
-
 bool ui::pane::skeleton::validate_props_name_change(const std::string& new_name) {
 	return main_skel_pane_->validate_props_name_change(new_name);
 }

@@ -11,12 +11,6 @@
 #include "clipboard.h"
 #include <QtWidgets>
 
-#ifdef Q_OS_WIN
-#include <windows.h>
-#include <dwmapi.h>
-#pragma comment(lib, "Dwmapi.lib")
-#endif
-
 //debug
 #include "../core/sm_bone.h"
 #include "../core/sm_visit.h"
@@ -29,7 +23,6 @@ namespace r = std::ranges;
 namespace rv = std::ranges::views;
 
 namespace {
-
     void to_do(const std::string& msg) {
         QMessageBox msgBox;
         msgBox.setWindowTitle("TODO");
@@ -38,18 +31,7 @@ namespace {
         msgBox.setStandardButtons(QMessageBox::Ok);
         msgBox.exec();
     }
-
-
-    void setDarkTitleBar(WId window) {
-    #ifdef Q_OS_WIN
-        BOOL USE_DARK_MODE = true;
-        DwmSetWindowAttribute(
-            (HWND)window, DWMWINDOWATTRIBUTE::DWMWA_USE_IMMERSIVE_DARK_MODE,
-            &USE_DARK_MODE, sizeof(USE_DARK_MODE));
-    #endif
-    }
 }
-
 ui::stick_man::stick_man(QWidget* parent) :
 		QMainWindow(parent),
 		was_shown_(false),
@@ -58,8 +40,6 @@ ui::stick_man::stick_man(QWidget* parent) :
 		anim_pane_(new pane::animation(this)),
 		tool_pane_(new pane::tool_settings(this)),
 		skel_pane_(new pane::skeleton(this)) {
-    setDarkTitleBar(winId());
-
     setDockNestingEnabled(true);
     addDockWidget(Qt::LeftDockWidgetArea, tool_pal_);
     addDockWidget(Qt::RightDockWidgetArea, tool_pane_);
@@ -73,7 +53,6 @@ ui::stick_man::stick_man(QWidget* parent) :
 	tool_mgr_.init(*canvases_, project_);
     tool_pane_->init(tool_mgr_);
 }
-
 void ui::stick_man::open()
 {
 	QString filePath = QFileDialog::getOpenFileName(
@@ -85,8 +64,7 @@ void ui::stick_man::open()
 			QTextStream in(&file);
 			QString content = in.readAll();
 			file.close();
-
-            auto success = project_.from_json(content.toStdString()); 
+            auto success = project_.from_json(content.toStdString());
             if (!success) {
                 QMessageBox::critical(this, "Error", "Error opening file.");
             }
@@ -97,13 +75,12 @@ void ui::stick_man::open()
 }
 
 void ui::stick_man::save() {
-	
+
 }
 
 void ui::stick_man::save_as() {
 	QString filePath = QFileDialog::getSaveFileName(
 		this, "Save stick man As", QDir::homePath(), "stick man JSON (*.smj);;All Files (*)");
-
 	if (!filePath.isEmpty()) {
 		// Perform the actual save operation
 		QFile file(filePath);
@@ -121,7 +98,6 @@ void ui::stick_man::exit() {
 	bool unsavedChanges = false; // TODO
 
 	if (unsavedChanges) {
-
 		QMessageBox::StandardButton response = QMessageBox::question(
 			this, "Unsaved Changes",
 			"You have unsaved changes. Do you want to save them before quitting?",
@@ -142,7 +118,6 @@ void ui::stick_man::exit() {
 
 void ui::stick_man::debug() {
 }
-
 void ui::stick_man::insert_new_tab() {
     auto valid_tab_name = [this](const std::string& str)->bool {
             return !project_.has_tab(str);
@@ -162,7 +137,6 @@ void ui::stick_man::create_pose()
 {
     to_do("create pose");
 }
-
 
 ui::tool::manager& ui::stick_man::tool_mgr() {
     return tool_mgr_;
@@ -184,14 +158,12 @@ ui::pane::skeleton& ui::stick_man::skel_pane() {
 ui::canvas::manager& ui::stick_man::canvases() {
     return *canvases_;
 }
-
 void ui::stick_man::insert_file_menu() {
     auto file_menu = menuBar()->addMenu(tr("&File"));
     QAction* actionOpen = new QAction(tr("Open stick man"), this);
     QAction* actionSave = new QAction(tr("Save stick man"), this);
     QAction* actionSaveAs = new QAction(tr("Save as..."), this);
     QAction* actionExit = new QAction(tr("Exit"), this);
-
     file_menu->addAction(actionOpen);
     file_menu->addAction(actionSave);
     file_menu->addAction(actionSaveAs);
@@ -201,7 +173,6 @@ void ui::stick_man::insert_file_menu() {
     QFontMetrics metrics(file_menu->font());
     int maxWidth = metrics.horizontalAdvance(actionSaveAs->text()) + 20;
     file_menu->setMinimumWidth(maxWidth);
-
     connect(actionOpen, &QAction::triggered, this, &stick_man::open);
     connect(actionSave, &QAction::triggered, this, &stick_man::save);
     connect(actionSaveAs, &QAction::triggered, this, &stick_man::save_as);
@@ -217,7 +188,6 @@ void ui::stick_man::do_redo() {
 }
 
 void ui::stick_man::insert_edit_menu() {
-
     undo_action_ = new QAction("Undo", this);
     undo_action_->setShortcut(QKeySequence::Undo);
     connect(undo_action_, &QAction::triggered, this, &stick_man::do_undo);
@@ -225,17 +195,15 @@ void ui::stick_man::insert_edit_menu() {
     redo_action_ = new QAction("Redo", this);
     redo_action_->setShortcut(QKeySequence::Redo);
     connect(redo_action_, &QAction::triggered, this, &stick_man::do_redo);
-
     QAction* cut_action = new QAction("Cut", this);
     cut_action->setShortcut(QKeySequence::Cut);
-    connect(cut_action, &QAction::triggered, 
+    connect(cut_action, &QAction::triggered,
         [this]() {clipboard::cut(*this); });
 
     QAction* copy_action = new QAction("Copy", this);
     copy_action->setShortcut(QKeySequence::Copy);
     connect(copy_action, &QAction::triggered,
         [this]() {clipboard::copy(*this); });
-
     QAction* paste_action = new QAction("Paste", this);
     paste_action->setShortcut(QKeySequence::Paste);
     connect(paste_action, &QAction::triggered,
@@ -245,14 +213,12 @@ void ui::stick_man::insert_edit_menu() {
     paste_in_place_action->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
     connect(paste_in_place_action, &QAction::triggered,
         [this]() {clipboard::paste(*this, true); });
-
     QAction* delete_action = new QAction("Delete", this);
     delete_action->setShortcut(QKeySequence::Delete);
     connect(delete_action, &QAction::triggered,
         [this]() {clipboard::del(*this); });
 
     QMenu* edit_menu = menuBar()->addMenu("Edit");
-
     edit_menu->addAction(undo_action_);
     edit_menu->addAction(redo_action_);
     edit_menu->addSeparator();
@@ -262,7 +228,6 @@ void ui::stick_man::insert_edit_menu() {
     edit_menu->addAction(paste_in_place_action);
     edit_menu->addSeparator();
     edit_menu->addAction(delete_action);
-
     connect(&project_, &mdl::project::refresh_undo_redo_state, this, &stick_man::update_undo_and_redo);
     redo_action_->setEnabled(false);
     undo_action_->setEnabled(false);
@@ -276,7 +241,6 @@ void ui::stick_man::update_undo_and_redo(bool can_redo, bool can_undo) {
 void ui::stick_man::insert_view_menu() {
     auto view_menu = menuBar()->addMenu(tr("View"));
     QMenu* magnification_menu = view_menu->addMenu(tr("Magnification"));
-
     // Create an action group to make the actions mutually exclusive (like radio buttons)
     QActionGroup* magnification_group = new QActionGroup(this);
     magnification_group->setExclusive(true);
@@ -284,7 +248,6 @@ void ui::stick_man::insert_view_menu() {
     const auto* zoom_tool = static_cast<const tool::zoom*>(
         &tool_mgr_.tool_from_id(tool::id::zoom)
     );
-
     // Create actions for each magnification level
     auto zoom_levels = zoom_tool->magnification_levels();
     for (auto level : zoom_levels) {
@@ -296,7 +259,6 @@ void ui::stick_man::insert_view_menu() {
         }
         magnification_group->addAction(action);
         magnification_menu->addAction(action);
-
         // Connect each action to a slot if you want to handle magnification changes
         connect(action, &QAction::triggered, this, [=]() {
             double scale = level / 100.0;
@@ -307,7 +269,6 @@ void ui::stick_man::insert_view_menu() {
 
 void ui::stick_man::insert_project_menu() {
     auto project_menu = menuBar()->addMenu(tr("Stick Man"));
-
     auto* new_tab_action = new QAction(tr("Insert new canvas"), this);
     auto* new_animation = new QAction("Create new animation", this);
     auto* new_pose = new QAction("Create new pose", this);
@@ -315,7 +276,6 @@ void ui::stick_man::insert_project_menu() {
     project_menu->addAction(new_tab_action);
     project_menu->addAction(new_animation);
     project_menu->addAction(new_pose);
-
     connect(new_tab_action, &QAction::triggered, this, &stick_man::insert_new_tab);
     connect(new_animation, &QAction::triggered, this, &stick_man::create_animation);
     connect(new_pose, &QAction::triggered, this, &stick_man::create_pose);
@@ -327,19 +287,12 @@ void ui::stick_man::createMainMenu()
     insert_edit_menu();
     insert_project_menu();
     insert_view_menu();
-
-    QString styleSheet =
-        "QMenu::separator { background-color: #7f7f7f; color: gray; }"
-        "QMenu::item:disabled{ color: gray; background-color: #353535 }";
-    menuBar()->setStyleSheet(styleSheet);
-
 }
 
 void ui::stick_man::showEvent(QShowEvent* event) {
 	QMainWindow::showEvent(event);
 	was_shown_ = true;
 }
-
 void ui::stick_man::resizeEvent(QResizeEvent* event) {
 	QMainWindow::resizeEvent(event);
 	if (was_shown_ && !has_fully_layed_out_widgets_) {
