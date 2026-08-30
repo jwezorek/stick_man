@@ -50,7 +50,7 @@ int main(int argc, char* argv[])
 {
     // The Windows style honors Qt's dark color scheme while still allowing
     // the application to supply its preferred widget palette.
-    QApplication::setStyle("windows");
+    QApplication::setStyle("Fusion");
 
     QApplication app(argc, argv);
 
