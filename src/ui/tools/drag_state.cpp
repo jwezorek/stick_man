@@ -1,6 +1,6 @@
-#include "drag_state.h"
-#include "../../core/sm_bone.h"
-#include "../../core/sm_visit.h"
+#include "drag_state.hpp"
+#include "../../core/sm_bone.hpp"
+#include "../../core/sm_visit.hpp"
 
 namespace r = std::ranges;
 namespace rv = std::ranges::views;

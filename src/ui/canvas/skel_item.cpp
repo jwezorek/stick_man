@@ -1,8 +1,8 @@
-#include "scene.h"
-#include "canvas_item.h"
-#include "skel_item.h"
-#include "../util.h"
-#include "../../core/sm_skeleton.h"
+#include "scene.hpp"
+#include "canvas_item.hpp"
+#include "skel_item.hpp"
+#include "../util.hpp"
+#include "../../core/sm_skeleton.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 

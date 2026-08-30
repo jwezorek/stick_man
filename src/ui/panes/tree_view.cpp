@@ -1,4 +1,4 @@
-#include "tree_view.h"
+#include "tree_view.hpp"
 
 ui::pane::tree_view::tree_view(QWidget* parent)
     : QTreeView(parent), model_(new QStandardItemModel(this)) {

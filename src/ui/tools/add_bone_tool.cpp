@@ -1,5 +1,5 @@
-#include "add_bone_tool.h"
-#include "../canvas/node_item.h"
+#include "add_bone_tool.hpp"
+#include "../canvas/node_item.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 

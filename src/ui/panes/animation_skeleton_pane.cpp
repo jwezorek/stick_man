@@ -1,5 +1,5 @@
-#include "animation_skeleton_pane.h"
-#include "tree_view.h"
+#include "animation_skeleton_pane.hpp"
+#include "tree_view.hpp"
 
 namespace {
 

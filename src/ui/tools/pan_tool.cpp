@@ -1,5 +1,5 @@
-#include "pan_tool.h"
-#include "../canvas/canvas_manager.h"
+#include "pan_tool.hpp"
+#include "../canvas/canvas_manager.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 

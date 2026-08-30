@@ -1,8 +1,8 @@
-#include "sm_types.h"
-#include "sm_bone.h"
-#include "sm_skeleton.h"
-#include "sm_fabrik.h"
-#include "sm_visit.h"
+#include "sm_types.hpp"
+#include "sm_bone.hpp"
+#include "sm_skeleton.hpp"
+#include "sm_fabrik.hpp"
+#include "sm_visit.hpp"
 #include <unordered_map>
 #include <cmath>
 

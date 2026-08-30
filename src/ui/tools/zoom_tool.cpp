@@ -1,6 +1,6 @@
-#include "zoom_tool.h"
-#include "../canvas/canvas_manager.h"
-#include "../canvas/scene.h"
+#include "zoom_tool.hpp"
+#include "../canvas/canvas_manager.hpp"
+#include "../canvas/scene.hpp"
 #include <QRegularExpression>
 #include <qdebug.h>
 

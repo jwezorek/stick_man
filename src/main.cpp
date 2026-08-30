@@ -1,4 +1,4 @@
-#include "ui/stick_man.h"
+#include "ui/stick_man.hpp"
 
 #include <QtWidgets/QApplication>
 #include <QPalette>

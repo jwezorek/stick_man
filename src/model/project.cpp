@@ -1,6 +1,6 @@
-#include "project.h"
-#include "commands.h"
-#include "../core/sm_skeleton.h"
+#include "project.hpp"
+#include "commands.hpp"
+#include "../core/sm_skeleton.hpp"
 #include "../core/json.hpp"
 #include <ranges>
 #include <optional>

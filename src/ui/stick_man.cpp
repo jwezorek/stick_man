@@ -1,14 +1,14 @@
-#include "stick_man.h"
-#include "panes/skeleton_pane.h"
-#include "panes/animation_pane.h"
-#include "panes/tools_pane.h"
-#include "panes/tool_settings_pane.h"
-#include "canvas/canvas_item.h"
-#include "canvas/canvas_manager.h"
-#include "tools/tool_manager.h"
-#include "tools/zoom_tool.h"
-#include "util.h"
-#include "clipboard.h"
+#include "stick_man.hpp"
+#include "panes/skeleton_pane.hpp"
+#include "panes/animation_pane.hpp"
+#include "panes/tools_pane.hpp"
+#include "panes/tool_settings_pane.hpp"
+#include "canvas/canvas_item.hpp"
+#include "canvas/canvas_manager.hpp"
+#include "tools/tool_manager.hpp"
+#include "tools/zoom_tool.hpp"
+#include "util.hpp"
+#include "clipboard.hpp"
 #include <QtWidgets>
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -17,10 +17,10 @@
 #endif
 
 //debug
-#include "../core/sm_bone.h"
-#include "../core/sm_visit.h"
-#include "canvas/bone_item.h"
-#include "canvas/node_item.h"
+#include "../core/sm_bone.hpp"
+#include "../core/sm_visit.hpp"
+#include "canvas/bone_item.hpp"
+#include "canvas/node_item.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 

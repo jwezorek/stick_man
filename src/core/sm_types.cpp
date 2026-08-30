@@ -1,6 +1,6 @@
 #include <cmath>
 #include <numbers>
-#include "sm_types.h"
+#include "sm_types.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 

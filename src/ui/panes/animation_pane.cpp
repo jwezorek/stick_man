@@ -1,4 +1,4 @@
-#include "animation_pane.h"
+#include "animation_pane.hpp"
 #include <QIcon>
 
 /*------------------------------------------------------------------------------------------------*/

@@ -1,7 +1,7 @@
-#include "sm_skeleton.h"
-#include "sm_types.h"
-#include "sm_visit.h"
-#include "sm_animation.h"
+#include "sm_skeleton.hpp"
+#include "sm_types.hpp"
+#include "sm_visit.hpp"
+#include "sm_animation.hpp"
 #include "json.hpp"
 #include <algorithm>
 #include <cctype>

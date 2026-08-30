@@ -1,9 +1,9 @@
-#include "node_properties.h"
-#include "../util.h"
-#include "../canvas/scene.h"
-#include "../canvas/node_item.h"
-#include "skeleton_pane.h"
-#include "main_skeleton_pane.h"
+#include "node_properties.hpp"
+#include "../util.hpp"
+#include "../canvas/scene.hpp"
+#include "../canvas/node_item.hpp"
+#include "skeleton_pane.hpp"
+#include "main_skeleton_pane.hpp"
 #include <ranges>
 
 namespace r = std::ranges;

@@ -1,12 +1,12 @@
-#include "tool_manager.h"
-#include "../canvas/canvas_manager.h"
-#include "tool.h"
-#include "selection_tool.h"
-#include "pan_tool.h"
-#include "zoom_tool.h"
-#include "animate_tool.h"
-#include "add_node_tool.h"
-#include "add_bone_tool.h"
+#include "tool_manager.hpp"
+#include "../canvas/canvas_manager.hpp"
+#include "tool.hpp"
+#include "selection_tool.hpp"
+#include "pan_tool.hpp"
+#include "zoom_tool.hpp"
+#include "animate_tool.hpp"
+#include "add_node_tool.hpp"
+#include "add_bone_tool.hpp"
 #include <ranges>
 
 namespace r = std::ranges;

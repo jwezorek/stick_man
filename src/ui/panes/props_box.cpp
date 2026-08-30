@@ -1,8 +1,8 @@
-#include "props_box.h"
-#include "properties.h"
-#include "node_properties.h"
-#include "bone_properties.h"
-#include "../canvas/scene.h"
+#include "props_box.hpp"
+#include "properties.hpp"
+#include "node_properties.hpp"
+#include "bone_properties.hpp"
+#include "../canvas/scene.hpp"
 
 ui::pane::props::props_box::props_box(
         const current_canvas_fn& fn,

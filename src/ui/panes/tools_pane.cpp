@@ -1,6 +1,6 @@
 #include <QtWidgets>
-#include "tools_pane.h"
-#include "../stick_man.h"
+#include "tools_pane.hpp"
+#include "../stick_man.hpp"
 #include <ranges>
 
 namespace r = std::ranges;

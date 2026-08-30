@@ -1,8 +1,8 @@
-#include "skeleton_properties.h"
-#include "../canvas/scene.h"
-#include "../canvas/skel_item.h"
-#include "skeleton_pane.h"
-#include "main_skeleton_pane.h"
+#include "skeleton_properties.hpp"
+#include "../canvas/scene.hpp"
+#include "../canvas/skel_item.hpp"
+#include "skeleton_pane.hpp"
+#include "main_skeleton_pane.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 

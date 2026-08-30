@@ -1,7 +1,7 @@
-#include "handle.h"
+#include "handle.hpp"
 #include <variant>
-#include "../core/sm_skeleton.h"
-#include "../core/sm_bone.h"
+#include "../core/sm_skeleton.hpp"
+#include "../core/sm_bone.hpp"
 
 namespace {
     template<class... Ts> struct overload : Ts... { using Ts::operator()...; };

@@ -1,5 +1,5 @@
-#include "tool_settings_pane.h"
-#include "../tools/tool_manager.h"
+#include "tool_settings_pane.hpp"
+#include "../tools/tool_manager.hpp"
 #include <QIcon>
 
 /*------------------------------------------------------------------------------------------------*/

@@ -1,4 +1,4 @@
-#include "select_tool_panel.h"
+#include "select_tool_panel.hpp"
 
 namespace {
     QWidget* indent_widget(int indent_level = 1) {

@@ -1,5 +1,5 @@
-#include "rubber_band.h"
-#include "../util.h"
+#include "rubber_band.hpp"
+#include "../util.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 

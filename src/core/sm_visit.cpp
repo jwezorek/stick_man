@@ -1,7 +1,7 @@
 #include <stack>
 #include <unordered_set>
-#include "sm_visit.h"
-#include "sm_bone.h"
+#include "sm_visit.hpp"
+#include "sm_bone.hpp"
 
 namespace r = std::ranges;
 namespace rv = std::ranges::views;

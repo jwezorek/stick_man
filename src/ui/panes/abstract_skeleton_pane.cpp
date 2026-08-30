@@ -1,6 +1,6 @@
-#include "abstract_skeleton_pane.h"
-#include "../canvas/canvas_manager.h"
-#include "skeleton_pane.h"
+#include "abstract_skeleton_pane.hpp"
+#include "../canvas/canvas_manager.hpp"
+#include "skeleton_pane.hpp"
 
 void ui::pane::abstract_skeleton_pane::connect_tree_sel_handler() {
     tree_sel_conn_ = connect(
