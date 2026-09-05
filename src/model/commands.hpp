@@ -15,49 +15,40 @@ namespace mdl {
     class commands {
         friend class project;
     private:
-
         template<typename T>
         using handle_table = std::unordered_map<handle, T, handle_hash>;
         struct create_node_state {
-            std::string canvas_name;
             std::string node_name;
             sm::object_id skeleton;
             sm::point loc;
             sm::world snapshot;
         };
-
         struct add_bone_state {
-            std::string canvas_name;
             std::string bone_name;
             handle u_hnd;
             handle v_hnd;
             sm::world original;
             sm::object_id merged;
             sm::object_id bone_id;
-            add_bone_state(const std::string& str,
-                const std::string& bone_name,
+            add_bone_state(const std::string& bone_name,
                 const handle& u_hnd,
                 const handle& v_hnd);
         };
-
         struct rename_state {
             handle object;
             std::string old_name;
             std::string new_name;
         };
         struct replace_skeleton_state {
-            std::string canvas_name;
             std::vector<sm::object_id> replacee_ids;
             sm::world replacees;
             std::vector<sm::object_id> replacement_ids;
             sm::world replacements;
-
-            replace_skeleton_state(const std::string& canv,
+            replace_skeleton_state(
                 const std::vector<sm::object_id>& replacees,
                 const std::vector<sm::skel_ref>& replacements);
         };
         struct transform_nodes_and_bones_state {
-            std::string canvas;
             std::function<void(sm::node&)> transform_nodes;
             std::function<void(sm::bone&)> transform_bones;
             std::vector<handle> nodes;
@@ -69,7 +60,6 @@ namespace mdl {
                 const std::vector<handle>& nodes,
                 const std::function<void(sm::node&)>& fn
             );
-
             transform_nodes_and_bones_state(
                 project& proj,
                 const std::vector<handle>& bones,
@@ -81,7 +71,6 @@ namespace mdl {
             auto& obj = hnd.to<T>(proj.world_);
             proj.rename_aux(sm::ref(obj), name);
         }
-
         template<sm::is_skel_piece T>
         static command make_rename_command(sm::ref<T> piece, const std::string& new_name) {
             auto state = std::make_shared<rename_state>(
@@ -95,12 +84,11 @@ namespace mdl {
                 }
             };
         }
-        static command make_create_node_command(const std::string& tab,
+        static command make_create_node_command(
             const sm::point& pt, const std::string& node_name);
-        static command make_add_bone_command(const std::string& tab,
+        static command make_add_bone_command(
             const handle& u_hnd, const handle& v_hnd, const std::string& bone_name);
         static command make_replace_skeletons_command(
-            const std::string& canvas_name,
             const std::vector<sm::object_id>& replacees,
             const std::vector<sm::skel_ref>& replacements
         );
@@ -116,7 +104,5 @@ namespace mdl {
             const std::vector<std::tuple<handle, sm::point>>& old_locs,
             const std::vector<std::tuple<handle, sm::point>>& new_locs
         );
-
-        static command make_add_tab_command(const std::string& tab_name);
     };
 }

@@ -2,12 +2,12 @@
 #include "canvas_item.hpp"
 #include "skel_item.hpp"
 #include <ranges>
+#include <stdexcept>
 
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
 
 namespace {
-
     ui::canvas::item::skeleton* skeleton_item_by_id(ui::canvas::scene& canv, const sm::object_id& id) {
         auto skels = canv.skeleton_items();
         auto iter = r::find_if(skels,
@@ -20,109 +20,44 @@ namespace {
         }
         return *iter;
     }
-
 }
 
 /*------------------------------------------------------------------------------------------------*/
-
-void ui::canvas::manager::connect_current_tab_signal() {
-    current_tab_conn_ = connect(this, &QTabWidget::currentChanged,
-        [this](int i) {
-            auto* canv = static_cast<scene*>(
-                static_cast<QGraphicsView*>(widget(i))->scene()
-                );
-            auto old_active_pane = active_canv_;
-            old_active_pane->clear_selection();
-            active_canv_ = canv;
-            emit active_canvas_changed(*old_active_pane, *canv);
-        }
-    );
-}
-
-void ui::canvas::manager::disconnect_current_tab_signal() {
-    disconnect(current_tab_conn_);
-}
-
 ui::canvas::manager::manager(tool::input_handler& inp_handler) :
-    drag_mode_(drag_mode::none),
     inp_handler_(inp_handler),
-    active_canv_(nullptr) {
-    setStyleSheet(
-        "QTabBar::tab {"
-        "    height: 28px; /* Set the height of tabs */"
-        "}"
-    );
-    add_tab("untitled");
-    connect_current_tab_signal();
-}
+    drag_mode_(drag_mode::none) {
+    auto* view = new QGraphicsView();
+    view->setRenderHint(QPainter::Antialiasing, true);
+    view->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
+    view->scale(1, -1);
+    addTab(view, "untitled");
+    tabBar()->hide();
 
+    auto* canv = new ui::canvas::scene(inp_handler_);
+    view->setScene(canv);
+    canv->init();
+    canv->set_drag_mode(drag_mode_);
+    center_active_view();
+}
 void ui::canvas::manager::init(mdl::project& proj) {
-    connect(&proj, &mdl::project::tab_created_or_deleted, this, &manager::add_or_delete_tab);
     connect(&proj, &mdl::project::pre_new_bone_added, this, &manager::prepare_to_add_bone);
     connect(&proj, &mdl::project::new_bone_added, this, &manager::add_new_bone);
     connect(&proj, &mdl::project::new_skeleton_added, this, &manager::add_new_skeleton);
     connect(&proj, &mdl::project::new_project_opened, this, &manager::set_contents);
     connect(&proj, &mdl::project::refresh_canvas,
-        [this](mdl::project& model, const std::string& canvas, bool clear) {
+        [this](mdl::project& model, bool clear) {
             if (clear) {
-                set_contents_of_canvas(model, canvas);
+                set_contents(model);
             }
             else {
-                canvas_from_name(canvas)->sync_to_model();
+                active_canvas().sync_to_model();
             }
         }
     );
 }
-
 void ui::canvas::manager::clear() {
-    active_canv_ = nullptr;
-    while (count() > 0) {
-        QWidget* widget = this->widget(0);
-        removeTab(0);
-        delete widget;
-    }
+    active_canvas().clear();
 }
-
-void ui::canvas::manager::add_tab(const std::string& name) {
-    QGraphicsView* view = new QGraphicsView();
-
-    view->setRenderHint(QPainter::Antialiasing, true);
-    view->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
-    view->scale(1, -1);
-
-    addTab(view, name.c_str());
-    scene* canv = new ui::canvas::scene(inp_handler_);
-    view->setScene(canv);
-    canv->init();
-    canv->set_drag_mode(drag_mode_);
-
-    if (active_canv_ == nullptr) {
-        active_canv_ = canv;
-    }
-    center_active_view();
-}
-
-void ui::canvas::manager::add_or_delete_tab(const std::string& name, bool should_add) {
-    if (should_add) {
-        add_tab(name);
-    }
-    else {
-        int index_of_tab = -1;
-        for (int i = 0; i < count(); ++i) {
-            if (tabText(i).toStdString() == name) {
-                index_of_tab = i;
-                break;
-            }
-        }
-        if (index_of_tab == -1) {
-            throw std::runtime_error("canvas not found");
-        }
-        auto view = static_cast<QGraphicsView*>(widget(index_of_tab));
-        removeTab(index_of_tab);
-        delete view;
-    }
-}
-
 void ui::canvas::manager::prepare_to_add_bone(sm::node& u, sm::node& v) {
     auto& canv = active_canvas();
     auto* deletee = skeleton_item_by_id(canv, v.owner().id());
@@ -139,33 +74,22 @@ void ui::canvas::manager::add_new_bone(sm::bone& bone) {
     auto& world = bone.owner().owner();
     emit canvas_refresh(world);
 }
-
-void ui::canvas::manager::add_new_skeleton(const std::string& canvas, sm::skel_ref skel_ref) {
-    auto& canv = *canvas_from_name(canvas);
-
+void ui::canvas::manager::add_new_skeleton(sm::skel_ref skel_ref) {
+    auto& canv = active_canvas();
     auto& skel = skel_ref.get();
     canv.insert_item(skel.root_node());
     canv.insert_item(skel);
 
     emit canvas_refresh(skel.owner());
 }
-
-ui::canvas::scene* ui::canvas::manager::canvas_from_name(const std::string& tab_name) {
-    for (int i = 0; i < count(); ++i) {
-        if (tabText(i).toStdString() == tab_name) {
-            auto view = static_cast<QGraphicsView*>(widget(i));
-            return static_cast<ui::canvas::scene*>(view->scene());
-        }
-    }
-    return nullptr;
+ui::canvas::scene* ui::canvas::manager::canvas_from_name(const std::string& name) {
+    return name == canvas_name() ? &active_canvas() : nullptr;
 }
 
 QGraphicsView& ui::canvas::manager::active_view() const {
-    return *static_cast<QGraphicsView*>(this->widget(currentIndex()));
+    return *static_cast<QGraphicsView*>(widget(0));
 }
-
 ui::canvas::scene& ui::canvas::manager::active_canvas() const {
-
     return *static_cast<ui::canvas::scene*>(active_view().scene());
 }
 
@@ -174,66 +98,29 @@ void ui::canvas::manager::center_active_view() {
 }
 
 std::vector<std::string> ui::canvas::manager::tab_names() const {
-    std::vector<std::string> names(count());
-    for (int i = 0; i < count(); ++i) {
-        names[i] = tabText(i).toStdString();
-    }
-    return names;
+    return { canvas_name() };
 }
-
 std::string ui::canvas::manager::tab_name(const scene& canv) const {
-    int index = this->indexOf(&canv.view());
-    return (index >= 0) ? tabText(index).toStdString() : "";
+    return &canv == &active_canvas() ? canvas_name() : "";
+}
+std::string ui::canvas::manager::canvas_name() const {
+    return tabText(0).toStdString();
+}
+void ui::canvas::manager::set_canvas_name(const std::string& name) {
+    setTabText(0, QString::fromStdString(name));
 }
 
 void ui::canvas::manager::set_contents(mdl::project& model) {
-
-    // clear the old tabs and create new ones based on what is in the project
-    disconnect_current_tab_signal();
-    clear();
-    for (auto tab_name : model.tabs()) {
-        add_tab(tab_name.c_str());
-    }
-    connect_current_tab_signal();
-
-    // set their contents...
-    for (auto tab : model.tabs()) {
-        canvas_from_name(tab)->set_contents(
-            model.skeletons_on_tab(tab) | r::to<std::vector<sm::skel_ref>>()
-        );
-    }
+    active_canvas().set_contents(
+        model.world().skeletons() | r::to<std::vector<sm::skel_ref>>()
+    );
     emit canvas_refresh(model.world());
-}
-
-void ui::canvas::manager::set_contents_of_canvas(mdl::project& model, const std::string& canvas) {
-    auto* canv = canvas_from_name(canvas);
-    if (!canv) {
-        return;
-    }
-
-    auto new_contents = model.skeletons_on_tab(canvas) | r::to<std::vector<sm::skel_ref>>();
-    canv->set_contents(new_contents);
-
-    emit canvas_refresh(model.world());
-}
-
-void ui::canvas::manager::clear_canvas(const std::string& canv)
-{
-    canvas_from_name(canv)->clear();
 }
 
 void ui::canvas::manager::set_drag_mode(drag_mode dm) {
     drag_mode_ = dm;
-    for (auto* canv : canvases()) {
-        canv->set_drag_mode(dm);
-    }
+    active_canvas().set_drag_mode(dm);
 }
-
-void ui::canvas::manager::set_active_canvas(const scene& c) {
-    auto canvases = this->canvases();
-    for (auto [index, canv_ptr] : rv::enumerate(canvases)) {
-        if (&c == canv_ptr) {
-            setCurrentIndex(index);
-        }
-    }
+void ui::canvas::manager::set_active_canvas(const scene&) {
+    // There is only one canvas.
 }

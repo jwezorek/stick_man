@@ -10,7 +10,6 @@ ui::tool::add_node::add_node() :
 void ui::tool::add_node::init(canvas::manager& canvases, mdl::project& model) {
     model_ = &model;
 }
-
-void ui::tool::add_node::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
-    model_->add_new_skeleton_root(canv.tab_name(), from_qt_pt(event->scenePos()));
+void ui::tool::add_node::mouseReleaseEvent(canvas::scene&, QGraphicsSceneMouseEvent* event) {
+    model_->add_new_skeleton_root(from_qt_pt(event->scenePos()));
 }

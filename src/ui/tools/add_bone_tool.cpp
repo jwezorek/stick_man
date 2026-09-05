@@ -2,7 +2,6 @@
 #include "../canvas/node_item.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
-
 void ui::tool::add_bone::init_rubber_band(canvas::scene& c) {
     if (!rubber_band_) {
         c.addItem(rubber_band_ = new QGraphicsLineItem());
@@ -14,7 +13,6 @@ void ui::tool::add_bone::init_rubber_band(canvas::scene& c) {
         c.addItem(rubber_band_);
     }
 }
-
 ui::tool::add_bone::add_bone() :
     model_(nullptr),
     rubber_band_(nullptr),
@@ -31,7 +29,6 @@ void ui::tool::add_bone::mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEv
     rubber_band_->setLine(QLineF(origin_, origin_));
     rubber_band_->show();
 }
-
 void ui::tool::add_bone::mouseMoveEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) {
     rubber_band_->setLine(QLineF(origin_, event->scenePos()));
 }
@@ -45,9 +42,7 @@ void ui::tool::add_bone::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMo
     if (!parent_node || !child_node || parent_node == child_node) {
         return;
     }
-
     model_->add_bone(
-        canv.tab_name(),
         mdl::to_handle(parent_node->model()),
         mdl::to_handle(child_node->model())
     );
