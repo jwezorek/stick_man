@@ -182,6 +182,22 @@ namespace {
         return pieces_and_sel_state;
     }
 
+    std::unordered_set<sm::object_id> selected_node_ids(
+            ui::canvas::scene& canv,
+            const std::unordered_set<const sm::skeleton*>& skel_set) {
+        std::unordered_set<sm::object_id> ids;
+        for (const auto& [piece, is_selected] :
+                skeleton_pieces_in_topological_order(canv, skel_set)) {
+            if (!is_selected) {
+                continue;
+            }
+            if (auto node = std::get_if<sm::const_node_ref>(&piece)) {
+                ids.insert(node->get().id());
+            }
+        }
+        return ids;
+    }
+
     // given a set of skeletons generate separate skeletons for each connected component
     // of selected-ness or deselected-ness of the skeletons' nodes and bones. Since you
     // cannot have a bone without its two nodes existing this will make duplicate
@@ -254,6 +270,7 @@ namespace {
         auto& canv = main_wnd.canvases().active_canvas();
         auto relavent_skels = relavent_skeleton_set(canv);
 
+        auto regenerate_ids = selected_node_ids(canv, relavent_skels);
         auto [unselected, selected] = split_skeletons_by_selection(canv, relavent_skels);
         if (op == selection_operation::cut || op == selection_operation::del) {
             auto replacees = relavent_skels | rv::transform(
@@ -262,7 +279,7 @@ namespace {
                     }
                 ) | r::to<std::vector<sm::object_id>>();
             auto replacements = unselected.skeletons() | r::to<std::vector<sm::skel_ref>>();
-            project.replace_skeletons(replacees, replacements);
+            project.replace_skeletons(replacees, replacements, regenerate_ids);
         }
         if (op == selection_operation::cut || op == selection_operation::copy) {
             return selected.to_json();

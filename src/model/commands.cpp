@@ -66,7 +66,7 @@ mdl::command mdl::commands::make_create_node_command(
 }
 mdl::commands::add_bone_state::add_bone_state(
         const std::string& name, const handle& u, const handle& v):
-    bone_name(name), u_hnd(u), v_hnd(v), bone_id(sm::object_id::generate()) {
+    bone_name(name), u_hnd(u), v_hnd(v) {
 }
 mdl::command mdl::commands::make_add_bone_command(
         const handle& u_hnd, const handle& v_hnd, const std::string& bone_name) {
@@ -86,9 +86,14 @@ mdl::command mdl::commands::make_add_bone_command(
                 throw std::runtime_error("skeleton copy failed");
             }
             emit proj.pre_new_bone_added(u, v);
-            auto bone = proj.world_.create_bone(state->bone_id, state->bone_name, u, v);
+            auto bone = state->bone_id
+                ? proj.world_.create_bone(*state->bone_id, state->bone_name, u, v)
+                : proj.world_.create_bone(state->bone_name, u, v);
             if (!bone) {
                 throw std::runtime_error("create_bone failed");
+            }
+            if (!state->bone_id) {
+                state->bone_id = bone->get().id();
             }
             state->merged = bone->get().owner().id();
             emit proj.new_bone_added(bone->get());
@@ -97,7 +102,8 @@ mdl::command mdl::commands::make_add_bone_command(
             proj.replace_skeletons_aux(
                 {state->merged},
                 state->original.skeletons() | r::to<std::vector<sm::skel_ref>>(),
-                nullptr
+                nullptr,
+                {}
             );
             state->original.clear();
         }
@@ -105,8 +111,9 @@ mdl::command mdl::commands::make_add_bone_command(
 }
 mdl::commands::replace_skeleton_state::replace_skeleton_state(
         const std::vector<sm::object_id>& replacees_arg,
-        const std::vector<sm::skel_ref>& replacers):
-    replacee_ids(replacees_arg) {
+        const std::vector<sm::skel_ref>& replacers,
+        const std::unordered_set<sm::object_id>& regenerate_ids_arg):
+    replacee_ids(replacees_arg), regenerate_ids(regenerate_ids_arg) {
     for (auto skel : replacers) {
         // An insertion (not a replacement) is an editor duplication operation, e.g. paste.
         // Allocate the duplicate IDs once here; redo then restores those same IDs.
@@ -120,8 +127,10 @@ mdl::commands::replace_skeleton_state::replace_skeleton_state(
 }
 mdl::command mdl::commands::make_replace_skeletons_command(
         const std::vector<sm::object_id>& replacees,
-        const std::vector<sm::skel_ref>& replacements) {
-    auto state = std::make_shared<replace_skeleton_state>(replacees, replacements);
+        const std::vector<sm::skel_ref>& replacements,
+        const std::unordered_set<sm::object_id>& regenerate_ids) {
+    auto state = std::make_shared<replace_skeleton_state>(
+        replacees, replacements, regenerate_ids);
     return {
         [state](mdl::project& proj) {
             if (state->replacees.empty()) {
@@ -136,14 +145,16 @@ mdl::command mdl::commands::make_replace_skeletons_command(
             proj.replace_skeletons_aux(
                 state->replacee_ids,
                 state->replacements.skeletons() | r::to<std::vector<sm::skel_ref>>(),
-                &state->replacement_ids
+                &state->replacement_ids,
+                state->regenerate_ids
             );
         },
         [state](mdl::project& proj) {
             proj.replace_skeletons_aux(
                 state->replacement_ids,
                 state->replacees.skeletons() | r::to<std::vector<sm::skel_ref>>(),
-                nullptr
+                nullptr,
+                {}
             );
         }
     };

@@ -14,13 +14,11 @@
 #include "sm_types.hpp"
 #include "sm_object_id.hpp"
 #include "sm_bone.hpp"
-#include "sm_animation.hpp"
 #include "json_fwd.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 
 namespace sm {
-
     class world;
     class skeleton : public detail::enable_protected_make_unique<skeleton> {
         friend class world;
@@ -36,7 +34,6 @@ namespace sm {
         std::any user_data_;
         nodes_tbl nodes_;
         bones_tbl bones_;
-        std::vector<animation> animations_;
     protected:
         skeleton(world& w, object_id id);
         skeleton(world& w, object_id id, const std::string& name, double x, double y);
@@ -54,25 +51,25 @@ namespace sm {
         bool empty() const;
         sm::node& root_node();
         const sm::node& root_node() const;
-
         std::any get_user_data() const;
         void set_user_data(std::any data);
         void clear_user_data();
-        // Model snapshots preserve object identity.
+        // Model snapshots preserve object identity. The remapping overload is used by
+        // topology replacement when a split creates helper endpoint nodes that need
+        // fresh live-project identity.
         expected_skel copy_to(world& w, const std::string& new_name = "") const;
+        expected_skel copy_to(
+            world& w,
+            const std::unordered_map<object_id, object_id>& id_remap,
+            const std::string& new_name = "") const;
         // Editor duplication creates fresh identity and remaps internal references.
         expected_skel duplicate_to(world& w, const std::string& new_name = "") const;
-
         void set_name(bone& bone, const std::string& new_name);
         void set_name(node& node, const std::string& new_name);
         auto nodes() { return detail::to_range_view<node_ref>(nodes_); }
         auto bones() { return detail::to_range_view<bone_ref>(bones_); }
         auto nodes() const { return detail::to_range_view<const_node_ref>(nodes_); }
         auto bones() const { return detail::to_range_view<const_bone_ref>(bones_); }
-
-        const std::vector<animation>& animations() const;
-        void insert_animation(const animation& anim);
-
         sm::world& owner();
         const sm::world& owner() const;
         // Compatibility/display convenience only; never use labels as identity.
@@ -80,7 +77,6 @@ namespace sm {
         bool contains(const std::string& name) const {
             return get_by_name<T>(name).has_value();
         }
-
         template <is_node_or_bone T>
         bool contains(const object_id& id) const {
             if constexpr (std::is_same_v<T, sm::node>) {
@@ -89,7 +85,6 @@ namespace sm {
                 return bones_.contains(id);
             }
         }
-
         void apply(matrix& mat);
         template <is_node_or_bone T>
         std::optional<sm::ref<T>> get(const object_id& id) const {
@@ -131,10 +126,10 @@ namespace sm {
         friend class bone;
     private:
         using skeleton_tbl = std::unordered_map<object_id, std::unique_ptr<skeleton>>;
-
         std::vector<std::unique_ptr<node>> nodes_;
         std::vector<std::unique_ptr<bone>> bones_;
         skeleton_tbl skeletons_;
+        object_id generate_piece_id() const;
         node_ref create_node(skeleton& parent, object_id id, const std::string& name, double x, double y);
         node_ref create_node(skeleton& parent, const std::string& name, double x, double y);
         node_ref create_node(skeleton& parent, double x, double y);
@@ -155,11 +150,21 @@ namespace sm {
         expected_skel create_skeleton(const std::string& name);
         expected_skel skeleton(const object_id& id);
         expected_const_skel skeleton(const object_id& id) const;
+        // Global piece lookup. Live project worlds guarantee node/bone IDs are unique
+        // across all skeleton components, so these remain stable across split/merge.
+        template <is_node_or_bone T>
+        std::optional<sm::ref<T>> get(const object_id& id) const {
+            for (auto skel : skeletons()) {
+                if (auto piece = skel->template get<T>(id)) {
+                    return piece;
+                }
+            }
+            return {};
+        }
         // Compatibility/display lookup only; these return the first matching label.
         expected_skel skeleton(const std::string& name);
         expected_const_skel skeleton(const std::string& name) const;
         result delete_skeleton(const object_id& id);
-
         std::vector<std::string> skeleton_names() const;
         bool contains_skeleton(const object_id& id) const;
         // Compatibility/display convenience only; labels are not identity.
@@ -175,5 +180,4 @@ namespace sm {
         auto skeletons() { return detail::to_range_view<skel_ref>(skeletons_); }
         auto skeletons() const { return detail::to_range_view<const_skel_ref>(skeletons_); }
     };
-
 }

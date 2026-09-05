@@ -7,6 +7,8 @@
 #include "../core/sm_visit.hpp"
 #include "project.hpp"
 #include <unordered_map>
+#include <unordered_set>
+#include <optional>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -29,7 +31,7 @@ namespace mdl {
             handle v_hnd;
             sm::world original;
             sm::object_id merged;
-            sm::object_id bone_id;
+            std::optional<sm::object_id> bone_id;
             add_bone_state(const std::string& bone_name,
                 const handle& u_hnd,
                 const handle& v_hnd);
@@ -44,9 +46,11 @@ namespace mdl {
             sm::world replacees;
             std::vector<sm::object_id> replacement_ids;
             sm::world replacements;
+            std::unordered_set<sm::object_id> regenerate_ids;
             replace_skeleton_state(
                 const std::vector<sm::object_id>& replacees,
-                const std::vector<sm::skel_ref>& replacements);
+                const std::vector<sm::skel_ref>& replacements,
+                const std::unordered_set<sm::object_id>& regenerate_ids);
         };
         struct transform_nodes_and_bones_state {
             std::function<void(sm::node&)> transform_nodes;
@@ -90,7 +94,8 @@ namespace mdl {
             const handle& u_hnd, const handle& v_hnd, const std::string& bone_name);
         static command make_replace_skeletons_command(
             const std::vector<sm::object_id>& replacees,
-            const std::vector<sm::skel_ref>& replacements
+            const std::vector<sm::skel_ref>& replacements,
+            const std::unordered_set<sm::object_id>& regenerate_ids
         );
         static command make_transform_bones_or_nodes_command(
             project& proj,

@@ -9,11 +9,52 @@
 #include <type_traits>
 #include <string_view>
 #include <stdexcept>
+#include <unordered_set>
+#include <unordered_map>
 
 using json = nlohmann::json;
 
 /*------------------------------------------------------------------------------------------------*/
 namespace {
+    using object_id_set = std::unordered_set<sm::object_id>;
+
+    object_id_set live_piece_ids(const sm::world& world) {
+        object_id_set ids;
+        for (auto skel : world.skeletons()) {
+            for (auto node : skel->nodes()) {
+                ids.insert(node->id());
+            }
+            for (auto bone : skel->bones()) {
+                ids.insert(bone->id());
+            }
+        }
+        return ids;
+    }
+    bool unique_live_piece_ids(const sm::world& world) {
+        object_id_set ids;
+        for (auto skel : world.skeletons()) {
+            for (auto node : skel->nodes()) {
+                if (!ids.insert(node->id()).second) {
+                    return false;
+                }
+            }
+            for (auto bone : skel->bones()) {
+                if (!ids.insert(bone->id()).second) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    sm::object_id unused_piece_id(object_id_set& used) {
+        while (true) {
+            auto id = sm::object_id::generate();
+            if (used.insert(id).second) {
+                return id;
+            }
+        }
+    }
+
     std::optional<sm::world> json_to_world(const std::string& str) {
         try {
             json proj = json::parse(str);
@@ -22,7 +63,7 @@ namespace {
             }
             sm::world new_world;
             auto result = new_world.from_json(proj.at("world"));
-            if (result != sm::result::success) {
+            if (result != sm::result::success || !unique_live_piece_ids(new_world)) {
                 return {};
             }
             return std::move(new_world);
@@ -177,12 +218,42 @@ void mdl::project::transform_node_positions(
 void mdl::project::replace_skeletons_aux(
         const std::vector<sm::object_id>& replacees,
         const std::vector<sm::skel_ref>& replacements,
-        std::vector<sm::object_id>* new_ids) {
+        std::vector<sm::object_id>* new_ids,
+        const std::unordered_set<sm::object_id>& regenerate_ids) {
     for (const auto& replacee : replacees) {
         world_.delete_skeleton(replacee);
     }
+
+    auto used_ids = live_piece_ids(world_);
+    auto allocation_guard = used_ids;
     for (auto replacement : replacements) {
-        auto new_skel = replacement->copy_to(world_);
+        for (auto node : replacement->nodes()) {
+            allocation_guard.insert(node->id());
+        }
+        for (auto bone : replacement->bones()) {
+            allocation_guard.insert(bone->id());
+        }
+    }
+
+    for (auto replacement : replacements) {
+        std::unordered_map<sm::object_id, sm::object_id> id_remap;
+        auto reserve_id = [&](const sm::object_id& id) {
+            if (regenerate_ids.contains(id) || used_ids.contains(id)) {
+                auto new_id = unused_piece_id(allocation_guard);
+                used_ids.insert(new_id);
+                id_remap[id] = new_id;
+            } else {
+                used_ids.insert(id);
+            }
+        };
+        for (auto node : replacement->nodes()) {
+            reserve_id(node->id());
+        }
+        for (auto bone : replacement->bones()) {
+            reserve_id(bone->id());
+        }
+
+        auto new_skel = replacement->copy_to(world_, id_remap);
         if (!new_skel) {
             throw std::runtime_error("skeleton copy failed");
         }
@@ -190,13 +261,18 @@ void mdl::project::replace_skeletons_aux(
             new_ids->push_back(new_skel->get().id());
         }
     }
+    if (!unique_live_piece_ids(world_)) {
+        throw std::runtime_error("live project contains duplicate node/bone object IDs");
+    }
     advance_default_name_counters_from_world();
     emit refresh_canvas(*this, true);
 }
 void mdl::project::replace_skeletons(
         const std::vector<sm::object_id>& replacees,
-        const std::vector<sm::skel_ref>& replacements) {
-    execute_command(commands::make_replace_skeletons_command(replacees, replacements));
+        const std::vector<sm::skel_ref>& replacements,
+        const std::unordered_set<sm::object_id>& regenerate_ids) {
+    execute_command(commands::make_replace_skeletons_command(
+        replacees, replacements, regenerate_ids));
 }
 
 bool mdl::identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2) {

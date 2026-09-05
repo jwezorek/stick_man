@@ -8,6 +8,8 @@
 #include <cstddef>
 #include <tuple>
 #include <functional>
+#include <optional>
+#include <unordered_set>
 #include "../core/sm_skeleton.hpp"
 #include "handle.hpp"
 
@@ -38,7 +40,8 @@ namespace mdl {
         void replace_skeletons_aux(
             const std::vector<sm::object_id>& replacees,
             const std::vector<sm::skel_ref>& replacements,
-            std::vector<sm::object_id>* new_ids_of_replacements);
+            std::vector<sm::object_id>* new_ids_of_replacements,
+            const std::unordered_set<sm::object_id>& regenerate_ids = {});
         void clear();
         std::string next_default_node_name();
         std::string next_default_bone_name();
@@ -47,6 +50,10 @@ namespace mdl {
         project();
         const sm::world& world() const;
         sm::world& world();
+        template <sm::is_node_or_bone T>
+        std::optional<sm::ref<T>> get(const sm::object_id& id) const {
+            return world_.get<T>(id);
+        }
         bool can_undo() const;
         bool can_redo() const;
         std::string to_json() const;
@@ -58,7 +65,8 @@ namespace mdl {
         bool rename(skel_piece piece, const std::string& new_name);
         void replace_skeletons(
             const std::vector<sm::object_id>& replacees,
-            const std::vector<sm::skel_ref>& replacements
+            const std::vector<sm::skel_ref>& replacements,
+            const std::unordered_set<sm::object_id>& regenerate_ids = {}
         );
         void transform(const std::vector<handle>& nodes,
             const std::function<void(sm::node&)>& fn);
