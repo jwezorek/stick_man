@@ -54,9 +54,9 @@ namespace sm {
         std::any get_user_data() const;
         void set_user_data(std::any data);
         void clear_user_data();
-        // Model snapshots preserve object identity. The remapping overload is used by
-        // topology replacement when a split creates helper endpoint nodes that need
-        // fresh live-project identity.
+        // Model snapshots preserve object identity. The remapping overload may remap the
+        // skeleton ID as well as node/bone IDs when topology replacement must avoid a
+        // collision in the live project's global object-ID namespace.
         expected_skel copy_to(world& w, const std::string& new_name = "") const;
         expected_skel copy_to(
             world& w,
@@ -129,7 +129,7 @@ namespace sm {
         std::vector<std::unique_ptr<node>> nodes_;
         std::vector<std::unique_ptr<bone>> bones_;
         skeleton_tbl skeletons_;
-        object_id generate_piece_id() const;
+        object_id generate_object_id() const;
         node_ref create_node(skeleton& parent, object_id id, const std::string& name, double x, double y);
         node_ref create_node(skeleton& parent, const std::string& name, double x, double y);
         node_ref create_node(skeleton& parent, double x, double y);
@@ -150,8 +150,8 @@ namespace sm {
         expected_skel create_skeleton(const std::string& name);
         expected_skel skeleton(const object_id& id);
         expected_const_skel skeleton(const object_id& id) const;
-        // Global piece lookup. Live project worlds guarantee node/bone IDs are unique
-        // across all skeleton components, so these remain stable across split/merge.
+        // Global node/bone lookup. Live project worlds guarantee every skeleton, node,
+        // and bone ID is unique, so node/bone lookup remains stable across split/merge.
         template <is_node_or_bone T>
         std::optional<sm::ref<T>> get(const object_id& id) const {
             for (auto skel : skeletons()) {

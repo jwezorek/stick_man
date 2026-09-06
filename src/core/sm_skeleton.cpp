@@ -182,7 +182,7 @@ sm::expected_skel sm::skeleton::copy_to(
         return it == id_remap.end() ? id : it->second;
     };
     auto label = new_name.empty() ? name_ : new_name;
-    auto new_skel = other_world.create_skeleton_with_id(id_, label);
+    auto new_skel = other_world.create_skeleton_with_id(mapped_id(id_), label);
     if (!new_skel) {
         return new_skel;
     }
@@ -229,7 +229,7 @@ sm::expected_skel sm::skeleton::duplicate_to(world& other_world, const std::stri
     std::unordered_map<object_id, object_id> id_map;
     id_map.emplace(id_, dest.id());
     for (auto node : nodes()) {
-        auto new_id = other_world.generate_piece_id();
+        auto new_id = other_world.generate_object_id();
         id_map.emplace(node->id(), new_id);
         auto copied = other_world.create_node(
             dest, new_id, node->name(), node->world_x(), node->world_y());
@@ -237,7 +237,7 @@ sm::expected_skel sm::skeleton::duplicate_to(world& other_world, const std::stri
     }
     dest.set_root(dest.get<sm::node>(id_map.at(root_node().id()))->get());
     for (auto bone : bones()) {
-        auto new_id = other_world.generate_piece_id();
+        auto new_id = other_world.generate_object_id();
         id_map.emplace(bone->id(), new_id);
         auto u = dest.get<sm::node>(id_map.at(bone->parent_node().id()));
         auto v = dest.get<sm::node>(id_map.at(bone->child_node().id()));
@@ -368,17 +368,17 @@ void sm::world::clear() {
     nodes_.clear();
 }
 bool sm::world::empty() const { return skeletons_.empty(); }
-sm::object_id sm::world::generate_piece_id() const {
+sm::object_id sm::world::generate_object_id() const {
     while (true) {
         auto id = object_id::generate();
-        if (!get<node>(id) && !get<bone>(id)) {
+        if (!contains_skeleton(id) && !get<node>(id) && !get<bone>(id)) {
             return id;
         }
     }
 }
 sm::skeleton& sm::world::create_skeleton(double x, double y) {
     auto new_name = unique_name("skeleton", skeleton_names());
-    auto id = object_id::generate();
+    auto id = generate_object_id();
     auto [it, inserted] = skeletons_.emplace(
         id, skeleton::make_unique(*this, id, new_name, x, y));
     if (!inserted) {
@@ -388,7 +388,7 @@ sm::skeleton& sm::world::create_skeleton(double x, double y) {
 }
 sm::skeleton& sm::world::create_skeleton(const point& pt) { return create_skeleton(pt.x, pt.y); }
 sm::expected_skel sm::world::create_skeleton_with_id(object_id id, const std::string& name) {
-    if (skeletons_.contains(id)) {
+    if (skeletons_.contains(id) || get<node>(id) || get<bone>(id)) {
         return std::unexpected(result::duplicate_id);
     }
     auto [it, inserted] = skeletons_.emplace(id, skeleton::make_unique(*this, id));
@@ -399,7 +399,7 @@ sm::expected_skel sm::world::create_skeleton_with_id(object_id id, const std::st
     return sm::ref(*it->second);
 }
 sm::expected_skel sm::world::create_skeleton(const std::string& name) {
-    return create_skeleton_with_id(object_id::generate(), name);
+    return create_skeleton_with_id(generate_object_id(), name);
 }
 sm::expected_skel sm::world::skeleton(const object_id& id) {
     auto const_this = const_cast<const world*>(this);
@@ -486,15 +486,17 @@ void sm::world::set_name(sm::skeleton& skel, const std::string& new_name) {
 }
 sm::node_ref sm::world::create_node(sm::skeleton& parent, object_id id,
     const std::string& name, double x, double y) {
-    if (parent.contains<node>(id)) {
-        throw std::runtime_error("duplicate node object ID");
+    // Scratch worlds used by selection splitting may contain the same node ID in
+    // more than one component, but an object ID may never collide across types.
+    if (parent.contains<node>(id) || skeletons_.contains(id) || get<bone>(id)) {
+        throw std::runtime_error("duplicate object ID");
     }
     nodes_.push_back(node::make_unique(parent, id, name, x, y));
     return *nodes_.back();
 }
 sm::node_ref sm::world::create_node(sm::skeleton& parent, const std::string& name,
     double x, double y) {
-    return create_node(parent, generate_piece_id(), name, x, y);
+    return create_node(parent, generate_object_id(), name, x, y);
 }
 sm::node_ref sm::world::create_node(sm::skeleton& parent, double x, double y) {
     return create_node(parent, "root", x, y);
@@ -509,7 +511,7 @@ sm::expected_bone sm::world::create_bone_in_skeleton(
     if (&skel_u != &skel_v) {
         return std::unexpected(sm::result::cross_skeleton_bone);
     }
-    if (skel_u.contains<bone>(id)) {
+    if (skeletons_.contains(id) || get<node>(id) || get<bone>(id)) {
         return std::unexpected(sm::result::duplicate_id);
     }
     bones_.push_back(bone::make_unique(id, bone_name, u, v));
@@ -517,10 +519,10 @@ sm::expected_bone sm::world::create_bone_in_skeleton(
 }
 sm::expected_bone sm::world::create_bone_in_skeleton(
     const std::string& bone_name, node& u, node& v) {
-    return create_bone_in_skeleton(generate_piece_id(), bone_name, u, v);
+    return create_bone_in_skeleton(generate_object_id(), bone_name, u, v);
 }
 sm::expected_bone sm::world::create_bone(const std::string& bone_name, node& u, node& v) {
-    return create_bone(generate_piece_id(), bone_name, u, v);
+    return create_bone(generate_object_id(), bone_name, u, v);
 }
 sm::expected_bone sm::world::create_bone(object_id id, const std::string& bone_name, node& u, node& v) {
     if (!v.is_root()) {
@@ -531,7 +533,7 @@ sm::expected_bone sm::world::create_bone(object_id id, const std::string& bone_n
     if (&skel_u == &skel_v) {
         return std::unexpected(sm::result::cyclic_bones);
     }
-    if (get<node>(id) || get<bone>(id)) {
+    if (contains_skeleton(id) || get<node>(id) || get<bone>(id)) {
         return std::unexpected(sm::result::duplicate_id);
     }
     skeletons_.erase(skel_v.id());

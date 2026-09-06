@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <optional>
+#include <stdexcept>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -18,7 +19,16 @@ namespace mdl {
         friend class project;
     private:
         template<typename T>
-        using handle_table = std::unordered_map<handle, T, handle_hash>;
+        using handle_table = std::unordered_map<handle, T>;
+
+        template<sm::is_skel_piece T>
+        static T& resolve(project& proj, const handle& hnd) {
+            auto object = proj.get(hnd);
+            if (auto ref = std::get_if<sm::ref<T>>(&object)) {
+                return ref->get();
+            }
+            throw std::runtime_error("model object has unexpected type");
+        }
         struct create_node_state {
             std::string node_name;
             sm::object_id skeleton;
@@ -72,7 +82,7 @@ namespace mdl {
         };
         template<sm::is_skel_piece T>
         static void rename(project& proj, const handle& hnd, const std::string& name) {
-            auto& obj = hnd.to<T>(proj.world_);
+            auto& obj = resolve<T>(proj, hnd);
             proj.rename_aux(sm::ref(obj), name);
         }
         template<sm::is_skel_piece T>

@@ -50,10 +50,8 @@ namespace mdl {
         project();
         const sm::world& world() const;
         sm::world& world();
-        template <sm::is_node_or_bone T>
-        std::optional<sm::ref<T>> get(const sm::object_id& id) const {
-            return world_.get<T>(id);
-        }
+        model_object get(const sm::object_id& id);
+        const_model_object get(const sm::object_id& id) const;
         bool can_undo() const;
         bool can_redo() const;
         std::string to_json() const;

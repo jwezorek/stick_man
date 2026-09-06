@@ -73,8 +73,8 @@ mdl::command mdl::commands::make_add_bone_command(
     auto state = std::make_shared<add_bone_state>(bone_name, u_hnd, v_hnd);
     return {
         [state](mdl::project& proj) {
-            auto& u = state->u_hnd.to<sm::node>(proj.world_);
-            auto& v = state->v_hnd.to<sm::node>(proj.world_);
+            auto& u = commands::resolve<sm::node>(proj, state->u_hnd);
+            auto& v = commands::resolve<sm::node>(proj, state->v_hnd);
             if (&u.owner() == &v.owner()) {
                 return;
             }
@@ -164,7 +164,7 @@ mdl::commands::transform_nodes_and_bones_state::transform_nodes_and_bones_state(
         const std::function<void(sm::node&)>& fn):
     transform_nodes{fn} {
     for (auto hnd : node_hnds) {
-        auto& node = hnd.to<sm::node>(proj.world_);
+        auto& node = commands::resolve<sm::node>(proj, hnd);
         nodes.push_back(hnd);
         old_node_to_position[hnd] = node.world_pos();
     }
@@ -176,7 +176,7 @@ mdl::commands::transform_nodes_and_bones_state::transform_nodes_and_bones_state(
     transform_bones{fn} {
     std::unordered_set<sm::node*> node_set;
     for (auto hnd : bone_hnds) {
-        auto& bone = hnd.to<sm::bone>(proj.world_);
+        auto& bone = commands::resolve<sm::bone>(proj, hnd);
         bones.push_back(hnd);
         if (auto rot_con = bone.rotation_constraint()) {
             old_bone_to_rotcon[hnd] = *rot_con;
@@ -203,11 +203,11 @@ mdl::command mdl::commands::make_transform_bones_or_nodes_command(
         [state](project& proj) {
             if (state->transform_nodes) {
                 for (auto node_hnd : state->nodes) {
-                    state->transform_nodes(node_hnd.to<sm::node>(proj.world_));
+                    state->transform_nodes(commands::resolve<sm::node>(proj, node_hnd));
                 }
             } else if (state->transform_bones) {
                 for (auto bone_hnd : state->bones) {
-                    state->transform_bones(bone_hnd.to<sm::bone>(proj.world_));
+                    state->transform_bones(commands::resolve<sm::bone>(proj, bone_hnd));
                 }
             } else {
                 throw std::runtime_error("bad call to make_transform_bones_or_nodes_command");
@@ -216,11 +216,11 @@ mdl::command mdl::commands::make_transform_bones_or_nodes_command(
         },
         [state](project& proj) {
             for (auto node_hnd : state->nodes) {
-                auto& node = node_hnd.to<sm::node>(proj.world_);
+                auto& node = commands::resolve<sm::node>(proj, node_hnd);
                 node.set_world_pos(state->old_node_to_position[node_hnd]);
             }
             for (auto bone_hnd : state->bones) {
-                auto& bone = bone_hnd.to<sm::bone>(proj.world_);
+                auto& bone = commands::resolve<sm::bone>(proj, bone_hnd);
                 if (state->old_bone_to_rotcon.contains(bone_hnd)) {
                     auto rot_con = state->old_bone_to_rotcon[bone_hnd];
                     bone.set_rotation_constraint(
@@ -240,14 +240,14 @@ mdl::command mdl::commands::make_transform_node_positions_command(
     return {
         [new_locs](project& proj) {
             for (const auto& [node_hnd, loc] : new_locs) {
-                auto& node = node_hnd.to<sm::node>(proj.world_);
+                auto& node = commands::resolve<sm::node>(proj, node_hnd);
                 node.set_world_pos(loc);
             }
             emit proj.refresh_canvas(proj, false);
         },
         [old_locs](project& proj) {
             for (const auto& [node_hnd, loc] : old_locs) {
-                auto& node = node_hnd.to<sm::node>(proj.world_);
+                auto& node = commands::resolve<sm::node>(proj, node_hnd);
                 node.set_world_pos(loc);
             }
             emit proj.refresh_canvas(proj, false);
