@@ -14,7 +14,7 @@
 #include "sm_types.hpp"
 #include "sm_object_id.hpp"
 #include "sm_bone.hpp"
-#include "third-party/json_fwd.hpp"
+#include "json_fwd.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -28,18 +28,18 @@ namespace sm {
         using nodes_tbl = std::unordered_map<object_id, node*>;
         using bones_tbl = std::unordered_map<object_id, bone*>;
         const object_id id_;
-        world_ref owner_;
+        std::reference_wrapper<topology> owner_;
         std::string name_;
         maybe_node_ref root_;
         std::any user_data_;
         nodes_tbl nodes_;
         bones_tbl bones_;
     protected:
-        skeleton(topology& w, object_id id);
-        skeleton(topology& w, object_id id, const std::string& name, double x, double y);
+        skeleton(topology& owner, object_id id);
+        skeleton(topology& owner, object_id id, const std::string& name, double x, double y);
         void on_new_bone(sm::bone& bone);
         void set_name(const std::string& str);
-        result from_json(topology& w, const nlohmann::json&);
+        result from_json(topology& owner, const nlohmann::json&);
         nlohmann::json to_json() const;
         void set_root(sm::node& new_root);
         void register_node(sm::node& new_node);
@@ -57,13 +57,13 @@ namespace sm {
         // Model snapshots preserve object identity. The remapping overload may remap the
         // skeleton ID as well as node/bone IDs when topology replacement must avoid a
         // collision in the live project's global object-ID namespace.
-        expected_skel copy_to(topology& w, const std::string& new_name = "") const;
+        expected_skel copy_to(topology& destination, const std::string& new_name = "") const;
         expected_skel copy_to(
-            topology& w,
+            topology& destination,
             const std::unordered_map<object_id, object_id>& id_remap,
             const std::string& new_name = "") const;
         // Editor duplication creates fresh identity and remaps internal references.
-        expected_skel duplicate_to(topology& w, const std::string& new_name = "") const;
+        expected_skel duplicate_to(topology& destination, const std::string& new_name = "") const;
         void set_name(bone& bone, const std::string& new_name);
         void set_name(node& node, const std::string& new_name);
         auto nodes() { return detail::to_range_view<node_ref>(nodes_); }
@@ -150,7 +150,7 @@ namespace sm {
         expected_skel create_skeleton(const std::string& name);
         expected_skel skeleton(const object_id& id);
         expected_const_skel skeleton(const object_id& id) const;
-        // Global node/bone lookup. Live project worlds guarantee every skeleton, node,
+        // Global node/bone lookup. Live project topologies guarantee every skeleton, node,
         // and bone ID is unique, so node/bone lookup remains stable across split/merge.
         template <is_node_or_bone T>
         std::optional<sm::ref<T>> get(const object_id& id) const {

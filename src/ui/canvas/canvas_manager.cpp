@@ -71,8 +71,8 @@ void ui::canvas::manager::add_new_bone(sm::bone& bone) {
     canv.insert_item(bone);
     canv.sync_to_model();
 
-    auto& world = bone.owner().owner();
-    emit canvas_refresh(world);
+    auto& topology = bone.owner().owner();
+    emit canvas_refresh(topology);
 }
 void ui::canvas::manager::add_new_skeleton(sm::skel_ref skel_ref) {
     auto& canv = active_canvas();
@@ -112,9 +112,9 @@ void ui::canvas::manager::set_canvas_name(const std::string& name) {
 
 void ui::canvas::manager::set_contents(mdl::project& model) {
     active_canvas().set_contents(
-        model.world().skeletons() | r::to<std::vector<sm::skel_ref>>()
+        model.topology().skeletons() | r::to<std::vector<sm::skel_ref>>()
     );
-    emit canvas_refresh(model.world());
+    emit canvas_refresh(model.topology());
 }
 
 void ui::canvas::manager::set_drag_mode(drag_mode dm) {

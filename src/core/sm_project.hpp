@@ -27,7 +27,7 @@ namespace sm {
     };
 
     class project {
-        topology world_;
+        sm::topology topology_;
         mutable std::unordered_map<object_id, project_object> objects_;
         mutable bool object_index_dirty_ = true;
 
@@ -42,8 +42,8 @@ namespace sm {
         project(const project&) = delete;
         project& operator=(const project&) = delete;
 
-        sm::topology& world();
-        const sm::topology& world() const;
+        sm::topology& topology();
+        const sm::topology& topology() const;
 
         project_object get(const object_id& id);
         const_project_object get(const object_id& id) const;

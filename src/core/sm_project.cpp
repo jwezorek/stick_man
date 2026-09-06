@@ -14,7 +14,7 @@ namespace {
     template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 
     constexpr std::string_view project_json_name = "project.json";
-    constexpr double project_json_version = 2.0;
+    constexpr double project_json_version = 3.0;
 
     sm::object_id object_id_of(const sm::project_object& object) {
         return std::visit(
@@ -24,14 +24,14 @@ namespace {
     }
 
     bool build_object_index(
-            sm::topology& world,
+            sm::topology& topology,
             std::unordered_map<sm::object_id, sm::project_object>& objects) {
         objects.clear();
         auto insert = [&objects](sm::project_object object) {
             return objects.emplace(object_id_of(object), object).second;
         };
 
-        for (auto skel : world.skeletons()) {
+        for (auto skel : topology.skeletons()) {
             if (!insert(skel)) {
                 objects.clear();
                 return false;
@@ -60,7 +60,7 @@ void sm::project::invalidate_object_index() noexcept {
 }
 
 bool sm::project::rebuild_object_index() {
-    if (!build_object_index(world_, objects_)) {
+    if (!build_object_index(topology_, objects_)) {
         return false;
     }
     object_index_dirty_ = false;
@@ -74,15 +74,15 @@ bool sm::project::ensure_object_index() const {
     return const_cast<project*>(this)->rebuild_object_index();
 }
 
-sm::topology& sm::project::world() {
+sm::topology& sm::project::topology() {
     // Core topology is still mutated directly by the editor model. Conservatively
     // invalidate the global object index whenever mutable topology access is granted.
     invalidate_object_index();
-    return world_;
+    return topology_;
 }
 
-const sm::topology& sm::project::world() const {
-    return world_;
+const sm::topology& sm::project::topology() const {
+    return topology_;
 }
 
 sm::project_object sm::project::get(const object_id& id) {
@@ -125,7 +125,7 @@ bool sm::project::has_unique_object_ids() const {
 }
 
 void sm::project::clear() {
-    world_.clear();
+    topology_.clear();
     objects_.clear();
     object_index_dirty_ = false;
 }
@@ -137,7 +137,7 @@ std::expected<sm::project_buffer, sm::project_result> sm::project::serialize() c
 
     json semantic_project = {
         {"version", project_json_version},
-        {"world", world_.to_json()}
+        {"topology", topology_.to_json()}
     };
     auto project_json = semantic_project.dump(4);
 
@@ -202,25 +202,26 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
     mz_free(project_json_data);
     mz_zip_reader_end(&archive);
 
-    sm::topology new_world;
+    sm::topology new_topology;
     try {
         auto semantic_project = json::parse(project_json);
         if (semantic_project.at("version").get<double>() != project_json_version) {
             return project_result::invalid_project_json;
         }
-        if (new_world.from_json(semantic_project.at("world")) != result::success) {
+        if (new_topology.from_json(semantic_project.at("topology")) != result::success) {
             return project_result::invalid_project_json;
         }
-    } catch (...) {
+    }
+    catch (...) {
         return project_result::invalid_project_json;
     }
 
     std::unordered_map<object_id, project_object> new_objects;
-    if (!build_object_index(new_world, new_objects)) {
+    if (!build_object_index(new_topology, new_objects)) {
         return project_result::duplicate_object_id;
     }
 
-    world_ = std::move(new_world);
+    topology_ = std::move(new_topology);
     objects_ = std::move(new_objects);
     object_index_dirty_ = false;
     return project_result::success;

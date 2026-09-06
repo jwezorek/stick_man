@@ -220,18 +220,18 @@ namespace {
             if (copied.contains(piece)) {
                 continue;
             }
-            auto& dest_world = is_selected ? selected : unselected;
+            auto& dest_topology = is_selected ? selected : unselected;
             std::visit(
                 overload{
                     [&](sm::const_skel_ref skel) {
                         copied.insert(skel);
-                        auto new_skel = skel->copy_to(dest_world);
+                        auto new_skel = skel->copy_to(dest_topology);
                         if (!new_skel) {
                             throw std::runtime_error("unable to make new skeleton");
                         }
                     },
                     [&](auto node_or_bone) {
-                        copy_connected_component(dest_world, node_or_bone, selection_set, copied);
+                        copy_connected_component(dest_topology, node_or_bone, selection_set, copied);
                     }
                 },
                 piece
@@ -293,7 +293,7 @@ namespace {
         auto str = selection_json.dump(4);
         return QByteArray(str.c_str(), str.size());
     }
-    std::optional<sm::matrix> paste_matrix(std::optional<sm::point> target,const sm::topology& world) {
+    std::optional<sm::matrix> paste_matrix(std::optional<sm::point> target,const sm::topology& topology) {
         if (!target) {
             return {};
         }
@@ -301,7 +301,7 @@ namespace {
             std::numeric_limits<double>::max(),
             std::numeric_limits<double>::max()
         };
-        auto pts = world.skeletons() |
+        auto pts = topology.skeletons() |
             rv::transform([](auto s) {return s->root_node().world_pos(); });
         for (auto pt : pts) {
             if (pt.y < lower_left.y || (pt.y == lower_left.y && pt.x < lower_left.x)) {
@@ -311,23 +311,23 @@ namespace {
         return sm::translation_matrix(*target - lower_left);
     }
     void paste_selection(ui::stick_man& main_wnd, const QByteArray& bytes, bool in_place) {
-        std::string world_json_str = std::string(bytes.data());
-        sm::topology clipboard_world;
-        clipboard_world.from_json_str(world_json_str);
+        std::string topology_json_str = std::string(bytes.data());
+        sm::topology clipboard_topology;
+        clipboard_topology.from_json_str(topology_json_str);
 
         auto& canvases = main_wnd.canvases();
         auto& canv = canvases.active_canvas();
         auto dest_mat = (!in_place) ?
-            paste_matrix(canv.cursor_pos(), clipboard_world) :
+            paste_matrix(canv.cursor_pos(), clipboard_topology) :
             std::optional<sm::matrix>{};
         if (dest_mat) {
-            clipboard_world.apply( *dest_mat );
+            clipboard_topology.apply( *dest_mat );
         }
 
         auto& project = main_wnd.project();
         project.replace_skeletons(
             {},
-            clipboard_world.skeletons() | r::to<std::vector<sm::skel_ref>>()
+            clipboard_topology.skeletons() | r::to<std::vector<sm::skel_ref>>()
         );
     }
     void cut_or_copy(ui::stick_man& main_wnd, bool should_cut) {

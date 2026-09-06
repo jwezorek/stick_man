@@ -48,13 +48,13 @@ namespace mdl {
         void clear();
         std::string next_default_node_name();
         std::string next_default_bone_name();
-        void advance_default_name_counters_from_world();
+        void advance_default_name_counters_from_topology();
     public:
         project();
         const sm::project& core() const;
         sm::project& core();
-        const sm::topology& world() const;
-        sm::topology& world();
+        const sm::topology& topology() const;
+        sm::topology& topology();
         model_object get(const sm::object_id& id);
         const_model_object get(const sm::object_id& id) const;
         bool can_undo() const;

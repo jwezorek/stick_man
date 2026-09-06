@@ -15,9 +15,9 @@
 namespace {
     using object_id_set = std::unordered_set<sm::object_id>;
 
-    object_id_set live_object_ids(const sm::topology& world) {
+    object_id_set live_object_ids(const sm::topology& topology) {
         object_id_set ids;
-        for (auto skel : world.skeletons()) {
+        for (auto skel : topology.skeletons()) {
             ids.insert(skel->id());
             for (auto node : skel->nodes()) {
                 ids.insert(node->id());
@@ -68,8 +68,8 @@ mdl::project::project() {}
 
 const sm::project& mdl::project::core() const { return core_; }
 sm::project& mdl::project::core() { return core_; }
-const sm::topology& mdl::project::world() const { return core_.world(); }
-sm::topology& mdl::project::world() { return core_.world(); }
+const sm::topology& mdl::project::topology() const { return core_.topology(); }
+sm::topology& mdl::project::topology() { return core_.topology(); }
 
 mdl::model_object mdl::project::get(const sm::object_id& id) {
     return core_.get(id);
@@ -93,8 +93,8 @@ std::string mdl::project::next_default_node_name() {
 std::string mdl::project::next_default_bone_name() {
     return "bone-" + std::to_string(next_bone_name_++);
 }
-void mdl::project::advance_default_name_counters_from_world() {
-    const auto& topology = std::as_const(core_).world();
+void mdl::project::advance_default_name_counters_from_topology() {
+    const auto& topology = std::as_const(core_).topology();
     for (auto skel : topology.skeletons()) {
         for (auto node : skel->nodes()) {
             auto index = default_name_index(node->name(), "node-");
@@ -144,7 +144,7 @@ bool mdl::project::deserialize(std::span<const std::uint8_t> buffer) {
     undo_stack_ = {};
     next_node_name_ = 1;
     next_bone_name_ = 1;
-    advance_default_name_counters_from_world();
+    advance_default_name_counters_from_topology();
     emit refresh_undo_redo_state(false, false);
     emit new_project_opened(*this);
     return true;
@@ -163,7 +163,7 @@ void mdl::project::rename_aux(skel_piece piece_var, const std::string& new_name)
         },
         piece_var
     );
-    advance_default_name_counters_from_world();
+    advance_default_name_counters_from_topology();
     emit name_changed(piece_var, new_name);
 }
 bool mdl::project::can_rename(skel_piece, const std::string&) {
@@ -197,10 +197,10 @@ void mdl::project::replace_skeletons_aux(
         std::vector<sm::object_id>* new_ids,
         const std::unordered_set<sm::object_id>& regenerate_ids) {
     for (const auto& replacee : replacees) {
-        world().delete_skeleton(replacee);
+        topology().delete_skeleton(replacee);
     }
 
-    auto used_ids = live_object_ids(world());
+    auto used_ids = live_object_ids(topology());
     auto allocation_guard = used_ids;
     for (auto replacement : replacements) {
         allocation_guard.insert(replacement->id());
@@ -231,7 +231,7 @@ void mdl::project::replace_skeletons_aux(
             reserve_id(bone->id());
         }
 
-        auto new_skel = replacement->copy_to(world(), id_remap);
+        auto new_skel = replacement->copy_to(topology(), id_remap);
         if (!new_skel) {
             throw std::runtime_error("skeleton copy failed");
         }
@@ -242,7 +242,7 @@ void mdl::project::replace_skeletons_aux(
     if (!core_.has_unique_object_ids()) {
         throw std::runtime_error("live project contains duplicate object IDs");
     }
-    advance_default_name_counters_from_world();
+    advance_default_name_counters_from_topology();
     emit refresh_canvas(*this, true);
 }
 void mdl::project::replace_skeletons(
