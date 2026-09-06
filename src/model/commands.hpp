@@ -33,13 +33,13 @@ namespace mdl {
             std::string node_name;
             sm::object_id skeleton;
             sm::point loc;
-            sm::world snapshot;
+            sm::topology snapshot;
         };
         struct add_bone_state {
             std::string bone_name;
             handle u_hnd;
             handle v_hnd;
-            sm::world original;
+            sm::topology original;
             sm::object_id merged;
             std::optional<sm::object_id> bone_id;
             add_bone_state(const std::string& bone_name,
@@ -53,9 +53,9 @@ namespace mdl {
         };
         struct replace_skeleton_state {
             std::vector<sm::object_id> replacee_ids;
-            sm::world replacees;
+            sm::topology replacees;
             std::vector<sm::object_id> replacement_ids;
-            sm::world replacements;
+            sm::topology replacements;
             std::unordered_set<sm::object_id> regenerate_ids;
             replace_skeleton_state(
                 const std::vector<sm::object_id>& replacees,

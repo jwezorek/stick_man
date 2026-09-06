@@ -53,8 +53,8 @@ namespace mdl {
         project();
         const sm::project& core() const;
         sm::project& core();
-        const sm::world& world() const;
-        sm::world& world();
+        const sm::topology& world() const;
+        sm::topology& world();
         model_object get(const sm::object_id& id);
         const_model_object get(const sm::object_id& id) const;
         bool can_undo() const;

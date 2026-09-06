@@ -44,7 +44,7 @@ namespace ui {
             void handle_tree_change(QStandardItem* item) override;
             void handle_tree_selection_change( 
                 const QItemSelection&, const QItemSelection&) override;
-            void sync_with_model(sm::world& model) override;
+            void sync_with_model(sm::topology& model) override;
             void init_aux(canvas::manager& canvases, mdl::project& proj) override;
 
         public:

@@ -212,7 +212,7 @@ void ui::pane::main_skeleton_pane::expand_selected_items() {
 	}
 }
 
-void ui::pane::main_skeleton_pane::sync_with_model(sm::world& model)
+void ui::pane::main_skeleton_pane::sync_with_model(sm::topology& model)
 {
 	disconnect_tree_sel_handler();
 

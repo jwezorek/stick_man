@@ -14,7 +14,7 @@
 namespace sm {
 
     class node : public detail::enable_protected_make_unique<node> {
-        friend class world;
+        friend class topology;
         friend class bone;
         friend class skeleton;
     private:
@@ -63,7 +63,7 @@ namespace sm {
     };
 
     class bone : public detail::enable_protected_make_unique<bone> {
-        friend class world;
+        friend class topology;
         friend class skeleton;
     private:
         const object_id id_;

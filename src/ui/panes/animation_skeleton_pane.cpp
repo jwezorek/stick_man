@@ -35,7 +35,7 @@ void ui::pane::animation_skeleton_pane::handle_tree_selection_change(const QItem
 {
 }
 
-void ui::pane::animation_skeleton_pane::sync_with_model(sm::world& model) {
+void ui::pane::animation_skeleton_pane::sync_with_model(sm::topology& model) {
 	disconnect_tree_sel_handler();
 
 	// clear the treeview and repopulate it.

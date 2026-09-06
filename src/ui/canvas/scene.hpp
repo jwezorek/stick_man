@@ -21,7 +21,7 @@ namespace sm {
     class node;
     class bone;
     class skeleton;
-    class world;
+    class topology;
 }
 
 namespace mdl {

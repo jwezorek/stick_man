@@ -111,16 +111,16 @@ namespace sm {
 	class bone;
 	class node;
 	class skeleton;
-	class world;
+	class topology;
 
 	using bone_ref = ref<bone>;
 	using node_ref = ref<node>;
 	using skel_ref = ref<skeleton>;
-	using world_ref = ref<world>;
+	using world_ref = ref<topology>;
 	using const_bone_ref = ref<const bone>;
 	using const_node_ref = ref<const node>;
 	using const_skel_ref = ref<const skeleton>;
-	using const_world_ref = ref<const world>;
+	using const_world_ref = ref<const topology>;
 
 	using maybe_bone_ref = std::optional<bone_ref>;
 	using maybe_node_ref = std::optional<node_ref>;

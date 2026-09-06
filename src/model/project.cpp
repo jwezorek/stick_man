@@ -15,7 +15,7 @@
 namespace {
     using object_id_set = std::unordered_set<sm::object_id>;
 
-    object_id_set live_object_ids(const sm::world& world) {
+    object_id_set live_object_ids(const sm::topology& world) {
         object_id_set ids;
         for (auto skel : world.skeletons()) {
             ids.insert(skel->id());
@@ -68,8 +68,8 @@ mdl::project::project() {}
 
 const sm::project& mdl::project::core() const { return core_; }
 sm::project& mdl::project::core() { return core_; }
-const sm::world& mdl::project::world() const { return core_.world(); }
-sm::world& mdl::project::world() { return core_.world(); }
+const sm::topology& mdl::project::world() const { return core_.world(); }
+sm::topology& mdl::project::world() { return core_.world(); }
 
 mdl::model_object mdl::project::get(const sm::object_id& id) {
     return core_.get(id);

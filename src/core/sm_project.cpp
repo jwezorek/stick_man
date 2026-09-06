@@ -24,7 +24,7 @@ namespace {
     }
 
     bool build_object_index(
-            sm::world& world,
+            sm::topology& world,
             std::unordered_map<sm::object_id, sm::project_object>& objects) {
         objects.clear();
         auto insert = [&objects](sm::project_object object) {
@@ -74,14 +74,14 @@ bool sm::project::ensure_object_index() const {
     return const_cast<project*>(this)->rebuild_object_index();
 }
 
-sm::world& sm::project::world() {
+sm::topology& sm::project::world() {
     // Core topology is still mutated directly by the editor model. Conservatively
     // invalidate the global object index whenever mutable topology access is granted.
     invalidate_object_index();
     return world_;
 }
 
-const sm::world& sm::project::world() const {
+const sm::topology& sm::project::world() const {
     return world_;
 }
 
@@ -202,7 +202,7 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
     mz_free(project_json_data);
     mz_zip_reader_end(&archive);
 
-    sm::world new_world;
+    sm::topology new_world;
     try {
         auto semantic_project = json::parse(project_json);
         if (semantic_project.at("version").get<double>() != project_json_version) {
@@ -211,8 +211,7 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
         if (new_world.from_json(semantic_project.at("world")) != result::success) {
             return project_result::invalid_project_json;
         }
-    }
-    catch (...) {
+    } catch (...) {
         return project_result::invalid_project_json;
     }
 

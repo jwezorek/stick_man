@@ -19,9 +19,9 @@
 /*------------------------------------------------------------------------------------------------*/
 
 namespace sm {
-    class world;
+    class topology;
     class skeleton : public detail::enable_protected_make_unique<skeleton> {
-        friend class world;
+        friend class topology;
         friend class node;
         friend class bone;
     private:
@@ -35,16 +35,16 @@ namespace sm {
         nodes_tbl nodes_;
         bones_tbl bones_;
     protected:
-        skeleton(world& w, object_id id);
-        skeleton(world& w, object_id id, const std::string& name, double x, double y);
+        skeleton(topology& w, object_id id);
+        skeleton(topology& w, object_id id, const std::string& name, double x, double y);
         void on_new_bone(sm::bone& bone);
         void set_name(const std::string& str);
-        result from_json(world& w, const nlohmann::json&);
+        result from_json(topology& w, const nlohmann::json&);
         nlohmann::json to_json() const;
         void set_root(sm::node& new_root);
         void register_node(sm::node& new_node);
         void register_bone(sm::bone& new_bone);
-        void set_owner(world& owner);
+        void set_owner(topology& owner);
     public:
         const object_id& id() const noexcept;
         std::string name() const;
@@ -57,21 +57,21 @@ namespace sm {
         // Model snapshots preserve object identity. The remapping overload may remap the
         // skeleton ID as well as node/bone IDs when topology replacement must avoid a
         // collision in the live project's global object-ID namespace.
-        expected_skel copy_to(world& w, const std::string& new_name = "") const;
+        expected_skel copy_to(topology& w, const std::string& new_name = "") const;
         expected_skel copy_to(
-            world& w,
+            topology& w,
             const std::unordered_map<object_id, object_id>& id_remap,
             const std::string& new_name = "") const;
         // Editor duplication creates fresh identity and remaps internal references.
-        expected_skel duplicate_to(world& w, const std::string& new_name = "") const;
+        expected_skel duplicate_to(topology& w, const std::string& new_name = "") const;
         void set_name(bone& bone, const std::string& new_name);
         void set_name(node& node, const std::string& new_name);
         auto nodes() { return detail::to_range_view<node_ref>(nodes_); }
         auto bones() { return detail::to_range_view<bone_ref>(bones_); }
         auto nodes() const { return detail::to_range_view<const_node_ref>(nodes_); }
         auto bones() const { return detail::to_range_view<const_bone_ref>(bones_); }
-        sm::world& owner();
-        const sm::world& owner() const;
+        sm::topology& owner();
+        const sm::topology& owner() const;
         // Compatibility/display convenience only; never use labels as identity.
         template <is_node_or_bone T>
         bool contains(const std::string& name) const {
@@ -120,7 +120,7 @@ namespace sm {
             return {};
         }
     };
-    class world {
+    class topology {
         friend class skeleton;
         friend class node;
         friend class bone;
@@ -137,12 +137,12 @@ namespace sm {
         expected_bone create_bone_in_skeleton(const std::string& bone_name, node& u, node& v);
         expected_skel create_skeleton_with_id(object_id id, const std::string& name);
     public:
-        world();
-        world(world&& other);
-        world& operator=(world&& other);
-        world(const world& other) = delete;
-        world& operator=(const world& other) = delete;
-        ~world() = default;
+        topology();
+        topology(topology&& other);
+        topology& operator=(topology&& other);
+        topology(const topology& other) = delete;
+        topology& operator=(const topology& other) = delete;
+        ~topology() = default;
         void clear();
         bool empty() const;
         skeleton& create_skeleton(double x, double y);

@@ -67,12 +67,12 @@ namespace {
             }
         }
     };
-    sm::skeleton* create_skeleton(sm::world& dest, const std::string& skel_name) {
+    sm::skeleton* create_skeleton(sm::topology& dest, const std::string& skel_name) {
         auto skel = dest.create_skeleton(skel_name);
         return skel ? &skel->get() : nullptr;
     }
 
-    void copy_connected_component(sm::world& dest, const auto& root,
+    void copy_connected_component(sm::topology& dest, const auto& root,
             const skeleton_piece_set& selection, skeleton_piece_set& copied) {
         bool is_selected = selection.contains(sm::ref(root));
         auto is_part_of_component = [&](auto& itm)->bool {
@@ -203,7 +203,7 @@ namespace {
     // cannot have a bone without its two nodes existing this will make duplicate
     // nodes for connected components trees with raw bones for leaves, but this is what
     // we want. This is what representing arbitrary selections as skeletons entails.
-    std::tuple<sm::world, sm::world> split_skeletons_by_selection(
+    std::tuple<sm::topology, sm::topology> split_skeletons_by_selection(
             ui::canvas::scene& canv, const std::unordered_set<const sm::skeleton*>& skel_set) {
         auto pieces = skeleton_pieces_in_topological_order(canv, skel_set);
 
@@ -214,8 +214,8 @@ namespace {
             }
         }
         skeleton_piece_set copied;
-        sm::world unselected;
-        sm::world selected;
+        sm::topology unselected;
+        sm::topology selected;
         for (auto [piece, is_selected] : pieces) {
             if (copied.contains(piece)) {
                 continue;
@@ -293,7 +293,7 @@ namespace {
         auto str = selection_json.dump(4);
         return QByteArray(str.c_str(), str.size());
     }
-    std::optional<sm::matrix> paste_matrix(std::optional<sm::point> target,const sm::world& world) {
+    std::optional<sm::matrix> paste_matrix(std::optional<sm::point> target,const sm::topology& world) {
         if (!target) {
             return {};
         }
@@ -312,7 +312,7 @@ namespace {
     }
     void paste_selection(ui::stick_man& main_wnd, const QByteArray& bytes, bool in_place) {
         std::string world_json_str = std::string(bytes.data());
-        sm::world clipboard_world;
+        sm::topology clipboard_world;
         clipboard_world.from_json_str(world_json_str);
 
         auto& canvases = main_wnd.canvases();
