@@ -1,7 +1,7 @@
 #include "clipboard.hpp"
 #include "../core/sm_skeleton.hpp"
 #include "../core/sm_visit.hpp"
-#include "../core/json.hpp"
+#include "../core/third-party/json.hpp"
 #include "canvas/node_item.hpp"
 #include "canvas/bone_item.hpp"
 #include "canvas/skel_item.hpp"

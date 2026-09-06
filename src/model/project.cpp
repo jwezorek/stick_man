@@ -1,7 +1,7 @@
 #include "project.hpp"
 #include "commands.hpp"
 #include "../core/sm_skeleton.hpp"
-#include "../core/json.hpp"
+#include "../core/third-party/json.hpp"
 #include <optional>
 #include <charconv>
 #include <algorithm>

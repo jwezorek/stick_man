@@ -14,7 +14,7 @@
 #include "sm_types.hpp"
 #include "sm_object_id.hpp"
 #include "sm_bone.hpp"
-#include "json_fwd.hpp"
+#include "third-party/json_fwd.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 

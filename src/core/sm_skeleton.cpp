@@ -1,7 +1,7 @@
 #include "sm_skeleton.hpp"
 #include "sm_types.hpp"
 #include "sm_visit.hpp"
-#include "json.hpp"
+#include "third-party/json.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
