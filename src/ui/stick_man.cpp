@@ -11,7 +11,9 @@
 #include "clipboard.hpp"
 #include <QtWidgets>
 #include <QFileInfo>
+#include <cstdint>
 #include <ranges>
+#include <span>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <dwmapi.h>
@@ -68,49 +70,81 @@ ui::stick_man::stick_man(QWidget* parent) :
     tool_pane_->init(tool_mgr_);
 }
 void ui::stick_man::set_current_file(const QString& file_path) {
+    current_file_path_ = file_path;
     const auto file_name = QFileInfo(file_path).fileName();
     canvases_->set_canvas_name(file_name.toStdString());
     setWindowTitle(QString("stick_man - %1").arg(file_name));
 }
+
+bool ui::stick_man::write_project_file(const QString& file_path) {
+    auto serialized = project_.serialize();
+    if (!serialized) {
+        QMessageBox::critical(this, "Error", "Could not serialize project.");
+        return false;
+    }
+
+    QFile file(file_path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        QMessageBox::critical(this, "Error", "Could not open project file for writing.");
+        return false;
+    }
+
+    const auto& buffer = *serialized;
+    const auto written = file.write(
+        reinterpret_cast<const char*>(buffer.data()),
+        static_cast<qint64>(buffer.size()));
+    file.close();
+
+    if (written != static_cast<qint64>(buffer.size())) {
+        QMessageBox::critical(this, "Error", "Could not write complete project file.");
+        return false;
+    }
+    return true;
+}
 void ui::stick_man::open()
 {
     QString filePath = QFileDialog::getOpenFileName(
-        this, "Open stick man", QDir::homePath(), "stick man JSON (*.smj);;All Files (*)");
-    if (!filePath.isEmpty()) {
-        QFile file(filePath);
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            QTextStream in(&file);
-            QString content = in.readAll();
-            file.close();
-            auto success = project_.from_json(content.toStdString());
-            if (!success) {
-                QMessageBox::critical(this, "Error", "Error opening file.");
-            }
-            else {
-                set_current_file(filePath);
-            }
-        } else {
-            QMessageBox::critical(this, "Error", "Could not open file.");
-        }
+        this, "Open stick_man project", QDir::homePath(), "stick_man Project (*.stickman)");
+    if (filePath.isEmpty()) {
+        return;
     }
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        QMessageBox::critical(this, "Error", "Could not open project file.");
+        return;
+    }
+
+    const QByteArray content = file.readAll();
+    file.close();
+    const auto* first = reinterpret_cast<const std::uint8_t*>(content.constData());
+    const std::span<const std::uint8_t> buffer(first, static_cast<std::size_t>(content.size()));
+    if (!project_.deserialize(buffer)) {
+        QMessageBox::critical(this, "Error", "Error opening project file.");
+        return;
+    }
+    set_current_file(filePath);
 }
 
 void ui::stick_man::save() {
-
+    if (current_file_path_.isEmpty()) {
+        save_as();
+        return;
+    }
+    write_project_file(current_file_path_);
 }
+
 void ui::stick_man::save_as() {
     QString filePath = QFileDialog::getSaveFileName(
-        this, "Save stick man As", QDir::homePath(), "stick man JSON (*.smj);;All Files (*)");
-    if (!filePath.isEmpty()) {
-        QFile file(filePath);
-        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            QTextStream out(&file);
-            out << project_.to_json().c_str();
-            file.close();
-            set_current_file(filePath);
-        } else {
-            QMessageBox::critical(this, "Error", "Bad pathname.");
-        }
+        this, "Save stick_man project As", QDir::homePath(), "stick_man Project (*.stickman)");
+    if (filePath.isEmpty()) {
+        return;
+    }
+    if (!filePath.endsWith(".stickman", Qt::CaseInsensitive)) {
+        filePath += ".stickman";
+    }
+    if (write_project_file(filePath)) {
+        set_current_file(filePath);
     }
 }
 void ui::stick_man::exit() {

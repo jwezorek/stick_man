@@ -1,8 +1,6 @@
 #include "project.hpp"
 #include "commands.hpp"
-#include "../core/sm_skeleton.hpp"
-#include "../core/third-party/json.hpp"
-#include <optional>
+#include "../core/sm_project.hpp"
 #include <charconv>
 #include <algorithm>
 #include <system_error>
@@ -12,8 +10,6 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <utility>
-
-using json = nlohmann::json;
 
 /*------------------------------------------------------------------------------------------------*/
 namespace {
@@ -32,25 +28,6 @@ namespace {
         }
         return ids;
     }
-    bool unique_live_object_ids(const sm::world& world) {
-        object_id_set ids;
-        for (auto skel : world.skeletons()) {
-            if (!ids.insert(skel->id()).second) {
-                return false;
-            }
-            for (auto node : skel->nodes()) {
-                if (!ids.insert(node->id()).second) {
-                    return false;
-                }
-            }
-            for (auto bone : skel->bones()) {
-                if (!ids.insert(bone->id()).second) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
     sm::object_id unused_object_id(object_id_set& used) {
         while (true) {
             auto id = sm::object_id::generate();
@@ -60,22 +37,6 @@ namespace {
         }
     }
 
-    std::optional<sm::world> json_to_world(const std::string& str) {
-        try {
-            json proj = json::parse(str);
-            if (proj.at("version").get<double>() != 2.0) {
-                return {};
-            }
-            sm::world new_world;
-            auto result = new_world.from_json(proj.at("world"));
-            if (result != sm::result::success || !unique_live_object_ids(new_world)) {
-                return {};
-            }
-            return std::move(new_world);
-        } catch (...) {
-            return {};
-        }
-    }
     std::size_t default_name_index(std::string_view name, std::string_view prefix) {
         if (!name.starts_with(prefix)) {
             return 0;
@@ -105,37 +66,21 @@ void mdl::project::execute_command(const command& cmd) {
 
 mdl::project::project() {}
 
-const sm::world& mdl::project::world() const { return world_; }
-sm::world& mdl::project::world() { return world_; }
+const sm::project& mdl::project::core() const { return core_; }
+sm::project& mdl::project::core() { return core_; }
+const sm::world& mdl::project::world() const { return core_.world(); }
+sm::world& mdl::project::world() { return core_.world(); }
 
 mdl::model_object mdl::project::get(const sm::object_id& id) {
-    if (auto skel = world_.skeleton(id)) {
-        return sm::ref(skel->get());
-    }
-    if (auto node = world_.get<sm::node>(id)) {
-        return *node;
-    }
-    if (auto bone = world_.get<sm::bone>(id)) {
-        return *bone;
-    }
-    throw std::runtime_error("model object ID not found");
+    return core_.get(id);
 }
 
 mdl::const_model_object mdl::project::get(const sm::object_id& id) const {
-    if (auto skel = world_.skeleton(id)) {
-        return sm::ref(skel->get());
-    }
-    if (auto node = world_.get<sm::node>(id)) {
-        return sm::ref(std::as_const(node->get()));
-    }
-    if (auto bone = world_.get<sm::bone>(id)) {
-        return sm::ref(std::as_const(bone->get()));
-    }
-    throw std::runtime_error("model object ID not found");
+    return core_.get(id);
 }
 
 void mdl::project::clear() {
-    world_.clear();
+    core_.clear();
     redo_stack_ = {};
     undo_stack_ = {};
     next_node_name_ = 1;
@@ -149,7 +94,8 @@ std::string mdl::project::next_default_bone_name() {
     return "bone-" + std::to_string(next_bone_name_++);
 }
 void mdl::project::advance_default_name_counters_from_world() {
-    for (auto skel : world_.skeletons()) {
+    const auto& topology = std::as_const(core_).world();
+    for (auto skel : topology.skeletons()) {
         for (auto node : skel->nodes()) {
             auto index = default_name_index(node->name(), "node-");
             if (index != 0) {
@@ -186,21 +132,20 @@ void mdl::project::redo() {
 }
 bool mdl::project::can_undo() const { return !undo_stack_.empty(); }
 bool mdl::project::can_redo() const { return !redo_stack_.empty(); }
-std::string mdl::project::to_json() const {
-    json stick_man_project = {
-        {"version", 2.0},
-        {"world", world_.to_json()}
-    };
-    return stick_man_project.dump(4);
+std::expected<sm::project_buffer, sm::project_result> mdl::project::serialize() const {
+    return core_.serialize();
 }
-bool mdl::project::from_json(const std::string& str) {
-    auto new_world = json_to_world(str);
-    if (!new_world) {
+bool mdl::project::deserialize(std::span<const std::uint8_t> buffer) {
+    auto result = core_.deserialize(buffer);
+    if (result != sm::project_result::success) {
         return false;
     }
-    clear();
-    world_ = std::move(*new_world);
+    redo_stack_ = {};
+    undo_stack_ = {};
+    next_node_name_ = 1;
+    next_bone_name_ = 1;
     advance_default_name_counters_from_world();
+    emit refresh_undo_redo_state(false, false);
     emit new_project_opened(*this);
     return true;
 }
@@ -252,10 +197,10 @@ void mdl::project::replace_skeletons_aux(
         std::vector<sm::object_id>* new_ids,
         const std::unordered_set<sm::object_id>& regenerate_ids) {
     for (const auto& replacee : replacees) {
-        world_.delete_skeleton(replacee);
+        world().delete_skeleton(replacee);
     }
 
-    auto used_ids = live_object_ids(world_);
+    auto used_ids = live_object_ids(world());
     auto allocation_guard = used_ids;
     for (auto replacement : replacements) {
         allocation_guard.insert(replacement->id());
@@ -286,7 +231,7 @@ void mdl::project::replace_skeletons_aux(
             reserve_id(bone->id());
         }
 
-        auto new_skel = replacement->copy_to(world_, id_remap);
+        auto new_skel = replacement->copy_to(world(), id_remap);
         if (!new_skel) {
             throw std::runtime_error("skeleton copy failed");
         }
@@ -294,7 +239,7 @@ void mdl::project::replace_skeletons_aux(
             new_ids->push_back(new_skel->get().id());
         }
     }
-    if (!unique_live_object_ids(world_)) {
+    if (!core_.has_unique_object_ids()) {
         throw std::runtime_error("live project contains duplicate object IDs");
     }
     advance_default_name_counters_from_world();

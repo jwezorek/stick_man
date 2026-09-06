@@ -48,6 +48,7 @@ namespace ui {
         void resizeEvent(QResizeEvent* event) override;
         void update_undo_and_redo(bool can_redo, bool can_undo);
         void set_current_file(const QString& file_path);
+        bool write_project_file(const QString& file_path);
         tool::manager tool_mgr_;
         pane::tools* tool_pal_;
         pane::animation* anim_pane_;
@@ -55,6 +56,7 @@ namespace ui {
         pane::skeleton * skel_pane_;
         canvas::manager* canvases_;
         mdl::project project_;
+        QString current_file_path_;
         bool was_shown_;
         bool has_fully_layed_out_widgets_;
         QAction* undo_action_;

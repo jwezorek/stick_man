@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "../core/sm_object_id.hpp"
+#include "../core/sm_project.hpp"
 #include "../core/sm_skeleton.hpp"
 #include "../core/sm_types.hpp"
 
@@ -14,8 +15,8 @@ namespace mdl {
         std::variant<sm::const_node_ref, sm::const_bone_ref, sm::const_skel_ref>;
     using skel_piece = std::variant<sm::node_ref, sm::bone_ref, sm::skel_ref>;
 
-    using model_object = skel_piece;
-    using const_model_object = const_skel_piece;
+    using model_object = sm::project_object;
+    using const_model_object = sm::const_project_object;
 
     // All live model objects share one project-global object_id namespace.
     // A handle therefore needs no topology/component context of its own.

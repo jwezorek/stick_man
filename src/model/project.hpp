@@ -1,6 +1,9 @@
 #pragma once
 #include <QWidget>
 #include <QtWidgets>
+#include <cstdint>
+#include <expected>
+#include <span>
 #include <string>
 #include <vector>
 #include <memory>
@@ -10,7 +13,7 @@
 #include <functional>
 #include <optional>
 #include <unordered_set>
-#include "../core/sm_skeleton.hpp"
+#include "../core/sm_project.hpp"
 #include "handle.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
@@ -28,7 +31,7 @@ namespace mdl {
 
         Q_OBJECT
 
-        sm::world world_;
+        sm::project core_;
         std::stack<command> redo_stack_;
         std::stack<command> undo_stack_;
         std::size_t next_node_name_ = 1;
@@ -48,14 +51,16 @@ namespace mdl {
         void advance_default_name_counters_from_world();
     public:
         project();
+        const sm::project& core() const;
+        sm::project& core();
         const sm::world& world() const;
         sm::world& world();
         model_object get(const sm::object_id& id);
         const_model_object get(const sm::object_id& id) const;
         bool can_undo() const;
         bool can_redo() const;
-        std::string to_json() const;
-        bool from_json(const std::string& str);
+        std::expected<sm::project_buffer, sm::project_result> serialize() const;
+        bool deserialize(std::span<const std::uint8_t> buffer);
         void undo();
         void redo();
         void add_bone(const handle& node_u, const handle& node_v);
