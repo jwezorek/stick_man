@@ -45,7 +45,7 @@ mdl::command mdl::commands::make_create_node_command(
             sm::skeleton* skel = nullptr;
             if (state->snapshot.empty()) {
                 auto& created = proj.core().create_skeleton(state->loc);
-                created.set_name(created.root_node(), state->node_name);
+                proj.core().rename(created.root_node().id(), state->node_name);
                 state->skeleton = created.id();
                 created.copy_to(state->snapshot);
                 skel = &created;

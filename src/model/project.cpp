@@ -45,7 +45,6 @@ mdl::project::project() {}
 const sm::project& mdl::project::core() const { return core_; }
 sm::project& mdl::project::core() { return core_; }
 const sm::topology& mdl::project::topology() const { return core_.topology(); }
-sm::topology& mdl::project::topology() { return core_.topology(); }
 
 mdl::model_object mdl::project::get(const sm::object_id& id) {
     return core_.get(id);
@@ -131,16 +130,10 @@ void mdl::project::add_bone(const handle& u, const handle& v) {
 void mdl::project::add_new_skeleton_root(sm::point loc) {
     execute_command(commands::make_create_node_command(loc, next_default_node_name()));
 }
-void mdl::project::rename_aux(skel_piece piece_var, const std::string& new_name) {
-    std::visit(
-        [&](auto ref) {
-            auto& piece = ref.get();
-            piece.owner().set_name(piece, new_name);
-        },
-        piece_var
-    );
+void mdl::project::rename_aux(handle id, const std::string& new_name) {
+    core_.rename(id, new_name);
     advance_default_name_counters_from_topology();
-    emit name_changed(piece_var, new_name);
+    emit name_changed(std::as_const(core_).get(id), new_name);
 }
 bool mdl::project::can_rename(skel_piece, const std::string&) {
     return true;

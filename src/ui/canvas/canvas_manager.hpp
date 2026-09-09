@@ -54,7 +54,7 @@ namespace ui {
         signals:
             void active_canvas_changed(ui::canvas::scene& old_canv, ui::canvas::scene& canv);
             void selection_changed(ui::canvas::scene& canv);
-            void canvas_refresh(sm::topology& topology);
+            void canvas_refresh(const sm::topology& topology);
         };
     }
 }

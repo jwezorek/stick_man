@@ -15,7 +15,7 @@ namespace mdl {
         std::variant<sm::const_node_ref, sm::const_bone_ref, sm::const_skel_ref>;
     using skel_piece = std::variant<sm::node_ref, sm::bone_ref, sm::skel_ref>;
 
-    using model_object = sm::project_object;
+    using model_object = sm::mutable_project_object;
     using const_model_object = sm::const_project_object;
 
     // All live model objects share one project-global object_id namespace.

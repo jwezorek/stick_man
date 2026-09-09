@@ -111,9 +111,7 @@ void ui::canvas::manager::set_canvas_name(const std::string& name) {
 }
 
 void ui::canvas::manager::set_contents(mdl::project& model) {
-    active_canvas().set_contents(
-        model.topology().skeletons() | r::to<std::vector<sm::skel_ref>>()
-    );
+    active_canvas().set_contents(model);
     emit canvas_refresh(model.topology());
 }
 

@@ -78,7 +78,7 @@ namespace ui {
             QGraphicsView& view();
             const QGraphicsView& view() const;
             void set_drag_mode(drag_mode dm);
-            void set_contents(const std::vector<sm::skel_ref>& contents);
+            void set_contents(mdl::project& model);
 
             void keyPressEvent(QKeyEvent* event) override;
             void keyReleaseEvent(QKeyEvent* event) override;

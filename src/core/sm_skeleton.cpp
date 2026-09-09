@@ -155,14 +155,14 @@ sm::expected_skel sm::skeleton::copy_to(topology& other_topology, const std::str
     }
     auto& dest = new_skel->get();
     for (auto node : nodes()) {
-        auto copied = node->copy_to(dest);
+        auto copied = node->copy_to(other_topology, dest.id());
         if (!copied) {
             return std::unexpected(copied.error());
         }
     }
     dest.set_root(dest.get<sm::node>(root_node().id())->get());
     for (auto bone : bones()) {
-        auto copied = bone->copy_to(dest);
+        auto copied = bone->copy_to(other_topology, dest.id());
         if (!copied) {
             return std::unexpected(copied.error());
         }
@@ -341,7 +341,6 @@ void sm::skeleton::register_bone(sm::bone& new_bone) {
     bones_[new_bone.id()] = &new_bone;
 }
 bool sm::skeleton::empty() const { return !root_.has_value(); }
-sm::topology& sm::skeleton::owner() { return owner_; }
 const sm::topology& sm::skeleton::owner() const { return owner_; }
 void sm::skeleton::apply(matrix& mat) {
     for (auto node : nodes()) {

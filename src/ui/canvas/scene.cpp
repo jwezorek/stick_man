@@ -233,19 +233,20 @@ void ui::canvas::scene::sync_to_model() {
     }
 }
 
-void ui::canvas::scene::set_contents(const std::vector<sm::skel_ref>& contents) {
+void ui::canvas::scene::set_contents(mdl::project& model) {
 
     clear();
-    for (auto skel_ref : contents) {
-        auto& skel = skel_ref.get();
-        insert_item(skel);
+    for (auto skel_ref : model.topology().skeletons()) {
+        const auto& skel = skel_ref.get();
+        auto& root = std::get<sm::node_ref>(model.get(skel.root_node().id())).get();
+        insert_item(root.owner());
 
         for (auto node : skel.nodes()) {
-            insert_item(node);
+            insert_item(std::get<sm::node_ref>(model.get(node->id())));
         }
 
         for (auto bone : skel.bones()) {
-            insert_item(bone);
+            insert_item(std::get<sm::bone_ref>(model.get(bone->id())));
         }
     }
 

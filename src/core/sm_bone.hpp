@@ -14,6 +14,7 @@
 namespace sm {
 
     class node : public detail::enable_protected_make_unique<node> {
+        friend class project;
         friend class topology;
         friend class bone;
         friend class skeleton;
@@ -35,7 +36,7 @@ namespace sm {
     public:
         const object_id& id() const noexcept;
         std::string name() const;
-        expected_node copy_to(skeleton& skel) const;
+        expected_node copy_to(topology& destination, const object_id& skeleton_id) const;
 
         maybe_bone_ref parent_bone();
         maybe_const_bone_ref parent_bone() const;
@@ -63,6 +64,7 @@ namespace sm {
     };
 
     class bone : public detail::enable_protected_make_unique<bone> {
+        friend class project;
         friend class topology;
         friend class skeleton;
     private:
@@ -81,7 +83,7 @@ namespace sm {
     public:
         const object_id& id() const noexcept;
         std::string name() const;
-        expected_bone copy_to(skeleton& skel) const;
+        expected_bone copy_to(topology& destination, const object_id& skeleton_id) const;
 
         maybe_const_bone_ref parent_bone() const;
         maybe_bone_ref parent_bone();

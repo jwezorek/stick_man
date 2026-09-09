@@ -90,7 +90,7 @@ namespace {
                 }
                 if (!dest_skel->contains<sm::node>(node.id())) {
                     bool is_root = dest_skel->empty();
-                    auto copy = node.copy_to(*dest_skel);
+                    auto copy = node.copy_to(dest, dest_skel->id());
                 }
                 return sm::visit_result::continue_traversal;
             };
@@ -104,10 +104,10 @@ namespace {
                     dest_skel = create_skeleton(dest, bone.owner().name());
                 }
                 if (!dest_skel->get<sm::node>(bone.parent_node().id())) {
-                    bone.parent_node().copy_to( *dest_skel );
+                    bone.parent_node().copy_to(dest, dest_skel->id());
                 }
-                bone.child_node().copy_to( *dest_skel );
-                bone.copy_to( *dest_skel );
+                bone.child_node().copy_to(dest, dest_skel->id());
+                bone.copy_to(dest, dest_skel->id());
 
                 return sm::visit_result::continue_traversal;
             };

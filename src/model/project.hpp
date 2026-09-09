@@ -38,7 +38,7 @@ namespace mdl {
         std::size_t next_bone_name_ = 1;
         void clear_redo_stack();
         void execute_command(const command& cmd);
-        void rename_aux(skel_piece piece, const std::string& new_name);
+        void rename_aux(handle id, const std::string& new_name);
         bool can_rename(skel_piece piece, const std::string& new_name);
         sm::topology_change replace_skeletons_aux(
             const std::vector<sm::object_id>& replacees,
@@ -53,7 +53,6 @@ namespace mdl {
         const sm::project& core() const;
         sm::project& core();
         const sm::topology& topology() const;
-        sm::topology& topology();
         model_object get(const sm::object_id& id);
         const_model_object get(const sm::object_id& id) const;
         bool can_undo() const;
@@ -84,7 +83,7 @@ namespace mdl {
         void new_project_opened(project& model);
         void new_skeleton_added(sm::skel_ref skel);
         void refresh_canvas(project& model, bool clear);
-        void name_changed(skel_piece piece, const std::string& new_name);
+        void name_changed(const_skel_piece piece, const std::string& new_name);
         void refresh_undo_redo_state(bool, bool);
     };
     bool identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2);

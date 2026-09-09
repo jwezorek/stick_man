@@ -3,7 +3,7 @@
 
 namespace {
 
-	void insert_skeleton(QStandardItemModel* tree, sm::skel_ref skel) {
+	void insert_skeleton(QStandardItemModel* tree, sm::const_skel_ref skel) {
 
 		QStandardItem* root = tree->invisibleRootItem();
 		QStandardItem* skel_item = new QStandardItem(skel->name().c_str());
@@ -35,7 +35,7 @@ void ui::pane::animation_skeleton_pane::handle_tree_selection_change(const QItem
 {
 }
 
-void ui::pane::animation_skeleton_pane::sync_with_model(sm::topology& model) {
+void ui::pane::animation_skeleton_pane::sync_with_model(const sm::topology& model) {
 	disconnect_tree_sel_handler();
 
 	// clear the treeview and repopulate it.

@@ -17,18 +17,20 @@ namespace {
     constexpr std::string_view project_json_name = "project.json";
     constexpr double project_json_version = 3.0;
 
-    sm::object_id object_id_of(const sm::project_object& object) {
+    template<typename Object>
+    sm::object_id object_id_of(const Object& object) {
         return std::visit(
             [](auto ref) { return ref->id(); },
             object
         );
     }
 
+    template<typename Object>
     bool build_object_index(
             sm::topology& topology,
-            std::unordered_map<sm::object_id, sm::project_object>& objects) {
+            std::unordered_map<sm::object_id, Object>& objects) {
         objects.clear();
-        auto insert = [&objects](sm::project_object object) {
+        auto insert = [&objects](Object object) {
             return objects.emplace(object_id_of(object), object).second;
         };
 
@@ -73,13 +75,6 @@ bool sm::project::ensure_object_index() const {
         return true;
     }
     return const_cast<project*>(this)->rebuild_object_index();
-}
-
-sm::topology& sm::project::topology() {
-    // Core topology is still mutated directly by the editor model. Conservatively
-    // invalidate the global object index whenever mutable topology access is granted.
-    invalidate_object_index();
-    return topology_;
 }
 
 const sm::topology& sm::project::topology() const {
@@ -250,7 +245,7 @@ sm::topology_change sm::project::replace_skeletons(
     return change;
 }
 
-sm::project_object sm::project::get(const object_id& id) {
+const sm::project::mutable_object& sm::project::get_mutable(const object_id& id) const {
     if (!ensure_object_index()) {
         throw std::runtime_error("project contains duplicate object IDs");
     }
@@ -261,14 +256,21 @@ sm::project_object sm::project::get(const object_id& id) {
     return it->second;
 }
 
+sm::mutable_project_object sm::project::get(const object_id& id) {
+    return std::visit(overloaded{
+        [](node_ref ref) -> mutable_project_object { return ref; },
+        [](bone_ref ref) -> mutable_project_object { return ref; },
+        [](skel_ref) -> mutable_project_object {
+            throw std::runtime_error("project object does not support mutable lookup");
+        }
+    }, get_mutable(id));
+}
+
+void sm::project::rename(object_id id, std::string name) {
+    std::visit([&name](auto ref) { ref->set_name(name); }, get_mutable(id));
+}
+
 sm::const_project_object sm::project::get(const object_id& id) const {
-    if (!ensure_object_index()) {
-        throw std::runtime_error("project contains duplicate object IDs");
-    }
-    auto it = objects_.find(id);
-    if (it == objects_.end()) {
-        throw std::runtime_error("project object ID not found");
-    }
     return std::visit(
         overloaded{
             [](sm::node_ref ref) -> sm::const_project_object {
@@ -281,7 +283,7 @@ sm::const_project_object sm::project::get(const object_id& id) const {
                 return sm::const_skel_ref(std::as_const(ref.get()));
             }
         },
-        it->second
+        get_mutable(id)
     );
 }
 
@@ -381,7 +383,7 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
         return project_result::invalid_project_json;
     }
 
-    std::unordered_map<object_id, project_object> new_objects;
+    std::unordered_map<object_id, mutable_object> new_objects;
     if (!build_object_index(new_topology, new_objects)) {
         return project_result::duplicate_object_id;
     }

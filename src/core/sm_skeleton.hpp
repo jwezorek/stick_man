@@ -21,6 +21,7 @@
 namespace sm {
     class topology;
     class skeleton : public detail::enable_protected_make_unique<skeleton> {
+        friend class project;
         friend class topology;
         friend class node;
         friend class bone;
@@ -70,7 +71,6 @@ namespace sm {
         auto bones() { return detail::to_range_view<bone_ref>(bones_); }
         auto nodes() const { return detail::to_range_view<const_node_ref>(nodes_); }
         auto bones() const { return detail::to_range_view<const_bone_ref>(bones_); }
-        sm::topology& owner();
         const sm::topology& owner() const;
         // Compatibility/display convenience only; never use labels as identity.
         template <is_node_or_bone T>

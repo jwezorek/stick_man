@@ -81,20 +81,15 @@ namespace mdl {
             );
         };
         template<sm::is_skel_piece T>
-        static void rename(project& proj, const handle& hnd, const std::string& name) {
-            auto& obj = resolve<T>(proj, hnd);
-            proj.rename_aux(sm::ref(obj), name);
-        }
-        template<sm::is_skel_piece T>
         static command make_rename_command(sm::ref<T> piece, const std::string& new_name) {
             auto state = std::make_shared<rename_state>(
                 to_handle(skel_piece{piece}), piece->name(), new_name);
             return {
                 [state](mdl::project& proj) {
-                    rename<T>(proj, state->object, state->new_name);
+                    proj.rename_aux(state->object, state->new_name);
                 },
                 [state](mdl::project& proj) {
-                    rename<T>(proj, state->object, state->old_name);
+                    proj.rename_aux(state->object, state->old_name);
                 }
             };
         }

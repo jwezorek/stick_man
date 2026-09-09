@@ -108,19 +108,19 @@ namespace {
 		return itm;
 	}
 
-	void insert_skeleton(QStandardItemModel* tree, sm::skel_ref skel) {
+	void insert_skeleton(QStandardItemModel* tree, sm::const_skel_ref skel) {
 
 		// traverse the skeleton graph and repopulate the treeview during the traversal 
 		// by building a hash table mapping bones to their tree items.
 
 		QStandardItem* root = tree->invisibleRootItem();
-		QStandardItem* skel_item = make_treeitem(skel.get());
+		QStandardItem* skel_item = make_treeitem(ui::canvas::item_from_model<ui::canvas::item::skeleton>(skel.get()).model());
 		root->appendRow(skel_item);
 
-		std::unordered_map<sm::bone*, QStandardItem*> bone_to_tree_item;
-		auto visit = [&](sm::bone& b)->sm::visit_result {
+		std::unordered_map<const sm::bone*, QStandardItem*> bone_to_tree_item;
+		auto visit = [&](const sm::bone& b)->sm::visit_result {
 			auto parent = b.parent_bone();
-			QStandardItem* bone_row = make_treeitem(b);
+			QStandardItem* bone_row = make_treeitem(ui::canvas::item_from_model<ui::canvas::item::bone>(b).model());
 			QStandardItem* parent_item =
 				(!parent) ? skel_item : bone_to_tree_item.at(&parent->get());
 			parent_item->appendRow(bone_row);
@@ -128,7 +128,7 @@ namespace {
 			return sm::visit_result::continue_traversal;
 			};
 
-		sm::visit_bones(skel->root_node(), visit);
+		sm::visit_nodes_and_bones(skel->root_node(), {}, visit, true);
 	}
 
 	bool is_same_bone_selection(const std::vector<ui::canvas::item::bone*>& canv_sel,
@@ -212,7 +212,7 @@ void ui::pane::main_skeleton_pane::expand_selected_items() {
 	}
 }
 
-void ui::pane::main_skeleton_pane::sync_with_model(sm::topology& model)
+void ui::pane::main_skeleton_pane::sync_with_model(const sm::topology& model)
 {
 	disconnect_tree_sel_handler();
 
@@ -308,14 +308,14 @@ void ui::pane::main_skeleton_pane::traverse_tree_items(const std::function<void(
 	}
 }
 
-void ui::pane::main_skeleton_pane::handle_rename(mdl::skel_piece piece, const std::string& new_name) {
-	if (std::holds_alternative<sm::node_ref>(piece)) {
+void ui::pane::main_skeleton_pane::handle_rename(mdl::const_skel_piece piece, const std::string& new_name) {
+	if (std::holds_alternative<sm::const_node_ref>(piece)) {
 		return;
 	}
 	traverse_tree_items(
 		[&](QStandardItem* itm)->void {
 			auto itm_piece = get_treeitem_var(itm);
-			if (mdl::identical_pieces(piece, itm_piece)) {
+			if (mdl::to_handle(piece) == mdl::to_handle(itm_piece)) {
 				auto curr_name = itm->text().toStdString();
 				if (curr_name != new_name) {
 					itm->setText(new_name.c_str());

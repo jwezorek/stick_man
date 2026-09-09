@@ -14,7 +14,7 @@
 
 namespace sm {
 
-    using project_object = std::variant<node_ref, bone_ref, skel_ref>;
+    using mutable_project_object = std::variant<node_ref, bone_ref>;
     using const_project_object = std::variant<const_node_ref, const_bone_ref, const_skel_ref>;
     using project_buffer = std::vector<std::uint8_t>;
 
@@ -33,13 +33,15 @@ namespace sm {
     };
 
     class project {
+        using mutable_object = std::variant<node_ref, bone_ref, skel_ref>;
         sm::topology topology_;
-        mutable std::unordered_map<object_id, project_object> objects_;
+        mutable std::unordered_map<object_id, mutable_object> objects_;
         mutable bool object_index_dirty_ = true;
 
         void invalidate_object_index() noexcept;
         bool rebuild_object_index();
         bool ensure_object_index() const;
+        const mutable_object& get_mutable(const object_id& id) const;
 
     public:
         project() = default;
@@ -48,7 +50,6 @@ namespace sm {
         project(const project&) = delete;
         project& operator=(const project&) = delete;
 
-        sm::topology& topology();
         const sm::topology& topology() const;
 
         skeleton& create_skeleton(const point& pt);
@@ -63,8 +64,10 @@ namespace sm {
             const std::vector<skel_ref>& replacements,
             const std::unordered_set<object_id>& regenerate_ids = {});
 
-        project_object get(const object_id& id);
+        // Mutable lookup accepts nodes and bones only; use const lookup for skeletons.
+        mutable_project_object get(const object_id& id);
         const_project_object get(const object_id& id) const;
+        void rename(object_id id, std::string name);
         bool has_unique_object_ids() const;
 
         void clear();
