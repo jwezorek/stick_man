@@ -4,6 +4,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 
 using json = nlohmann::json;
@@ -83,6 +84,170 @@ sm::topology& sm::project::topology() {
 
 const sm::topology& sm::project::topology() const {
     return topology_;
+}
+
+sm::skeleton& sm::project::create_skeleton(const point& pt) {
+    auto& created = topology_.create_skeleton(pt);
+    invalidate_object_index();
+    if (!ensure_object_index()) {
+        throw std::runtime_error("creating skeleton produced duplicate object IDs");
+    }
+    return created;
+}
+
+sm::expected_skel sm::project::copy_skeleton(
+        const skeleton& source,
+        const std::unordered_map<object_id, object_id>& id_remap) {
+    if (!ensure_object_index()) {
+        return std::unexpected(result::duplicate_id);
+    }
+
+    auto mapped_id = [&id_remap](const object_id& id) {
+        auto it = id_remap.find(id);
+        return it == id_remap.end() ? id : it->second;
+    };
+    auto collides = [this, &mapped_id](const object_id& id) {
+        return objects_.contains(mapped_id(id));
+    };
+
+    if (collides(source.id())) {
+        return std::unexpected(result::duplicate_id);
+    }
+    for (auto node : source.nodes()) {
+        if (collides(node->id())) {
+            return std::unexpected(result::duplicate_id);
+        }
+    }
+    for (auto bone : source.bones()) {
+        if (collides(bone->id())) {
+            return std::unexpected(result::duplicate_id);
+        }
+    }
+
+    auto copied = source.copy_to(topology_, id_remap);
+    if (!copied) {
+        return copied;
+    }
+    invalidate_object_index();
+    if (!ensure_object_index()) {
+        throw std::runtime_error("copying skeleton produced duplicate object IDs");
+    }
+    return copied;
+}
+
+sm::result sm::project::delete_skeleton(const object_id& id) {
+    auto deleted = topology_.delete_skeleton(id);
+    if (deleted != result::success) {
+        return deleted;
+    }
+    invalidate_object_index();
+    if (!ensure_object_index()) {
+        throw std::runtime_error("deleting skeleton left duplicate object IDs");
+    }
+    return result::success;
+}
+
+sm::expected_bone sm::project::create_bone(const std::string& name, node& u, node& v) {
+    auto created = topology_.create_bone(name, u, v);
+    if (!created) {
+        return created;
+    }
+    invalidate_object_index();
+    if (!ensure_object_index()) {
+        throw std::runtime_error("creating bone produced duplicate object IDs");
+    }
+    return created;
+}
+
+sm::expected_bone sm::project::create_bone(
+        object_id id, const std::string& name, node& u, node& v) {
+    if (!ensure_object_index()) {
+        return std::unexpected(result::duplicate_id);
+    }
+    if (objects_.contains(id)) {
+        return std::unexpected(result::duplicate_id);
+    }
+    auto created = topology_.create_bone(id, name, u, v);
+    if (!created) {
+        return created;
+    }
+    invalidate_object_index();
+    if (!ensure_object_index()) {
+        throw std::runtime_error("creating bone produced duplicate object IDs");
+    }
+    return created;
+}
+
+sm::topology_change sm::project::replace_skeletons(
+        const std::vector<object_id>& replacees,
+        const std::vector<skel_ref>& replacements,
+        const std::unordered_set<object_id>& regenerate_ids) {
+    topology_change change;
+    change.removed_skeleton_ids.reserve(replacees.size());
+    change.added_skeleton_ids.reserve(replacements.size());
+
+    for (const auto& replacee : replacees) {
+        if (delete_skeleton(replacee) == result::success) {
+            change.removed_skeleton_ids.push_back(replacee);
+        }
+    }
+
+    if (!ensure_object_index()) {
+        throw std::runtime_error("project contains duplicate object IDs");
+    }
+    std::unordered_set<object_id> used_ids;
+    used_ids.reserve(objects_.size());
+    for (const auto& [id, object] : objects_) {
+        used_ids.insert(id);
+    }
+
+    auto allocation_guard = used_ids;
+    for (auto replacement : replacements) {
+        allocation_guard.insert(replacement->id());
+        for (auto node : replacement->nodes()) {
+            allocation_guard.insert(node->id());
+        }
+        for (auto bone : replacement->bones()) {
+            allocation_guard.insert(bone->id());
+        }
+    }
+    auto unused_object_id = [&allocation_guard]() {
+        while (true) {
+            auto id = object_id::generate();
+            if (allocation_guard.insert(id).second) {
+                return id;
+            }
+        }
+    };
+
+    for (auto replacement : replacements) {
+        std::unordered_map<object_id, object_id> id_remap;
+        auto reserve_id = [&](const object_id& id) {
+            if (regenerate_ids.contains(id) || used_ids.contains(id)) {
+                auto new_id = unused_object_id();
+                used_ids.insert(new_id);
+                id_remap[id] = new_id;
+            } else {
+                used_ids.insert(id);
+            }
+        };
+
+        reserve_id(replacement->id());
+        for (auto node : replacement->nodes()) {
+            reserve_id(node->id());
+        }
+        for (auto bone : replacement->bones()) {
+            reserve_id(bone->id());
+        }
+
+        auto copied = copy_skeleton(replacement.get(), id_remap);
+        if (!copied) {
+            throw std::runtime_error("skeleton copy failed");
+        }
+        change.added_skeleton_ids.push_back(copied->get().id());
+    }
+
+    return change;
 }
 
 sm::project_object sm::project::get(const object_id& id) {

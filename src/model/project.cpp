@@ -13,30 +13,6 @@
 
 /*------------------------------------------------------------------------------------------------*/
 namespace {
-    using object_id_set = std::unordered_set<sm::object_id>;
-
-    object_id_set live_object_ids(const sm::topology& topology) {
-        object_id_set ids;
-        for (auto skel : topology.skeletons()) {
-            ids.insert(skel->id());
-            for (auto node : skel->nodes()) {
-                ids.insert(node->id());
-            }
-            for (auto bone : skel->bones()) {
-                ids.insert(bone->id());
-            }
-        }
-        return ids;
-    }
-    sm::object_id unused_object_id(object_id_set& used) {
-        while (true) {
-            auto id = sm::object_id::generate();
-            if (used.insert(id).second) {
-                return id;
-            }
-        }
-    }
-
     std::size_t default_name_index(std::string_view name, std::string_view prefix) {
         if (!name.starts_with(prefix)) {
             return 0;
@@ -191,59 +167,14 @@ void mdl::project::transform_node_positions(
         const node_locs& old_locs, const node_locs& new_locs) {
     execute_command(commands::make_transform_node_positions_command(*this, old_locs, new_locs));
 }
-void mdl::project::replace_skeletons_aux(
+sm::topology_change mdl::project::replace_skeletons_aux(
         const std::vector<sm::object_id>& replacees,
         const std::vector<sm::skel_ref>& replacements,
-        std::vector<sm::object_id>* new_ids,
         const std::unordered_set<sm::object_id>& regenerate_ids) {
-    for (const auto& replacee : replacees) {
-        topology().delete_skeleton(replacee);
-    }
-
-    auto used_ids = live_object_ids(topology());
-    auto allocation_guard = used_ids;
-    for (auto replacement : replacements) {
-        allocation_guard.insert(replacement->id());
-        for (auto node : replacement->nodes()) {
-            allocation_guard.insert(node->id());
-        }
-        for (auto bone : replacement->bones()) {
-            allocation_guard.insert(bone->id());
-        }
-    }
-
-    for (auto replacement : replacements) {
-        std::unordered_map<sm::object_id, sm::object_id> id_remap;
-        auto reserve_id = [&](const sm::object_id& id) {
-            if (regenerate_ids.contains(id) || used_ids.contains(id)) {
-                auto new_id = unused_object_id(allocation_guard);
-                used_ids.insert(new_id);
-                id_remap[id] = new_id;
-            } else {
-                used_ids.insert(id);
-            }
-        };
-        reserve_id(replacement->id());
-        for (auto node : replacement->nodes()) {
-            reserve_id(node->id());
-        }
-        for (auto bone : replacement->bones()) {
-            reserve_id(bone->id());
-        }
-
-        auto new_skel = replacement->copy_to(topology(), id_remap);
-        if (!new_skel) {
-            throw std::runtime_error("skeleton copy failed");
-        }
-        if (new_ids) {
-            new_ids->push_back(new_skel->get().id());
-        }
-    }
-    if (!core_.has_unique_object_ids()) {
-        throw std::runtime_error("live project contains duplicate object IDs");
-    }
+    auto change = core_.replace_skeletons(replacees, replacements, regenerate_ids);
     advance_default_name_counters_from_topology();
     emit refresh_canvas(*this, true);
+    return change;
 }
 void mdl::project::replace_skeletons(
         const std::vector<sm::object_id>& replacees,

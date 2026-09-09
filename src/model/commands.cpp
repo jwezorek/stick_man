@@ -3,6 +3,7 @@
 #include <unordered_set>
 #include <cassert>
 #include <stdexcept>
+#include <utility>
 
 /*------------------------------------------------------------------------------------------------*/
 namespace r = std::ranges;
@@ -43,14 +44,14 @@ mdl::command mdl::commands::make_create_node_command(
         [state](mdl::project& proj) {
             sm::skeleton* skel = nullptr;
             if (state->snapshot.empty()) {
-                auto& created = proj.topology().create_skeleton(state->loc);
+                auto& created = proj.core().create_skeleton(state->loc);
                 created.set_name(created.root_node(), state->node_name);
                 state->skeleton = created.id();
                 created.copy_to(state->snapshot);
                 skel = &created;
             } else {
                 auto snapshot = state->snapshot.skeleton(state->skeleton);
-                auto restored = snapshot->get().copy_to(proj.topology());
+                auto restored = proj.core().copy_skeleton(snapshot->get());
                 if (!restored) {
                     throw std::runtime_error("unable to restore created skeleton");
                 }
@@ -59,7 +60,7 @@ mdl::command mdl::commands::make_create_node_command(
             emit proj.new_skeleton_added(*skel);
         },
         [state](mdl::project& proj) {
-            proj.topology().delete_skeleton(state->skeleton);
+            proj.core().delete_skeleton(state->skeleton);
             emit proj.refresh_canvas(proj, true);
         }
     };
@@ -87,8 +88,8 @@ mdl::command mdl::commands::make_add_bone_command(
             }
             emit proj.pre_new_bone_added(u, v);
             auto bone = state->bone_id
-                ? proj.topology().create_bone(*state->bone_id, state->bone_name, u, v)
-                : proj.topology().create_bone(state->bone_name, u, v);
+                ? proj.core().create_bone(*state->bone_id, state->bone_name, u, v)
+                : proj.core().create_bone(state->bone_name, u, v);
             if (!bone) {
                 throw std::runtime_error("create_bone failed");
             }
@@ -101,9 +102,7 @@ mdl::command mdl::commands::make_add_bone_command(
         [state](mdl::project& proj) {
             proj.replace_skeletons_aux(
                 {state->merged},
-                state->original.skeletons() | r::to<std::vector<sm::skel_ref>>(),
-                nullptr,
-                {}
+                state->original.skeletons() | r::to<std::vector<sm::skel_ref>>()
             );
             state->original.clear();
         }
@@ -141,20 +140,17 @@ mdl::command mdl::commands::make_replace_skeletons_command(
                     }
                 }
             }
-            state->replacement_ids.clear();
-            proj.replace_skeletons_aux(
+            auto change = proj.replace_skeletons_aux(
                 state->replacee_ids,
                 state->replacements.skeletons() | r::to<std::vector<sm::skel_ref>>(),
-                &state->replacement_ids,
                 state->regenerate_ids
             );
+            state->replacement_ids = std::move(change.added_skeleton_ids);
         },
         [state](mdl::project& proj) {
             proj.replace_skeletons_aux(
                 state->replacement_ids,
-                state->replacees.skeletons() | r::to<std::vector<sm::skel_ref>>(),
-                nullptr,
-                {}
+                state->replacees.skeletons() | r::to<std::vector<sm::skel_ref>>()
             );
         }
     };

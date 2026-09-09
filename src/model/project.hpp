@@ -40,10 +40,9 @@ namespace mdl {
         void execute_command(const command& cmd);
         void rename_aux(skel_piece piece, const std::string& new_name);
         bool can_rename(skel_piece piece, const std::string& new_name);
-        void replace_skeletons_aux(
+        sm::topology_change replace_skeletons_aux(
             const std::vector<sm::object_id>& replacees,
             const std::vector<sm::skel_ref>& replacements,
-            std::vector<sm::object_id>* new_ids_of_replacements,
             const std::unordered_set<sm::object_id>& regenerate_ids = {});
         void clear();
         std::string next_default_node_name();
