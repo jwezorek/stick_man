@@ -22,7 +22,7 @@ ui::canvas::item::rect_rubber_band::rect_rubber_band(const QPointF& pt) {
 }
 
 void ui::canvas::item::rect_rubber_band::handle_drag(const QPointF& pt) {
-    QRectF rect(pinned_point_, pt);
+    QRectF rect = QRectF(pinned_point_, pt).normalized();
     setRect(rect);
 }
 

@@ -96,6 +96,23 @@ set_target_properties(stick_man PROPERTIES
 
 include(CTest)
 if(BUILD_TESTING)
+    get_target_property(SELECTION_TEST_SOURCES stick_man SOURCES)
+    list(REMOVE_ITEM SELECTION_TEST_SOURCES src/main.cpp)
+    add_executable(selection_regressions tests/selection_regressions.cpp ${SELECTION_TEST_SOURCES})
+    target_include_directories(selection_regressions PRIVATE src "${MINIZ_DIR}" "${MINIZ_GENERATED_DIR}")
+    target_compile_definitions(selection_regressions PRIVATE MINIZ_NO_STDIO)
+    target_link_libraries(selection_regressions PRIVATE Qt6::Widgets Eigen3::Eigen)
+    foreach(case IN ITEMS rectangle partial modifiers tree clipboard drag rubber_band_directions fast_release release_endpoint)
+        if(WIN32)
+            add_test(NAME selection_${case} COMMAND "${CMAKE_COMMAND}" -E env
+                "QT_QPA_PLATFORM=offscreen" "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+                $<TARGET_FILE:selection_regressions> ${case})
+        else()
+            add_test(NAME selection_${case} COMMAND "${CMAKE_COMMAND}" -E env
+                "QT_QPA_PLATFORM=offscreen" $<TARGET_FILE:selection_regressions> ${case})
+        endif()
+        set_tests_properties(selection_${case} PROPERTIES TIMEOUT 30)
+    endforeach()
     add_executable(topology_regressions
         tests/topology_regressions.cpp
         src/core/sm_project.cpp

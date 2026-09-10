@@ -257,8 +257,11 @@ const ui::canvas::selection_set&  ui::canvas::scene::selection() const {
 }
 
 ui::canvas::item::skeleton* ui::canvas::scene::selected_skeleton() const {
-	auto skeletons = to_vector_of_type<ui::canvas::item::skeleton>(selection_);
-	return (skeletons.size() == 1) ? skeletons.front() : nullptr;
+	return selection_.size() == 1 ? dynamic_cast<item::skeleton*>(*selection_.begin()) : nullptr;
+}
+
+std::vector<ui::canvas::item::skeleton*> ui::canvas::scene::selected_skeletons() const {
+    return to_vector_of_type<item::skeleton>(selection_);
 }
 
 std::vector<ui::canvas::item::bone*> ui::canvas::scene::selected_bones() const {
@@ -549,6 +552,9 @@ void ui::canvas::scene::wheelEvent(QGraphicsSceneWheelEvent* event) {
 /*------------------------------------------------------------------------------------------------*/
 
 std::optional<mdl::skel_piece> ui::canvas::selected_single_model(const scene& canv) {
+    if (canv.selection().size() != 1) {
+        return {};
+    }
 	auto* skel_item = canv.selected_skeleton();
 	if (skel_item) {
 		return mdl::skel_piece{ sm::ref(skel_item->model()) };

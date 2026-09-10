@@ -3,6 +3,7 @@
 #include "../util.hpp"
 #include "../canvas/skel_item.hpp"
 #include "../canvas/bone_item.hpp"
+#include "../canvas/node_item.hpp"
 #include "../canvas/scene.hpp"
 #include "../canvas/canvas_manager.hpp"
 #include "../tools/tool.hpp"
@@ -251,31 +252,34 @@ void ui::pane::main_skeleton_pane::handle_tree_selection_change(
 	auto& curr_canv = canvas();
 	std::vector<canvas::item::base*> sel_canv_items;
 	auto selection = selected_items();
-	QStandardItem* selected_skel = nullptr;
-
-	for (auto* qsi : selection) {
-		if (!is_bone_treeitem(qsi)) {
-			selected_skel = qsi;
-			break;
-		}
-	}
-
-	if (selected_skel) {
-		skeleton_tree_->selectionModel()->clearSelection();
-		select_item(selected_skel, true);
-		sel_canv_items.push_back(
-			&canvas::item_from_model<canvas::item::skeleton>(
-				*get_treeitem_data<sm::skeleton>(selected_skel)
-			)
-		);
-	}
-	else {
-		for (auto* sel : selection) {
-			sm::bone* bone_ptr = get_treeitem_data<sm::bone>(sel);
-			sel_canv_items.push_back(&canvas::item_from_model<canvas::item::bone>(*bone_ptr));
-		}
-		normalize_selection_per_active_canvas(sel_canv_items, curr_canv);
-	}
+    // A selected skeleton row already includes its bones; descendant rows add nothing.
+    std::unordered_set<sm::skeleton*> selected_skeletons;
+    for (auto* selected : selection) {
+        if (!is_bone_treeitem(selected)) {
+            selected_skeletons.insert(get_treeitem_data<sm::skeleton>(selected));
+        }
+    }
+    std::erase_if(selection, [&](auto* selected) {
+        return is_bone_treeitem(selected) &&
+            selected_skeletons.contains(&get_treeitem_data<sm::bone>(selected)->owner());
+    });
+    bool all_skeletons = r::all_of(selection, [](auto* item) { return !is_bone_treeitem(item); });
+    std::unordered_set<canvas::item::base*> unique_items;
+    for (auto* selected : selection) {
+        if (is_bone_treeitem(selected)) {
+            unique_items.insert(&canvas::item_from_model<canvas::item::bone>(*get_treeitem_data<sm::bone>(selected)));
+        } else {
+            auto& skel = *get_treeitem_data<sm::skeleton>(selected);
+            if (all_skeletons) {
+                unique_items.insert(&canvas::item_from_model<canvas::item::skeleton>(skel));
+            } else {
+                for (auto node : skel.nodes()) unique_items.insert(&canvas::item_from_model<canvas::item::node>(node.get()));
+                for (auto bone : skel.bones()) unique_items.insert(&canvas::item_from_model<canvas::item::bone>(bone.get()));
+            }
+        }
+    }
+    sel_canv_items = unique_items | r::to<std::vector<canvas::item::base*>>();
+    sel_canv_items = normalize_selection_per_active_canvas(sel_canv_items, curr_canv);
 
 	if (!sel_canv_items.empty()) {
 		auto& sel_canv = *sel_canv_items.front()->canvas();
@@ -285,8 +289,8 @@ void ui::pane::main_skeleton_pane::handle_tree_selection_change(
 	}
 
 	canvas().set_selection(sel_canv_items, true);
+	handle_canv_sel_change();
 	connect_canv_sel_handler();
-	connect_tree_sel_handler();
 }
 
 void ui::pane::main_skeleton_pane::traverse_tree_items(const std::function<void(QStandardItem*)>& callback_visitor) {

@@ -104,13 +104,23 @@ Ordinary node, bone, and skeleton editing and deletion must work for character r
 
 ### Creating a character
 
-When a single loose skeleton is selected, its properties pane offers a **Make Character** button. The skeleton pane also offers **Make Character** in the context menu for a loose skeleton. Both create a character containing that one skeleton. Creating a character from multiple skeletons at once is outside the initial version; characters can acquire multiple components through adoption or splitting.
+When one or more loose skeletons are selected, the selection properties pane offers a **Make Character** button. The skeleton pane also offers **Make Character** in the context menu for the selected loose skeletons. Both promote the entire skeleton selection into a single new character whose rig contains all selected skeletons, preserving their topology and positions. This includes creating a character from multiple disconnected skeletons in the initial version.
+
+**Make Character** requires a nonempty selection of complete skeletons, all of which are loose. It is unavailable for partial topology selections or selections containing skeletons that already belong to a character. Characters can also acquire additional components through adoption or splitting.
 
 ### Skeleton pane and character selection
 
 The skeleton pane displays characters as parent entries above the skeletons that comprise their rigs. Loose skeletons remain available without a character parent.
 
-A character can be selected either by selecting its entry in the skeleton pane or by selecting exactly the nodes and bones that comprise its complete rig in the editor. Only one character can be selected at a time in the initial version. A mixed selection, including a complete character plus other topology or multiple complete characters, remains a topology selection. The editor indicates character selection with a bounding rectangle similar to the skeleton-selection indicator, but in a different color and with an attached label such as **character: Fred**. The exact color and label styling remain UI design details.
+Multiple-skeleton selection is supported in the initial version. Selection inferred from nodes and bones in the editor follows this precedence:
+
+1. Selecting exactly all the components of one or more complete skeletons selects those skeletons.
+2. If that set of skeletons is exactly the complete rig of one character, it selects the character instead.
+3. A selection that includes only part of any skeleton remains a topology selection.
+
+Only one character can be selected at a time. A set of complete skeletons that includes a character plus additional skeletons, or the rigs of multiple characters, remains a skeleton selection because it does not exactly match one character's rig.
+
+A character can also be selected directly through its entry in the skeleton pane. The editor indicates character selection with a bounding rectangle similar to the skeleton-selection indicator, but in a different color and with an attached label such as **character: Fred**. The exact color and label styling remain UI design details.
 
 For a character containing a single skeleton, dragging a selection around the whole skeleton in the editor selects the character. To select that skeleton itself, the user selects its entry in the skeleton pane or clicks the corresponding skeleton in the character's properties pane.
 
@@ -118,13 +128,13 @@ Explicit skeleton selection through either pane must remain skeleton selection e
 
 ### Editing and dragging
 
-Existing editing tools retain their behavior for loose skeletons when working on character topology. Dragging a whole selected character moves every skeleton in its rig together. This requires supporting multiple components internally, but does not require exposing general multiple-skeleton selection in the initial version. No new character-specific rotation or scaling behavior is introduced.
+Existing editing tools retain their behavior for loose skeletons when working on character topology. Dragging multiple selected skeletons moves them together. Dragging a whole selected character moves every skeleton in its rig together using the same underlying operation. No new character-specific rotation or scaling behavior is introduced.
 
 ### Cut, copy, and paste
 
 Cut, copy, and paste support whole-character selections. Copying a selected character includes its complete rig and character data. Pasting that whole-character clipboard content creates a character with its rig, preserving their internal associations while assigning fresh identities. Cutting a selected character removes the whole character and places it on the clipboard for pasting. Future artwork and animation efforts will extend whole-character copying to their associated resources.
 
-When the selection is topology rather than a whole character, ordinary paste creates loose skeletons, including when the copied or cut topology came from a character. It does not retain the source character's membership. This also applies to a skeleton explicitly selected through a pane in a single-skeleton character.
+When the selection is one or more skeletons or a topology selection rather than a whole character, ordinary paste creates loose skeletons, including when the copied or cut topology came from a character. It does not retain the source character's membership. This also applies to a skeleton explicitly selected through a pane in a single-skeleton character.
 
 Ordinary paste does not insert clipboard content into an existing character, regardless of the current selection. Whole-character paste creates a character; topology paste creates loose skeletons.
 

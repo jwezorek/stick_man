@@ -116,6 +116,7 @@ namespace ui {
             //sel_type selection_type() const;
 
             item::skeleton* selected_skeleton() const;
+            std::vector<item::skeleton*> selected_skeletons() const;
             std::vector<item::bone*> selected_bones() const;
             std::vector<item::node*> selected_nodes() const;
 

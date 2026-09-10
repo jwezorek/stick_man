@@ -114,31 +114,27 @@ namespace {
         sm::visit_nodes_and_bones( root, node_visitor, bone_visitor, true );
     }
 
-    // this functions returns the sm::skeleton associated with the one-and-only-one selected
-    // skeleton item in the UI *or* it returns any sm::skeletons for which all of their nodes
-    // and bones are selected.
+    // Include explicit skeleton selections and skeletons whose nodes and bones are all selected.
     std::unordered_set<const sm::skeleton*> get_selected_skeletons(ui::canvas::scene& canv) {
         std::unordered_set<const sm::skeleton*> selected_skels;
-        auto selected_skel = canv.selected_skeleton();
-        if (selected_skel) {
+        for (auto* selected_skel : canv.selected_skeletons()) {
             selected_skels.insert(&selected_skel->model());
-        } else {
-            for (auto skel_item : canv.skeleton_items()) {
-                auto& skel = skel_item->model();
-                bool skel_is_selected = r::all_of(skel.nodes(),
-                        [](sm::node_ref nr)->bool {
-                            auto& ni = ui::canvas::item_from_model<ui::canvas::item::node>(nr.get());
-                            return ni.is_selected();
-                        }
-                    ) && r::all_of(skel.bones(),
-                        [](sm::bone_ref br)->bool {
-                            auto& bi = ui::canvas::item_from_model<ui::canvas::item::bone>(br.get());
-                            return bi.is_selected();
-                        }
-                    );
-                if (skel_is_selected) {
-                    selected_skels.insert(&skel);
-                }
+        }
+        for (auto skel_item : canv.skeleton_items()) {
+            auto& skel = skel_item->model();
+            bool skel_is_selected = r::all_of(skel.nodes(),
+                    [](sm::node_ref nr)->bool {
+                        auto& ni = ui::canvas::item_from_model<ui::canvas::item::node>(nr.get());
+                        return ni.is_selected();
+                    }
+                ) && r::all_of(skel.bones(),
+                    [](sm::bone_ref br)->bool {
+                        auto& bi = ui::canvas::item_from_model<ui::canvas::item::bone>(br.get());
+                        return bi.is_selected();
+                    }
+                );
+            if (skel_is_selected) {
+                selected_skels.insert(&skel);
             }
         }
         return selected_skels;

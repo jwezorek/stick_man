@@ -31,7 +31,7 @@ namespace {
 			return ui::selection_type::none;
 		}
 
-		if (sel.size() == 1 && dynamic_cast<ui::canvas::item::skeleton*>(*sel.begin())) {
+		if (r::all_of(sel, [](auto* item) { return dynamic_cast<ui::canvas::item::skeleton*>(item) != nullptr; })) {
 			return ui::selection_type::skeleton;
 		}
 

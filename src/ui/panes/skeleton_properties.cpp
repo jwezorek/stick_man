@@ -36,5 +36,11 @@ void ui::pane::props::skeletons::populate(mdl::project & proj) {
 
 void ui::pane::props::skeletons::set_selection(const ui::canvas::scene& canv) {
     auto* skel_item = canv.selected_skeleton();
-    name_->set_value(skel_item->model().name().c_str());
+    name_->setVisible(skel_item != nullptr);
+    if (skel_item) {
+        set_title("skeleton selection");
+        name_->set_value(skel_item->model().name().c_str());
+    } else {
+        set_title(QString("%1 skeletons selected").arg(canv.selected_skeletons().size()));
+    }
 }
