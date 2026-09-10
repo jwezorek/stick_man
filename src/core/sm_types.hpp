@@ -109,6 +109,9 @@ namespace sm {
         foreign_skeleton,
         duplicate_skeleton,
         skeleton_already_owned,
+        different_characters,
+        ambiguous_membership,
+        invalid_membership,
 		unknown_error
 	};
 

@@ -531,6 +531,9 @@ sm::expected_bone sm::topology::create_bone(const std::string& bone_name, node& 
     return create_bone(generate_object_id(), bone_name, u, v);
 }
 sm::expected_bone sm::topology::create_bone(object_id id, const std::string& bone_name, node& u, node& v) {
+    if (&u.owner().owner() != this || &v.owner().owner() != this) {
+        return std::unexpected(sm::result::foreign_skeleton);
+    }
     if (!v.is_root()) {
         return std::unexpected(sm::result::multi_parent_node);
     }

@@ -40,6 +40,8 @@ namespace mdl {
             handle u_hnd;
             handle v_hnd;
             sm::topology original;
+            sm::membership_state membership;
+            sm::result status = sm::result::success;
             sm::object_id merged;
             std::optional<sm::object_id> bone_id;
             add_bone_state(const std::string& bone_name,
@@ -56,6 +58,9 @@ namespace mdl {
             sm::topology replacees;
             std::vector<sm::object_id> replacement_ids;
             sm::topology replacements;
+            sm::membership_state before_membership;
+            std::optional<sm::membership_state> after_membership;
+            sm::result status = sm::result::success;
             std::unordered_set<sm::object_id> regenerate_ids;
             replace_skeleton_state(
                 const std::vector<sm::object_id>& replacees,

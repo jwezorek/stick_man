@@ -24,6 +24,8 @@ namespace mdl {
     struct command {
         std::function<void(project&)> redo;
         std::function<void(project&)> undo;
+        // Only commands with ordinary user failures need to report an outcome.
+        std::function<sm::result()> outcome;
     };
     class project : public QObject {
 
@@ -37,13 +39,14 @@ namespace mdl {
         std::size_t next_node_name_ = 1;
         std::size_t next_bone_name_ = 1;
         void clear_redo_stack();
-        void execute_command(const command& cmd);
+        sm::result execute_command(const command& cmd);
         void rename_aux(handle id, const std::string& new_name);
         bool can_rename(skel_piece piece, const std::string& new_name);
         sm::topology_change replace_skeletons_aux(
             const std::vector<sm::object_id>& replacees,
             const std::vector<sm::skel_ref>& replacements,
-            const std::unordered_set<sm::object_id>& regenerate_ids = {});
+            const std::unordered_set<sm::object_id>& regenerate_ids = {},
+            const sm::membership_state* membership = nullptr);
         void clear();
         std::string next_default_node_name();
         std::string next_default_bone_name();
@@ -60,11 +63,13 @@ namespace mdl {
         std::expected<sm::project_buffer, sm::project_result> serialize() const;
         bool deserialize(std::span<const std::uint8_t> buffer);
         void undo();
-        void redo();
-        void add_bone(const handle& node_u, const handle& node_v);
+        sm::result redo();
+        sm::result add_bone(const handle& node_u, const handle& node_v);
+        sm::result adopt_skeletons(const sm::object_id& character_id,
+            std::span<const sm::const_skel_ref> skeletons);
         void add_new_skeleton_root(sm::point loc);
         bool rename(skel_piece piece, const std::string& new_name);
-        void replace_skeletons(
+        sm::result replace_skeletons(
             const std::vector<sm::object_id>& replacees,
             const std::vector<sm::skel_ref>& replacements,
             const std::unordered_set<sm::object_id>& regenerate_ids = {}

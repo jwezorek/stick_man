@@ -23,6 +23,21 @@ namespace sm {
     struct topology_change {
         std::vector<object_id> removed_skeleton_ids;
         std::vector<object_id> added_skeleton_ids;
+        result status = result::success;
+    };
+
+    // Semantic command state lives beside, never inside, scratch topology.
+    struct character_state {
+        object_id id;
+        std::string name;
+    };
+    struct membership_state {
+        std::unordered_map<object_id, std::optional<object_id>> parents;
+        std::vector<character_state> characters;
+    };
+    struct replacement_plan {
+        membership_state membership;
+        std::vector<object_id> deleted_character_ids;
     };
 
     enum class project_result {
@@ -50,6 +65,8 @@ namespace sm {
         bool rebuild_object_index();
         bool ensure_object_index() const;
         const mutable_object& get_mutable(const object_id& id) const;
+        void detach_skeleton(skeleton& skel);
+        void prune_empty_characters();
 
     public:
         project() = default;
@@ -65,14 +82,25 @@ namespace sm {
             const skeleton& source,
             const std::unordered_map<object_id, object_id>& id_remap = {});
         result delete_skeleton(const object_id& id);
+        result can_create_bone(const node& u, const node& v) const;
         expected_bone create_bone(const std::string& name, node& u, node& v);
         expected_bone create_bone(object_id id, const std::string& name, node& u, node& v);
         topology_change replace_skeletons(
             const std::vector<object_id>& replacees,
             const std::vector<skel_ref>& replacements,
-            const std::unordered_set<object_id>& regenerate_ids = {});
+            const std::unordered_set<object_id>& regenerate_ids = {},
+            const membership_state* restored_membership = nullptr);
+        membership_state snapshot_membership(const std::vector<object_id>& skeletons) const;
+        // Restore affected membership without replacing topology (e.g. adoption undo).
+        result restore_membership(const membership_state& state);
+        std::expected<replacement_plan, result> plan_replacement(
+            const std::vector<object_id>& replacees,
+            const std::vector<skel_ref>& replacements,
+            const membership_state* restored_membership = nullptr) const;
+        bool has_consistent_membership() const;
 
         expected_const_character create_character(std::span<const const_skel_ref> skeletons);
+        result adopt_skeletons(const object_id& character_id, std::span<const const_skel_ref> skeletons);
         result remove_character(const object_id& id);
         expected_const_character character(const object_id& id) const;
         auto characters() const { return detail::to_range_view<const_character_ref>(characters_); }

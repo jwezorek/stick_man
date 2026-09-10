@@ -33,11 +33,13 @@ namespace {
 }
 /*------------------------------------------------------------------------------------------------*/
 void mdl::project::clear_redo_stack() { redo_stack_ = {}; }
-void mdl::project::execute_command(const command& cmd) {
-    clear_redo_stack();
+sm::result mdl::project::execute_command(const command& cmd) {
     cmd.redo(*this);
+    if (cmd.outcome && cmd.outcome() != sm::result::success) return cmd.outcome();
+    clear_redo_stack();
     undo_stack_.push(cmd);
     emit refresh_undo_redo_state(can_redo(), can_undo());
+    return sm::result::success;
 }
 
 mdl::project::project() {}
@@ -95,15 +97,17 @@ void mdl::project::undo() {
     redo_stack_.push(cmd);
     emit refresh_undo_redo_state(can_redo(), can_undo());
 }
-void mdl::project::redo() {
+sm::result mdl::project::redo() {
     if (!can_redo()) {
-        return;
+        return sm::result::success;
     }
     auto cmd = redo_stack_.top();
-    redo_stack_.pop();
     cmd.redo(*this);
+    if (cmd.outcome && cmd.outcome() != sm::result::success) return cmd.outcome();
+    redo_stack_.pop();
     undo_stack_.push(cmd);
     emit refresh_undo_redo_state(can_redo(), can_undo());
+    return sm::result::success;
 }
 bool mdl::project::can_undo() const { return !undo_stack_.empty(); }
 bool mdl::project::can_redo() const { return !redo_stack_.empty(); }
@@ -124,8 +128,42 @@ bool mdl::project::deserialize(std::span<const std::uint8_t> buffer) {
     emit new_project_opened(*this);
     return true;
 }
-void mdl::project::add_bone(const handle& u, const handle& v) {
-    execute_command(commands::make_add_bone_command(u, v, next_default_bone_name()));
+sm::result mdl::project::add_bone(const handle& u, const handle& v) {
+    auto status = core_.can_create_bone(commands::resolve<sm::node>(*this, u), commands::resolve<sm::node>(*this, v));
+    if (status != sm::result::success) return status;
+    return execute_command(commands::make_add_bone_command(u, v, next_default_bone_name()));
+}
+sm::result mdl::project::adopt_skeletons(const sm::object_id& character_id,
+        std::span<const sm::const_skel_ref> skeletons) {
+    struct adoption_state {
+        sm::membership_state before;
+        std::optional<sm::membership_state> after;
+        sm::result status = sm::result::success;
+    };
+    auto state = std::make_shared<adoption_state>();
+    // References are used only during initial execution; redo resolves stable IDs.
+    std::vector<sm::const_skel_ref> candidates(skeletons.begin(), skeletons.end());
+    return execute_command({
+        [state, character_id, candidates](project& proj) {
+            if (state->after) {
+                state->status = proj.core_.restore_membership(*state->after);
+            } else {
+                std::vector<sm::object_id> ids;
+                for (auto s : candidates) ids.push_back(s->id());
+                state->before = proj.core_.snapshot_membership(ids);
+                state->status = proj.core_.adopt_skeletons(character_id, candidates);
+                if (state->status == sm::result::success)
+                    state->after = proj.core_.snapshot_membership(ids);
+            }
+            if (state->status == sm::result::success) emit proj.refresh_canvas(proj, true);
+        },
+        [state](project& proj) {
+            if (proj.core_.restore_membership(state->before) != sm::result::success)
+                throw std::runtime_error("unable to restore adoption membership");
+            emit proj.refresh_canvas(proj, true);
+        },
+        [state] { return state->status; }
+    });
 }
 void mdl::project::add_new_skeleton_root(sm::point loc) {
     execute_command(commands::make_create_node_command(loc, next_default_node_name()));
@@ -171,17 +209,21 @@ void mdl::project::transform_node_positions(
 sm::topology_change mdl::project::replace_skeletons_aux(
         const std::vector<sm::object_id>& replacees,
         const std::vector<sm::skel_ref>& replacements,
-        const std::unordered_set<sm::object_id>& regenerate_ids) {
-    auto change = core_.replace_skeletons(replacees, replacements, regenerate_ids);
+        const std::unordered_set<sm::object_id>& regenerate_ids,
+        const sm::membership_state* membership) {
+    auto change = core_.replace_skeletons(replacees, replacements, regenerate_ids, membership);
+    if (change.status != sm::result::success) return change;
     advance_default_name_counters_from_topology();
     emit refresh_canvas(*this, true);
     return change;
 }
-void mdl::project::replace_skeletons(
+sm::result mdl::project::replace_skeletons(
         const std::vector<sm::object_id>& replacees,
         const std::vector<sm::skel_ref>& replacements,
         const std::unordered_set<sm::object_id>& regenerate_ids) {
-    execute_command(commands::make_replace_skeletons_command(
+    auto plan = core_.plan_replacement(replacees, replacements);
+    if (!plan) return plan.error();
+    return execute_command(commands::make_replace_skeletons_command(
         replacees, replacements, regenerate_ids));
 }
 

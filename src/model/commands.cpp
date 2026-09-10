@@ -76,11 +76,11 @@ mdl::command mdl::commands::make_add_bone_command(
         [state](mdl::project& proj) {
             auto& u = commands::resolve<sm::node>(proj, state->u_hnd);
             auto& v = commands::resolve<sm::node>(proj, state->v_hnd);
-            if (&u.owner() == &v.owner()) {
-                return;
-            }
+            state->status = proj.core().can_create_bone(u, v);
+            if (state->status != sm::result::success) return;
             auto& skel_u = u.owner();
             auto& skel_v = v.owner();
+            state->membership = proj.core().snapshot_membership({skel_u.id(), skel_v.id()});
             auto new_u = skel_u.copy_to(state->original);
             auto new_v = skel_v.copy_to(state->original);
             if (!new_u || !new_v) {
@@ -91,7 +91,9 @@ mdl::command mdl::commands::make_add_bone_command(
                 ? proj.core().create_bone(*state->bone_id, state->bone_name, u, v)
                 : proj.core().create_bone(state->bone_name, u, v);
             if (!bone) {
-                throw std::runtime_error("create_bone failed");
+                state->status = bone.error();
+                state->original.clear();
+                return;
             }
             if (!state->bone_id) {
                 state->bone_id = bone->get().id();
@@ -102,10 +104,12 @@ mdl::command mdl::commands::make_add_bone_command(
         [state](mdl::project& proj) {
             proj.replace_skeletons_aux(
                 {state->merged},
-                state->original.skeletons() | r::to<std::vector<sm::skel_ref>>()
+                state->original.skeletons() | r::to<std::vector<sm::skel_ref>>(),
+                {}, &state->membership
             );
             state->original.clear();
-        }
+        },
+        [state] { return state->status; }
     };
 }
 mdl::commands::replace_skeleton_state::replace_skeleton_state(
@@ -132,6 +136,7 @@ mdl::command mdl::commands::make_replace_skeletons_command(
         replacees, replacements, regenerate_ids);
     return {
         [state](mdl::project& proj) {
+            state->before_membership = proj.core().snapshot_membership(state->replacee_ids);
             if (state->replacees.empty()) {
                 for (const auto& skel_id : state->replacee_ids) {
                     auto skel = proj.topology().skeleton(skel_id);
@@ -143,9 +148,13 @@ mdl::command mdl::commands::make_replace_skeletons_command(
             auto change = proj.replace_skeletons_aux(
                 state->replacee_ids,
                 state->replacements.skeletons() | r::to<std::vector<sm::skel_ref>>(),
-                state->regenerate_ids
+                state->regenerate_ids,
+                state->after_membership ? &*state->after_membership : nullptr
             );
+            state->status = change.status;
+            if (change.status != sm::result::success) return;
             state->replacement_ids = std::move(change.added_skeleton_ids);
+            state->after_membership = proj.core().snapshot_membership(state->replacement_ids);
             // Replacement may remap any object ID to avoid collisions. Retain the
             // actual inserted topology so later commands keep valid handles on redo.
             sm::topology inserted;
@@ -161,9 +170,11 @@ mdl::command mdl::commands::make_replace_skeletons_command(
         [state](mdl::project& proj) {
             proj.replace_skeletons_aux(
                 state->replacement_ids,
-                state->replacees.skeletons() | r::to<std::vector<sm::skel_ref>>()
+                state->replacees.skeletons() | r::to<std::vector<sm::skel_ref>>(),
+                {}, &state->before_membership
             );
-        }
+        },
+        [state] { return state->status; }
     };
 }
 mdl::commands::transform_nodes_and_bones_state::transform_nodes_and_bones_state(
