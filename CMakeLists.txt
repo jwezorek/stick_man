@@ -64,6 +64,7 @@ add_executable(stick_man
     src/ui/panes/abstract_skeleton_pane.cpp
     src/ui/panes/animation_skeleton_pane.cpp
     src/core/sm_project.cpp
+    src/core/sm_character.cpp
     src/core/sm_skeleton.cpp
     src/core/sm_bone.cpp
     src/core/sm_types.cpp
@@ -116,6 +117,7 @@ if(BUILD_TESTING)
     add_executable(topology_regressions
         tests/topology_regressions.cpp
         src/core/sm_project.cpp
+        src/core/sm_character.cpp
         src/core/sm_skeleton.cpp
         src/core/sm_bone.cpp
         src/core/sm_types.cpp
@@ -131,6 +133,24 @@ if(BUILD_TESTING)
     target_include_directories(topology_regressions PRIVATE src "${MINIZ_DIR}" "${MINIZ_GENERATED_DIR}")
     target_compile_definitions(topology_regressions PRIVATE MINIZ_NO_STDIO)
     target_link_libraries(topology_regressions PRIVATE Qt6::Widgets Eigen3::Eigen)
+
+    add_executable(character_stage1
+        tests/character_stage1.cpp
+        src/core/sm_project.cpp
+        src/core/sm_character.cpp
+        src/core/sm_skeleton.cpp
+        src/core/sm_bone.cpp
+        src/core/sm_types.cpp
+        src/core/sm_fabrik.cpp
+        src/core/sm_visit.cpp
+        src/core/sm_animation.cpp
+        src/core/sm_object_id.cpp
+        ${MINIZ_SOURCES}
+    )
+    target_include_directories(character_stage1 PRIVATE src "${MINIZ_DIR}" "${MINIZ_GENERATED_DIR}")
+    target_compile_definitions(character_stage1 PRIVATE MINIZ_NO_STDIO)
+    target_link_libraries(character_stage1 PRIVATE Eigen3::Eigen)
+    add_test(NAME character_stage1 COMMAND $<TARGET_FILE:character_stage1>)
     foreach(case IN ITEMS regenerate collision paste copy remap duplicate json archive)
         if(WIN32)
             add_test(NAME topology_${case} COMMAND "${CMAKE_COMMAND}" -E env

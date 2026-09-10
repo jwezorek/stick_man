@@ -105,6 +105,10 @@ namespace sm {
 		fabrik_mixed,
 		fabrik_no_solution_found,
         cross_skeleton_bone,
+        empty_character,
+        foreign_skeleton,
+        duplicate_skeleton,
+        skeleton_already_owned,
 		unknown_error
 	};
 
@@ -112,6 +116,9 @@ namespace sm {
 	class node;
 	class skeleton;
 	class topology;
+    class project;
+    class rig;
+    class character;
 
 	using bone_ref = ref<bone>;
 	using node_ref = ref<node>;
@@ -121,6 +128,8 @@ namespace sm {
 	using const_node_ref = ref<const node>;
 	using const_skel_ref = ref<const skeleton>;
 	using const_world_ref = ref<const topology>;
+    using character_ref = ref<character>;
+    using const_character_ref = ref<const character>;
 
 	using maybe_bone_ref = std::optional<bone_ref>;
 	using maybe_node_ref = std::optional<node_ref>;
@@ -128,10 +137,13 @@ namespace sm {
 	using maybe_const_node_ref = std::optional<const_node_ref>;
 	using maybe_const_bone_ref = std::optional<const_bone_ref>;
     using maybe_const_skel_ref = std::optional<skel_ref>;
+    using maybe_character_ref = std::optional<character_ref>;
+    using maybe_const_character_ref = std::optional<const_character_ref>;
 	using expected_bone = std::expected<bone_ref, result>;
 	using expected_node = std::expected<node_ref, result>;
 	using expected_skel = std::expected<skel_ref, result>;
     using expected_const_skel = std::expected<const_skel_ref, result>;
+    using expected_const_character = std::expected<const_character_ref, result>;
     namespace detail {
         template <typename T>
         class enable_protected_make_unique {

@@ -25,9 +25,10 @@ namespace {
         );
     }
 
-    template<typename Object>
+    template<typename Object, typename CharacterTable>
     bool build_object_index(
             sm::topology& topology,
+            CharacterTable& characters,
             std::unordered_map<sm::object_id, Object>& objects) {
         objects.clear();
         auto insert = [&objects](Object object) {
@@ -52,6 +53,12 @@ namespace {
                 }
             }
         }
+        for (auto& entry : characters) {
+            if (!insert(sm::character_ref(*entry.second))) {
+                objects.clear();
+                return false;
+            }
+        }
         return true;
     }
 }
@@ -63,7 +70,7 @@ void sm::project::invalidate_object_index() noexcept {
 }
 
 bool sm::project::rebuild_object_index() {
-    if (!build_object_index(topology_, objects_)) {
+    if (!build_object_index(topology_, characters_, objects_)) {
         return false;
     }
     object_index_dirty_ = false;
@@ -82,12 +89,18 @@ const sm::topology& sm::project::topology() const {
 }
 
 sm::skeleton& sm::project::create_skeleton(const point& pt) {
-    auto& created = topology_.create_skeleton(pt);
-    invalidate_object_index();
-    if (!ensure_object_index()) {
-        throw std::runtime_error("creating skeleton produced duplicate object IDs");
+    // topology generates skeleton/root-node IDs without knowledge of character IDs.
+    // Retry the vanishingly unlikely collision so the project-wide namespace remains strict.
+    while (true) {
+        auto& created = topology_.create_skeleton(pt);
+        const auto created_id = created.id();
+        invalidate_object_index();
+        if (ensure_object_index()) {
+            return created;
+        }
+        topology_.delete_skeleton(created_id);
+        invalidate_object_index();
     }
-    return created;
 }
 
 sm::expected_skel sm::project::copy_skeleton(
@@ -143,15 +156,14 @@ sm::result sm::project::delete_skeleton(const object_id& id) {
 }
 
 sm::expected_bone sm::project::create_bone(const std::string& name, node& u, node& v) {
-    auto created = topology_.create_bone(name, u, v);
-    if (!created) {
-        return created;
-    }
-    invalidate_object_index();
     if (!ensure_object_index()) {
-        throw std::runtime_error("creating bone produced duplicate object IDs");
+        return std::unexpected(result::duplicate_id);
     }
-    return created;
+    object_id id;
+    do {
+        id = object_id::generate();
+    } while (objects_.contains(id));
+    return create_bone(id, name, u, v);
 }
 
 sm::expected_bone sm::project::create_bone(
@@ -245,6 +257,98 @@ sm::topology_change sm::project::replace_skeletons(
     return change;
 }
 
+sm::expected_const_character sm::project::create_character(std::span<const const_skel_ref> skeletons) {
+    if (skeletons.empty()) {
+        return std::unexpected(result::empty_character);
+    }
+    if (!ensure_object_index()) {
+        return std::unexpected(result::duplicate_id);
+    }
+
+    std::unordered_set<object_id> seen;
+    seen.reserve(skeletons.size());
+    std::vector<skel_ref> validated;
+    validated.reserve(skeletons.size());
+
+    // Validate the complete request before changing either side of membership.
+    for (auto skel : skeletons) {
+        if (&skel->owner() != &topology_) {
+            return std::unexpected(result::foreign_skeleton);
+        }
+        auto live = topology_.skeleton(skel->id());
+        if (!live || &live->get() != &skel.get()) {
+            return std::unexpected(result::foreign_skeleton);
+        }
+        if (!seen.insert(skel->id()).second) {
+            return std::unexpected(result::duplicate_skeleton);
+        }
+        if (!live->get().is_loose()) {
+            return std::unexpected(result::skeleton_already_owned);
+        }
+        validated.push_back(*live);
+    }
+
+    object_id id;
+    do {
+        id = object_id::generate();
+    } while (objects_.contains(id));
+
+    sm::rig rig(*this);
+    for (auto skel : validated) {
+        rig.add_skeleton(skel->id());
+    }
+
+    auto name = "character-" + std::to_string(next_character_name_);
+    auto created = sm::character::make_unique(*this, id, std::move(name), std::move(rig));
+    auto* created_ptr = created.get();
+    auto [it, inserted] = characters_.emplace(id, std::move(created));
+    if (!inserted) {
+        return std::unexpected(result::duplicate_id);
+    }
+    for (auto skel : validated) {
+        skel->set_parent_character(*created_ptr);
+    }
+    ++next_character_name_;
+
+    invalidate_object_index();
+    if (!ensure_object_index()) {
+        throw std::runtime_error("creating character produced duplicate object IDs");
+    }
+    return const_character_ref(std::as_const(*created_ptr));
+}
+
+sm::result sm::project::remove_character(const object_id& id) {
+    auto it = characters_.find(id);
+    if (it == characters_.end()) {
+        return result::not_found;
+    }
+
+    auto& removed = *it->second;
+    // Scan live skeletons rather than trusting the rig alone. This guarantees no surviving
+    // skeleton can retain the non-owning reference when the character is destroyed.
+    for (auto skel : topology_.skeletons()) {
+        auto parent = skel->parent_character();
+        if (parent && &parent->get() == &removed) {
+            skel->clear_parent_character();
+        }
+    }
+    characters_.erase(it);
+
+    invalidate_object_index();
+    if (!ensure_object_index()) {
+        throw std::runtime_error("removing character left duplicate object IDs");
+    }
+    return result::success;
+}
+
+sm::expected_const_character sm::project::character(const object_id& id) const {
+    auto it = characters_.find(id);
+    if (it == characters_.end()) {
+        return std::unexpected(result::not_found);
+    }
+    return const_character_ref(std::as_const(*it->second));
+}
+
 const sm::project::mutable_object& sm::project::get_mutable(const object_id& id) const {
     if (!ensure_object_index()) {
         throw std::runtime_error("project contains duplicate object IDs");
@@ -261,6 +365,9 @@ sm::mutable_project_object sm::project::get(const object_id& id) {
         [](node_ref ref) -> mutable_project_object { return ref; },
         [](bone_ref ref) -> mutable_project_object { return ref; },
         [](skel_ref) -> mutable_project_object {
+            throw std::runtime_error("project object does not support mutable lookup");
+        },
+        [](character_ref) -> mutable_project_object {
             throw std::runtime_error("project object does not support mutable lookup");
         }
     }, get_mutable(id));
@@ -281,6 +388,9 @@ sm::const_project_object sm::project::get(const object_id& id) const {
             },
             [](sm::skel_ref ref) -> sm::const_project_object {
                 return sm::const_skel_ref(std::as_const(ref.get()));
+            },
+            [](sm::character_ref ref) -> sm::const_project_object {
+                return sm::const_character_ref(std::as_const(ref.get()));
             }
         },
         get_mutable(id)
@@ -292,9 +402,11 @@ bool sm::project::has_unique_object_ids() const {
 }
 
 void sm::project::clear() {
-    topology_.clear();
     objects_.clear();
+    topology_.clear();
+    characters_.clear();
     object_index_dirty_ = false;
+    next_character_name_ = 1;
 }
 
 std::expected<sm::project_buffer, sm::project_result> sm::project::serialize() const {
@@ -383,13 +495,19 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
         return project_result::invalid_project_json;
     }
 
+    std::unordered_map<object_id, std::unique_ptr<sm::character>> no_characters;
     std::unordered_map<object_id, mutable_object> new_objects;
-    if (!build_object_index(new_topology, new_objects)) {
+    if (!build_object_index(new_topology, no_characters, new_objects)) {
         return project_result::duplicate_object_id;
     }
 
+    // Character serialization is intentionally a later stage. A successful load replaces
+    // the whole in-memory project with the topology represented by this package.
+    objects_.clear();
     topology_ = std::move(new_topology);
+    characters_.clear();
     objects_ = std::move(new_objects);
     object_index_dirty_ = false;
+    next_character_name_ = 1;
     return project_result::success;
 }

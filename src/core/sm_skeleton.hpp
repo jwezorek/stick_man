@@ -33,6 +33,7 @@ namespace sm {
         std::string name_;
         maybe_node_ref root_;
         std::any user_data_;
+        maybe_character_ref parent_character_;
         nodes_tbl nodes_;
         bones_tbl bones_;
     protected:
@@ -46,10 +47,14 @@ namespace sm {
         void register_node(sm::node& new_node);
         void register_bone(sm::bone& new_bone);
         void set_owner(topology& owner);
+        void set_parent_character(character& parent);
+        void clear_parent_character() noexcept;
     public:
         const object_id& id() const noexcept;
         std::string name() const;
         bool empty() const;
+        bool is_loose() const noexcept;
+        maybe_const_character_ref parent_character() const;
         sm::node& root_node();
         const sm::node& root_node() const;
         std::any get_user_data() const;

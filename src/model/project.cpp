@@ -133,7 +133,15 @@ void mdl::project::add_new_skeleton_root(sm::point loc) {
 void mdl::project::rename_aux(handle id, const std::string& new_name) {
     core_.rename(id, new_name);
     advance_default_name_counters_from_topology();
-    emit name_changed(std::as_const(core_).get(id), new_name);
+    // The editor's existing rename command only operates on topology pieces. Core's
+    // const generic lookup now also includes characters, so narrow the signal back to
+    // the pre-Stage-1 topology-only variant until character UI lands in a later stage.
+    std::visit([this, &new_name](auto ref) {
+        using value_type = std::remove_cvref_t<decltype(ref.get())>;
+        if constexpr (!std::is_same_v<value_type, sm::character>) {
+            emit name_changed(const_skel_piece{ref}, new_name);
+        }
+    }, std::as_const(core_).get(id));
 }
 bool mdl::project::can_rename(skel_piece, const std::string&) {
     return true;

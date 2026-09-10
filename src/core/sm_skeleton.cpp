@@ -1,4 +1,5 @@
 #include "sm_skeleton.hpp"
+#include "sm_character.hpp"
 #include "sm_types.hpp"
 #include "sm_visit.hpp"
 #include "json.hpp"
@@ -13,6 +14,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 using namespace std::placeholders;
 namespace r = std::ranges;
@@ -141,6 +143,15 @@ const sm::object_id& sm::skeleton::id() const noexcept { return id_; }
 std::string sm::skeleton::name() const { return name_; }
 
 void sm::skeleton::set_name(const std::string& str) { name_ = str; }
+void sm::skeleton::set_parent_character(character& parent) { parent_character_ = character_ref(parent); }
+void sm::skeleton::clear_parent_character() noexcept { parent_character_.reset(); }
+bool sm::skeleton::is_loose() const noexcept { return !parent_character_.has_value(); }
+sm::maybe_const_character_ref sm::skeleton::parent_character() const {
+    if (!parent_character_) {
+        return {};
+    }
+    return const_character_ref(std::as_const(parent_character_->get()));
+}
 
 sm::node& sm::skeleton::root_node() { return root_.value(); }
 const sm::node& sm::skeleton::root_node() const { return root_.value(); }

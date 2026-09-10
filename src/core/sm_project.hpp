@@ -8,14 +8,16 @@
 #include <unordered_set>
 #include <variant>
 #include <vector>
+#include <memory>
 #include "sm_skeleton.hpp"
+#include "sm_character.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 
 namespace sm {
 
     using mutable_project_object = std::variant<node_ref, bone_ref>;
-    using const_project_object = std::variant<const_node_ref, const_bone_ref, const_skel_ref>;
+    using const_project_object = std::variant<const_node_ref, const_bone_ref, const_skel_ref, const_character_ref>;
     using project_buffer = std::vector<std::uint8_t>;
 
     struct topology_change {
@@ -33,10 +35,16 @@ namespace sm {
     };
 
     class project {
-        using mutable_object = std::variant<node_ref, bone_ref, skel_ref>;
+        using mutable_object = std::variant<node_ref, bone_ref, skel_ref, character_ref>;
+        using character_tbl = std::unordered_map<object_id, std::unique_ptr<sm::character>>;
+
+        // Keep characters alive until after topology destruction so a surviving skeleton can
+        // never outlive the character referenced by its non-owning parent link.
+        character_tbl characters_;
         sm::topology topology_;
         mutable std::unordered_map<object_id, mutable_object> objects_;
         mutable bool object_index_dirty_ = true;
+        std::size_t next_character_name_ = 1;
 
         void invalidate_object_index() noexcept;
         bool rebuild_object_index();
@@ -64,7 +72,12 @@ namespace sm {
             const std::vector<skel_ref>& replacements,
             const std::unordered_set<object_id>& regenerate_ids = {});
 
-        // Mutable lookup accepts nodes and bones only; use const lookup for skeletons.
+        expected_const_character create_character(std::span<const const_skel_ref> skeletons);
+        result remove_character(const object_id& id);
+        expected_const_character character(const object_id& id) const;
+        auto characters() const { return detail::to_range_view<const_character_ref>(characters_); }
+
+        // Mutable lookup accepts nodes and bones only; use const lookup for aggregate objects.
         mutable_project_object get(const object_id& id);
         const_project_object get(const object_id& id) const;
         void rename(object_id id, std::string name);
