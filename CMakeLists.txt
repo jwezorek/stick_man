@@ -93,3 +93,34 @@ set_target_properties(stick_man PROPERTIES
     WIN32_EXECUTABLE ON
     MACOSX_BUNDLE ON
 )
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(topology_regressions
+        tests/topology_regressions.cpp
+        src/core/sm_project.cpp
+        src/core/sm_skeleton.cpp
+        src/core/sm_bone.cpp
+        src/core/sm_types.cpp
+        src/core/sm_fabrik.cpp
+        src/core/sm_visit.cpp
+        src/core/sm_animation.cpp
+        src/core/sm_object_id.cpp
+        src/model/project.cpp
+        src/model/commands.cpp
+        src/model/handle.cpp
+        ${MINIZ_SOURCES}
+    )
+    target_include_directories(topology_regressions PRIVATE src "${MINIZ_DIR}" "${MINIZ_GENERATED_DIR}")
+    target_compile_definitions(topology_regressions PRIVATE MINIZ_NO_STDIO)
+    target_link_libraries(topology_regressions PRIVATE Qt6::Widgets Eigen3::Eigen)
+    foreach(case IN ITEMS regenerate collision paste copy remap duplicate json archive)
+        if(WIN32)
+            add_test(NAME topology_${case} COMMAND "${CMAKE_COMMAND}" -E env
+                "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+                $<TARGET_FILE:topology_regressions> ${case})
+        else()
+            add_test(NAME topology_${case} COMMAND topology_regressions ${case})
+        endif()
+    endforeach()
+endif()

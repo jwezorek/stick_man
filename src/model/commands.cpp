@@ -146,6 +146,17 @@ mdl::command mdl::commands::make_replace_skeletons_command(
                 state->regenerate_ids
             );
             state->replacement_ids = std::move(change.added_skeleton_ids);
+            // Replacement may remap any object ID to avoid collisions. Retain the
+            // actual inserted topology so later commands keep valid handles on redo.
+            sm::topology inserted;
+            for (const auto& id : state->replacement_ids) {
+                auto skel = proj.topology().skeleton(id);
+                if (!skel || !skel->get().copy_to(inserted)) {
+                    throw std::runtime_error("unable to snapshot inserted skeleton");
+                }
+            }
+            state->replacements = std::move(inserted);
+            state->regenerate_ids.clear();
         },
         [state](mdl::project& proj) {
             proj.replace_skeletons_aux(

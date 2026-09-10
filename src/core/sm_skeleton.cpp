@@ -148,35 +148,12 @@ std::any sm::skeleton::get_user_data() const { return user_data_; }
 void sm::skeleton::set_user_data(std::any data) { user_data_ = data; }
 void sm::skeleton::clear_user_data() { user_data_.reset(); }
 sm::expected_skel sm::skeleton::copy_to(topology& other_topology, const std::string& new_name) const {
-    auto label = new_name.empty() ? name_ : new_name;
-    auto new_skel = other_topology.create_skeleton_with_id(id_, label);
-    if (!new_skel) {
-        return new_skel;
-    }
-    auto& dest = new_skel->get();
-    for (auto node : nodes()) {
-        auto copied = node->copy_to(other_topology, dest.id());
-        if (!copied) {
-            return std::unexpected(copied.error());
-        }
-    }
-    dest.set_root(dest.get<sm::node>(root_node().id())->get());
-    for (auto bone : bones()) {
-        auto copied = bone->copy_to(other_topology, dest.id());
-        if (!copied) {
-            return std::unexpected(copied.error());
-        }
-    }
-    dest.user_data_ = user_data_;
-    return new_skel;
+    return copy_to(other_topology, std::unordered_map<object_id, object_id>{}, new_name);
 }
 sm::expected_skel sm::skeleton::copy_to(
         topology& other_topology,
         const std::unordered_map<object_id, object_id>& id_remap,
         const std::string& new_name) const {
-    if (id_remap.empty()) {
-        return copy_to(other_topology, new_name);
-    }
     auto mapped_id = [&id_remap](const object_id& id) {
         auto it = id_remap.find(id);
         return it == id_remap.end() ? id : it->second;
@@ -208,13 +185,20 @@ sm::expected_skel sm::skeleton::copy_to(
         if (!copied) {
             return std::unexpected(copied.error());
         }
+        dest.register_bone(copied->get());
+    }
+    // Parent-relative constraints require the complete bone graph, regardless
+    // of the source's unordered bone iteration order.
+    for (auto bone : bones()) {
         if (auto constraint = bone->rotation_constraint()) {
-            copied->get().set_rotation_constraint(
+            auto result = dest.get<sm::bone>(mapped_id(bone->id()))->get().set_rotation_constraint(
                 constraint->start_angle,
                 constraint->span_angle,
                 constraint->relative_to_parent);
+            if (result != sm::result::success) {
+                return std::unexpected(result);
+            }
         }
-        dest.register_bone(copied->get());
     }
     dest.user_data_ = user_data_;
     return new_skel;
@@ -245,13 +229,18 @@ sm::expected_skel sm::skeleton::duplicate_to(topology& other_topology, const std
         if (!copied) {
             return std::unexpected(copied.error());
         }
+        dest.register_bone(copied->get());
+    }
+    for (auto bone : bones()) {
         if (auto constraint = bone->rotation_constraint()) {
-            copied->get().set_rotation_constraint(
+            auto result = dest.get<sm::bone>(id_map.at(bone->id()))->get().set_rotation_constraint(
                 constraint->start_angle,
                 constraint->span_angle,
                 constraint->relative_to_parent);
+            if (result != sm::result::success) {
+                return std::unexpected(result);
+            }
         }
-        dest.register_bone(copied->get());
     }
     return new_skel;
 }
@@ -278,6 +267,7 @@ sm::result sm::skeleton::from_json(sm::topology& owner, const json& jobj) {
         }
         nodes_[new_node->id()] = new_node.ptr();
     }
+    std::vector<std::pair<sm::bone_ref, sm::rot_constraint>> constraints;
     for (const auto& bone_json : jobj.at("bones")) {
         auto* u = node_from_reference(*this, bone_json.at("u"));
         auto* v = node_from_reference(*this, bone_json.at("v"));
@@ -292,10 +282,10 @@ sm::result sm::skeleton::from_json(sm::topology& owner, const json& jobj) {
         }
         if (bone_json.contains("rot_constraint")) {
             const auto& constraint = bone_json.at("rot_constraint");
-            b->get().set_rotation_constraint(
+            constraints.emplace_back(b->get(), sm::rot_constraint{
+                constraint.at("relative_to_parent").get<bool>(),
                 constraint.at("start_angle").get<double>(),
-                constraint.at("span_angle").get<double>(),
-                constraint.at("relative_to_parent").get<bool>());
+                constraint.at("span_angle").get<double>()});
         }
         bones_[b->get().id()] = &b->get();
     }
@@ -304,6 +294,12 @@ sm::result sm::skeleton::from_json(sm::topology& owner, const json& jobj) {
         return sm::result::invalid_json;
     }
     root_ = *root;
+    for (auto& [bone, constraint] : constraints) {
+        if (bone->set_rotation_constraint(constraint.start_angle, constraint.span_angle,
+                constraint.relative_to_parent) != sm::result::success) {
+            return sm::result::invalid_json;
+        }
+    }
     return sm::result::success;
 }
 json sm::skeleton::to_json() const {
