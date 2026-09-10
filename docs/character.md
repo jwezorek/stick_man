@@ -27,9 +27,21 @@ project
     └── character
         ├── rig
         │   └── references to one or more skeletons
-        ├── artwork
-        └── animation
+        ├── artwork (future effort)
+        └── animation (future effort)
 ```
+
+## Initial implementation scope and ownership
+
+The initial version introduces `sm_character.hpp/.cpp` with a character that has an ID, a name, a project owner, and a privately held rig. Artwork and animation are separate future efforts and are not implemented in this version.
+
+The project owns both its topology and its characters. Topology continues to own all skeleton, node, and bone objects. A character owns its rig membership list, not the skeleton objects themselves. The rig can be represented as a vector of skeleton IDs resolved through the project.
+
+Each skeleton retains its topology owner and also has an optional, non-owning character parent reference, for example `std::optional<std::reference_wrapper<character>>`. An absent parent means the skeleton is loose. This reference allows a skeleton to identify its character directly without changing lifetime ownership.
+
+The parent reference and rig membership must agree: a skeleton names a character as its parent if and only if that character's rig includes the skeleton. Both must belong to the same project. Project-controlled operations update both sides together during creation, adoption, splitting, merging, deletion, and restoration. Neither side is independently editable by callers. No surviving skeleton may retain a reference to a destroyed character.
+
+Character IDs are stable identity; names are display labels. Creation generates a name such as `character-1`, using a simple advancing counter or equivalent. Duplicate names are allowed. Users can rename characters through the properties pane or skeleton pane. Pasted characters receive a fresh ID and a roughly unique name suffix; exhaustive name uniqueness is unnecessary.
 
 ## Why a skeleton should not be a character
 
@@ -63,7 +75,7 @@ The rig tells the character which skeleton components in the project's current t
 
 Not every skeleton in a project needs to belong to a character.
 
-Users should be able to create and manipulate loose skeletons as lightweight construction objects. A loose skeleton can become part of a character through **Make Character**, later rig-editing/adoption commands, or by connecting it to a skeleton that already belongs to a character.
+Users should be able to create and manipulate loose skeletons as lightweight construction objects. A loose skeleton can become part of a character through **Make Character**, adoption into an existing character, or by connecting it to a skeleton that already belongs to a character. Adoption is in scope for the initial version; its GUI interaction remains to be decided.
 
 This keeps basic skeleton editing simple and avoids silently creating heavyweight semantic objects during ordinary topology manipulation.
 
@@ -84,27 +96,45 @@ Every component produced by splitting a character's skeleton retains membership 
 
 Deleting a character's final rig component also deletes the character. Before applying such an operation, the editor displays an **OK/Cancel** dialog explaining that the character will be deleted. **OK** applies the operation; **Cancel** leaves the project unchanged. Empty characters are not retained after this deletion.
 
+Deleting a selected character deletes the character and its entire rig, including its nodes and bones, guarded by an **OK/Cancel** prompt. The initial version has no command to dissolve a character while retaining its rig as loose skeletons.
+
+Ordinary node, bone, and skeleton editing and deletion must work for character rigs in the initial version, preserving membership according to these rules.
+
 ## GUI behavior
+
+### Creating a character
+
+When a single loose skeleton is selected, its properties pane offers a **Make Character** button. The skeleton pane also offers **Make Character** in the context menu for a loose skeleton. Both create a character containing that one skeleton. Creating a character from multiple skeletons at once is outside the initial version; characters can acquire multiple components through adoption or splitting.
 
 ### Skeleton pane and character selection
 
 The skeleton pane displays characters as parent entries above the skeletons that comprise their rigs. Loose skeletons remain available without a character parent.
 
-A character can be selected either by selecting its entry in the skeleton pane or by selecting all of its constituent skeletons in the editor. The editor indicates character selection with a bounding rectangle similar to the skeleton-selection indicator, but in a different color and with an attached label such as **character: Fred**. The exact color and label styling remain UI design details.
+A character can be selected either by selecting its entry in the skeleton pane or by selecting exactly the nodes and bones that comprise its complete rig in the editor. Only one character can be selected at a time in the initial version. A mixed selection, including a complete character plus other topology or multiple complete characters, remains a topology selection. The editor indicates character selection with a bounding rectangle similar to the skeleton-selection indicator, but in a different color and with an attached label such as **character: Fred**. The exact color and label styling remain UI design details.
 
 For a character containing a single skeleton, dragging a selection around the whole skeleton in the editor selects the character. To select that skeleton itself, the user selects its entry in the skeleton pane or clicks the corresponding skeleton in the character's properties pane.
 
 Explicit skeleton selection through either pane must remain skeleton selection even when that skeleton is the character's entire rig. Selection therefore distinguishes a character from its component skeletons; selecting the same topology does not always imply the same semantic selection.
 
+### Editing and dragging
+
+Existing editing tools retain their behavior for loose skeletons when working on character topology. Dragging a whole selected character moves every skeleton in its rig together. This requires supporting multiple components internally, but does not require exposing general multiple-skeleton selection in the initial version. No new character-specific rotation or scaling behavior is introduced.
+
 ### Cut, copy, and paste
 
-Cut, copy, and paste support whole-character selections. Copying a selected character includes its complete rig and associated character resources. Pasting that whole-character clipboard content creates a character with its rig and resources, preserving their internal associations. Cutting a selected character removes the whole character and places it on the clipboard for pasting.
+Cut, copy, and paste support whole-character selections. Copying a selected character includes its complete rig and character data. Pasting that whole-character clipboard content creates a character with its rig, preserving their internal associations while assigning fresh identities. Cutting a selected character removes the whole character and places it on the clipboard for pasting. Future artwork and animation efforts will extend whole-character copying to their associated resources.
 
 When the selection is topology rather than a whole character, ordinary paste creates loose skeletons, including when the copied or cut topology came from a character. It does not retain the source character's membership. This also applies to a skeleton explicitly selected through a pane in a single-skeleton character.
 
 Ordinary paste does not insert clipboard content into an existing character, regardless of the current selection. Whole-character paste creates a character; topology paste creates loose skeletons.
 
-Pasting directly into a character will be provided by special commands. The ordinary bone-connection rule above still allows pasted loose topology to be connected to an existing character.
+Special commands for pasting directly into a character are outside the initial version. The ordinary bone-connection rule above still allows pasted loose topology to be connected to an existing character.
+
+## Undo and persistence
+
+Character creation, renaming, adoption, deletion, clipboard edits, and structural edits to rigs participate in undo and redo. Restoration preserves character identity and restores rig membership and skeleton parent references consistently with the topology.
+
+Project serialization includes character IDs, names, and rig membership. Deserialization reconstructs characters and their skeleton parent references; runtime references are not serialized as memory addresses. Backward compatibility with older project files is not required.
 
 ## Project topology remains authoritative
 
