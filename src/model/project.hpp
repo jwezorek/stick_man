@@ -67,6 +67,10 @@ namespace mdl {
         sm::result add_bone(const handle& node_u, const handle& node_v);
         sm::result adopt_skeletons(const sm::object_id& character_id,
             std::span<const sm::const_skel_ref> skeletons);
+        std::expected<sm::object_id, sm::result> make_character(std::span<const sm::const_skel_ref> skeletons);
+        std::expected<sm::object_id, sm::result> paste_character(const sm::topology& rig, const std::string& name);
+        sm::result delete_character(const sm::object_id& id);
+        bool rename(const sm::object_id& id, const std::string& new_name);
         void add_new_skeleton_root(sm::point loc);
         bool rename(skel_piece piece, const std::string& new_name);
         sm::result replace_skeletons(
@@ -89,6 +93,8 @@ namespace mdl {
         void new_skeleton_added(sm::skel_ref skel);
         void refresh_canvas(project& model, bool clear);
         void name_changed(const_skel_piece piece, const std::string& new_name);
+        void project_changed(project& model);
+        void select_character(sm::object_id id);
         void refresh_undo_redo_state(bool, bool);
     };
     bool identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2);

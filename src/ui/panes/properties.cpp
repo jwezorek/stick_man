@@ -30,6 +30,8 @@ namespace {
 		if (sel.empty()) {
 			return ui::selection_type::none;
 		}
+        if (sel.size() == 1 && dynamic_cast<ui::canvas::item::character*>(*sel.begin()))
+            return ui::selection_type::character;
 
 		if (r::all_of(sel, [](auto* item) { return dynamic_cast<ui::canvas::item::skeleton*>(item) != nullptr; })) {
 			return ui::selection_type::skeleton;
@@ -67,6 +69,7 @@ ui::pane::selection_properties::selection_properties(const props::current_canvas
 			{selection_type::node, new props::nodes(fn, this)},
 			{selection_type::bone, new props::bones(fn, this)},
 			{selection_type::skeleton, new props::skeletons(fn, this)},
+            {selection_type::character, new props::character(fn, this)},
 			{selection_type::mixed, new props::mixed_properties(fn, this)}
 		} {
 	for (const auto& [key, prop_box] : props_) {

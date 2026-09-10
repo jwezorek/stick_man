@@ -39,6 +39,7 @@ sm::result mdl::project::execute_command(const command& cmd) {
     clear_redo_stack();
     undo_stack_.push(cmd);
     emit refresh_undo_redo_state(can_redo(), can_undo());
+    emit project_changed(*this);
     return sm::result::success;
 }
 
@@ -96,6 +97,7 @@ void mdl::project::undo() {
     cmd.undo(*this);
     redo_stack_.push(cmd);
     emit refresh_undo_redo_state(can_redo(), can_undo());
+    emit project_changed(*this);
 }
 sm::result mdl::project::redo() {
     if (!can_redo()) {
@@ -107,6 +109,7 @@ sm::result mdl::project::redo() {
     redo_stack_.pop();
     undo_stack_.push(cmd);
     emit refresh_undo_redo_state(can_redo(), can_undo());
+    emit project_changed(*this);
     return sm::result::success;
 }
 bool mdl::project::can_undo() const { return !undo_stack_.empty(); }
@@ -168,12 +171,115 @@ sm::result mdl::project::adopt_skeletons(const sm::object_id& character_id,
 void mdl::project::add_new_skeleton_root(sm::point loc) {
     execute_command(commands::make_create_node_command(loc, next_default_node_name()));
 }
+std::expected<sm::object_id, sm::result> mdl::project::make_character(
+        std::span<const sm::const_skel_ref> skeletons) {
+    struct state_type {
+        sm::membership_state before, after;
+        sm::object_id id;
+        sm::result status = sm::result::success;
+        bool created = false;
+    };
+    auto state = std::make_shared<state_type>();
+    std::vector<sm::const_skel_ref> candidates(skeletons.begin(), skeletons.end());
+    auto result = execute_command({
+        [state, candidates](project& proj) {
+            if (state->created) {
+                state->status = proj.core_.restore_membership(state->after);
+            } else {
+                std::vector<sm::object_id> ids;
+                for (auto s : candidates) ids.push_back(s->id());
+                state->before = proj.core_.snapshot_membership(ids);
+                auto created = proj.core_.create_character(candidates);
+                if (!created) { state->status = created.error(); return; }
+                state->id = created->get().id();
+                state->after = proj.core_.snapshot_membership(ids);
+                state->created = true;
+            }
+            if (state->status == sm::result::success) {
+                emit proj.refresh_canvas(proj, true);
+                emit proj.select_character(state->id);
+            }
+        },
+        [state](project& proj) {
+            if (proj.core_.restore_membership(state->before) != sm::result::success)
+                throw std::runtime_error("unable to restore character creation");
+            emit proj.refresh_canvas(proj, true);
+        },
+        [state] { return state->status; }
+    });
+    if (result != sm::result::success) return std::unexpected(result);
+    return state->id;
+}
+
+std::expected<sm::object_id, sm::result> mdl::project::paste_character(
+        const sm::topology& rig, const std::string& name) {
+    if (rig.empty()) return std::unexpected(sm::result::empty_character);
+    struct state_type {
+        sm::topology topology;
+        sm::membership_state membership;
+        std::vector<sm::object_id> ids;
+        sm::object_id character = sm::object_id::generate();
+        sm::result status = sm::result::success;
+    };
+    auto state = std::make_shared<state_type>();
+    std::unordered_set<std::string> existing_names;
+    for (auto character : core_.characters()) existing_names.insert(character->name());
+    auto copied_name = name + " copy";
+    for (std::size_t suffix = 2; existing_names.contains(copied_name); ++suffix)
+        copied_name = name + " copy " + std::to_string(suffix);
+    state->membership.characters.push_back({state->character, copied_name});
+    for (auto skel : rig.skeletons()) {
+        auto copy = skel->duplicate_to(state->topology);
+        if (!copy) return std::unexpected(copy.error());
+        state->ids.push_back(copy->get().id());
+        state->membership.parents.emplace(copy->get().id(), state->character);
+    }
+    auto result = execute_command({
+        [state](project& proj) {
+            auto change = proj.replace_skeletons_aux({},
+                state->topology.skeletons() | std::ranges::to<std::vector<sm::skel_ref>>(),
+                {}, &state->membership);
+            state->status = change.status;
+            if (state->status == sm::result::success) {
+                state->ids = std::move(change.added_skeleton_ids);
+                state->membership = proj.core_.snapshot_membership(state->ids);
+                sm::topology inserted;
+                for (const auto& id : state->ids)
+                    if (!proj.topology().skeleton(id)->get().copy_to(inserted))
+                        throw std::runtime_error("unable to snapshot pasted character");
+                state->topology = std::move(inserted);
+                emit proj.select_character(state->character);
+            }
+        },
+        [state](project& proj) { proj.replace_skeletons_aux(state->ids, {}); },
+        [state] { return state->status; }
+    });
+    if (result != sm::result::success) return std::unexpected(result);
+    return state->character;
+}
+
+sm::result mdl::project::delete_character(const sm::object_id& id) {
+    auto character = core_.character(id);
+    if (!character) return character.error();
+    // Stage 2 replacement is the semantic structural deletion operation: it prunes
+    // the empty character and snapshots both identity and membership for undo.
+    return replace_skeletons(character->get().rig().skeleton_ids(), {});
+}
+
+bool mdl::project::rename(const sm::object_id& id, const std::string& new_name) {
+    auto old_name = std::visit([](auto ref) { return ref->name(); }, std::as_const(core_).get(id));
+    if (old_name == new_name) return true;
+    execute_command({
+        [id, new_name](project& proj) { proj.rename_aux(id, new_name); },
+        [id, old_name](project& proj) { proj.rename_aux(id, old_name); }
+    });
+    return true;
+}
 void mdl::project::rename_aux(handle id, const std::string& new_name) {
     core_.rename(id, new_name);
     advance_default_name_counters_from_topology();
-    // The editor's existing rename command only operates on topology pieces. Core's
-    // const generic lookup now also includes characters, so narrow the signal back to
-    // the pre-Stage-1 topology-only variant until character UI lands in a later stage.
+    // Existing topology properties use this narrow notification. Character labels
+    // and panes resynchronize through the command's project_changed notification.
     std::visit([this, &new_name](auto ref) {
         using value_type = std::remove_cvref_t<decltype(ref.get())>;
         if constexpr (!std::is_same_v<value_type, sm::character>) {
@@ -185,14 +291,7 @@ bool mdl::project::can_rename(skel_piece, const std::string&) {
     return true;
 }
 bool mdl::project::rename(skel_piece piece, const std::string& new_name) {
-    std::visit(
-        [this, piece, new_name](auto ref) {
-            using value_type = std::remove_cvref_t<decltype(ref.get())>;
-            execute_command(commands::make_rename_command<value_type>(ref, new_name));
-        },
-        piece
-    );
-    return true;
+    return rename(to_handle(piece), new_name);
 }
 void mdl::project::transform(const std::vector<handle>& nodes,
         const std::function<void(sm::node&)>& fn) {

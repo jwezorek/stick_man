@@ -1,4 +1,5 @@
 #include "selection_tool.hpp"
+#include "../../model/selection.hpp"
 #include "select_tool_panel.hpp"
 #include "../panes/skeleton_pane.hpp"
 #include "../util.hpp"
@@ -216,7 +217,12 @@ namespace {
         using namespace ui::canvas;
         selection_set result;
         for (auto* item : items) {
-            if (auto* skel = dynamic_cast<item::skeleton*>(item)) {
+            if (auto* character = dynamic_cast<item::character*>(item)) {
+                for (auto skel : character->model().rig().skeletons()) {
+                    for (auto node : skel->nodes()) result.insert(&item_from_model<item::node>(node.get()));
+                    for (auto bone : skel->bones()) result.insert(&item_from_model<item::bone>(bone.get()));
+                }
+            } else if (auto* skel = dynamic_cast<item::skeleton*>(item)) {
                 for (auto node : skel->model().nodes()) {
                     result.insert(&item_from_model<item::node>(node.get()));
                 }
@@ -240,25 +246,15 @@ namespace {
             if (subtract && !add) selection.erase(item);
             else selection.insert(item);
         }
-        std::unordered_set<sm::skeleton*> skeletons;
-        for (auto* item : selection) {
-            std::visit([&](auto piece) {
-                using T = std::remove_cvref_t<decltype(piece.get())>;
-                if constexpr (!std::is_same_v<T, sm::skeleton>) skeletons.insert(&piece->owner());
-            }, item->to_skeleton_piece());
-        }
-        bool complete = !selection.empty() && r::all_of(skeletons, [&](auto* skel) {
-            return r::all_of(skel->nodes(), [&](auto node) {
-                return selection.contains(&item_from_model<item::node>(node.get()));
-            }) && r::all_of(skel->bones(), [&](auto bone) {
-                return selection.contains(&item_from_model<item::bone>(bone.get()));
-            });
-        });
-        if (complete) {
-            selection.clear();
-            for (auto* skel : skeletons) selection.insert(&item_from_model<item::skeleton>(*skel));
-        }
-        auto selected = selection | r::to<std::vector<item::base*>>();
+        mdl::selection objects;
+        for (auto* item : selection) objects.push_back(item->to_selection_object());
+        std::vector<item::base*> selected;
+        for (const auto& object : mdl::infer_selection(objects)) std::visit(overload{
+            [&](sm::const_node_ref n) { selected.push_back(&item_from_model<item::node>(n.get())); },
+            [&](sm::const_bone_ref b) { selected.push_back(&item_from_model<item::bone>(b.get())); },
+            [&](sm::const_skel_ref s) { selected.push_back(&item_from_model<item::skeleton>(s.get())); },
+            [&](sm::const_character_ref c) { selected.push_back(canv.character_item(c->id())); }
+        }, object);
         canv.set_selection(selected, true);
     }
 
@@ -418,7 +414,7 @@ namespace {
     }
     std::vector<sm::node_ref> selection_to_nodes(ui::canvas::scene& canv) {
         std::unordered_set<sm::node*> unique_nodes;
-        for (auto* item : canv.selection()) {
+        for (auto* item : topology_items(canv.selection())) {
             auto nodes_from_piece = skel_piece_to_nodes(item->to_skeleton_piece());
             r::copy(
                 nodes_from_piece | rv::transform([](auto node) {return node.ptr(); }),
@@ -435,6 +431,12 @@ namespace {
         ui::canvas::scene& canv, QPointF clicked_pt) {
         auto* clicked_item = canv.top_item(clicked_pt);
         if (!clicked_item) return {};
+        if (auto* character = canv.selected_character()) {
+            if (clicked_item == character) return selection_to_nodes(canv);
+            auto clicked_nodes = skel_piece_to_nodes(clicked_item->to_skeleton_piece());
+            if (!clicked_nodes.empty() && character->model().rig().contains(clicked_nodes.front()->owner().id()))
+                return selection_to_nodes(canv);
+        }
         bool selected = clicked_item->is_selected() || std::visit([](auto piece) {
             using T = std::remove_cvref_t<decltype(piece.get())>;
             if constexpr (std::is_same_v<T, sm::skeleton>) {
@@ -489,6 +491,15 @@ std::optional<ui::tool::rubber_band_type> ui::tool::select::kind_of_rubber_band(
         return {};
     }
     auto settings = settings_panel_->settings();
+    if (auto* character = canv.selected_character()) {
+        bool belongs = std::visit([&](auto ref) {
+            using T = std::remove_cvref_t<decltype(ref.get())>;
+            if constexpr (std::is_same_v<T, sm::character>) return ref->id() == character->id();
+            else if constexpr (std::is_same_v<T, sm::skeleton>) return character->model().rig().contains(ref->id());
+            else return character->model().rig().contains(ref->owner().id());
+        }, selected_item->to_selection_object());
+        if (belongs) return translation_rb;
+    }
     if (settings.is_in_rotate_mode_) {
         return rotation_rb;
     }
@@ -574,6 +585,7 @@ std::optional<ui::tool::rotation_state> ui::tool::select::create_rotation_state(
         return {};
     }
 
+    if (dynamic_cast<canvas::item::character*>(item)) return {};
     auto model = item->to_skeleton_piece();
     if (!settings.rotate_on_pinned_ || !has_pinned_nodes(model)) {
         auto parent_bone = std::visit(
@@ -627,11 +639,14 @@ std::optional<ui::tool::translation_state> ui::tool::select::create_translation_
         return {};
     }
     auto mode = settings.trans_mode_;
-    auto [anchor, offset] = translation_anchor(item->to_skeleton_piece(), clicked_pt);
+    auto anchor_piece = dynamic_cast<canvas::item::character*>(item)
+        ? mdl::skel_piece{sm::ref(canv.resolved_skeletons().front()->model())}
+        : item->to_skeleton_piece();
+    auto [anchor, offset] = translation_anchor(anchor_piece, clicked_pt);
     auto selected_nodes = selected_nodes_for_translation(canv, clicked_pt);
     auto pinned_nodes = pinned_nodes_for_translation(canv);
-    auto selected_skeletons = canv.selected_skeletons();
-    if (!selected_skeletons.empty() && selected_skeletons.size() == canv.selection().size() &&
+    auto selected_skeletons = canv.resolved_skeletons();
+    if (!selected_skeletons.empty() && (canv.selected_character() || selected_skeletons.size() == canv.selection().size()) &&
         r::any_of(selected_skeletons, [&](auto* skel) { return &skel->model() == &anchor->owner(); })) {
         mode = sel_drag_mode::rigid;
     }

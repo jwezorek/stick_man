@@ -40,6 +40,9 @@ namespace ui {
                 void set_selected(bool selected);
                 mdl::skel_piece to_skeleton_piece();
                 virtual mdl::const_skel_piece to_skeleton_piece() const = 0;
+                virtual mdl::selection_object to_selection_object() const {
+                    return std::visit([](auto ref) -> mdl::selection_object { return ref; }, to_skeleton_piece());
+                }
                 virtual ~base();
             };
 

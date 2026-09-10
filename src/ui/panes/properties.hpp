@@ -24,6 +24,7 @@ namespace ui {
 		node,
 		bone,
 		skeleton,
+        character,
 		mixed
 	};
 

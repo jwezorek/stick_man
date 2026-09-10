@@ -1,93 +1,51 @@
-#include "scene.hpp"
-#include "canvas_item.hpp"
 #include "skel_item.hpp"
-#include "../util.hpp"
-#include "../../core/sm_skeleton.hpp"
+#include "scene.hpp"
+#include <limits>
+#include <algorithm>
+#include <stdexcept>
 
-/*------------------------------------------------------------------------------------------------*/
-
-namespace r = std::ranges;
-namespace rv = std::ranges::views;
-
-namespace {
-
-    constexpr auto k_skel_marg = 11.0;
-
-    QRectF scale_rect(double scale, const QRectF r) {
-        return {
-            scale * r.topLeft().x(),
-            scale * r.topLeft().y(),
-            scale * r.width(),
-            scale * r.height()
-        };
-    }
-
-    QRectF inflate_rect(const QRectF& originalRect, qreal amnt)
-    {
-        qreal x = originalRect.x() - amnt;
-        qreal y = originalRect.y() - amnt;
-        qreal width = originalRect.width() + 2 * amnt;
-        qreal height = originalRect.height() + 2 * amnt;
-
-        return QRectF(x, y, width, height);
-    }
-
-    QRectF skeleton_bounds(const sm::skeleton& skel) {
-        auto pts = skel.nodes() | rv::transform(
-            [](const sm::node& node)->sm::point {
-                return node.world_pos();
-            }
-        ) | r::to<std::vector<sm::point>>();
-        auto [min_x, max_x] = r::minmax(
-            pts | rv::transform([](const auto& pt) {return pt.x; })
-        );
-        auto [min_y, max_y] = r::minmax(
-            pts | rv::transform([](const auto& pt) {return pt.y; })
-        );
-        return {
-            min_x, min_y,
-            max_x - min_x,
-            max_y - min_y
-        };
-    }
-
-}
-
-/*------------------------------------------------------------------------------------------------*/
-
-void ui::canvas::item::skeleton::sync_item_to_model() {
-    QRectF rect = inflate_rect(skeleton_bounds(model_), k_skel_marg);
-    auto& canv = *canvas();
-    double inv_scale = 1.0 / canv.scale();
-    setRect(
-        scale_rect(inv_scale, rect)
-    );
-    setVisible(is_selected());
-}
-
-void ui::canvas::item::skeleton::sync_sel_frame_to_model() {
-}
-
-QGraphicsItem* ui::canvas::item::skeleton::create_selection_frame() const {
-    return nullptr;
-}
-
-bool ui::canvas::item::skeleton::is_selection_frame_only() const {
-    return true;
-}
-
-QGraphicsItem* ui::canvas::item::skeleton::item_body() {
-    return this;
-}
-
-mdl::const_skel_piece ui::canvas::item::skeleton::to_skeleton_piece() const {
-    auto& skel = model();
-    return sm::const_skel_ref(skel);
-}
-
-ui::canvas::item::skeleton::skeleton(sm::skeleton& skel, double scale) :
-    has_stick_man_model<ui::canvas::item::skeleton, sm::skeleton&>(skel) {
-    setPen(QPen(Qt::cyan, 3, Qt::DotLine));
+ui::canvas::item::aggregate_frame::aggregate_frame(QColor color, bool labeled) {
+    setPen(QPen(color, 3, Qt::DotLine));
     setBrush(Qt::NoBrush);
+    setZValue(-1);
     setVisible(false);
+    if (labeled) {
+        tag_ = new QGraphicsRectItem(this);
+        tag_->setPen(Qt::NoPen);
+        tag_->setBrush(color);
+        tag_->setFlag(QGraphicsItem::ItemIgnoresTransformations);
+        label_ = new QGraphicsSimpleTextItem(tag_);
+        label_->setBrush(Qt::white);
+    }
+}
+void ui::canvas::item::aggregate_frame::sync_item_to_model() {
+    double left = std::numeric_limits<double>::max(), bottom = left;
+    double right = -left, top = -left;
+    for (auto skel : components()) {
+        for (auto node : skel->nodes()) {
+            auto p = node->world_pos();
+            left = std::min(left, p.x); right = std::max(right, p.x);
+            bottom = std::min(bottom, p.y); top = std::max(top, p.y);
+        }
+    }
+    if (left > right) { setRect({}); return; }
+    const double margin = 11.0 / canvas()->scale();
+    setRect(QRectF(left, bottom, right - left, top - bottom).adjusted(-margin, -margin, margin, margin));
+    auto p = pen(); p.setCosmetic(true); setPen(p);
+    if (tag_) {
+        label_->setText(QString::fromStdString(label()));
+        auto bounds = label_->boundingRect();
+        tag_->setRect(0, -bounds.height() - 6, bounds.width() + 12, bounds.height() + 6);
+        tag_->setPos(rect().left(), rect().bottom()); // Y points upward in the canvas.
+        label_->setPos(6, -bounds.height() - 3);
+    }
+}
+ui::canvas::item::skeleton::skeleton(sm::skeleton& skel, double) :
+    aggregate_frame(Qt::cyan, false), model_(skel) {
+    skel.set_user_data(sm::ref(*this));
+}
+ui::canvas::item::character::character(const sm::character& character) :
+    aggregate_frame(QColor(133, 77, 181), true), project_(character.owner()), id_(character.id()) {}
+mdl::const_skel_piece ui::canvas::item::character::to_skeleton_piece() const {
+    throw std::logic_error("character must be expanded before topology editing");
 }

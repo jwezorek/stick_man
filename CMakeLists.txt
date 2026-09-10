@@ -82,6 +82,7 @@ add_executable(stick_man
     src/ui/stick_man.cpp
     src/ui/panes/properties.cpp
     src/ui/clipboard.cpp
+    src/ui/character_actions.cpp
     src/ui/util.cpp
 
     src/main.cpp
@@ -103,7 +104,9 @@ if(BUILD_TESTING)
     target_include_directories(selection_regressions PRIVATE src "${MINIZ_DIR}" "${MINIZ_GENERATED_DIR}")
     target_compile_definitions(selection_regressions PRIVATE MINIZ_NO_STDIO)
     target_link_libraries(selection_regressions PRIVATE Qt6::Widgets Eigen3::Eigen)
-    foreach(case IN ITEMS rectangle partial modifiers tree clipboard drag rubber_band_directions fast_release release_endpoint)
+    foreach(case IN ITEMS rectangle partial modifiers tree clipboard drag rubber_band_directions fast_release release_endpoint
+        character_hierarchy character_commands character_pane character_inference character_drag
+        character_clipboard character_delete character_actions character_error)
         if(WIN32)
             add_test(NAME selection_${case} COMMAND "${CMAKE_COMMAND}" -E env
                 "QT_QPA_PLATFORM=offscreen" "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
@@ -166,6 +169,16 @@ if(BUILD_TESTING)
     get_target_property(CHARACTER_STAGE2_SOURCES topology_regressions SOURCES)
     list(REMOVE_ITEM CHARACTER_STAGE2_SOURCES tests/topology_regressions.cpp)
     add_executable(character_stage2 tests/character_stage2.cpp ${CHARACTER_STAGE2_SOURCES})
+    add_executable(character_stage3 tests/character_stage3.cpp ${CHARACTER_STAGE2_SOURCES})
+    target_include_directories(character_stage3 PRIVATE src "${MINIZ_DIR}" "${MINIZ_GENERATED_DIR}")
+    target_compile_definitions(character_stage3 PRIVATE MINIZ_NO_STDIO)
+    target_link_libraries(character_stage3 PRIVATE Qt6::Widgets Eigen3::Eigen)
+    if(WIN32)
+        add_test(NAME character_stage3 COMMAND "${CMAKE_COMMAND}" -E env
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}" $<TARGET_FILE:character_stage3>)
+    else()
+        add_test(NAME character_stage3 COMMAND character_stage3)
+    endif()
     target_include_directories(character_stage2 PRIVATE src "${MINIZ_DIR}" "${MINIZ_GENERATED_DIR}")
     target_compile_definitions(character_stage2 PRIVATE MINIZ_NO_STDIO)
     target_link_libraries(character_stage2 PRIVATE Qt6::Widgets Eigen3::Eigen)

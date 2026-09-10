@@ -22,6 +22,7 @@ namespace ui {
             QGraphicsView& active_view() const;
             tool::input_handler& inp_handler_;
             drag_mode drag_mode_;
+            mdl::project* project_ = nullptr;
             void prepare_to_add_bone(sm::node& u, sm::node& v);
             void add_new_bone(sm::bone& bone);
             void add_new_skeleton(sm::skel_ref skel);
@@ -54,7 +55,7 @@ namespace ui {
         signals:
             void active_canvas_changed(ui::canvas::scene& old_canv, ui::canvas::scene& canv);
             void selection_changed(ui::canvas::scene& canv);
-            void canvas_refresh(const sm::topology& topology);
+            void canvas_refresh(const sm::project& project);
         };
     }
 }

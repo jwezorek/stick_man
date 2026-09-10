@@ -42,8 +42,11 @@ void ui::tool::add_bone::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMo
     if (!parent_node || !child_node || parent_node == child_node) {
         return;
     }
-    model_->add_bone(
+    auto status = model_->add_bone(
         mdl::to_handle(parent_node->model()),
         mdl::to_handle(child_node->model())
     );
+    if (status == sm::result::different_characters) {
+        QMessageBox::warning(nullptr, "Add Bone", "Cannot connect skeletons belonging to different characters.", QMessageBox::Ok);
+    }
 }

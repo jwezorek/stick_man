@@ -7,6 +7,8 @@
 #include "ui/panes/tree_view.hpp"
 #include "ui/panes/skeleton_properties.hpp"
 #include "ui/clipboard.hpp"
+#include "ui/character_actions.hpp"
+#include "ui/tools/add_bone_tool.hpp"
 #include <iostream>
 #include <stdexcept>
 #ifdef _MSC_VER
@@ -73,11 +75,272 @@ struct fixture {
             canvas().selection().contains(item(second)), "complete components must select both skeletons");
         require(!ui::canvas::selected_single_model(canvas()), "multiple skeletons must not expose a single rename target");
     }
+    sm::object_id make_character(bool both = true) {
+        std::vector<sm::const_skel_ref> rig{skeleton(first)};
+        if (both) rig.push_back(skeleton(second));
+        auto result = window.project().make_character(rig);
+        require(result.has_value(), "Make Character failed");
+        window.project().rename(*result, "Alice");
+        return *result;
+    }
+    QTreeView* tree() {
+        for (auto* tree : window.findChildren<QTreeView*>())
+            if (tree->model() == item(first)->treeview_item()->model()) return tree;
+        throw std::runtime_error("missing tree");
+    }
+    void select_row(QStandardItem* row) {
+        tree()->selectionModel()->select(row->index(), QItemSelectionModel::ClearAndSelect);
+    }
 };
+
+void answer_message(QMessageBox::StandardButton answer, bool& seen) {
+    QTimer::singleShot(0, [&seen, answer] {
+        for (auto* widget : QApplication::topLevelWidgets()) {
+            if (auto* message = qobject_cast<QMessageBox*>(widget)) {
+                seen = message->text().contains("Alice") && message->text().contains("character");
+                message->button(answer)->click();
+                return;
+            }
+        }
+    });
+}
+
+void character_test(fixture& f, const std::string& mode) {
+    auto& model = f.window.project();
+    if (mode == "character_make") {
+        f.select_both();
+        QPushButton* make = nullptr;
+        for (auto* button : f.window.findChildren<QPushButton*>()) if (button->text() == "Make Character") make = button;
+        require(make && make->isEnabled(), "complete loose selection must enable Make Character in Properties");
+        make->click();
+        require(f.canvas().selected_character() && f.canvas().selected_character()->model().rig().size() == 2, "Make Character button must create and select rig");
+        model.undo();
+        require(f.skeleton(f.first).is_loose() && f.skeleton(f.second).is_loose(), "button creation undo");
+        auto* node = &ui::canvas::item_from_model<ui::canvas::item::node>(f.skeleton(f.first).root_node());
+        f.canvas().set_selection(node, true);
+        require(f.canvas().loose_selection().empty(), "partial topology is not a Make Character candidate");
+        ui::character_actions::make(f.canvas(), model);
+        require(std::ranges::empty(model.core().characters()), "invalid Make Character must not mutate model");
+    } else if (mode == "character_commands") {
+        auto id = f.make_character();
+        require(f.canvas().selected_character() && f.canvas().selected_character()->id() == id, "creation must select character");
+        require(std::holds_alternative<sm::const_character_ref>(f.canvas().selected_objects().front()), "explicit character selection value missing");
+        require(f.canvas().selected_skeletons().empty() && f.canvas().resolved_skeletons().size() == 2,
+            "character must resolve its rig without being skeleton selection");
+        model.undo(); // rename
+        model.undo(); // creation
+        require(!model.core().character(id) && f.skeleton(f.first).is_loose(), "Make Character undo");
+        model.redo(); model.redo();
+        require(model.core().character(id)->get().name() == "Alice", "redo must restore same identity/name");
+    } else if (mode == "character_pane") {
+        auto id = f.make_character(false);
+        auto* child = f.item(f.first)->treeview_item();
+        require(child->parent() && child->parent()->text() == "Alice", "one-component character needs two distinct rows");
+        require(!f.item(f.second)->treeview_item()->parent(), "loose skeleton must remain a root");
+        f.select_row(child);
+        require(!f.canvas().selected_character() && f.canvas().selected_skeleton() == f.item(f.first), "child selection must never promote");
+        f.select_row(child->parent());
+        require(f.canvas().selected_character()->id() == id, "root selects character");
+        auto* edit = f.window.findChild<QLineEdit*>("characterName");
+        require(edit && edit->text() == "Alice", "character properties name missing");
+        child->parent()->setText("Renamed");
+        require(model.core().character(id)->get().name() == "Renamed" && edit->text() == "Renamed", "pane rename must synchronize properties");
+        bool tag = false;
+        for (auto* item : f.canvas().items())
+            if (auto* text = dynamic_cast<QGraphicsSimpleTextItem*>(item)) tag = tag || text->text() == "Renamed";
+        require(tag, "rename must update character tag");
+        edit->setText("Properties name");
+        QMetaObject::invokeMethod(edit, "editingFinished");
+        require(model.core().character(id)->get().name() == "Properties name", "properties rename must reach model");
+        for (auto* button : f.window.findChildren<QPushButton*>()) if (button->text() == "Select Component") button->click();
+        require(f.canvas().selected_skeleton() == f.item(f.first) && !f.canvas().selected_character(), "Properties component selection must stay explicit skeleton");
+    } else if (mode == "character_inference") {
+        auto id = f.make_character();
+        f.canvas().clear_selection();
+        f.drag({-40, -40}, {120, 40});
+        require(f.canvas().selected_skeleton() == f.item(f.first), "incomplete rig must remain skeleton selection");
+        f.drag({-40, -40}, {240, 40});
+        require(f.canvas().selected_character() && f.canvas().selected_character()->id() == id, "complete rig must infer character");
+        require(f.tree()->selectionModel()->selectedIndexes().size() == 1 &&
+            f.tree()->selectionModel()->selectedIndexes().front() == f.item(f.first)->treeview_item()->parent()->index(), "inference must highlight character root");
+        f.drag({160, -40}, {240, 40}, Qt::ControlModifier);
+        require(f.canvas().selected_skeleton() == f.item(f.first), "subtracting a component must expand character selection");
+        f.drag({160, -40}, {240, 40}, Qt::ShiftModifier);
+        require(f.canvas().selected_character(), "adding the final component must restore character inference");
+        f.drag({40, -40}, {240, 40});
+        require(!f.canvas().selected_character() && f.canvas().selected_skeletons().empty(), "partial component prevents aggregate promotion");
+        model.add_new_skeleton_root({300, 0});
+        f.drag({-40, -40}, {340, 40});
+        require(!f.canvas().selected_character() && f.canvas().selected_skeletons().size() == 3, "rig plus loose must remain skeletons");
+        std::vector<sm::const_skel_ref> other;
+        for (auto s : model.topology().skeletons()) if (s->is_loose()) other.push_back(s);
+        require(model.make_character(other).has_value(), "second character fixture");
+        f.drag({-40, -40}, {340, 40});
+        require(!f.canvas().selected_character() && f.canvas().selected_skeletons().size() == 3, "two rigs must remain skeletons");
+    } else if (mode == "character_drag") {
+        auto id = f.make_character();
+        auto* frame = f.canvas().selected_character();
+        require(frame->rect().contains(QPointF(0, 0)) && frame->rect().contains(QPointF(200, 0)), "frame must enclose disconnected rig");
+        require(frame->pen().color() == QColor(133, 77, 181), "character frame must be purple");
+        for (auto* button : f.tool.settings_widget()->findChildren<QAbstractButton*>())
+            if (button->text() == "drag behaviors on" || button->text() == "rag doll mode") button->setChecked(true);
+        ui::canvas::item_from_model<ui::canvas::item::node>(f.skeleton(f.second).root_node()).set_pinned(true);
+        f.drag({0, 0}, {30, 30});
+        require(sm::distance(f.skeleton(f.first).root_node().world_pos(), {30, 30}) < .001 &&
+            sm::distance(f.skeleton(f.second).root_node().world_pos(), {230, 30}) < .001,
+            "whole character drag must translate all disconnected components");
+        model.undo();
+        require(sm::distance(f.skeleton(f.second).root_node().world_pos(), {200, 0}) < .001, "character drag undo");
+        model.redo();
+        require(sm::distance(f.skeleton(f.second).root_node().world_pos(), {230, 30}) < .001, "character drag redo");
+        require(model.core().character(id)->get().rig().size() == 2, "drag must not merge topology");
+    } else if (mode == "character_clipboard") {
+        auto id = f.make_character();
+        ui::clipboard::copy(f.window);
+        ui::clipboard::paste(f.window, true);
+        auto copy = f.canvas().selected_character()->id();
+        require(copy != id && model.core().character(copy)->get().rig().size() == 2, "whole-character paste must create fresh character with rig");
+        for (auto s : model.core().character(copy)->get().rig().skeletons()) {
+            require(!model.core().character(id)->get().rig().contains(s->id()), "pasted skeleton identity must be fresh");
+            for (auto n : s->nodes())
+                for (auto original : model.core().character(id)->get().rig().skeletons())
+                    require(!original->contains<sm::node>(n->id()), "pasted node identity must be fresh");
+        }
+        model.undo(); require(!model.core().character(copy), "character paste must undo in one step");
+        model.redo(); require(model.core().character(copy).has_value(), "character paste redo must preserve identity");
+        ui::clipboard::paste(f.window, true);
+        require(f.canvas().selected_character()->model().name() != model.core().character(copy)->get().name(), "repeated paste should choose a distinct cosmetic suffix");
+        model.undo();
+        f.select_row(f.item(f.first)->treeview_item());
+        ui::clipboard::copy(f.window);
+        f.canvas().set_selection(f.canvas().character_item(id), true);
+        ui::clipboard::paste(f.window, true);
+        require(std::ranges::count_if(model.topology().skeletons(), [](auto s) {return s->is_loose();}) == 1,
+            "ordinary topology paste must remain loose even with character selected");
+        f.canvas().set_selection(f.canvas().character_item(id), true);
+        bool seen = false;
+        answer_message(QMessageBox::Cancel, seen);
+        auto previous = QApplication::clipboard()->mimeData()->data("application/x-stick_man");
+        ui::clipboard::cut(f.window);
+        require(seen && model.core().character(id) && QApplication::clipboard()->mimeData()->data("application/x-stick_man") == previous,
+            "cancel cut must preserve character and clipboard");
+        seen = false; answer_message(QMessageBox::Ok, seen);
+        ui::clipboard::cut(f.window);
+        require(seen && !model.core().character(id), "whole-character cut must delete original");
+        ui::clipboard::paste(f.window, true);
+        require(f.canvas().selected_character() && f.canvas().selected_character()->id() != id, "cut paste must assign fresh identity");
+    } else if (mode == "character_delete") {
+        auto id = f.make_character();
+        f.select_row(f.item(f.second)->treeview_item());
+        ui::clipboard::del(f.window); // must not prompt with another component remaining
+        require(model.core().character(id)->get().rig().size() == 1, "nonfinal deletion must retain character");
+        f.select_row(f.item(f.first)->treeview_item());
+        bool seen = false; answer_message(QMessageBox::Cancel, seen);
+        ui::clipboard::del(f.window);
+        require(seen && model.core().character(id), "final-component cancellation must preserve character");
+        seen = false; answer_message(QMessageBox::Ok, seen);
+        ui::clipboard::del(f.window);
+        require(seen && !model.core().character(id), "final-component OK must delete character");
+        model.undo();
+        require(model.core().character(id)->get().rig().contains(f.first), "undo must restore character identity and membership");
+        model.undo();
+        require(model.core().character(id)->get().rig().size() == 2, "undo component deletion must restore full rig");
+    } else if (mode == "character_actions") {
+        auto id = f.make_character(false);
+        f.canvas().set_selection(f.item(f.second), true);
+        bool seen = false;
+        QTimer::singleShot(0, [&] {
+            for (auto* widget : QApplication::topLevelWidgets()) {
+                if (auto* dialog = qobject_cast<QDialog*>(widget); dialog && dialog->windowTitle() == "Add to Character") {
+                    seen = true; dialog->accept(); return;
+                }
+            }
+        });
+        ui::character_actions::adopt(f.canvas(), model, &f.window);
+        require(seen && model.core().character(id)->get().rig().size() == 2 && f.canvas().selected_character(), "adoption UI must add loose skeleton and select character");
+        model.undo(); require(f.skeleton(f.second).is_loose(), "adoption undo must restore loose root");
+        model.redo(); require(model.core().character(id)->get().rig().size() == 2, "adoption redo");
+    } else if (mode == "character_tag") {
+        auto id = f.make_character();
+        auto* frame = f.canvas().selected_character();
+        QPointF tag_point;
+        for (double scale : {.5, 1., 2.}) {
+            f.canvas().set_scale(scale);
+            require(frame->rect().contains(QPointF(200, 0)), "zoom must not scale model-space frame position");
+            QGraphicsSimpleTextItem* label = nullptr;
+            for (auto* item : f.canvas().items())
+                if (auto* text = dynamic_cast<QGraphicsSimpleTextItem*>(item); text && text->text() == "Alice") label = text;
+            require(label, "tag label missing");
+            auto* view = f.canvas().views().front();
+            auto viewport_point = label->deviceTransform(view->viewportTransform()).map(label->boundingRect().center());
+            auto scene_point = view->mapToScene(viewport_point.toPoint());
+            tag_point = scene_point;
+            require(f.canvas().top_item(scene_point) == frame, "visible tag must hit character at every zoom with Y inversion");
+        }
+        auto bounds = frame->rect();
+        model.rename(id, "A very long character name that must not enlarge the rig geometry bounds");
+        require(frame->rect() == bounds, "name tag must not affect character bounding rectangle");
+        for (auto* button : f.tool.settings_widget()->findChildren<QAbstractButton*>())
+            if (button->text() == "drag behaviors on") button->setChecked(true);
+        f.drag(tag_point, tag_point + QPointF(20, 20));
+        require(sm::distance(f.skeleton(f.second).root_node().world_pos(), {220, 20}) < .001,
+            "dragging the tag must translate every rig component");
+    } else if (mode == "character_visual") {
+        auto id = f.make_character();
+        model.rename(f.first, "body"); model.rename(f.second, "left-eye");
+        model.add_new_skeleton_root({110, 80});
+        std::vector<sm::const_skel_ref> loose;
+        for (auto skel : model.topology().skeletons()) if (skel->is_loose()) loose.push_back(skel);
+        model.rename(loose.front()->id(), "right-eye");
+        require(model.adopt_skeletons(id, loose) == sm::result::success, "visual adoption");
+        model.add_new_skeleton_root({300, 50});
+        f.canvas().set_selection(f.canvas().character_item(id), true);
+        f.window.resize(1100, 760);
+        f.window.show(); QApplication::processEvents();
+        f.canvas().views().front()->centerOn(100, 20);
+        require(f.window.grab().save("out/character-stage3.png"), "save visual review image");
+        f.select_row(f.item(f.first)->treeview_item());
+        require(f.window.grab().save("out/character-stage3-skeleton.png"), "save child selection review image");
+    } else if (mode == "character_error") {
+        auto id = f.make_character(false);
+        std::vector<sm::const_skel_ref> other{f.skeleton(f.second)};
+        auto second = model.make_character(other);
+        require(second.has_value(), "second character fixture");
+        model.rename(*second, "Bob"); model.undo(); // keep a redo entry through the rejected command
+        const auto before = model.topology().to_json_str();
+        ui::tool::add_bone tool;
+        tool.init(f.window.canvases(), model);
+        QGraphicsSceneMouseEvent press(QEvent::GraphicsSceneMousePress), release(QEvent::GraphicsSceneMouseRelease);
+        press.setScenePos({0, 0}); release.setScenePos({200, 0});
+        tool.mousePressEvent(f.canvas(), &press);
+        bool seen = false;
+        QTimer::singleShot(0, [&] {
+            for (auto* widget : QApplication::topLevelWidgets()) if (auto* message = qobject_cast<QMessageBox*>(widget)) {
+                seen = message->text() == "Cannot connect skeletons belonging to different characters.";
+                message->done(QMessageBox::Ok); return;
+            }
+        });
+        tool.mouseReleaseEvent(f.canvas(), &release);
+        require(seen && model.topology().to_json_str() == before && model.can_redo(), "rejected Add Bone must show normal error, preserve project and redo");
+        model.undo();
+        require(!model.core().character(*second) && model.core().character(id), "failed Add Bone must not create undo entry");
+    } else throw std::runtime_error("unknown character test");
+}
 
 void run(const std::string& mode) {
     fixture f;
-    if (mode == "rubber_band_directions") {
+    if (mode == "character_hierarchy") {
+        std::vector<sm::const_skel_ref> rig{f.skeleton(f.first), f.skeleton(f.second)};
+        auto character = f.window.project().core().create_character(rig);
+        require(character.has_value(), "character fixture creation failed");
+        emit f.window.project().refresh_canvas(f.window.project(), true);
+        auto* row = f.item(f.first)->treeview_item();
+        require(row->parent() && row->parent() == f.item(f.second)->treeview_item()->parent(),
+            "character rig components must have a shared character root");
+        require(row->parent()->text().toStdString() == character->get().name(), "character root must display its name");
+    } else if (mode.starts_with("character_")) {
+        character_test(f, mode);
+    } else if (mode == "rubber_band_directions") {
         const std::vector<std::pair<QPointF, QPointF>> directions{
             {{-40, -40}, {240, 40}}, {{240, -40}, {-40, 40}},
             {{-40, 40}, {240, -40}}, {{240, 40}, {-40, -40}}
@@ -221,6 +484,12 @@ int main(int argc, char** argv) {
     _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
 #endif
     QApplication app(argc, argv);
+    // The Windows offscreen platform does not enumerate installed system fonts.
+    // Load a real font for the optional rendered UI inspection only.
+    if (argc == 2 && std::string(argv[1]) == "character_visual") {
+        auto font = QFontDatabase::addApplicationFont("C:/Windows/Fonts/segoeui.ttf");
+        if (font >= 0) app.setFont(QFont(QFontDatabase::applicationFontFamilies(font).front(), 9));
+    }
     try {
         require(argc == 2, "expected test case");
         run(argv[1]);

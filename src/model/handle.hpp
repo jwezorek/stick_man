@@ -17,6 +17,9 @@ namespace mdl {
 
     using model_object = sm::mutable_project_object;
     using const_model_object = sm::const_project_object;
+    // Editor semantic selection. skel_piece remains exclusively topology-oriented.
+    using selection_object = const_model_object;
+    using selection = std::vector<selection_object>;
 
     // All live model objects share one project-global object_id namespace.
     // A handle therefore needs no topology/component context of its own.

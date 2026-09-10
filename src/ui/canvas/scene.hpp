@@ -45,6 +45,7 @@ namespace ui {
             class node;
             class bone;
             class skeleton;
+            class character;
         }
 
         using selection_set = std::unordered_set<item::base*>;
@@ -117,6 +118,11 @@ namespace ui {
 
             item::skeleton* selected_skeleton() const;
             std::vector<item::skeleton*> selected_skeletons() const;
+            item::character* selected_character() const;
+            item::character* character_item(const sm::object_id& id) const;
+            mdl::selection selected_objects() const;
+            std::vector<item::skeleton*> resolved_skeletons() const;
+            std::vector<sm::const_skel_ref> loose_selection() const;
             std::vector<item::bone*> selected_bones() const;
             std::vector<item::node*> selected_nodes() const;
 

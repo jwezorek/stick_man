@@ -50,7 +50,7 @@ namespace ui {
             virtual void handle_tree_change(QStandardItem* item) = 0;
             virtual void handle_tree_selection_change(
                 const QItemSelection&, const QItemSelection&) = 0;
-            virtual void sync_with_model(const sm::topology& model) = 0;
+            virtual void sync_with_model(const sm::project& model) = 0;
             virtual void init_aux(canvas::manager& canvases, mdl::project& proj) = 0;
 
         public:

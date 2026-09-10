@@ -40,6 +40,15 @@ ui::canvas::manager::manager(tool::input_handler& inp_handler) :
     center_active_view();
 }
 void ui::canvas::manager::init(mdl::project& proj) {
+    project_ = &proj;
+    connect(&proj, &mdl::project::project_changed, this, [this](mdl::project& model) {
+        active_canvas().sync_to_model();
+        emit canvas_refresh(model.core());
+        active_canvas().sync_selection();
+    });
+    connect(&proj, &mdl::project::select_character, this, [this](sm::object_id id) {
+        if (auto* item = active_canvas().character_item(id)) active_canvas().set_selection(item, true);
+    });
     connect(&proj, &mdl::project::pre_new_bone_added, this, &manager::prepare_to_add_bone);
     connect(&proj, &mdl::project::new_bone_added, this, &manager::add_new_bone);
     connect(&proj, &mdl::project::new_skeleton_added, this, &manager::add_new_skeleton);
@@ -71,8 +80,7 @@ void ui::canvas::manager::add_new_bone(sm::bone& bone) {
     canv.insert_item(bone);
     canv.sync_to_model();
 
-    auto& topology = bone.owner().owner();
-    emit canvas_refresh(topology);
+    emit canvas_refresh(project_->core());
 }
 void ui::canvas::manager::add_new_skeleton(sm::skel_ref skel_ref) {
     auto& canv = active_canvas();
@@ -80,7 +88,7 @@ void ui::canvas::manager::add_new_skeleton(sm::skel_ref skel_ref) {
     canv.insert_item(skel.root_node());
     canv.insert_item(skel);
 
-    emit canvas_refresh(skel.owner());
+    emit canvas_refresh(project_->core());
 }
 ui::canvas::scene* ui::canvas::manager::canvas_from_name(const std::string& name) {
     return name == canvas_name() ? &active_canvas() : nullptr;
@@ -112,7 +120,9 @@ void ui::canvas::manager::set_canvas_name(const std::string& name) {
 
 void ui::canvas::manager::set_contents(mdl::project& model) {
     active_canvas().set_contents(model);
-    emit canvas_refresh(model.topology());
+    active_canvas().sync_to_model();
+    emit canvas_refresh(model.core());
+    active_canvas().sync_selection();
 }
 
 void ui::canvas::manager::set_drag_mode(drag_mode dm) {

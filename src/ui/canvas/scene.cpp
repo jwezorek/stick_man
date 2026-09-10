@@ -236,6 +236,7 @@ void ui::canvas::scene::sync_to_model() {
 void ui::canvas::scene::set_contents(mdl::project& model) {
 
     clear();
+    for (auto character : model.core().characters()) addItem(new item::character(character.get()));
     for (auto skel_ref : model.topology().skeletons()) {
         const auto& skel = skel_ref.get();
         auto& root = std::get<sm::node_ref>(model.get(skel.root_node().id())).get();
@@ -258,6 +259,39 @@ const ui::canvas::selection_set&  ui::canvas::scene::selection() const {
 
 ui::canvas::item::skeleton* ui::canvas::scene::selected_skeleton() const {
 	return selection_.size() == 1 ? dynamic_cast<item::skeleton*>(*selection_.begin()) : nullptr;
+}
+
+ui::canvas::item::character* ui::canvas::scene::selected_character() const {
+    return selection_.size() == 1 ? dynamic_cast<item::character*>(*selection_.begin()) : nullptr;
+}
+ui::canvas::item::character* ui::canvas::scene::character_item(const sm::object_id& id) const {
+    for (auto* candidate : canvas_items())
+        if (auto* c = dynamic_cast<item::character*>(candidate); c && c->id() == id) return c;
+    return nullptr;
+}
+mdl::selection ui::canvas::scene::selected_objects() const {
+    mdl::selection result;
+    for (auto* item : selection_) result.push_back(item->to_selection_object());
+    return result;
+}
+std::vector<ui::canvas::item::skeleton*> ui::canvas::scene::resolved_skeletons() const {
+    if (auto* character = selected_character()) {
+        std::vector<item::skeleton*> result;
+        for (auto skel : character->model().rig().skeletons())
+            result.push_back(&item_from_model<item::skeleton>(skel.get()));
+        return result;
+    }
+    return selected_skeletons();
+}
+std::vector<sm::const_skel_ref> ui::canvas::scene::loose_selection() const {
+    auto skeletons = selected_skeletons();
+    if (skeletons.empty() || skeletons.size() != selection_.size()) return {};
+    std::vector<sm::const_skel_ref> result;
+    for (auto* skel : skeletons) {
+        if (!skel->model().is_loose()) return {};
+        result.push_back(skel->model());
+    }
+    return result;
 }
 
 std::vector<ui::canvas::item::skeleton*> ui::canvas::scene::selected_skeletons() const {
@@ -473,7 +507,11 @@ ui::canvas::item::node* ui::canvas::scene::top_node(const QPointF& pt) const {
 }
 
 ui::canvas::item::base* ui::canvas::scene::top_item(const QPointF& pt) const {
-    return top_item_of_type<ui::canvas::item::base>(*this, pt);
+    for (auto* graphics : items(pt, Qt::IntersectsItemShape, Qt::DescendingOrder, view().viewportTransform())) {
+        for (auto* candidate = graphics; candidate; candidate = candidate->parentItem())
+            if (auto* item = dynamic_cast<item::base*>(candidate)) return item;
+    }
+    return nullptr;
 }
 
 std::vector<ui::canvas::item::base*> ui::canvas::scene::items_in_rect(const QRectF& r) const {
