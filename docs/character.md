@@ -120,9 +120,7 @@ Multiple-skeleton selection is supported in the initial version. Selection infer
 
 Only one character can be selected at a time. A set of complete skeletons that includes a character plus additional skeletons, or the rigs of multiple characters, remains a skeleton selection because it does not exactly match one character's rig.
 
-A character can also be selected directly through its entry in the skeleton pane. The editor indicates character selection with a bounding rectangle similar to the skeleton-selection indicator, but in a different color and with an attached label such as **character: Fred**. The exact color and label styling remain UI design details.
-
-For a character containing a single skeleton, dragging a selection around the whole skeleton in the editor selects the character. To select that skeleton itself, the user selects its entry in the skeleton pane or clicks the corresponding skeleton in the character's properties pane.
+A character can also be selected directly through its entry in the skeleton pane. The editor indicates character selection with a bounding rectangle similar to the skeleton-selection indicator, but in a different color and with an attached label such as **character: Fred**. The exact color and label styling remain UI design details. Since selecting the skeleton comprising a one-skeleton character selects the character, to select that skeleton itself, the user selects its entry in the skeleton pane or clicks the corresponding skeleton in the character's properties pane.
 
 Explicit skeleton selection through either pane must remain skeleton selection even when that skeleton is the character's entire rig. Selection therefore distinguishes a character from its component skeletons; selecting the same topology does not always imply the same semantic selection.
 
