@@ -24,14 +24,14 @@ void ui::pane::props::props_box::do_property_name_change(const std::string& new_
     proj_->rename(*maybe_piece, new_name);
 }
 
-void ui::pane::props::props_box::handle_rename(mdl::skel_piece p,
+void ui::pane::props::props_box::handle_rename(mdl::const_skel_piece p,
     ui::string_edit* name_edit, const std::string& new_name)
 {
     auto maybe_piece = ui::canvas::selected_single_model(get_current_canv_());
     if (!maybe_piece) {
         return;
     }
-    if (!mdl::identical_pieces(*maybe_piece, p)) {
+    if (mdl::to_handle(*maybe_piece) != mdl::to_handle(p)) {
         return;
     }
     if (name_edit->text().toStdString() != new_name) {

@@ -30,7 +30,7 @@ namespace ui {
                 mdl::project* proj_;
 
                 void do_property_name_change(const std::string& new_name);
-                void handle_rename(mdl::skel_piece p, ui::string_edit* name_edit,
+                void handle_rename(mdl::const_skel_piece p, ui::string_edit* name_edit,
                     const std::string& new_name);
 
             public:
