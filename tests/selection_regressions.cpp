@@ -127,6 +127,14 @@ void character_test(fixture& f, const std::string& mode) {
         require(!f.item(f.second)->treeview_item()->parent(), "loose skeleton must remain a root");
         f.select_row(child);
         require(!f.canvas().selected_character() && f.canvas().selected_skeleton() == f.item(f.first), "child selection must never promote");
+        ui::hyperlink_button* parent_link = nullptr;
+        for (auto* button : f.window.findChildren<QPushButton*>())
+            if (auto* link = dynamic_cast<ui::hyperlink_button*>(button);
+                link && !link->isHidden() && link->text() == "Alice") parent_link = link;
+        require(parent_link, "parented skeleton properties must expose its character as a hyperlink");
+        parent_link->click();
+        require(f.canvas().selected_character() && f.canvas().selected_character()->id() == id,
+            "skeleton character hyperlink must select the parent character");
         f.select_row(child->parent());
         require(f.canvas().selected_character()->id() == id, "root selects character");
         auto* edit = f.window.findChild<QLineEdit*>("characterName");
@@ -140,8 +148,20 @@ void character_test(fixture& f, const std::string& mode) {
         edit->setText("Properties name");
         QMetaObject::invokeMethod(edit, "editingFinished");
         require(model.core().character(id)->get().name() == "Properties name", "properties rename must reach model");
-        for (auto* button : f.window.findChildren<QPushButton*>()) if (button->text() == "Select Component") button->click();
-        require(f.canvas().selected_skeleton() == f.item(f.first) && !f.canvas().selected_character(), "Properties component selection must stay explicit skeleton");
+        require(!f.window.findChild<QComboBox*>("characterComponents"),
+            "character properties must not retain the component combo box");
+        for (auto* button : f.window.findChildren<QPushButton*>())
+            require(button->text() != "Select Component", "character properties must not retain Select Component button");
+        auto* component_scroller = f.window.findChild<QScrollArea*>("characterSkeletons");
+        require(component_scroller, "character properties must expose a skeleton scroll view");
+        ui::hyperlink_button* component_link = nullptr;
+        for (auto* button : component_scroller->findChildren<QPushButton*>())
+            if (auto* link = dynamic_cast<ui::hyperlink_button*>(button);
+                link && link->text().toStdString() == f.skeleton(f.first).name()) component_link = link;
+        require(component_link, "character properties must show each skeleton as a hyperlink");
+        component_link->click();
+        require(f.canvas().selected_skeleton() == f.item(f.first) && !f.canvas().selected_character(),
+            "character skeleton hyperlink must select the skeleton explicitly");
     } else if (mode == "character_inference") {
         auto id = f.make_character();
         f.canvas().clear_selection();

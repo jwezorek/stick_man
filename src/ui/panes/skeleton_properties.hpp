@@ -9,6 +9,7 @@ namespace ui {
 
             class skeletons : public props_box {
                 labeled_field* name_;
+                labeled_hyperlink* character_;
                 QPushButton* make_;
             public:
                 skeletons(const current_canvas_fn& fn, selection_properties* parent);
@@ -18,7 +19,7 @@ namespace ui {
             class character : public props_box {
                 QLineEdit* name_;
                 QLabel* count_;
-                QComboBox* components_;
+                QScrollArea* skeletons_;
             public:
                 character(const current_canvas_fn& fn, selection_properties* parent);
                 void populate(mdl::project& proj) override;

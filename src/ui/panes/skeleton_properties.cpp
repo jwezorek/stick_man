@@ -28,6 +28,20 @@ void ui::pane::props::skeletons::populate(mdl::project & proj) {
         }
     );
 
+    layout_->addWidget(
+        character_ = new ui::labeled_hyperlink("   character", "")
+    );
+    character_->hide();
+    connect(character_->hyperlink(), &QPushButton::clicked, this, [this] {
+        auto* selected = get_current_canv_().selected_skeleton();
+        if (!selected) return;
+        auto parent = selected->model().parent_character();
+        if (!parent) return;
+        auto& canv = get_current_canv_();
+        if (auto* character_item = canv.character_item(parent->get().id()))
+            canv.set_selection(character_item, true);
+    });
+
     connect(&proj, &mdl::project::name_changed,
         [this](mdl::const_skel_piece piece, const std::string& new_name) {
             handle_rename(piece, name_->value(), new_name);
@@ -47,7 +61,14 @@ void ui::pane::props::skeletons::set_selection(const ui::canvas::scene& canv) {
     if (skel_item) {
         set_title("skeleton selection");
         name_->set_value(skel_item->model().name().c_str());
+        if (auto parent = skel_item->model().parent_character()) {
+            character_->hyperlink()->setText(QString::fromStdString(parent->get().name()));
+            character_->show();
+        } else {
+            character_->hide();
+        }
     } else {
+        character_->hide();
         set_title(QString("%1 skeletons selected").arg(canv.selected_skeletons().size()));
     }
 }
@@ -60,16 +81,14 @@ void ui::pane::props::character::populate(mdl::project&) {
     layout_->addWidget(name_ = new QLineEdit());
     name_->setObjectName("characterName");
     layout_->addWidget(count_ = new QLabel());
-    layout_->addWidget(components_ = new QComboBox());
-    components_->setObjectName("characterComponents");
-    auto* select = new QPushButton("Select Component");
-    layout_->addWidget(select);
-    connect(select, &QPushButton::clicked, this, [this] {
-        auto id = sm::object_id::from_string(components_->currentData().toString().toStdString());
-        if (!id) return;
-        auto skel = proj_->topology().skeleton(*id);
-        if (skel) get_current_canv_().set_selection(&canvas::item_from_model<canvas::item::skeleton>(skel->get()), true);
-    });
+
+    layout_->addWidget(new QLabel("Skeletons"));
+    layout_->addWidget(skeletons_ = new QScrollArea());
+    skeletons_->setObjectName("characterSkeletons");
+    skeletons_->setWidgetResizable(true);
+    skeletons_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    skeletons_->setFrameShape(QFrame::NoFrame);
+
     connect(name_, &QLineEdit::editingFinished, this, [this] {
         if (auto* selected = get_current_canv_().selected_character())
             proj_->rename(selected->id(), name_->text().toStdString());
@@ -80,8 +99,23 @@ void ui::pane::props::character::set_selection(const canvas::scene& canv) {
     if (auto* selected = canv.selected_character()) {
         name_->setText(QString::fromStdString(selected->model().name()));
         count_->setText(QString("%1 skeleton components").arg(selected->model().rig().size()));
-        components_->clear();
-        for (auto skel : selected->model().rig().skeletons())
-            components_->addItem(QString::fromStdString(skel->name()), QString::fromStdString(skel->id().to_string()));
+
+        auto* contents = new QWidget();
+        auto* links = new QVBoxLayout(contents);
+        links->setContentsMargins(0, 0, 0, 0);
+        links->setSpacing(0);
+        links->setAlignment(Qt::AlignTop);
+        for (auto skel : selected->model().rig().skeletons()) {
+            auto* link = new ui::hyperlink_button(QString::fromStdString(skel->name()));
+            const auto id = skel->id();
+            links->addWidget(link, 0, Qt::AlignLeft);
+            connect(link, &QPushButton::clicked, this, [this, id] {
+                auto skel = proj_->topology().skeleton(id);
+                if (!skel) return;
+                get_current_canv_().set_selection(
+                    &canvas::item_from_model<canvas::item::skeleton>(skel->get()), true);
+            });
+        }
+        skeletons_->setWidget(contents);
     }
 }
