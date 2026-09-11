@@ -66,6 +66,7 @@ namespace ui {
             sm::node_ref anchor;
             sm::point anchor_offset;
             sel_drag_mode mode;
+            node_locs old_locs;
         };
 
         enum rubber_band_type {

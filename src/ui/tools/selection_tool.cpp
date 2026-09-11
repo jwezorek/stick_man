@@ -1,4 +1,5 @@
 #include "selection_tool.hpp"
+#include "../../model/selection.hpp"
 #include "select_tool_panel.hpp"
 #include "../panes/skeleton_pane.hpp"
 #include "../util.hpp"
@@ -208,84 +209,53 @@ namespace {
     }
 
     void destroy_rubber_band(ui::canvas::scene& canv, ui::canvas::item::rubber_band* rb) {
+        if (!rb) return;
         canv.removeItem(dynamic_cast<QGraphicsItem*>(rb));
         delete rb;
     }
-    void deselect_skeleton(ui::canvas::scene& canv) {
-        canv.filter_selection(
-            [](ui::canvas::item::base* itm)->bool {
-                return dynamic_cast<ui::canvas::item::skeleton*>(itm) == nullptr;
-            }
-        );
-    }
-
-    auto just_nodes_and_bones(std::span<ui::canvas::item::base*> itms) {
-        return itms | rv::filter(
-            [](auto* ptr)->bool {
-                return dynamic_cast<ui::canvas::item::node*>(ptr) ||
-                    dynamic_cast<ui::canvas::item::bone*>(ptr);
-            }
-        );
-    }
-    template<typename T>
-    auto items_to_model_set(auto abstract_items) {
-        using U = typename T::model_type;
-        return abstract_items | rv::transform(
-            [](ui::canvas::item::base* aci)->U* {
-                auto item_ptr = dynamic_cast<T*>(aci);
-                if (!item_ptr) {
-                    return nullptr;
+    ui::canvas::selection_set topology_items(const auto& items) {
+        using namespace ui::canvas;
+        selection_set result;
+        for (auto* item : items) {
+            if (auto* character = dynamic_cast<item::character*>(item)) {
+                for (auto skel : character->model().rig().skeletons()) {
+                    for (auto node : skel->nodes()) result.insert(&item_from_model<item::node>(node.get()));
+                    for (auto bone : skel->bones()) result.insert(&item_from_model<item::bone>(bone.get()));
                 }
-                return &(item_ptr->model());
+            } else if (auto* skel = dynamic_cast<item::skeleton*>(item)) {
+                for (auto node : skel->model().nodes()) {
+                    result.insert(&item_from_model<item::node>(node.get()));
+                }
+                for (auto bone : skel->model().bones()) {
+                    result.insert(&item_from_model<item::bone>(bone.get()));
+                }
+            } else {
+                result.insert(item);
             }
-        ) | rv::filter(
-            [](auto* ptr) { return ptr;  }
-        ) | r::to<std::unordered_set<U*>>();
+        }
+        return result;
     }
 
-    std::optional<sm::skel_ref> as_skeleton(auto itms) {
-        auto node_set = items_to_model_set<ui::canvas::item::node>(itms);
-        auto bone_set = items_to_model_set<ui::canvas::item::bone>(itms);
-
-        if (node_set.empty() || bone_set.empty()) {
-            return {};
+    // Apply modifiers to topology first, then promote only a union of complete skeletons.
+    void select_topology(ui::canvas::scene& canv,
+        std::span<ui::canvas::item::base*> items, bool add, bool subtract) {
+        using namespace ui::canvas;
+        auto incoming = topology_items(items);
+        auto selection = (add != subtract) ? topology_items(canv.selection()) : selection_set{};
+        for (auto* item : incoming) {
+            if (subtract && !add) selection.erase(item);
+            else selection.insert(item);
         }
-
-        // mathematics!
-        if (bone_set.size() != node_set.size() - 1) {
-            return {};
-        }
-
-        bool possibly_a_skeleton = true;
-        size_t bone_count = 0;
-        size_t node_count = 0;
-        auto visit_node = [&](sm::node& node)->sm::visit_result {
-            ++node_count;
-            if (!node_set.contains(&node)) {
-                possibly_a_skeleton = false;
-                return sm::visit_result::terminate_traversal;
-            }
-            return sm::visit_result::continue_traversal;
-            };
-
-        auto visit_bone = [&](sm::bone& bone)->sm::visit_result {
-            ++bone_count;
-            if (!bone_set.contains(&bone)) {
-                possibly_a_skeleton = false;
-                return sm::visit_result::terminate_traversal;
-            }
-            return sm::visit_result::continue_traversal;
-            };
-        sm::visit_nodes_and_bones(**node_set.begin(), visit_node, visit_bone);
-        if (!possibly_a_skeleton) {
-            return {};
-        }
-
-        if (node_set.size() == node_count && bone_set.size() == bone_count) {
-            return (*node_set.begin())->owner();
-        }
-
-        return {};
+        mdl::selection objects;
+        for (auto* item : selection) objects.push_back(item->to_selection_object());
+        std::vector<item::base*> selected;
+        for (const auto& object : mdl::infer_selection(objects)) std::visit(overload{
+            [&](sm::const_node_ref n) { selected.push_back(&item_from_model<item::node>(n.get())); },
+            [&](sm::const_bone_ref b) { selected.push_back(&item_from_model<item::bone>(b.get())); },
+            [&](sm::const_skel_ref s) { selected.push_back(&item_from_model<item::skeleton>(s.get())); },
+            [&](sm::const_character_ref c) { selected.push_back(canv.character_item(c->id())); }
+        }, object);
+        canv.set_selection(selected, true);
     }
 
     std::optional<QRectF> points_to_rect(QPointF pt1, QPointF pt2) {
@@ -444,7 +414,7 @@ namespace {
     }
     std::vector<sm::node_ref> selection_to_nodes(ui::canvas::scene& canv) {
         std::unordered_set<sm::node*> unique_nodes;
-        for (auto* item : canv.selection()) {
+        for (auto* item : topology_items(canv.selection())) {
             auto nodes_from_piece = skel_piece_to_nodes(item->to_skeleton_piece());
             r::copy(
                 nodes_from_piece | rv::transform([](auto node) {return node.ptr(); }),
@@ -460,7 +430,22 @@ namespace {
     std::vector<sm::node_ref> selected_nodes_for_translation(
         ui::canvas::scene& canv, QPointF clicked_pt) {
         auto* clicked_item = canv.top_item(clicked_pt);
-        if (!clicked_item || !clicked_item->is_selected()) {
+        if (!clicked_item) return {};
+        if (auto* character = canv.selected_character()) {
+            if (clicked_item == character) return selection_to_nodes(canv);
+            auto clicked_nodes = skel_piece_to_nodes(clicked_item->to_skeleton_piece());
+            if (!clicked_nodes.empty() && character->model().rig().contains(clicked_nodes.front()->owner().id()))
+                return selection_to_nodes(canv);
+        }
+        bool selected = clicked_item->is_selected() || std::visit([](auto piece) {
+            using T = std::remove_cvref_t<decltype(piece.get())>;
+            if constexpr (std::is_same_v<T, sm::skeleton>) {
+                return false;
+            } else {
+                return ui::canvas::item_from_model<ui::canvas::item::skeleton>(piece->owner()).is_selected();
+            }
+        }, clicked_item->to_skeleton_piece());
+        if (!selected) {
             return skel_piece_to_nodes(clicked_item->to_skeleton_piece());
         }
         return selection_to_nodes(canv);
@@ -506,6 +491,15 @@ std::optional<ui::tool::rubber_band_type> ui::tool::select::kind_of_rubber_band(
         return {};
     }
     auto settings = settings_panel_->settings();
+    if (auto* character = canv.selected_character()) {
+        bool belongs = std::visit([&](auto ref) {
+            using T = std::remove_cvref_t<decltype(ref.get())>;
+            if constexpr (std::is_same_v<T, sm::character>) return ref->id() == character->id();
+            else if constexpr (std::is_same_v<T, sm::skeleton>) return character->model().rig().contains(ref->id());
+            else return character->model().rig().contains(ref->owner().id());
+        }, selected_item->to_selection_object());
+        if (belongs) return translation_rb;
+    }
     if (settings.is_in_rotate_mode_) {
         return rotation_rb;
     }
@@ -556,12 +550,10 @@ std::optional<ui::tool::drag_state> ui::tool::select::create_drag_state(
     return tbl.at(typ)();
 }
 void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
-    auto rb_type = kind_of_rubber_band(canv, pt);
-    if (!rb_type) {
-        return;
-    }
     if (!is_dragging()) {
-        drag_ = create_drag_state(*rb_type, canv, pt);
+        auto rb_type = kind_of_rubber_band(canv, *click_pt_);
+        if (!rb_type) return;
+        drag_ = create_drag_state(*rb_type, canv, *click_pt_);
     }
     if (is_dragging()) {
         drag_->pt = from_qt_pt(pt);
@@ -593,6 +585,7 @@ std::optional<ui::tool::rotation_state> ui::tool::select::create_rotation_state(
         return {};
     }
 
+    if (dynamic_cast<canvas::item::character*>(item)) return {};
     auto model = item->to_skeleton_piece();
     if (!settings.rotate_on_pinned_ || !has_pinned_nodes(model)) {
         auto parent_bone = std::visit(
@@ -646,16 +639,29 @@ std::optional<ui::tool::translation_state> ui::tool::select::create_translation_
         return {};
     }
     auto mode = settings.trans_mode_;
-    auto [anchor, offset] = translation_anchor(item->to_skeleton_piece(), clicked_pt);
+    auto anchor_piece = dynamic_cast<canvas::item::character*>(item)
+        ? mdl::skel_piece{sm::ref(canv.resolved_skeletons().front()->model())}
+        : item->to_skeleton_piece();
+    auto [anchor, offset] = translation_anchor(anchor_piece, clicked_pt);
     auto selected_nodes = selected_nodes_for_translation(canv, clicked_pt);
     auto pinned_nodes = pinned_nodes_for_translation(canv);
+    auto selected_skeletons = canv.resolved_skeletons();
+    if (!selected_skeletons.empty() && (canv.selected_character() || selected_skeletons.size() == canv.selection().size()) &&
+        r::any_of(selected_skeletons, [&](auto* skel) { return &skel->model() == &anchor->owner(); })) {
+        mode = sel_drag_mode::rigid;
+    }
+    node_locs old_locs;
+    for (auto skel : skeletons_from_nodes(selected_nodes)) {
+        for (auto node : skel->nodes()) old_locs.emplace_back(node->id(), node->world_pos());
+    }
 
     return { {
         std::move(selected_nodes),
         std::move(pinned_nodes),
         anchor,
         offset,
-        mode
+        mode,
+        std::move(old_locs)
     } };
 }
 void ui::tool::select::pin_selection() {
@@ -681,7 +687,10 @@ void ui::tool::select::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEv
     }
 }
 void ui::tool::select::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
-
+    // A fast gesture may deliver few (or no) move events. Finish at the actual release point.
+    if (click_pt_ && (is_dragging() || distance(*click_pt_, event->scenePos()) > 3.0)) {
+        do_dragging(canv, event->scenePos());
+    }
     bool shift_down = event->modifiers().testFlag(Qt::ShiftModifier);
     bool ctrl_down = event->modifiers().testFlag(Qt::ControlModifier);
     bool alt_down = event->modifiers().testFlag(Qt::AltModifier);
@@ -756,8 +765,6 @@ void ui::tool::select::handle_click(
         return;
     }
 
-    deselect_skeleton(canv);
-
     if (alt_down) {
         auto clicked_node = dynamic_cast<ui::canvas::item::node*>(clicked_item);
         if (!clicked_node) {
@@ -771,17 +778,7 @@ void ui::tool::select::handle_click(
         }
         return;
     }
-    if (shift_down && !ctrl_down) {
-        canv.add_to_selection(clicked_item, true);
-        return;
-    }
-
-    if (ctrl_down && !shift_down) {
-        canv.subtract_from_selection(clicked_item, true);
-        return;
-    }
-
-    canv.set_selection(clicked_item, true);
+    select_topology(canv, {&clicked_item, 1}, shift_down, ctrl_down);
 }
 void ui::tool::select::do_rotation_complete(canvas::scene& canv, const rotation_state& ri) {
     const auto& new_locs = ri.current_node_locs();
@@ -793,6 +790,14 @@ void ui::tool::select::do_rotation_complete(canvas::scene& canv, const rotation_
 }
 
 void ui::tool::select::do_translation_complete(canvas::scene& canv, const translation_state& ri) {
+    node_locs new_locs;
+    bool changed = false;
+    for (const auto& [id, old_pos] : ri.old_locs) {
+        auto pos = std::get<sm::node_ref>(project_->get(id))->world_pos();
+        new_locs.emplace_back(id, pos);
+        changed = changed || sm::distance(pos, old_pos) > 0;
+    }
+    if (changed) project_->transform_node_positions(ri.old_locs, new_locs);
     canv.sync_selection();
 }
 void ui::tool::select::handle_drag_complete(canvas::scene& c, bool shift_down, bool alt_down) {
@@ -809,41 +814,10 @@ void ui::tool::select::handle_drag_complete(canvas::scene& c, bool shift_down, b
     }
 }
 void ui::tool::select::handle_select_drag(canvas::scene& canv, QRectF rect, bool shift_down, bool ctrl_down) {
-    auto clicked_items = canv.items_in_rect(rect);
-    if (clicked_items.empty()) {
-        canv.clear_selection();
-        return;
-    }
-    auto maybe_skeleton = as_skeleton(just_nodes_and_bones(clicked_items));
-    if (maybe_skeleton) {
-        ui::canvas::item::skeleton* skel_item = nullptr;
-        if (maybe_skeleton->get().get_user_data().has_value()) {
-            skel_item = &(canvas::item_from_model<canvas::item::skeleton>(maybe_skeleton->get()));
-        }
-        else {
-            skel_item = canv.insert_item(maybe_skeleton->get());
-        }
-        canv.set_selection(skel_item, true);
-        return;
-    }
-    clicked_items = just_nodes_and_bones(clicked_items) |
-        r::to<std::vector<ui::canvas::item::base*>>();
-    if (clicked_items.empty()) {
-        canv.clear_selection();
-        return;
-    }
-
-    if (shift_down && !ctrl_down) {
-        canv.add_to_selection(clicked_items, true);
-        return;
-    }
-
-    if (ctrl_down && !shift_down) {
-        canv.subtract_from_selection(clicked_items, true);
-        return;
-    }
-
-    canv.set_selection(clicked_items, true);
+    auto clicked_items = canv.items_in_rect(rect) | rv::filter([](auto* item) {
+        return dynamic_cast<canvas::item::node*>(item) || dynamic_cast<canvas::item::bone*>(item);
+    }) | r::to<std::vector<canvas::item::base*>>();
+    select_topology(canv, clicked_items, shift_down, ctrl_down);
 }
 void ui::tool::select::deactivate(canvas::manager& canv_mgr) {
     canv_mgr.set_drag_mode(ui::canvas::drag_mode::none);

@@ -10,12 +10,15 @@
 #include "util.hpp"
 #include "clipboard.hpp"
 #include <QtWidgets>
+#include <QFileInfo>
+#include <cstdint>
+#include <ranges>
+#include <span>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <dwmapi.h>
 #pragma comment(lib, "Dwmapi.lib")
 #endif
-
 //debug
 #include "../core/sm_bone.hpp"
 #include "../core/sm_visit.hpp"
@@ -26,7 +29,6 @@
 
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
-
 namespace {
     void to_do(const std::string& msg) {
         QMessageBox msgBox;
@@ -36,7 +38,6 @@ namespace {
         msgBox.setStandardButtons(QMessageBox::Ok);
         msgBox.exec();
     }
-
     void setDarkTitleBar(WId window) {
     #ifdef Q_OS_WIN
         BOOL USE_DARK_MODE = true;
@@ -47,107 +48,132 @@ namespace {
     }
 }
 ui::stick_man::stick_man(QWidget* parent) :
-		QMainWindow(parent),
-		was_shown_(false),
-		has_fully_layed_out_widgets_(false),
-		tool_pal_(new pane::tools(this)),
-		anim_pane_(new pane::animation(this)),
-		tool_pane_(new pane::tool_settings(this)),
-		skel_pane_(new pane::skeleton(this)) {
+        QMainWindow(parent),
+        was_shown_(false),
+        has_fully_layed_out_widgets_(false),
+        tool_pal_(new pane::tools(this)),
+        anim_pane_(new pane::animation(this)),
+        tool_pane_(new pane::tool_settings(this)),
+        skel_pane_(new pane::skeleton(this)) {
     setDarkTitleBar(winId());
     setDockNestingEnabled(true);
     addToolBar(Qt::LeftToolBarArea, tool_pal_);
     addDockWidget(Qt::RightDockWidgetArea, tool_pane_);
     addDockWidget(Qt::RightDockWidgetArea, skel_pane_);
     addDockWidget(Qt::BottomDockWidgetArea, anim_pane_);
-
     setCentralWidget(canvases_ = new canvas::manager(tool_mgr_));
+    setWindowTitle("stick_man - untitled");
     createMainMenu();
     canvases_->init(project_);
-	skel_pane_->init(*canvases_, project_);
-	tool_mgr_.init(*canvases_, project_);
+    skel_pane_->init(*canvases_, project_);
+    tool_mgr_.init(*canvases_, project_);
     tool_pane_->init(tool_mgr_);
+}
+void ui::stick_man::set_current_file(const QString& file_path) {
+    current_file_path_ = file_path;
+    const auto file_name = QFileInfo(file_path).fileName();
+    canvases_->set_canvas_name(file_name.toStdString());
+    setWindowTitle(QString("stick_man - %1").arg(file_name));
+}
+
+bool ui::stick_man::write_project_file(const QString& file_path) {
+    auto serialized = project_.serialize();
+    if (!serialized) {
+        QMessageBox::critical(this, "Error", "Could not serialize project.");
+        return false;
+    }
+
+    QFile file(file_path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        QMessageBox::critical(this, "Error", "Could not open project file for writing.");
+        return false;
+    }
+
+    const auto& buffer = *serialized;
+    const auto written = file.write(
+        reinterpret_cast<const char*>(buffer.data()),
+        static_cast<qint64>(buffer.size()));
+    file.close();
+
+    if (written != static_cast<qint64>(buffer.size())) {
+        QMessageBox::critical(this, "Error", "Could not write complete project file.");
+        return false;
+    }
+    return true;
 }
 void ui::stick_man::open()
 {
-	QString filePath = QFileDialog::getOpenFileName(
-		this, "Open stick man", QDir::homePath(), "stick man JSON (*.smj);;All Files (*)");
+    QString filePath = QFileDialog::getOpenFileName(
+        this, "Open stick_man project", QDir::homePath(), "stick_man Project (*.stickman)");
+    if (filePath.isEmpty()) {
+        return;
+    }
 
-	if (!filePath.isEmpty()) {
-		QFile file(filePath);
-		if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-			QTextStream in(&file);
-			QString content = in.readAll();
-			file.close();
-            auto success = project_.from_json(content.toStdString());
-            if (!success) {
-                QMessageBox::critical(this, "Error", "Error opening file.");
-            }
-		} else {
-			QMessageBox::critical(this, "Error", "Could not open file.");
-		}
-	}
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        QMessageBox::critical(this, "Error", "Could not open project file.");
+        return;
+    }
+
+    const QByteArray content = file.readAll();
+    file.close();
+    const auto* first = reinterpret_cast<const std::uint8_t*>(content.constData());
+    const std::span<const std::uint8_t> buffer(first, static_cast<std::size_t>(content.size()));
+    if (!project_.deserialize(buffer)) {
+        QMessageBox::critical(this, "Error", "Error opening project file.");
+        return;
+    }
+    set_current_file(filePath);
 }
 
 void ui::stick_man::save() {
-
+    if (current_file_path_.isEmpty()) {
+        save_as();
+        return;
+    }
+    write_project_file(current_file_path_);
 }
 
 void ui::stick_man::save_as() {
-	QString filePath = QFileDialog::getSaveFileName(
-		this, "Save stick man As", QDir::homePath(), "stick man JSON (*.smj);;All Files (*)");
-	if (!filePath.isEmpty()) {
-		// Perform the actual save operation
-		QFile file(filePath);
-		if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-			QTextStream out(&file);
-			out << project_.to_json().c_str();
-			file.close();
-		} else {
-			QMessageBox::critical(this, "Error", "Bad pathname.");
-		}
-	}
-}
-
-void ui::stick_man::exit() {
-	bool unsavedChanges = false; // TODO
-
-	if (unsavedChanges) {
-		QMessageBox::StandardButton response = QMessageBox::question(
-			this, "Unsaved Changes",
-			"You have unsaved changes. Do you want to save them before quitting?",
-			QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
-
-		if (response == QMessageBox::Save) {
-			save();
-		}
-		else if (response == QMessageBox::Discard) {
-
-		} else {
-			return;
-		}
-	}
-
-	QCoreApplication::quit();
-}
-
-void ui::stick_man::debug() {
-}
-void ui::stick_man::insert_new_tab() {
-    auto valid_tab_name = [this](const std::string& str)->bool {
-            return !project_.has_tab(str);
-        };
-    auto new_tab_name = query_for_valid_string(this, valid_tab_name, "New tab", "New tab name");
-    if (new_tab_name.empty()) {
+    QString filePath = QFileDialog::getSaveFileName(
+        this, "Save stick_man project As", QDir::homePath(), "stick_man Project (*.stickman)");
+    if (filePath.isEmpty()) {
         return;
     }
-    project_.add_new_tab(new_tab_name);
+    if (!filePath.endsWith(".stickman", Qt::CaseInsensitive)) {
+        filePath += ".stickman";
+    }
+    if (write_project_file(filePath)) {
+        set_current_file(filePath);
+    }
+}
+void ui::stick_man::exit() {
+    bool unsavedChanges = false; // TODO
+
+    if (unsavedChanges) {
+        QMessageBox::StandardButton response = QMessageBox::question(
+            this, "Unsaved Changes",
+            "You have unsaved changes. Do you want to save them before quitting?",
+            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+
+        if (response == QMessageBox::Save) {
+            save();
+        }
+        else if (response == QMessageBox::Discard) {
+
+        } else {
+            return;
+        }
+    }
+
+    QCoreApplication::quit();
+}
+void ui::stick_man::debug() {
 }
 
 void ui::stick_man::create_animation() {
     to_do("create animation");
 }
-
 void ui::stick_man::create_pose()
 {
     to_do("create pose");
@@ -167,9 +193,8 @@ ui::pane::tool_settings& ui::stick_man::tool_pane() {
 
 
 ui::pane::skeleton& ui::stick_man::skel_pane() {
-	return *skel_pane_;
+    return *skel_pane_;
 }
-
 ui::canvas::manager& ui::stick_man::canvases() {
     return *canvases_;
 }
@@ -184,7 +209,6 @@ void ui::stick_man::insert_file_menu() {
     file_menu->addAction(actionSaveAs);
     file_menu->addSeparator();
     file_menu->addAction(actionExit);
-
     QFontMetrics metrics(file_menu->font());
     int maxWidth = metrics.horizontalAdvance(actionSaveAs->text()) + 20;
     file_menu->setMinimumWidth(maxWidth);
@@ -197,7 +221,6 @@ void ui::stick_man::insert_file_menu() {
 void ui::stick_man::do_undo() {
     project_.undo();
 }
-
 void ui::stick_man::do_redo() {
     project_.redo();
 }
@@ -206,7 +229,6 @@ void ui::stick_man::insert_edit_menu() {
     undo_action_ = new QAction("Undo", this);
     undo_action_->setShortcut(QKeySequence::Undo);
     connect(undo_action_, &QAction::triggered, this, &stick_man::do_undo);
-
     redo_action_ = new QAction("Redo", this);
     redo_action_->setShortcut(QKeySequence::Redo);
     connect(redo_action_, &QAction::triggered, this, &stick_man::do_redo);
@@ -214,7 +236,6 @@ void ui::stick_man::insert_edit_menu() {
     cut_action->setShortcut(QKeySequence::Cut);
     connect(cut_action, &QAction::triggered,
         [this]() {clipboard::cut(*this); });
-
     QAction* copy_action = new QAction("Copy", this);
     copy_action->setShortcut(QKeySequence::Copy);
     connect(copy_action, &QAction::triggered,
@@ -223,7 +244,6 @@ void ui::stick_man::insert_edit_menu() {
     paste_action->setShortcut(QKeySequence::Paste);
     connect(paste_action, &QAction::triggered,
         [this]() {clipboard::paste(*this, false); });
-
     QAction* paste_in_place_action = new QAction("Paste in place", this);
     paste_in_place_action->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
     connect(paste_in_place_action, &QAction::triggered,
@@ -232,7 +252,6 @@ void ui::stick_man::insert_edit_menu() {
     delete_action->setShortcut(QKeySequence::Delete);
     connect(delete_action, &QAction::triggered,
         [this]() {clipboard::del(*this); });
-
     QMenu* edit_menu = menuBar()->addMenu("Edit");
     edit_menu->addAction(undo_action_);
     edit_menu->addAction(redo_action_);
@@ -247,19 +266,16 @@ void ui::stick_man::insert_edit_menu() {
     redo_action_->setEnabled(false);
     undo_action_->setEnabled(false);
 }
-
 void ui::stick_man::update_undo_and_redo(bool can_redo, bool can_undo) {
     redo_action_->setEnabled(can_redo);
     undo_action_->setEnabled(can_undo);
 }
-
 void ui::stick_man::insert_view_menu() {
     auto view_menu = menuBar()->addMenu(tr("View"));
     QMenu* magnification_menu = view_menu->addMenu(tr("Magnification"));
     // Create an action group to make the actions mutually exclusive (like radio buttons)
     QActionGroup* magnification_group = new QActionGroup(this);
     magnification_group->setExclusive(true);
-
     const auto* zoom_tool = static_cast<const tool::zoom*>(
         &tool_mgr_.tool_from_id(tool::id::zoom)
     );
@@ -281,21 +297,15 @@ void ui::stick_man::insert_view_menu() {
         });
     }
 }
-
 void ui::stick_man::insert_project_menu() {
     auto project_menu = menuBar()->addMenu(tr("Stick Man"));
-    auto* new_tab_action = new QAction(tr("Insert new canvas"), this);
     auto* new_animation = new QAction("Create new animation", this);
     auto* new_pose = new QAction("Create new pose", this);
-
-    project_menu->addAction(new_tab_action);
     project_menu->addAction(new_animation);
     project_menu->addAction(new_pose);
-    connect(new_tab_action, &QAction::triggered, this, &stick_man::insert_new_tab);
     connect(new_animation, &QAction::triggered, this, &stick_man::create_animation);
     connect(new_pose, &QAction::triggered, this, &stick_man::create_pose);
 }
-
 void ui::stick_man::createMainMenu()
 {
     insert_file_menu();
@@ -308,15 +318,14 @@ void ui::stick_man::createMainMenu()
     menuBar()->setStyleSheet(styleSheet);
 
 }
-
 void ui::stick_man::showEvent(QShowEvent* event) {
-	QMainWindow::showEvent(event);
-	was_shown_ = true;
+    QMainWindow::showEvent(event);
+    was_shown_ = true;
 }
 void ui::stick_man::resizeEvent(QResizeEvent* event) {
-	QMainWindow::resizeEvent(event);
-	if (was_shown_ && !has_fully_layed_out_widgets_) {
+    QMainWindow::resizeEvent(event);
+    if (was_shown_ && !has_fully_layed_out_widgets_) {
         canvases_->center_active_view();
-		has_fully_layed_out_widgets_ = true;
-	}
+        has_fully_layed_out_widgets_ = true;
+    }
 }

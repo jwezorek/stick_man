@@ -14,73 +14,74 @@
 #include "sm_types.hpp"
 #include "sm_object_id.hpp"
 #include "sm_bone.hpp"
-#include "sm_animation.hpp"
 #include "json_fwd.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 
 namespace sm {
-
-    class world;
+    class topology;
     class skeleton : public detail::enable_protected_make_unique<skeleton> {
-        friend class world;
+        friend class project;
+        friend class topology;
         friend class node;
         friend class bone;
     private:
         using nodes_tbl = std::unordered_map<object_id, node*>;
         using bones_tbl = std::unordered_map<object_id, bone*>;
         const object_id id_;
-        world_ref owner_;
+        std::reference_wrapper<topology> owner_;
         std::string name_;
         maybe_node_ref root_;
         std::any user_data_;
+        maybe_character_ref parent_character_;
         nodes_tbl nodes_;
         bones_tbl bones_;
-        std::vector<animation> animations_;
     protected:
-        skeleton(world& w, object_id id);
-        skeleton(world& w, object_id id, const std::string& name, double x, double y);
+        skeleton(topology& owner, object_id id);
+        skeleton(topology& owner, object_id id, const std::string& name, double x, double y);
         void on_new_bone(sm::bone& bone);
         void set_name(const std::string& str);
-        result from_json(world& w, const nlohmann::json&);
+        result from_json(topology& owner, const nlohmann::json&);
         nlohmann::json to_json() const;
         void set_root(sm::node& new_root);
         void register_node(sm::node& new_node);
         void register_bone(sm::bone& new_bone);
-        void set_owner(world& owner);
+        void set_owner(topology& owner);
+        void set_parent_character(character& parent);
+        void clear_parent_character() noexcept;
     public:
         const object_id& id() const noexcept;
         std::string name() const;
         bool empty() const;
+        bool is_loose() const noexcept;
+        maybe_const_character_ref parent_character() const;
         sm::node& root_node();
         const sm::node& root_node() const;
-
         std::any get_user_data() const;
         void set_user_data(std::any data);
         void clear_user_data();
-        // Model snapshots preserve object identity.
-        expected_skel copy_to(world& w, const std::string& new_name = "") const;
+        // Model snapshots preserve object identity. The remapping overload may remap the
+        // skeleton ID as well as node/bone IDs when topology replacement must avoid a
+        // collision in the live project's global object-ID namespace.
+        expected_skel copy_to(topology& destination, const std::string& new_name = "") const;
+        expected_skel copy_to(
+            topology& destination,
+            const std::unordered_map<object_id, object_id>& id_remap,
+            const std::string& new_name = "") const;
         // Editor duplication creates fresh identity and remaps internal references.
-        expected_skel duplicate_to(world& w, const std::string& new_name = "") const;
-
+        expected_skel duplicate_to(topology& destination, const std::string& new_name = "") const;
         void set_name(bone& bone, const std::string& new_name);
         void set_name(node& node, const std::string& new_name);
         auto nodes() { return detail::to_range_view<node_ref>(nodes_); }
         auto bones() { return detail::to_range_view<bone_ref>(bones_); }
         auto nodes() const { return detail::to_range_view<const_node_ref>(nodes_); }
         auto bones() const { return detail::to_range_view<const_bone_ref>(bones_); }
-
-        const std::vector<animation>& animations() const;
-        void insert_animation(const animation& anim);
-
-        sm::world& owner();
-        const sm::world& owner() const;
+        const sm::topology& owner() const;
         // Compatibility/display convenience only; never use labels as identity.
         template <is_node_or_bone T>
         bool contains(const std::string& name) const {
             return get_by_name<T>(name).has_value();
         }
-
         template <is_node_or_bone T>
         bool contains(const object_id& id) const {
             if constexpr (std::is_same_v<T, sm::node>) {
@@ -89,7 +90,6 @@ namespace sm {
                 return bones_.contains(id);
             }
         }
-
         void apply(matrix& mat);
         template <is_node_or_bone T>
         std::optional<sm::ref<T>> get(const object_id& id) const {
@@ -125,16 +125,16 @@ namespace sm {
             return {};
         }
     };
-    class world {
+    class topology {
         friend class skeleton;
         friend class node;
         friend class bone;
     private:
         using skeleton_tbl = std::unordered_map<object_id, std::unique_ptr<skeleton>>;
-
         std::vector<std::unique_ptr<node>> nodes_;
         std::vector<std::unique_ptr<bone>> bones_;
         skeleton_tbl skeletons_;
+        object_id generate_object_id() const;
         node_ref create_node(skeleton& parent, object_id id, const std::string& name, double x, double y);
         node_ref create_node(skeleton& parent, const std::string& name, double x, double y);
         node_ref create_node(skeleton& parent, double x, double y);
@@ -142,12 +142,12 @@ namespace sm {
         expected_bone create_bone_in_skeleton(const std::string& bone_name, node& u, node& v);
         expected_skel create_skeleton_with_id(object_id id, const std::string& name);
     public:
-        world();
-        world(world&& other);
-        world& operator=(world&& other);
-        world(const world& other) = delete;
-        world& operator=(const world& other) = delete;
-        ~world() = default;
+        topology();
+        topology(topology&& other);
+        topology& operator=(topology&& other);
+        topology(const topology& other) = delete;
+        topology& operator=(const topology& other) = delete;
+        ~topology() = default;
         void clear();
         bool empty() const;
         skeleton& create_skeleton(double x, double y);
@@ -155,11 +155,21 @@ namespace sm {
         expected_skel create_skeleton(const std::string& name);
         expected_skel skeleton(const object_id& id);
         expected_const_skel skeleton(const object_id& id) const;
+        // Global node/bone lookup. Live project topologies guarantee every skeleton, node,
+        // and bone ID is unique, so node/bone lookup remains stable across split/merge.
+        template <is_node_or_bone T>
+        std::optional<sm::ref<T>> get(const object_id& id) const {
+            for (auto skel : skeletons()) {
+                if (auto piece = skel->template get<T>(id)) {
+                    return piece;
+                }
+            }
+            return {};
+        }
         // Compatibility/display lookup only; these return the first matching label.
         expected_skel skeleton(const std::string& name);
         expected_const_skel skeleton(const std::string& name) const;
         result delete_skeleton(const object_id& id);
-
         std::vector<std::string> skeleton_names() const;
         bool contains_skeleton(const object_id& id) const;
         // Compatibility/display convenience only; labels are not identity.
@@ -175,5 +185,4 @@ namespace sm {
         auto skeletons() { return detail::to_range_view<skel_ref>(skeletons_); }
         auto skeletons() const { return detail::to_range_view<const_skel_ref>(skeletons_); }
     };
-
 }

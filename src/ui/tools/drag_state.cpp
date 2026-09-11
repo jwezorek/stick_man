@@ -10,8 +10,7 @@ namespace rv = std::ranges::views;
 namespace {
 
     ui::tool::node_locs node_locations(sm::node& src) {
-        std::unordered_map<mdl::handle, sm::point, mdl::handle_hash> locs;
-
+        std::unordered_map<mdl::handle, sm::point> locs;
         sm::visit_bone_hierarchy(src,
             [&](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
                 locs[mdl::to_handle(bone.child_node())] = bone.child_node().world_pos();
@@ -19,7 +18,6 @@ namespace {
                 return sm::visit_result::continue_traversal;
             }
         );
-
         return locs |
             rv::transform(
                 [](auto&& mv)->std::tuple<mdl::handle, sm::point> {
@@ -31,13 +29,11 @@ namespace {
 }
 
 /*------------------------------------------------------------------------------------------------*/
-
-ui::tool::rotation_state::rotation_state( 
-        sm::node_ref axis, 
-        sm::node_ref rotating, 
-        sm::bone_ref bone, 
+ui::tool::rotation_state::rotation_state(
+        sm::node_ref axis,
+        sm::node_ref rotating,
+        sm::bone_ref bone,
         ui::tool::sel_drag_mode mode) :
-
             axis_(axis),
             rotating_(rotating),
             bone_(bone),
@@ -50,7 +46,6 @@ ui::tool::rotation_state::rotation_state(
             old_locs_(std::make_unique<node_locs>(node_locations(axis))),
             radius_(sm::distance(axis_->world_pos(), rotating_->world_pos())) {
 }
-
 const sm::node& ui::tool::rotation_state::axis() const {
     return axis_.get();
 }

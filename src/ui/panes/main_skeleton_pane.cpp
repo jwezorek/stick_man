@@ -1,8 +1,10 @@
 #include "main_skeleton_pane.hpp"
+#include "../character_actions.hpp"
 #include "skeleton_pane.hpp"
 #include "../util.hpp"
 #include "../canvas/skel_item.hpp"
 #include "../canvas/bone_item.hpp"
+#include "../canvas/node_item.hpp"
 #include "../canvas/scene.hpp"
 #include "../canvas/canvas_manager.hpp"
 #include "../tools/tool.hpp"
@@ -50,6 +52,8 @@ namespace {
 	constexpr int k_treeview_max_hgt = 300;
 	const int k_is_bone_role = Qt::UserRole + 1;
 	const int k_model_role = Qt::UserRole + 2;
+    const int k_character_role = Qt::UserRole + 3;
+    bool is_character_treeitem(QStandardItem* item) { return item->data(k_character_role).toBool(); }
 
 	bool is_bone_treeitem(QStandardItem* qsi) {
 		return qsi->data(k_is_bone_role).value<bool>();
@@ -108,19 +112,19 @@ namespace {
 		return itm;
 	}
 
-	void insert_skeleton(QStandardItemModel* tree, sm::skel_ref skel) {
+	void insert_skeleton(QStandardItem* root, sm::const_skel_ref skel) {
 
 		// traverse the skeleton graph and repopulate the treeview during the traversal 
 		// by building a hash table mapping bones to their tree items.
 
-		QStandardItem* root = tree->invisibleRootItem();
-		QStandardItem* skel_item = make_treeitem(skel.get());
+		QStandardItem* skel_item = make_treeitem(ui::canvas::item_from_model<ui::canvas::item::skeleton>(skel.get()).model());
+        skel_item->setIcon(QApplication::style()->standardIcon(QStyle::SP_FileIcon));
 		root->appendRow(skel_item);
 
-		std::unordered_map<sm::bone*, QStandardItem*> bone_to_tree_item;
-		auto visit = [&](sm::bone& b)->sm::visit_result {
+		std::unordered_map<const sm::bone*, QStandardItem*> bone_to_tree_item;
+		auto visit = [&](const sm::bone& b)->sm::visit_result {
 			auto parent = b.parent_bone();
-			QStandardItem* bone_row = make_treeitem(b);
+			QStandardItem* bone_row = make_treeitem(ui::canvas::item_from_model<ui::canvas::item::bone>(b).model());
 			QStandardItem* parent_item =
 				(!parent) ? skel_item : bone_to_tree_item.at(&parent->get());
 			parent_item->appendRow(bone_row);
@@ -128,7 +132,7 @@ namespace {
 			return sm::visit_result::continue_traversal;
 			};
 
-		sm::visit_bones(skel->root_node(), visit);
+		sm::visit_nodes_and_bones(skel->root_node(), {}, visit, true);
 	}
 
 	bool is_same_bone_selection(const std::vector<ui::canvas::item::bone*>& canv_sel,
@@ -212,17 +216,26 @@ void ui::pane::main_skeleton_pane::expand_selected_items() {
 	}
 }
 
-void ui::pane::main_skeleton_pane::sync_with_model(sm::world& model)
+void ui::pane::main_skeleton_pane::sync_with_model(const sm::project& model)
 {
 	disconnect_tree_sel_handler();
+    disconnect_tree_change_handler();
 
 	// clear the treeview and repopulate it.
 	QStandardItemModel* tree_model = static_cast<QStandardItemModel*>(skeleton_tree_->model());
 	tree_model->clear();
 
-	for (const auto& skel : model.skeletons()) {
-		insert_skeleton(tree_model, skel);
-	}
+    for (auto character : model.characters()) {
+        auto* root = new QStandardItem(QString::fromStdString(character->name()));
+        root->setData(true, k_character_role);
+        root->setData(QString::fromStdString(character->id().to_string()), k_model_role);
+        root->setIcon(QApplication::style()->standardIcon(QStyle::SP_DirIcon));
+        tree_model->appendRow(root);
+        canvas().character_item(character->id())->set_treeview_item(root);
+        for (auto skel : character->rig().skeletons()) insert_skeleton(root, skel);
+    }
+    for (auto skel : model.topology().skeletons())
+        if (skel->is_loose()) insert_skeleton(tree_model->invisibleRootItem(), skel);
 
 	skeleton_tree_->clearSelection();
 
@@ -240,6 +253,7 @@ void ui::pane::main_skeleton_pane::sync_with_model(sm::world& model)
 	expand_selected_items();
 
 	connect_tree_sel_handler();
+    connect_tree_change_handler();
 }
 
 void ui::pane::main_skeleton_pane::handle_tree_selection_change(
@@ -251,31 +265,44 @@ void ui::pane::main_skeleton_pane::handle_tree_selection_change(
 	auto& curr_canv = canvas();
 	std::vector<canvas::item::base*> sel_canv_items;
 	auto selection = selected_items();
-	QStandardItem* selected_skel = nullptr;
-
-	for (auto* qsi : selection) {
-		if (!is_bone_treeitem(qsi)) {
-			selected_skel = qsi;
-			break;
-		}
-	}
-
-	if (selected_skel) {
-		skeleton_tree_->selectionModel()->clearSelection();
-		select_item(selected_skel, true);
-		sel_canv_items.push_back(
-			&canvas::item_from_model<canvas::item::skeleton>(
-				*get_treeitem_data<sm::skeleton>(selected_skel)
-			)
-		);
-	}
-	else {
-		for (auto* sel : selection) {
-			sm::bone* bone_ptr = get_treeitem_data<sm::bone>(sel);
-			sel_canv_items.push_back(&canvas::item_from_model<canvas::item::bone>(*bone_ptr));
-		}
-		normalize_selection_per_active_canvas(sel_canv_items, curr_canv);
-	}
+    // An explicit character row denotes one semantic selection. Adoption chooses
+    // its target in a dialog, so simultaneous character selections are unnecessary.
+    auto character_row = r::find_if(selection, is_character_treeitem);
+    if (character_row != selection.end()) {
+        auto id = sm::object_id::from_string((*character_row)->data(k_model_role).toString().toStdString());
+        if (id) canvas().set_selection(canvas().character_item(*id), true);
+        handle_canv_sel_change();
+        connect_canv_sel_handler();
+        return;
+    }
+    // A selected skeleton row already includes its bones; descendant rows add nothing.
+    std::unordered_set<sm::skeleton*> selected_skeletons;
+    for (auto* selected : selection) {
+        if (!is_bone_treeitem(selected)) {
+            selected_skeletons.insert(get_treeitem_data<sm::skeleton>(selected));
+        }
+    }
+    std::erase_if(selection, [&](auto* selected) {
+        return is_bone_treeitem(selected) &&
+            selected_skeletons.contains(&get_treeitem_data<sm::bone>(selected)->owner());
+    });
+    bool all_skeletons = r::all_of(selection, [](auto* item) { return !is_bone_treeitem(item); });
+    std::unordered_set<canvas::item::base*> unique_items;
+    for (auto* selected : selection) {
+        if (is_bone_treeitem(selected)) {
+            unique_items.insert(&canvas::item_from_model<canvas::item::bone>(*get_treeitem_data<sm::bone>(selected)));
+        } else {
+            auto& skel = *get_treeitem_data<sm::skeleton>(selected);
+            if (all_skeletons) {
+                unique_items.insert(&canvas::item_from_model<canvas::item::skeleton>(skel));
+            } else {
+                for (auto node : skel.nodes()) unique_items.insert(&canvas::item_from_model<canvas::item::node>(node.get()));
+                for (auto bone : skel.bones()) unique_items.insert(&canvas::item_from_model<canvas::item::bone>(bone.get()));
+            }
+        }
+    }
+    sel_canv_items = unique_items | r::to<std::vector<canvas::item::base*>>();
+    sel_canv_items = normalize_selection_per_active_canvas(sel_canv_items, curr_canv);
 
 	if (!sel_canv_items.empty()) {
 		auto& sel_canv = *sel_canv_items.front()->canvas();
@@ -285,8 +312,8 @@ void ui::pane::main_skeleton_pane::handle_tree_selection_change(
 	}
 
 	canvas().set_selection(sel_canv_items, true);
+	handle_canv_sel_change();
 	connect_canv_sel_handler();
-	connect_tree_sel_handler();
 }
 
 void ui::pane::main_skeleton_pane::traverse_tree_items(const std::function<void(QStandardItem*)>& callback_visitor) {
@@ -308,14 +335,15 @@ void ui::pane::main_skeleton_pane::traverse_tree_items(const std::function<void(
 	}
 }
 
-void ui::pane::main_skeleton_pane::handle_rename(mdl::skel_piece piece, const std::string& new_name) {
-	if (std::holds_alternative<sm::node_ref>(piece)) {
+void ui::pane::main_skeleton_pane::handle_rename(mdl::const_skel_piece piece, const std::string& new_name) {
+	if (std::holds_alternative<sm::const_node_ref>(piece)) {
 		return;
 	}
 	traverse_tree_items(
 		[&](QStandardItem* itm)->void {
+            if (is_character_treeitem(itm)) return;
 			auto itm_piece = get_treeitem_var(itm);
-			if (mdl::identical_pieces(piece, itm_piece)) {
+			if (mdl::to_handle(piece) == mdl::to_handle(itm_piece)) {
 				auto curr_name = itm->text().toStdString();
 				if (curr_name != new_name) {
 					itm->setText(new_name.c_str());
@@ -382,6 +410,12 @@ void ui::pane::main_skeleton_pane::handle_canv_sel_change() {
 }
 
 void ui::pane::main_skeleton_pane::handle_tree_change(QStandardItem* item) {
+    if (is_character_treeitem(item)) {
+        auto id = sm::object_id::from_string(item->data(k_model_role).toString().toStdString());
+        auto name = item->text().toStdString();
+        if (id) project_->rename(*id, name);
+        return;
+    }
 	auto piece = get_treeitem_var(item);
 	auto old_name = std::visit([](auto p) {return p->name(); }, piece);
 	auto result = project_->rename(piece, item->text().toStdString());
@@ -428,6 +462,8 @@ QWidget* ui::pane::main_skeleton_pane::create_content(skeleton* parent) {
 			parent_
 		)
 	);
+    // Leave enough initial space for character authoring controls below the tree.
+    splitter->setSizes({300, 200});
 	return splitter;
 }
 
@@ -444,6 +480,18 @@ ui::pane::selection_properties& ui::pane::main_skeleton_pane::sel_properties() {
 void ui::pane::main_skeleton_pane::init_aux(canvas::manager& canvases, mdl::project& proj) {
 	sel_properties_->init(canvases, proj);
 	connect(project_, &mdl::project::name_changed, this, &main_skeleton_pane::handle_rename);
+    skeleton_tree_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(skeleton_tree_, &QWidget::customContextMenuRequested, this, [this](QPoint point) {
+        QMenu menu(skeleton_tree_);
+        auto* make = menu.addAction("Make Character");
+        auto* adopt = menu.addAction("Add to Character...");
+        bool loose = !canvas().loose_selection().empty();
+        make->setEnabled(loose);
+        adopt->setEnabled(loose && !r::empty(project_->core().characters()));
+        auto* chosen = menu.exec(skeleton_tree_->viewport()->mapToGlobal(point));
+        if (chosen == make) character_actions::make(canvas(), *project_);
+        if (chosen == adopt) character_actions::adopt(canvas(), *project_, this);
+    });
 }
 
 bool ui::pane::main_skeleton_pane::validate_props_name_change(const std::string&) {

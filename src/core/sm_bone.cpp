@@ -79,11 +79,16 @@ const sm::object_id& sm::node::id() const noexcept {
 std::string sm::node::name() const {
 	return name_;
 }
-sm::expected_node sm::node::copy_to(skeleton& skel) const {
+sm::expected_node sm::node::copy_to(topology& destination, const object_id& skeleton_id) const {
+    auto target = destination.skeleton(skeleton_id);
+    if (!target) {
+        return std::unexpected(target.error());
+    }
+    auto& skel = target->get();
     if (skel.contains<node>(id_)) {
         return std::unexpected(sm::result::duplicate_id);
     }
-    auto node = skel.owner().create_node(skel, id_, name_, x_, y_);
+    auto node = destination.create_node(skel, id_, name_, x_, y_);
     skel.register_node(node);
     return node;
 }
@@ -226,8 +231,13 @@ std::string sm::bone::name() const {
 	return name_;
 }
 
-sm::expected_bone sm::bone::copy_to(skeleton& skel) const
+sm::expected_bone sm::bone::copy_to(topology& destination, const object_id& skeleton_id) const
 {
+    auto target = destination.skeleton(skeleton_id);
+    if (!target) {
+        return std::unexpected(target.error());
+    }
+    auto& skel = target->get();
     if (skel.contains<bone>(id_)) {
         return std::unexpected(result::duplicate_id);
     }
@@ -237,7 +247,7 @@ sm::expected_bone sm::bone::copy_to(skeleton& skel) const
     if (!u || !v) {
         return std::unexpected(result::not_found);
     }
-    auto bone = skel.owner().create_bone_in_skeleton(id_, name_, u->get(), v->get());
+    auto bone = destination.create_bone_in_skeleton(id_, name_, u->get(), v->get());
     if (rot_constraint_) {
         bone->get().set_rotation_constraint(
             rot_constraint_->start_angle,

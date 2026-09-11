@@ -31,7 +31,7 @@ namespace ui {
             ui::stick_man* main_wnd_;
 
             void expand_selected_items();
-            void handle_rename(mdl::skel_piece piece, const std::string& new_name);
+            void handle_rename(mdl::const_skel_piece piece, const std::string& new_name);
             void traverse_tree_items(const std::function<void(QStandardItem*)>& visitor);
             std::vector<QStandardItem*> selected_items() const;
             canvas::scene& canvas();
@@ -44,7 +44,7 @@ namespace ui {
             void handle_tree_change(QStandardItem* item) override;
             void handle_tree_selection_change( 
                 const QItemSelection&, const QItemSelection&) override;
-            void sync_with_model(sm::world& model) override;
+            void sync_with_model(const sm::project& model) override;
             void init_aux(canvas::manager& canvases, mdl::project& proj) override;
 
         public:

@@ -1,9 +1,13 @@
 #pragma once
 
+#include <ranges>
 #include <variant>
-#include "../core/sm_types.hpp"
-#include "../core/sm_skeleton.hpp"
+#include <vector>
+
 #include "../core/sm_object_id.hpp"
+#include "../core/sm_project.hpp"
+#include "../core/sm_skeleton.hpp"
+#include "../core/sm_types.hpp"
 
 namespace mdl {
 
@@ -11,60 +15,55 @@ namespace mdl {
         std::variant<sm::const_node_ref, sm::const_bone_ref, sm::const_skel_ref>;
     using skel_piece = std::variant<sm::node_ref, sm::bone_ref, sm::skel_ref>;
 
-    struct handle {
-    private:
-        template<sm::is_node_or_bone T>
-        std::expected<sm::ref<T>, sm::result> to_aux(sm::world& world) const {
-            auto skel = world.skeleton(skeleton_id);
-            if (!skel) {
-                return std::unexpected(skel.error());
-            }
-            auto piece = skel->get().get<T>(object_id);
-            if (!piece) {
-                return std::unexpected(sm::result::not_found);
-            }
-            return *piece;
-        }
+    using model_object = sm::mutable_project_object;
+    using const_model_object = sm::const_project_object;
+    // Editor semantic selection. skel_piece remains exclusively topology-oriented.
+    using selection_object = const_model_object;
+    using selection = std::vector<selection_object>;
 
-        sm::expected_skel to_skeleton(sm::world& world) const;
+    // All live model objects share one project-global object_id namespace.
+    // A handle therefore needs no topology/component context of its own.
+    using handle = sm::object_id;
 
-    public:
-        sm::object_id skeleton_id;
-        sm::object_id object_id;
+    inline handle to_handle(sm::node& piece) { return piece.id(); }
+    inline handle to_handle(const sm::node& piece) { return piece.id(); }
+    inline handle to_handle(sm::bone& piece) { return piece.id(); }
+    inline handle to_handle(const sm::bone& piece) { return piece.id(); }
+    inline handle to_handle(sm::skeleton& piece) { return piece.id(); }
+    inline handle to_handle(const sm::skeleton& piece) { return piece.id(); }
 
-        bool operator==(const handle& hand) const = default;
+    inline handle to_handle(sm::node_ref piece) { return piece.get().id(); }
+    inline handle to_handle(sm::const_node_ref piece) { return piece.get().id(); }
+    inline handle to_handle(sm::bone_ref piece) { return piece.get().id(); }
+    inline handle to_handle(sm::const_bone_ref piece) { return piece.get().id(); }
+    inline handle to_handle(sm::skel_ref piece) { return piece.get().id(); }
+    inline handle to_handle(sm::const_skel_ref piece) { return piece.get().id(); }
+    inline handle to_handle(const skel_piece& piece) {
+        return std::visit(
+            [](auto ref) -> handle {
+                return ref->id();
+            },
+            piece
+        );
+    }
 
-        template<sm::is_skel_piece T>
-        T& to(sm::world& world) const {
-            if constexpr (std::is_same_v<T, sm::skeleton>) {
-                auto val = to_skeleton(world);
-                if (!val) {
-                    throw std::runtime_error("invalid handle to skeleton");
-                }
-                return val->get();
-            } else {
-                auto val = to_aux<T>(world);
-                if (!val) {
-                    throw std::runtime_error("invalid handle to node/bone");
-                }
-                return val->get();
-            }
-        }
-    };
-
-    struct handle_hash {
-        size_t operator()(const handle& hand) const noexcept;
-    };
-
-    handle to_handle(const skel_piece& piece);
+    inline handle to_handle(const const_skel_piece& piece) {
+        return std::visit(
+            [](auto ref) -> handle {
+                return ref->id();
+            },
+            piece
+        );
+    }
 
     auto to_handles(auto ptrs) {
         return ptrs |
             std::ranges::views::transform(
-                [](auto* ptr)->handle {
-                    return to_handle(sm::ref(*ptr));
+                [](auto* ptr) -> handle {
+                    return ptr->id();
                 }
-            );
+            ) |
+            std::ranges::to<std::vector<handle>>();
     }
 
 }

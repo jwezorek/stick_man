@@ -325,7 +325,7 @@ void ui::pane::props::bones::populate(mdl::project& proj) {
     );
 
     connect(&proj, &mdl::project::name_changed,
-        [this](mdl::skel_piece piece, const std::string& new_name) {
+        [this](mdl::const_skel_piece piece, const std::string& new_name) {
             handle_rename(piece, name_->value(), new_name);
         }
     );

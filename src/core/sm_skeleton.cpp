@@ -1,7 +1,7 @@
 #include "sm_skeleton.hpp"
+#include "sm_character.hpp"
 #include "sm_types.hpp"
 #include "sm_visit.hpp"
-#include "sm_animation.hpp"
 #include "json.hpp"
 #include <algorithm>
 #include <cctype>
@@ -14,16 +14,15 @@
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 using namespace std::placeholders;
-
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
 using json = nlohmann::json;
 /*------------------------------------------------------------------------------------------------*/
 
 namespace {
-
     bool is_prefix(const std::string& prefix, const std::string& str) {
         auto [lhs, rhs] = r::mismatch(prefix, str);
         return lhs == prefix.end();
@@ -114,86 +113,14 @@ namespace {
         }
         return bone_json;
     }
-    json animation_event_to_json(const sm::animation_event& event) {
-        return std::visit(sm::overloaded{
-            [](const sm::rotation& rotation)->json {
-                return {
-                    {"type", "rotation"},
-                    {"axis", rotation.axis.to_string()},
-                    {"rotor", rotation.rotor.to_string()},
-                    {"theta", rotation.theta},
-                    {"duration", rotation.duration}
-                };
-            },
-            [](const sm::translation& translation)->json {
-                return {
-                    {"type", "translation"},
-                    {"subject", translation.subject.to_string()},
-                    {"offset", {{"x", translation.offset.x}, {"y", translation.offset.y}}},
-                    {"duration", translation.duration}
-                };
-            }
-            }, event);
-    }
-    sm::animation_event animation_event_from_json(const json& event) {
-        auto type = event.at("type").get<std::string>();
-        if (type == "rotation") {
-            auto axis = sm::object_id::from_string(event.at("axis").get<std::string>());
-            auto rotor = sm::object_id::from_string(event.at("rotor").get<std::string>());
-            if (!axis || !rotor) {
-                throw std::runtime_error("invalid animation object ID");
-            }
-            return sm::rotation{
-                *axis, *rotor,
-                event.at("theta").get<double>(),
-                event.at("duration").get<int>()
-            };
-        }
-        if (type == "translation") {
-            auto subject = sm::object_id::from_string(event.at("subject").get<std::string>());
-            if (!subject) {
-                throw std::runtime_error("invalid animation object ID");
-            }
-            const auto& offset = event.at("offset");
-            return sm::translation{
-                *subject,
-                {offset.at("x").get<double>(), offset.at("y").get<double>()},
-                event.at("duration").get<int>()
-            };
-        }
-        throw std::runtime_error("unknown animation event type");
-    }
-    sm::animation_event remap_event(
-        const sm::animation_event& event,
-        const std::unordered_map<sm::object_id, sm::object_id>& ids) {
-        auto remap = [&ids](const sm::object_id& id) {
-            auto it = ids.find(id);
-            return it == ids.end() ? id : it->second;
-            };
-        return std::visit(sm::overloaded{
-            [&](const sm::rotation& rotation)->sm::animation_event {
-                return sm::rotation{
-                    remap(rotation.axis), remap(rotation.rotor),
-                    rotation.theta, rotation.duration
-                };
-            },
-            [&](const sm::translation& translation)->sm::animation_event {
-                return sm::translation{
-                    remap(translation.subject), translation.offset, translation.duration
-                };
-            }
-            }, event);
-    }
 }
-
 /*------------------------------------------------------------------------------------------------*/
 
-sm::skeleton::skeleton(world& w, object_id id) :
-    id_(id), owner_(w) {}
-
-sm::skeleton::skeleton(world& w, object_id id, const std::string& name, double x, double y) :
-    id_(id), owner_(w), name_(name) {
-    auto root = w.create_node(*this, x, y);
+sm::skeleton::skeleton(topology& owner, object_id id) :
+    id_(id), owner_(owner) {}
+sm::skeleton::skeleton(topology& owner, object_id id, const std::string& name, double x, double y) :
+    id_(id), owner_(owner), name_(name) {
+    auto root = owner.create_node(*this, x, y);
     register_node(root);
 }
 void sm::skeleton::on_new_bone(sm::bone& b) {
@@ -213,107 +140,134 @@ void sm::skeleton::on_new_bone(sm::bone& b) {
     );
 }
 const sm::object_id& sm::skeleton::id() const noexcept { return id_; }
-
 std::string sm::skeleton::name() const { return name_; }
 
 void sm::skeleton::set_name(const std::string& str) { name_ = str; }
+void sm::skeleton::set_parent_character(character& parent) { parent_character_ = character_ref(parent); }
+void sm::skeleton::clear_parent_character() noexcept { parent_character_.reset(); }
+bool sm::skeleton::is_loose() const noexcept { return !parent_character_.has_value(); }
+sm::maybe_const_character_ref sm::skeleton::parent_character() const {
+    if (!parent_character_) {
+        return {};
+    }
+    return const_character_ref(std::as_const(parent_character_->get()));
+}
 
 sm::node& sm::skeleton::root_node() { return root_.value(); }
 const sm::node& sm::skeleton::root_node() const { return root_.value(); }
 std::any sm::skeleton::get_user_data() const { return user_data_; }
 void sm::skeleton::set_user_data(std::any data) { user_data_ = data; }
 void sm::skeleton::clear_user_data() { user_data_.reset(); }
-
-sm::expected_skel sm::skeleton::copy_to(world& other_world, const std::string& new_name) const {
+sm::expected_skel sm::skeleton::copy_to(topology& other_topology, const std::string& new_name) const {
+    return copy_to(other_topology, std::unordered_map<object_id, object_id>{}, new_name);
+}
+sm::expected_skel sm::skeleton::copy_to(
+        topology& other_topology,
+        const std::unordered_map<object_id, object_id>& id_remap,
+        const std::string& new_name) const {
+    auto mapped_id = [&id_remap](const object_id& id) {
+        auto it = id_remap.find(id);
+        return it == id_remap.end() ? id : it->second;
+    };
     auto label = new_name.empty() ? name_ : new_name;
-    auto new_skel = other_world.create_skeleton_with_id(id_, label);
+    auto new_skel = other_topology.create_skeleton_with_id(mapped_id(id_), label);
     if (!new_skel) {
         return new_skel;
     }
     auto& dest = new_skel->get();
     for (auto node : nodes()) {
-        auto copied = node->copy_to(dest);
-        if (!copied) {
-            return std::unexpected(copied.error());
-        }
+        auto copied = other_topology.create_node(
+            dest, mapped_id(node->id()), node->name(), node->world_x(), node->world_y());
+        dest.register_node(copied);
     }
-    dest.set_root(dest.get<sm::node>(root_node().id())->get());
+    auto root = dest.get<sm::node>(mapped_id(root_node().id()));
+    if (!root) {
+        return std::unexpected(sm::result::not_found);
+    }
+    dest.set_root(root->get());
     for (auto bone : bones()) {
-        auto copied = bone->copy_to(dest);
+        auto u = dest.get<sm::node>(mapped_id(bone->parent_node().id()));
+        auto v = dest.get<sm::node>(mapped_id(bone->child_node().id()));
+        if (!u || !v) {
+            return std::unexpected(sm::result::not_found);
+        }
+        auto copied = other_topology.create_bone_in_skeleton(
+            mapped_id(bone->id()), bone->name(), u->get(), v->get());
         if (!copied) {
             return std::unexpected(copied.error());
         }
+        dest.register_bone(copied->get());
     }
-    dest.animations_.reserve(animations_.size());
-    for (const auto& anim : animations_) {
-        dest.animations_.push_back(anim);
+    // Parent-relative constraints require the complete bone graph, regardless
+    // of the source's unordered bone iteration order.
+    for (auto bone : bones()) {
+        if (auto constraint = bone->rotation_constraint()) {
+            auto result = dest.get<sm::bone>(mapped_id(bone->id()))->get().set_rotation_constraint(
+                constraint->start_angle,
+                constraint->span_angle,
+                constraint->relative_to_parent);
+            if (result != sm::result::success) {
+                return std::unexpected(result);
+            }
+        }
     }
     dest.user_data_ = user_data_;
     return new_skel;
 }
-sm::expected_skel sm::skeleton::duplicate_to(world& other_world, const std::string& new_name) const {
+sm::expected_skel sm::skeleton::duplicate_to(topology& other_topology, const std::string& new_name) const {
     auto label = new_name.empty() ? name_ : new_name;
-    auto new_skel = other_world.create_skeleton(label);
+    auto new_skel = other_topology.create_skeleton(label);
     if (!new_skel) {
         return new_skel;
     }
-
     auto& dest = new_skel->get();
     std::unordered_map<object_id, object_id> id_map;
     id_map.emplace(id_, dest.id());
     for (auto node : nodes()) {
-        auto new_id = object_id::generate();
+        auto new_id = other_topology.generate_object_id();
         id_map.emplace(node->id(), new_id);
-        auto copied = other_world.create_node(
+        auto copied = other_topology.create_node(
             dest, new_id, node->name(), node->world_x(), node->world_y());
         dest.register_node(copied);
     }
     dest.set_root(dest.get<sm::node>(id_map.at(root_node().id()))->get());
     for (auto bone : bones()) {
-        auto new_id = object_id::generate();
+        auto new_id = other_topology.generate_object_id();
         id_map.emplace(bone->id(), new_id);
         auto u = dest.get<sm::node>(id_map.at(bone->parent_node().id()));
         auto v = dest.get<sm::node>(id_map.at(bone->child_node().id()));
-        auto copied = other_world.create_bone_in_skeleton(new_id, bone->name(), u->get(), v->get());
+        auto copied = other_topology.create_bone_in_skeleton(new_id, bone->name(), u->get(), v->get());
         if (!copied) {
             return std::unexpected(copied.error());
         }
+        dest.register_bone(copied->get());
+    }
+    for (auto bone : bones()) {
         if (auto constraint = bone->rotation_constraint()) {
-            copied->get().set_rotation_constraint(
+            auto result = dest.get<sm::bone>(id_map.at(bone->id()))->get().set_rotation_constraint(
                 constraint->start_angle,
                 constraint->span_angle,
                 constraint->relative_to_parent);
-        }
-        dest.register_bone(copied->get());
-    }
-    for (const auto& anim : animations_) {
-        animation new_anim(object_id::generate(), anim.name_);
-        id_map.emplace(anim.id_, new_anim.id_);
-        for (const auto& [time, events] : anim.timeline_) {
-            for (const auto& event : events) {
-                new_anim.insert(time, remap_event(event, id_map));
+            if (result != sm::result::success) {
+                return std::unexpected(result);
             }
         }
-        dest.animations_.push_back(std::move(new_anim));
     }
     return new_skel;
 }
 void sm::skeleton::set_name(bone& bone, const std::string& new_name) {
     bone.set_name(new_name);
 }
-
 void sm::skeleton::set_name(node& node, const std::string& new_name) {
     node.set_name(new_name);
 }
-
-sm::result sm::skeleton::from_json(sm::world& w, const json& jobj) {
+sm::result sm::skeleton::from_json(sm::topology& owner, const json& jobj) {
     name_ = jobj.at("name").get<std::string>();
     nodes_.clear();
     bones_.clear();
-    animations_.clear();
     for (const auto& node_json : jobj.at("nodes")) {
         const auto& pos = node_json.at("pos");
-        auto new_node = w.create_node(
+        auto new_node = owner.create_node(
             *this,
             parsed_id(node_json, "id"),
             node_json.at("name").get<std::string>(),
@@ -324,13 +278,14 @@ sm::result sm::skeleton::from_json(sm::world& w, const json& jobj) {
         }
         nodes_[new_node->id()] = new_node.ptr();
     }
+    std::vector<std::pair<sm::bone_ref, sm::rot_constraint>> constraints;
     for (const auto& bone_json : jobj.at("bones")) {
         auto* u = node_from_reference(*this, bone_json.at("u"));
         auto* v = node_from_reference(*this, bone_json.at("v"));
         if (!u || !v) {
             return sm::result::invalid_json;
         }
-        auto b = w.create_bone_in_skeleton(
+        auto b = owner.create_bone_in_skeleton(
             parsed_id(bone_json, "id"),
             bone_json.at("name").get<std::string>(), *u, *v);
         if (!b || bones_.contains(b->get().id())) {
@@ -338,10 +293,10 @@ sm::result sm::skeleton::from_json(sm::world& w, const json& jobj) {
         }
         if (bone_json.contains("rot_constraint")) {
             const auto& constraint = bone_json.at("rot_constraint");
-            b->get().set_rotation_constraint(
+            constraints.emplace_back(b->get(), sm::rot_constraint{
+                constraint.at("relative_to_parent").get<bool>(),
                 constraint.at("start_angle").get<double>(),
-                constraint.at("span_angle").get<double>(),
-                constraint.at("relative_to_parent").get<bool>());
+                constraint.at("span_angle").get<double>()});
         }
         bones_[b->get().id()] = &b->get();
     }
@@ -350,59 +305,33 @@ sm::result sm::skeleton::from_json(sm::world& w, const json& jobj) {
         return sm::result::invalid_json;
     }
     root_ = *root;
-    if (jobj.contains("animations")) {
-        for (const auto& anim_json : jobj.at("animations")) {
-            animation anim(parsed_id(anim_json, "id"), anim_json.at("name").get<std::string>());
-            for (const auto& entry : anim_json.at("timeline")) {
-                auto time = entry.at("start_time").get<int>();
-                for (const auto& event : entry.at("events")) {
-                    anim.insert(time, animation_event_from_json(event));
-                }
-            }
-            animations_.push_back(std::move(anim));
+    for (auto& [bone, constraint] : constraints) {
+        if (bone->set_rotation_constraint(constraint.start_angle, constraint.span_angle,
+                constraint.relative_to_parent) != sm::result::success) {
+            return sm::result::invalid_json;
         }
     }
     return sm::result::success;
 }
-
 json sm::skeleton::to_json() const {
     json nodes = json::array();
     for (auto node : this->nodes()) {
         nodes.push_back(node_to_json(*node));
     }
-
     json bones = json::array();
     for (auto bone : this->bones()) {
         bones.push_back(bone_to_json(*bone));
-    }
-    json animations = json::array();
-    for (const auto& anim : animations_) {
-        json timeline = json::array();
-        for (const auto& [time, events] : anim.timeline_) {
-            json event_json = json::array();
-            for (const auto& event : events) {
-                event_json.push_back(animation_event_to_json(event));
-            }
-            timeline.push_back({ {"start_time", time}, {"events", event_json} });
-        }
-        animations.push_back({
-            {"id", anim.id().to_string()},
-            {"name", anim.name()},
-            {"timeline", timeline}
-            });
     }
     return {
         {"id", id_.to_string()},
         {"name", name_},
         {"nodes", nodes},
         {"bones", bones},
-        {"root", root_node().id().to_string()},
-        {"animations", animations}
+        {"root", root_node().id().to_string()}
     };
 }
-
 void sm::skeleton::set_root(sm::node& new_root) { root_ = sm::ref(new_root); }
-void sm::skeleton::set_owner(sm::world& owner) { owner_ = owner; }
+void sm::skeleton::set_owner(sm::topology& owner) { owner_ = owner; }
 void sm::skeleton::register_node(sm::node& new_node) {
     if (nodes_.contains(new_node.id()) || &new_node.owner() != this) {
         throw std::runtime_error("sm::skeleton::register_node failed");
@@ -419,11 +348,7 @@ void sm::skeleton::register_bone(sm::bone& new_bone) {
     bones_[new_bone.id()] = &new_bone;
 }
 bool sm::skeleton::empty() const { return !root_.has_value(); }
-const std::vector<sm::animation>& sm::skeleton::animations() const { return animations_; }
-void sm::skeleton::insert_animation(const animation& anim) { animations_.push_back(anim); }
-sm::world& sm::skeleton::owner() { return owner_; }
-const sm::world& sm::skeleton::owner() const { return owner_; }
-
+const sm::topology& sm::skeleton::owner() const { return owner_; }
 void sm::skeleton::apply(matrix& mat) {
     for (auto node : nodes()) {
         node->apply(mat);
@@ -431,11 +356,10 @@ void sm::skeleton::apply(matrix& mat) {
 }
 /*------------------------------------------------------------------------------------------------*/
 
-sm::world::world() {}
+sm::topology::topology() {}
 
-sm::world::world(sm::world&& other) { *this = std::move(other); }
-
-sm::world& sm::world::operator=(world&& other) {
+sm::topology::topology(sm::topology&& other) { *this = std::move(other); }
+sm::topology& sm::topology::operator=(topology&& other) {
     skeletons_ = std::move(other.skeletons_);
     bones_ = std::move(other.bones_);
     nodes_ = std::move(other.nodes_);
@@ -444,16 +368,23 @@ sm::world& sm::world::operator=(world&& other) {
     }
     return *this;
 }
-void sm::world::clear() {
+void sm::topology::clear() {
     skeletons_.clear();
     bones_.clear();
     nodes_.clear();
 }
-
-bool sm::world::empty() const { return skeletons_.empty(); }
-sm::skeleton& sm::world::create_skeleton(double x, double y) {
+bool sm::topology::empty() const { return skeletons_.empty(); }
+sm::object_id sm::topology::generate_object_id() const {
+    while (true) {
+        auto id = object_id::generate();
+        if (!contains_skeleton(id) && !get<node>(id) && !get<bone>(id)) {
+            return id;
+        }
+    }
+}
+sm::skeleton& sm::topology::create_skeleton(double x, double y) {
     auto new_name = unique_name("skeleton", skeleton_names());
-    auto id = object_id::generate();
+    auto id = generate_object_id();
     auto [it, inserted] = skeletons_.emplace(
         id, skeleton::make_unique(*this, id, new_name, x, y));
     if (!inserted) {
@@ -461,10 +392,9 @@ sm::skeleton& sm::world::create_skeleton(double x, double y) {
     }
     return *it->second;
 }
-
-sm::skeleton& sm::world::create_skeleton(const point& pt) { return create_skeleton(pt.x, pt.y); }
-sm::expected_skel sm::world::create_skeleton_with_id(object_id id, const std::string& name) {
-    if (skeletons_.contains(id)) {
+sm::skeleton& sm::topology::create_skeleton(const point& pt) { return create_skeleton(pt.x, pt.y); }
+sm::expected_skel sm::topology::create_skeleton_with_id(object_id id, const std::string& name) {
+    if (skeletons_.contains(id) || get<node>(id) || get<bone>(id)) {
         return std::unexpected(result::duplicate_id);
     }
     auto [it, inserted] = skeletons_.emplace(id, skeleton::make_unique(*this, id));
@@ -474,34 +404,33 @@ sm::expected_skel sm::world::create_skeleton_with_id(object_id id, const std::st
     it->second->set_name(name);
     return sm::ref(*it->second);
 }
-sm::expected_skel sm::world::create_skeleton(const std::string& name) {
-    return create_skeleton_with_id(object_id::generate(), name);
+sm::expected_skel sm::topology::create_skeleton(const std::string& name) {
+    return create_skeleton_with_id(generate_object_id(), name);
 }
-
-sm::expected_skel sm::world::skeleton(const object_id& id) {
-    auto const_this = const_cast<const world*>(this);
+sm::expected_skel sm::topology::skeleton(const object_id& id) {
+    auto const_this = const_cast<const topology*>(this);
     auto skel = const_this->skeleton(id);
     if (!skel) {
         return std::unexpected(skel.error());
     }
     return sm::ref(const_cast<sm::skeleton&>(skel->get()));
 }
-sm::expected_const_skel sm::world::skeleton(const object_id& id) const {
+sm::expected_const_skel sm::topology::skeleton(const object_id& id) const {
     auto iter = skeletons_.find(id);
     if (iter == skeletons_.end()) {
         return std::unexpected(sm::result::not_found);
     }
     return *iter->second;
 }
-sm::expected_skel sm::world::skeleton(const std::string& name) {
-    auto const_this = const_cast<const world*>(this);
+sm::expected_skel sm::topology::skeleton(const std::string& name) {
+    auto const_this = const_cast<const topology*>(this);
     auto skel = const_this->skeleton(name);
     if (!skel) {
         return std::unexpected(skel.error());
     }
     return sm::ref(const_cast<sm::skeleton&>(skel->get()));
 }
-sm::expected_const_skel sm::world::skeleton(const std::string& name) const {
+sm::expected_const_skel sm::topology::skeleton(const std::string& name) const {
     // Label lookup is for display/legacy compatibility only. Names are not identity.
     for (const auto& [id, skel] : skeletons_) {
         if (skel->name() == name) {
@@ -515,8 +444,7 @@ void delete_ptrs_if(std::vector<std::unique_ptr<T>>& vec, std::function<bool(con
     vec.erase(std::remove_if(vec.begin(), vec.end(),
         [&](const std::unique_ptr<T>& item) { return predicate(*item); }), vec.end());
 }
-
-sm::result sm::world::delete_skeleton(const object_id& id) {
+sm::result sm::topology::delete_skeleton(const object_id& id) {
     auto skel_ref = skeleton(id);
     if (!skel_ref) {
         return sm::result::not_found;
@@ -537,7 +465,6 @@ sm::result sm::world::delete_skeleton(const object_id& id) {
     for (const auto& [node_id, node] : skel.nodes_) {
         nodes_to_delete.insert(node);
     }
-
     bones_.erase(std::remove_if(bones_.begin(), bones_.end(),
         [&bones_to_delete](const std::unique_ptr<sm::bone>& bone) {
             return bones_to_delete.contains(bone.get());
@@ -550,38 +477,37 @@ sm::result sm::world::delete_skeleton(const object_id& id) {
     skeletons_.erase(id);
     return sm::result::success;
 }
-
-std::vector<std::string> sm::world::skeleton_names() const {
+std::vector<std::string> sm::topology::skeleton_names() const {
     return skeletons() |
         rv::transform([](auto skel) { return skel->name(); }) |
         r::to<std::vector<std::string>>();
 }
-bool sm::world::contains_skeleton(const object_id& id) const { return skeletons_.contains(id); }
+bool sm::topology::contains_skeleton(const object_id& id) const { return skeletons_.contains(id); }
 
-bool sm::world::contains_skeleton(const std::string& name) const {
+bool sm::topology::contains_skeleton(const std::string& name) const {
     return r::any_of(skeletons_, [&](const auto& pair) { return pair.second->name() == name; });
 }
-
-void sm::world::set_name(sm::skeleton& skel, const std::string& new_name) {
+void sm::topology::set_name(sm::skeleton& skel, const std::string& new_name) {
     skel.set_name(new_name);
 }
-sm::node_ref sm::world::create_node(sm::skeleton& parent, object_id id,
+sm::node_ref sm::topology::create_node(sm::skeleton& parent, object_id id,
     const std::string& name, double x, double y) {
-    if (parent.contains<node>(id)) {
-        throw std::runtime_error("duplicate node object ID");
+    // Scratch topologies used by selection splitting may contain the same node ID in
+    // more than one component, but an object ID may never collide across types.
+    if (parent.contains<node>(id) || skeletons_.contains(id) || get<bone>(id)) {
+        throw std::runtime_error("duplicate object ID");
     }
     nodes_.push_back(node::make_unique(parent, id, name, x, y));
     return *nodes_.back();
 }
-
-sm::node_ref sm::world::create_node(sm::skeleton& parent, const std::string& name,
+sm::node_ref sm::topology::create_node(sm::skeleton& parent, const std::string& name,
     double x, double y) {
-    return create_node(parent, object_id::generate(), name, x, y);
+    return create_node(parent, generate_object_id(), name, x, y);
 }
-sm::node_ref sm::world::create_node(sm::skeleton& parent, double x, double y) {
+sm::node_ref sm::topology::create_node(sm::skeleton& parent, double x, double y) {
     return create_node(parent, "root", x, y);
 }
-sm::expected_bone sm::world::create_bone_in_skeleton(
+sm::expected_bone sm::topology::create_bone_in_skeleton(
     object_id id, const std::string& bone_name, node& u, node& v) {
     if (!v.is_root()) {
         return std::unexpected(sm::result::multi_parent_node);
@@ -591,31 +517,32 @@ sm::expected_bone sm::world::create_bone_in_skeleton(
     if (&skel_u != &skel_v) {
         return std::unexpected(sm::result::cross_skeleton_bone);
     }
-    if (skel_u.contains<bone>(id)) {
+    if (skeletons_.contains(id) || get<node>(id) || get<bone>(id)) {
         return std::unexpected(sm::result::duplicate_id);
     }
     bones_.push_back(bone::make_unique(id, bone_name, u, v));
     return *bones_.back();
 }
-sm::expected_bone sm::world::create_bone_in_skeleton(
+sm::expected_bone sm::topology::create_bone_in_skeleton(
     const std::string& bone_name, node& u, node& v) {
-    return create_bone_in_skeleton(object_id::generate(), bone_name, u, v);
+    return create_bone_in_skeleton(generate_object_id(), bone_name, u, v);
 }
-
-sm::expected_bone sm::world::create_bone(const std::string& bone_name, node& u, node& v) {
-    return create_bone(object_id::generate(), bone_name, u, v);
+sm::expected_bone sm::topology::create_bone(const std::string& bone_name, node& u, node& v) {
+    return create_bone(generate_object_id(), bone_name, u, v);
 }
-sm::expected_bone sm::world::create_bone(object_id id, const std::string& bone_name, node& u, node& v) {
+sm::expected_bone sm::topology::create_bone(object_id id, const std::string& bone_name, node& u, node& v) {
+    if (&u.owner().owner() != this || &v.owner().owner() != this) {
+        return std::unexpected(sm::result::foreign_skeleton);
+    }
     if (!v.is_root()) {
         return std::unexpected(sm::result::multi_parent_node);
     }
-
     auto& skel_u = u.owner();
     auto& skel_v = v.owner();
     if (&skel_u == &skel_v) {
         return std::unexpected(sm::result::cyclic_bones);
     }
-    if (skel_u.contains<bone>(id) || skel_v.contains<bone>(id)) {
+    if (contains_skeleton(id) || get<node>(id) || get<bone>(id)) {
         return std::unexpected(sm::result::duplicate_id);
     }
     skeletons_.erase(skel_v.id());
@@ -623,8 +550,7 @@ sm::expected_bone sm::world::create_bone(object_id id, const std::string& bone_n
     skel_u.on_new_bone(*bones_.back());
     return *bones_.back();
 }
-
-sm::result sm::world::from_json_str(const std::string& str) {
+sm::result sm::topology::from_json_str(const std::string& str) {
     try {
         return from_json(json::parse(str));
     }
@@ -632,10 +558,10 @@ sm::result sm::world::from_json_str(const std::string& str) {
         return sm::result::invalid_json;
     }
 }
-sm::result sm::world::from_json(const json& stick_man) {
+sm::result sm::topology::from_json(const json& topology_json) {
     try {
         clear();
-        for (const auto& jobj : stick_man.at("skeletons")) {
+        for (const auto& jobj : topology_json.at("skeletons")) {
             auto id = parsed_id(jobj, "id");
             if (skeletons_.contains(id)) {
                 return sm::result::invalid_json;
@@ -655,9 +581,8 @@ sm::result sm::world::from_json(const json& stick_man) {
     }
     return sm::result::success;
 }
-std::string sm::world::to_json_str() const { return to_json().dump(4); }
-
-json sm::world::to_json() const {
+std::string sm::topology::to_json_str() const { return to_json().dump(4); }
+json sm::topology::to_json() const {
     json skeleton_json = json::array();
     for (auto skel : skeletons()) {
         skeleton_json.push_back(skel->to_json());
@@ -665,7 +590,7 @@ json sm::world::to_json() const {
     return { {"version", 1.0}, {"skeletons", skeleton_json} };
 }
 
-void sm::world::apply(matrix& mat) {
+void sm::topology::apply(matrix& mat) {
     for (auto skel : skeletons()) {
         skel->apply(mat);
     }
