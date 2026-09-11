@@ -94,9 +94,9 @@ A skeleton belongs to at most one character. A skeleton with no character member
 
 Every component produced by splitting a character's skeleton retains membership in the same character. A split does not create new characters.
 
-Deleting a character's final rig component also deletes the character. Before applying such an operation, the editor displays an **OK/Cancel** dialog explaining that the character will be deleted. **OK** applies the operation; **Cancel** leaves the project unchanged. Empty characters are not retained after this deletion.
+Deleting a character's final rig component also deletes the character. The operation is applied immediately without a confirmation dialog. Empty characters are not retained after this deletion.
 
-Deleting a selected character deletes the character and its entire rig, including its nodes and bones, guarded by an **OK/Cancel** prompt. The initial version has no command to dissolve a character while retaining its rig as loose skeletons.
+Deleting a selected character immediately deletes the character and its entire rig, including its nodes and bones, without a confirmation dialog. The initial version has no command to dissolve a character while retaining its rig as loose skeletons.
 
 Ordinary node, bone, and skeleton editing and deletion must work for character rigs in the initial version, preserving membership according to these rules.
 

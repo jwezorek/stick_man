@@ -93,18 +93,6 @@ struct fixture {
     }
 };
 
-void answer_message(QMessageBox::StandardButton answer, bool& seen) {
-    QTimer::singleShot(0, [&seen, answer] {
-        for (auto* widget : QApplication::topLevelWidgets()) {
-            if (auto* message = qobject_cast<QMessageBox*>(widget)) {
-                seen = message->text().contains("Alice") && message->text().contains("character");
-                message->button(answer)->click();
-                return;
-            }
-        }
-    });
-}
-
 void character_test(fixture& f, const std::string& mode) {
     auto& model = f.window.project();
     if (mode == "character_make") {
@@ -218,15 +206,8 @@ void character_test(fixture& f, const std::string& mode) {
         require(std::ranges::count_if(model.topology().skeletons(), [](auto s) {return s->is_loose();}) == 1,
             "ordinary topology paste must remain loose even with character selected");
         f.canvas().set_selection(f.canvas().character_item(id), true);
-        bool seen = false;
-        answer_message(QMessageBox::Cancel, seen);
-        auto previous = QApplication::clipboard()->mimeData()->data("application/x-stick_man");
         ui::clipboard::cut(f.window);
-        require(seen && model.core().character(id) && QApplication::clipboard()->mimeData()->data("application/x-stick_man") == previous,
-            "cancel cut must preserve character and clipboard");
-        seen = false; answer_message(QMessageBox::Ok, seen);
-        ui::clipboard::cut(f.window);
-        require(seen && !model.core().character(id), "whole-character cut must delete original");
+        require(!model.core().character(id), "whole-character cut must delete original without confirmation");
         ui::clipboard::paste(f.window, true);
         require(f.canvas().selected_character() && f.canvas().selected_character()->id() != id, "cut paste must assign fresh identity");
     } else if (mode == "character_delete") {
@@ -235,12 +216,8 @@ void character_test(fixture& f, const std::string& mode) {
         ui::clipboard::del(f.window); // must not prompt with another component remaining
         require(model.core().character(id)->get().rig().size() == 1, "nonfinal deletion must retain character");
         f.select_row(f.item(f.first)->treeview_item());
-        bool seen = false; answer_message(QMessageBox::Cancel, seen);
         ui::clipboard::del(f.window);
-        require(seen && model.core().character(id), "final-component cancellation must preserve character");
-        seen = false; answer_message(QMessageBox::Ok, seen);
-        ui::clipboard::del(f.window);
-        require(seen && !model.core().character(id), "final-component OK must delete character");
+        require(!model.core().character(id), "final-component deletion must delete character without confirmation");
         model.undo();
         require(model.core().character(id)->get().rig().contains(f.first), "undo must restore character identity and membership");
         model.undo();

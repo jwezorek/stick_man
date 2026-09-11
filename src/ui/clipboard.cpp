@@ -261,17 +261,6 @@ namespace {
         cut, copy, del
     };
 
-    bool confirm_character_deletion(ui::stick_man& window, const std::vector<sm::object_id>& ids, bool whole_character = false) {
-        if (ids.empty()) return true;
-        QStringList names;
-        for (const auto& id : ids)
-            names.append(QString::fromStdString(window.project().core().character(id)->get().name()));
-        auto message = whole_character
-            ? QString("Delete character \"%1\" and its entire rig, including all nodes and bones?")
-            : QString("This operation removes the final rig component(s) of \"%1\". The character object will also be deleted. Continue?");
-        return QMessageBox::question(&window, "Delete Character", message.arg(names.join("\", \"")),
-            QMessageBox::Ok | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Ok;
-    }
 
     json perform_op_on_selection(ui::stick_man& main_wnd, selection_operation op) {
         auto& project = main_wnd.project();
@@ -285,7 +274,6 @@ namespace {
             }
             json payload{{"kind", "character"}, {"name", character->model().name()}, {"topology", rig.to_json()}};
             if (op != selection_operation::copy) {
-                if (!confirm_character_deletion(main_wnd, {id}, true)) return {};
                 if (project.delete_character(id) != sm::result::success) return {};
             }
             return payload;
@@ -301,8 +289,6 @@ namespace {
                     }
                 ) | r::to<std::vector<sm::object_id>>();
             auto replacements = unselected.skeletons() | r::to<std::vector<sm::skel_ref>>();
-            auto plan = project.core().plan_replacement(replacees, replacements);
-            if (!plan || !confirm_character_deletion(main_wnd, plan->deleted_character_ids)) return {};
             if (project.replace_skeletons(replacees, replacements, regenerate_ids) != sm::result::success) return {};
         }
         if (op == selection_operation::cut || op == selection_operation::copy) {
