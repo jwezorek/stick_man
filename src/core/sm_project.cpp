@@ -8,6 +8,8 @@
 #include <utility>
 #include <algorithm>
 #include <cassert>
+#include <charconv>
+#include <limits>
 
 using json = nlohmann::json;
 
@@ -17,7 +19,7 @@ namespace {
     template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 
     constexpr std::string_view project_json_name = "project.json";
-    constexpr double project_json_version = 3.0;
+    constexpr double project_json_version = 4.0;
 
     template<typename Object>
     sm::object_id object_id_of(const Object& object) {
@@ -640,9 +642,27 @@ std::expected<sm::project_buffer, sm::project_result> sm::project::serialize() c
         return std::unexpected(project_result::duplicate_object_id);
     }
 
+    if (!has_consistent_membership()) {
+        return std::unexpected(project_result::invalid_project_json);
+    }
+
+    json characters = json::array();
+    for (auto character : this->characters()) {
+        json skeletons = json::array();
+        for (const auto& id : character->rig().skeleton_ids()) {
+            skeletons.push_back(id.to_string());
+        }
+        characters.push_back({
+            {"id", character->id().to_string()},
+            {"name", character->name()},
+            {"skeletons", std::move(skeletons)}
+        });
+    }
+
     json semantic_project = {
         {"version", project_json_version},
-        {"topology", topology_.to_json()}
+        {"topology", topology_.to_json()},
+        {"characters", std::move(characters)}
     };
     auto project_json = semantic_project.dump(4);
 
@@ -707,7 +727,11 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
     mz_free(project_json_data);
     mz_zip_reader_end(&archive);
 
+    // Keep staged characters alive until after staged topology destruction on every early return,
+    // mirroring project member lifetime ordering for skeleton parent references.
+    character_tbl new_characters;
     sm::topology new_topology;
+    std::size_t new_next_character_name = 1;
     try {
         auto semantic_project = json::parse(project_json);
         if (semantic_project.at("version").get<double>() != project_json_version) {
@@ -716,24 +740,84 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
         if (new_topology.from_json(semantic_project.at("topology")) != result::success) {
             return project_result::invalid_project_json;
         }
+
+        const auto& character_json = semantic_project.at("characters");
+        if (!character_json.is_array()) {
+            return project_result::invalid_project_json;
+        }
+
+        std::unordered_set<object_id> claimed_skeletons;
+        for (const auto& entry : character_json) {
+            auto parsed_character_id = object_id::from_string(entry.at("id").get<std::string>());
+            if (!parsed_character_id) {
+                return project_result::invalid_project_json;
+            }
+            const auto character_id = *parsed_character_id;
+            const auto name = entry.at("name").get<std::string>();
+            const auto& skeleton_json = entry.at("skeletons");
+            if (!skeleton_json.is_array() || skeleton_json.empty()) {
+                return project_result::invalid_project_json;
+            }
+            if (new_characters.contains(character_id)) {
+                return project_result::duplicate_object_id;
+            }
+
+            sm::rig rig(*this);
+            std::unordered_set<object_id> rig_members;
+            for (const auto& skeleton_entry : skeleton_json) {
+                auto parsed_skeleton_id = object_id::from_string(skeleton_entry.get<std::string>());
+                if (!parsed_skeleton_id) {
+                    return project_result::invalid_project_json;
+                }
+                const auto skeleton_id = *parsed_skeleton_id;
+                if (!rig_members.insert(skeleton_id).second ||
+                    !claimed_skeletons.insert(skeleton_id).second) {
+                    return project_result::invalid_project_json;
+                }
+                if (!new_topology.skeleton(skeleton_id)) {
+                    return project_result::invalid_project_json;
+                }
+                rig.add_skeleton(skeleton_id);
+            }
+
+            auto character = sm::character::make_unique(
+                *this, character_id, name, std::move(rig));
+            auto* character_ptr = character.get();
+            new_characters.emplace(character_id, std::move(character));
+            for (const auto& skeleton_id : character_ptr->rig().skeleton_ids()) {
+                new_topology.skeleton(skeleton_id)->get().set_parent_character(*character_ptr);
+            }
+
+            constexpr std::string_view prefix = "character-";
+            if (name.starts_with(prefix)) {
+                const auto suffix = std::string_view(name).substr(prefix.size());
+                std::size_t value = 0;
+                const auto [ptr, ec] = std::from_chars(suffix.data(), suffix.data() + suffix.size(), value);
+                if (ec == std::errc{} && ptr == suffix.data() + suffix.size() &&
+                    value < std::numeric_limits<std::size_t>::max()) {
+                    new_next_character_name = std::max(new_next_character_name, value + 1);
+                }
+            }
+        }
     }
     catch (...) {
         return project_result::invalid_project_json;
     }
 
-    std::unordered_map<object_id, std::unique_ptr<sm::character>> no_characters;
     std::unordered_map<object_id, mutable_object> new_objects;
-    if (!build_object_index(new_topology, no_characters, new_objects)) {
+    if (!build_object_index(new_topology, new_characters, new_objects)) {
         return project_result::duplicate_object_id;
     }
 
-    // Character serialization is intentionally a later stage. A successful load replaces
-    // the whole in-memory project with the topology represented by this package.
+    // Commit only after topology, character membership and the project-wide object namespace
+    // have all validated successfully. The old characters remain alive while old topology is
+    // destroyed, and the staged character objects keep stable addresses across the map move.
     objects_.clear();
     topology_ = std::move(new_topology);
-    characters_.clear();
+    characters_ = std::move(new_characters);
     objects_ = std::move(new_objects);
     object_index_dirty_ = false;
-    next_character_name_ = 1;
+    next_character_name_ = new_next_character_name;
+    assert(has_consistent_membership());
     return project_result::success;
 }
