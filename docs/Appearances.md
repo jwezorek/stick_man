@@ -1,163 +1,353 @@
-**stick_man Artwork and Appearances Design**
+# stick_man Artwork and Appearances Design
 
-Architecture, editor UX, bone-driven sprite artwork, project packaging, and phased implementation plan
+Architecture, character-owned artwork, named sprite frames, appearance/state resolution, sprite animation, editor UX, package resources, and phased implementation plan.
 
 Review draft — updated September 12, 2026
 
-# 1. Executive Summary
+## 1. Executive Summary
 
-The design goal is to add bone-driven bitmap artwork while keeping Core as the authoritative owner of both the semantic project model and the renderer-independent `.stickman` package format.
+The goal is to add bone-driven bitmap artwork to `stick_man` without weakening the character/rig ownership model that now exists in Core.
 
-The current implementation already has the ownership boundary that artwork needs. `sm::project` owns `sm::topology` and the project's `sm::character` objects. Topology owns the live skeleton, node, and bone objects. Each character is the durable semantic object above that topology and directly owns its `sm::rig`, whose skeleton IDs resolve back into the project's topology. Artwork follows the same pattern: **artwork belongs to the character, not to the project and not to an individual skeleton**.
+The current implementation already has the correct durable semantic owner: `sm::project` owns topology and characters; topology owns skeletons, nodes, and bones; and each `sm::character` owns a rig whose skeleton IDs refer back into project topology. Artwork should follow the durable character rather than any individual skeleton component.
 
-Conceptually, each `sm::character` gains a directly owned `sm::artwork` member. That artwork owns the character's logical sprite atlas and all of the character's appearances. The atlas is not a project-owned object referenced by ID. An appearance therefore does not need a `sprite_atlas_id`: its `sprite_id` values resolve against the atlas owned by the same character. Multiple appearances of one character share that character's atlas, but sprite atlases cannot be shared across characters.
-
-This ownership is deliberate. A character remains stable while its rig may split into or merge several skeleton components. Character-owned artwork therefore survives ordinary topology edits without requiring resource transfer between transient skeletons. Deleting a character destroys its artwork with it; copying a whole character copies its artwork as character data rather than creating project-level shared resources.
-
-The existing Core package implementation already serializes `project.json` into a ZIP-backed `.stickman` file using `miniz`. Artwork extends that existing format rather than introducing a new project root or a second persistence layer.
-
-- Bones expose explicit string-valued sprite slots. These names are intentionally semantic and reusable across different appearances; ordinary node and bone display names remain cosmetic and non-load-bearing.
-- A character owns one artwork object containing one logical sprite atlas and zero or more appearances.
-- An appearance contains appearance items. Each item maps a string-valued bone slot to an opaque sprite ID in the owning character's atlas and stores local translation/rotation/scale, an explicit root-or-tip bone anchor, and explicit draw order.
-- Sprite IDs are the load-bearing identity of concrete sprite resources. Sprite names are human-facing labels and do not participate in binding resolution; renaming a sprite therefore does not require rewriting appearance items.
-- The editor presents logical sprites only. A character's `sm::sprite_atlas` may be backed by one or more packed atlas-page bitmaps; page count, packing, and rectangles remain Core resource details rather than rig semantics.
-- The `.stickman` package contains `project.json` plus any packed RGBA8 PNG atlas pages and page metadata needed by character artwork. Core owns reading and writing this format so the editor and runtimes share one implementation.
-- Core vendors the small implementation dependencies needed for persistence and image resources. The current implementation already vendors the JSON parser and `miniz`; artwork packaging adds `stb_image`, `stb_image_write`, and `stb_rect_pack` as private implementation dependencies.
-- The Sprite Transform tool keeps the rig fixed and edits a selected sprite binding using translation, rotation, and scale handles.
-- Sprite draw order is explicit per binding and user-editable; it is not inferred from binding/vector order.
-- Sprite bindings use a bone-local frame whose +X direction runs from the bone root node to its tip node. Each binding explicitly anchors its origin at either the bone root or bone tip; choosing the tip changes the origin but does not reverse the local axes. Node sprite binding is not part of the design.
-
-# 2. Design Goals and Boundaries
-
-## 2.1 Core as a reusable library
-
-Core is intended to be reusable by both:
-
-- the Qt-based stick_man editor; and
-- read-only stick_man runtime integrations for game frameworks and engines.
-
-Accordingly, Core must not depend on Qt, SDL, or a particular renderer. Core owns renderer-independent project and resource services: `sm::project`, `sm::topology`, characters and rigs, character-owned artwork, ZIP package I/O, JSON serialization, RGBA8 image buffers, image decode/encode, sprite-atlas/page metadata, and rectangle packing. These services define and transport project data; they do not draw it.
-
-| Concern | Core | Editor | Runtime / host integration |
-|---|---|---|---|
-| `sm::project` / topology / characters / rigs / IDs | Yes | Uses Core | Uses Core |
-| Character-owned artwork and appearances | Yes | Authors them | Consumes them |
-| Sprite slots and appearance items | Yes | Authors them | Consumes them |
-| Character-local sprite atlas / sprite IDs / display names | Yes | Authors them | Resolves them |
-| Binding T/R/S, root/tip anchor, and draw-order semantics | Yes | Edits them | Consumes them |
-| Qt image objects | No | Yes | No |
-| SDL / engine texture objects | No | No | Host-specific |
-| Image decoding | Yes | Calls Core | Calls Core |
-| Atlas-page rectangle packing | Yes; private save detail | Triggers through save | No |
-| Drawing/rendering | No | Editor renderer only | Host renderer only |
-| ZIP/package authoring | Yes | Calls Core | Normally read-only |
-| RGBA8 image buffers / atlas resources | Yes | Consumes through Core | Consumes through Core |
-| PNG atlas-page encoding | Yes; private save detail | Calls Core | No |
-| ZIP/package reading | Yes | Calls Core | Calls Core |
-
-## 2.2 What Core should know about sprites and resources
-
-Core should know enough to describe bone-driven character artwork semantically and to own the renderer-independent resources used by the packaged project. The key Core-level concepts are:
-
-- `sm::project` as the top-level Core-owned project object;
-- `sm::topology` as the owner of live skeleton/node/bone topology;
-- `sm::character` as the persistent semantic owner of one rig and its character-level resources;
-- a directly owned `sm::artwork` member on each character;
-- a symbolic string-valued sprite slot on a bone;
-- one logical `sm::sprite_atlas` inside each character's artwork, containing sprites with opaque IDs and human-facing names;
-- zero or more appearances inside that same artwork object;
-- appearance items that map slot strings to sprite IDs in the owning character's atlas;
-- the item transform and explicit root-or-tip bone anchor;
-- explicit per-item draw order;
-- one or more packed atlas pages and sprite rectangles as package/resource data; and
-- the authoritative load/save rules for the `.stickman` package.
-
-Atlas page indices and rectangles are not skeleton, rig, or appearance semantics: they may change whenever Core repacks a character's atlas. The stable resource relationship is:
+Conceptually:
 
 ```text
-character
-  -> artwork
-     -> atlas
-        -> sprite_id
-
-character
-  -> artwork
-     -> appearance
-        -> appearance_item.sprite_id
+project
+├── topology
+│   └── skeletons / nodes / bones
+└── characters
+    └── character
+        ├── rig
+        ├── artwork
+        │   ├── sprite atlas / sprite-frame library
+        │   └── appearances
+        └── animation                  (future character effort)
 ```
 
-There is intentionally no project-level `sprite_atlas_id` hop. An appearance item resolves its sprite ID only within the artwork owned by the same character. Core should never know about `QImage`, `QPixmap`, `SDL_Texture`, GPU handles, or renderer-specific sampling state.
+Each character directly owns one `sm::artwork`. Artwork owns:
 
-## 2.3 Core owns the packaged-project implementation
+- one logical sprite atlas, which is a character-local mapping from **unique sprite-frame names** to image resources; and
+- zero or more appearances.
 
-The `.stickman` package is already the canonical persisted form of a stick_man project. The current `sm::project::serialize()` implementation writes `project.json` into a ZIP archive with `miniz`, and `deserialize()` reconstructs topology, characters, rig membership, and skeleton parent links. Artwork should extend this Core-owned package rather than move persistence into the editor or create a separate artwork file format.
+Sprite-frame names are intentionally load-bearing resource keys. A sprite does **not** need an opaque ID merely to avoid a string reference. The atlas already is a symbol table:
 
-Core should expose project-, character-, and resource-level APIs in Core terms only. Third-party implementation types must not leak through public headers. In particular, callers should not see JSON-library objects, `stb_image` data structures, `stb_rect_pack` rectangles, or `miniz` archive handles.
+```text
+"human_eye_open"   -> sprite frame
+"human_eye_half"   -> sprite frame
+"human_eye_closed" -> sprite frame
+```
 
-The lightweight dependencies used for this implementation should remain vendored with the source rather than imposed as separately installed dependencies on Core consumers.
+Bones expose semantic string-valued sprite slots. A static appearance can therefore be understood as mapping slot names to sprite-frame names:
 
-# 3. Identity and Indirection
+```text
+bone slot "eyes"
+        |
+        v
+Human appearance: "eyes" -> "human_eye_open"
+        |
+        v
+character sprite atlas: "human_eye_open" -> pixels
+```
 
-## 3.1 Keep ordinary object names cosmetic
+To support sprite-based animation without tying an animation to one concrete appearance, the full model generalizes the appearance mapping from:
 
-The recent ID refactor deliberately made ordinary node and bone names non-unique labels rather than structural identifiers. Artwork should not accidentally reverse that decision. Bones should therefore have a separate semantic sprite-slot property. Nodes do not need sprite slots because sprites bind only to bones.
+```text
+slot -> sprite frame
+```
+
+to:
+
+```text
+(slot, semantic state) -> sprite frame
+```
+
+For example, the animation says `eyes = closed`; the Human appearance maps `(eyes, closed)` to `human_eye_closed`; the Robot appearance maps the same semantic state to `robot_eye_closed`. Animation owns timing and semantic state. Appearance owns concrete imagery. Switching appearances does not change the animation state.
+
+Static artwork is simply the special case in which an appearance item has only a `default` state.
+
+The design also keeps these earlier decisions:
+
+- artwork is owned directly by a character and is never a project-level shared resource;
+- different characters do not share sprite atlases by reference;
+- a bone's sprite slot is semantic and load-bearing, while ordinary node/bone names remain cosmetic;
+- appearance items use a bone-local transform with explicit root/tip anchoring;
+- multiple appearance items may target the same slot, allowing layered pieces such as a limb plus a joint cover;
+- draw order is explicit and user-editable;
+- node sprite binding is not required initially;
+- sprite frames have a registration origin so differently sized animation frames do not jump when changed;
+- atlas packing is a private Core persistence/resource detail, not semantic identity;
+- active appearance is editor/runtime-instance state, not mutable skeleton state; and
+- Core remains renderer-independent and does not expose Qt, SDL, GPU, JSON-library, stb, or miniz implementation types through public APIs.
+
+Before `artwork_` is added to `sm::character`, one existing undo/restoration assumption must be fixed: current structural replacement can destroy and later recreate a character from only its ID and name. Once characters own artwork, restoring only ID/name would lose the character payload. This is a prerequisite, not a later cleanup.
+
+## 2. Current-Code Constraints and Required Integration Changes
+
+This design is written against the current character-refactor implementation rather than the older pre-character architecture.
+
+### 2.1 Existing ownership already matches artwork
+
+The current Core shape is approximately:
+
+```cpp
+class character {
+    const object_id id_;
+    std::string name_;
+    std::reference_wrapper<project> owner_;
+    sm::rig rig_;
+};
+```
+
+Artwork should extend that directly:
+
+```cpp
+class character {
+    const object_id id_;
+    std::string name_;
+    std::reference_wrapper<project> owner_;
+    sm::rig rig_;
+    sm::artwork artwork_;
+};
+```
+
+Artwork must not be stored on `sm::skeleton`. Skeletons are deliberately topology components whose identities may change under split/merge/edit operations. The character is the persistent semantic object specifically intended to own long-lived resources such as artwork and future animation.
+
+Likewise, there should be no project-level atlas table whose entries are referenced by characters. Each character owns its own artwork and all image resources reachable from it.
+
+### 2.2 Sprite-frame names are resource identity; project object IDs remain a different concept
+
+The editor currently treats `sm::object_id` as a project-wide namespace for live model objects such as nodes, bones, skeletons, and characters. Artwork should not automatically enlarge that namespace.
+
+A sprite frame is not a project object handle. Its unique name within one character's artwork is sufficient identity:
+
+```cpp
+sprite_atlas["human_eye_closed"] -> sprite_frame
+```
+
+Consequences:
+
+- sprite-frame names must be unique within one character's atlas;
+- renaming a sprite frame is a semantic rename and must update all appearance mappings that reference the old name;
+- two different characters may both contain a frame named `head` without conflict;
+- sprite frames do not participate in `sm::project::get()`;
+- sprite frames do not participate in the project object index;
+- sprite frames are not `mdl::handle`s; and
+- copying a character may preserve its sprite-frame names exactly because the destination has a separate namespace.
+
+Appearance identity is different. Appearances are user-visible mutable aggregates whose names are cosmetic. It is useful for an appearance to retain a stable character-local opaque identity across rename and editing. If `object_id` is reused as the representation for an appearance ID, that ID is **character/artwork-scoped metadata**, not a live project object ID and not an `mdl::handle`.
+
+Appearance items do not require persistent opaque IDs in the initial design. They are values owned by an appearance. Tool-local editor selection can refer transiently to an item and clear/re-resolve that selection when the item's container is structurally changed.
+
+### 2.3 Character destruction/undo must preserve full character payload
+
+The current topology replacement machinery stores semantic membership snapshots separately from scratch topology. Its `character_state` contains only character ID and name. When topology replacement has destroyed a character and undo later restores it, Core can currently recreate the character from only those fields because a character has no other payload.
+
+That ceases to be correct as soon as `character` owns artwork.
+
+Ordinary membership snapshots should **not** be changed to copy artwork every time a bone edit affects topology. Bitmap resources may be large and most topology edits do not destroy the character.
+
+Instead, Core/model command state should distinguish:
+
+```text
+membership snapshot
+    lightweight: skeleton -> parent character relationships,
+                 character identity/name needed for membership restoration
+
+character payload snapshot
+    only when a character itself is actually destroyed:
+        character identity/name
+        artwork
+        future animation/poses
+        other future character-owned payload
+```
+
+The current `replacement_plan::deleted_character_ids` already identifies the important case: an affected character no longer survives the replacement. That is the natural point for the command layer to preserve a full character snapshot for undo.
+
+Deleting the last skeleton of a character, deleting a whole character, cut, and any other command that actually destroys character lifetime must therefore restore **the same character payload**, not an empty character with the same ID and name.
+
+This should be implemented before Phase 1 adds `artwork_`.
+
+### 2.4 Character-owned artwork should remain project-controlled mutable state
+
+The current Core API deliberately prevents general external mutable access to aggregate objects such as skeletons and characters. That is a useful boundary and artwork should not require weakening it.
+
+`character::artwork()` may expose a const read interface, while mutation flows through `sm::project` operations that can enforce invariants. Conceptually:
+
+```cpp
+const sm::artwork& character::artwork() const noexcept;
+
+// Representative project-controlled operations, exact names TBD.
+project.create_appearance(character_id, name);
+project.rename_appearance(character_id, appearance_id, name);
+project.delete_appearance(character_id, appearance_id);
+
+project.import_sprite_frame(character_id, frame_name, rgba8_image, origin);
+project.rename_sprite_frame(character_id, old_name, new_name);
+project.delete_sprite_frame(character_id, frame_name);
+
+project.set_bone_sprite_slot(bone_id, slot_name);
+project.rename_sprite_slot(character_id, old_slot, new_slot);
+
+project.add_appearance_item(character_id, appearance_id, item);
+project.update_appearance_item(character_id, appearance_id, item_index, item);
+project.delete_appearance_item(character_id, appearance_id, item_index);
+```
+
+`mdl::project` should wrap user-visible mutations in undoable commands and emit the appropriate editor notifications.
+
+### 2.5 Sprite editing should not be forced into topology selection
+
+The current canvas/model selection path is centered on topology pieces and character selection. Canvas items resolve to `mdl::skel_piece`/project model objects, and existing transform behavior assumes selection means nodes, bones, skeletons, or characters.
+
+A sprite binding/appearance item is not a topology object and does not need to become one merely so the Sprite Transform tool can edit it.
+
+The initial Sprite Transform tool should therefore keep **tool-local appearance-item selection**. Normal project selection remains focused on model/topology objects. When the Sprite Transform tool is left, when the appearance changes, or when the selected item is deleted/reordered incompatibly, its transient selection can be cleared or re-resolved.
+
+This avoids expanding `mdl::handle`, `mdl::selection`, `sm::project::get()`, and every existing selection/property path simply to manipulate artwork values.
+
+## 3. Terminology and Core Semantic Model
+
+### 3.1 Artwork
+
+`sm::artwork` is directly owned by one `sm::character` and contains:
+
+- one logical `sm::sprite_atlas`; and
+- zero or more appearances.
+
+The artwork object's lifetime is exactly the character's lifetime.
+
+### 3.2 Sprite atlas
+
+The term **sprite atlas** means the logical character-local sprite-frame library. It is not synonymous with one packed bitmap.
+
+A logical atlas may serialize to several physical **atlas pages**.
+
+```text
+logical sprite atlas
+    "head"             -> sprite frame
+    "eye_open"         -> sprite frame
+    "eye_closed"       -> sprite frame
+    "left_hand"        -> sprite frame
+
+serialized resource representation
+    page-0.png
+    page-1.png
+    ...
+```
+
+Atlas-page count, packing rectangles, and page assignment are generated resource metadata and are not semantic identity.
+
+### 3.3 Sprite frame
+
+What the editor informally calls a sprite is more precisely a **sprite frame**: one concrete bitmap image that can be selected by an appearance for a particular slot/state.
+
+A frame has no opaque ID. Its name is the key in the character's sprite atlas.
+
+Conceptually:
+
+```cpp
+struct sprite_frame {
+    rgba8_image image;
+    point origin{}; // registration offset in frame-local pixel units; see section 6
+};
+
+using sprite_atlas = map<string, sprite_frame>;
+```
+
+The exact container/resource-storage types are implementation choices. In particular, loaded package imagery may internally be backed by decoded atlas pages rather than one allocation per frame. That storage distinction must remain hidden behind Core resource APIs.
+
+### 3.4 Sprite slots
+
+A bone may expose a semantic sprite-slot name:
 
 ```cpp
 struct bone {
     object_id id;
-    std::string name;        // display label; non-unique
-    std::string sprite_slot; // semantic artwork interface; may be empty
-    // ...
-};
-
-struct node {
-    object_id id;
-    std::string name; // display label; non-unique
+    std::string name;        // cosmetic display label
+    std::string sprite_slot; // semantic artwork interface; empty means no slot
     // ...
 };
 ```
 
-## 3.2 Sprite slots are intentionally string-valued
+The slot is intentionally load-bearing. It is the interface between the rig, appearances, and sprite-state animation.
 
-The purpose of a sprite slot is to provide stable symbolic indirection across interchangeable appearances. For example:
+A non-empty slot name must be unique among the live bones belonging to one character's rig. Two different characters may use the same slot vocabulary.
+
+Loose skeletons may contain arbitrary slot names. Operations that establish or extend character membership must validate the resulting character slot namespace:
+
+- Make Character;
+- Adopt Skeletons; and
+- any future operation that transfers topology into an existing character.
+
+If adopting a skeleton would create two live bones with the same non-empty slot, Core should reject the operation until the conflict is resolved rather than silently choose one.
+
+A useful property of symbolic slots is that artwork can outlive the topology currently satisfying a slot. Appearance items referring to a slot whose bone has been deleted remain valid-but-unresolved character artwork. If a later edit/adoption introduces a bone with that slot again, the artwork resolves again automatically.
+
+### 3.5 Appearance
+
+An appearance is one visual interpretation of a character's rig slot vocabulary: Human, Robot, Winter Coat, Skeleton, and so on.
+
+An appearance owns a list of **appearance items**. Multiple appearance items may refer to the same slot. This is required for layered cutout artwork: for example, one lower-leg slot may drive the leg image plus a separate knee-cover or highlight image at another draw order.
+
+An appearance item contains:
+
+- the semantic slot it follows;
+- a mapping from semantic sprite state names to concrete sprite-frame names;
+- root/tip anchor;
+- local translation/rotation/scale; and
+- explicit draw order.
+
+The item itself does not require a persistent opaque ID in the initial design.
+
+### 3.6 Semantic sprite states
+
+Sprite state names such as `default`, `open`, `half`, `closed`, `smile`, or `hidden` are also intentionally symbolic strings.
+
+They are **not concrete sprite-frame names**. Animation refers to semantic states; an appearance resolves those states to concrete frame names.
+
+State names are interpreted within a slot. The pair:
 
 ```text
-Skeleton:
-  upper-left-arm bone -> sprite slot "upper_arm_l"
-
-Appearance "Human":
-  "upper_arm_l" -> sprite "upper_arm"
-
-Appearance "Robot":
-  "upper_arm_l" -> sprite "armored_upper_arm"
-
-Appearance "Skeleton":
-  "upper_arm_l" -> sprite "humerus"
+(slot, state)
 ```
 
-The slot is therefore deliberately more load-bearing than a display name. This is a feature, not an accidental identity mechanism.
+is therefore the semantic key used by sprite animation.
 
-## 3.3 Sprite IDs are resource identity; sprite names are labels
+Every appearance item must define a `default` mapping. The target of a state mapping is either:
 
-Each sprite in a character's `sm::sprite_atlas` has an opaque `object_id` and a string name. The ID is the stable identity used by appearance items and package/resource lookup. The name exists for users, import defaults, browser display, debugging, and similar human-facing purposes; it is not load-bearing and need not be globally unique.
+- a sprite-frame name in the owning character's atlas; or
+- explicit `none`, meaning this item is hidden in that state.
+
+If animation requests a state that an appearance item does not define, that item falls back to its `default` mapping. This allows one appearance to use fewer distinct images than another while sharing the same animation.
+
+Example:
 
 ```text
-character.artwork.atlas + appearance_item.sprite_id -> sprite
-sprite.name                                            -> display label only
+Animation semantic state:
+    eyes = half
+
+Human appearance item:
+    default -> human_eye_open
+    open    -> human_eye_open
+    half    -> human_eye_half
+    closed  -> human_eye_closed
+
+Robot appearance item:
+    default -> robot_eye_open
+    open    -> robot_eye_open
+    half    -> robot_eye_open      // Robot has no distinct half frame
+    closed  -> robot_eye_closed
 ```
 
-This keeps strings only at the deliberate late-binding boundary between rig semantics and an appearance: bones expose slot strings and appearance items match those strings. Once an appearance has selected a concrete sprite resource for a slot, ordinary opaque IDs are sufficient. Renaming a sprite does not alter bindings or atlas packing.
+## 4. Proposed Core Data Model
 
-Because the atlas is a direct member of one character's artwork, a sprite ID is not a handle to a project-owned sprite sheet. No character can bind to another character's atlas by storing an atlas ID. Cross-character sharing is intentionally unsupported; copying artwork between characters is a copy/import operation, not shared ownership.
-
-# 4. Proposed Core Data Model
-
-The exact C++ names can follow existing Core conventions, but the ownership model should match the implementation already established for characters and rigs. Conceptually:
+The exact C++ types should follow existing Core style. Conceptually:
 
 ```cpp
 struct sprite_transform {
     point translation{};
-    float rotation = 0.0f; // radians internally and in JSON
+    float rotation = 0.0f; // radians in Core and JSON
     point scale{1.0f, 1.0f};
 };
 
@@ -166,29 +356,35 @@ enum class bone_anchor {
     tip
 };
 
-struct sprite {
-    object_id id;
-    std::string name; // display label; non-load-bearing
-    std::uint32_t page = 0; // current packed atlas page
-    rect source_rect; // current rectangle within that page
+struct sprite_frame {
+    image_resource image;
+
+    // Registration offset from geometric image center, expressed in
+    // frame-local pixel units: +X right, +Y up. {0,0} means center.
+    point origin{};
 };
 
 struct sprite_atlas {
-    std::vector<sprite> sprites;
-    std::vector<atlas_page> pages;
+    // Names are unique, load-bearing keys within this character only.
+    map<string, sprite_frame> frames;
 };
 
+using frame_target = optional<string>; // nullopt = explicitly hidden
+
 struct appearance_item {
-    std::string slot;       // matches a bone sprite_slot
-    object_id sprite_id;    // concrete sprite in this character's atlas
+    std::string slot;
+
+    // Must contain "default". Other keys are semantic animation states.
+    map<string, frame_target> states;
+
     bone_anchor anchor = bone_anchor::root;
     sprite_transform transform;
-    int draw_order = 0;     // lower draws first
+    int draw_order = 0; // lower draws first
 };
 
 struct appearance {
-    object_id id;
-    std::string name; // display label
+    object_id id;       // character-local identity; not a project handle
+    std::string name;   // cosmetic display name
     std::vector<appearance_item> items;
 };
 
@@ -198,7 +394,7 @@ struct artwork {
 };
 ```
 
-The important ownership relationship is the character itself:
+The character owns it directly:
 
 ```cpp
 class character {
@@ -206,58 +402,151 @@ class character {
     std::string name_;
     std::reference_wrapper<project> owner_;
     sm::rig rig_;
-    sm::artwork artwork_; // directly owned; never a project-level reference
+    sm::artwork artwork_;
 };
 ```
 
-This extends the current implemented shape of `sm::character`, which already directly owns its `rig_`. `sm::project` continues to own topology and character lifetime; topology continues to own skeletons, nodes, and bones. Artwork does not move into topology and is not entered as a separate project-owned aggregate merely so that a character can refer to it.
+Important invariants:
 
-A character always has one artwork member, even when it is empty. Its appearances share that character's logical atlas. Consequently:
+1. An appearance belongs to exactly one character's artwork.
+2. Every non-null appearance state target names a frame in that same character's atlas.
+3. Sprite-frame names are unique within the atlas.
+4. Non-empty live bone slot names are unique within one character rig.
+5. Every appearance item contains a `default` state mapping.
+6. Multiple appearance items may target the same slot.
+7. Appearance-item draw order is deterministic within an appearance.
+8. Atlas page/rectangle placement is not present in the semantic `sprite_frame` identity.
+9. Artwork cannot contain a live reference to another character's resources.
 
-- no `sprite_atlas_id` is required on an appearance;
-- no project-level atlas table is required;
-- an appearance item may only reference a sprite in its own character's atlas;
-- atlas lifetime is exactly character lifetime;
-- deleting a character cannot leave dangling appearance/atlas references elsewhere in the project; and
-- two characters cannot share a sprite sheet by reference.
+## 5. Static and Animated Resolution
 
-The atlas remains logical and may serialize to multiple packed bitmap pages. Page and rectangle fields are resource metadata and may be regenerated without changing sprite IDs, appearance IDs, slot strings, or bindings.
+### 5.1 Static appearance resolution
 
-## 4.1 Active appearance
+Without sprite animation, the current semantic state of every slot is `default`.
 
-“Active appearance” should primarily be editor/session or runtime-instance state, not mutable state on the Core skeleton, topology, or character. A runtime may render multiple instances of one character with different appearances or change appearances dynamically.
+For each appearance item:
 
-Core APIs should therefore evaluate a selected appearance **within a selected character** rather than require the character itself to own a mutable active-appearance field. The character owns the set of available appearances; a particular editor canvas or runtime instance chooses which one to display.
+```text
+item.slot
+   |
+   v
+find live bone in character rig with matching sprite_slot
+   |
+   v
+item.states["default"]
+   |
+   +--> none: do not render item
+   |
+   v
+sprite-frame name
+   |
+   v
+character.artwork.atlas[name]
+   |
+   v
+pixels + frame origin
+```
 
-A character may eventually contain a preferred/default appearance as persisted metadata, but that should remain conceptually distinct from the active appearance of a particular editor or runtime instance.
+Thus the common static case remains conceptually as simple as:
 
-## 4.2 Renderer-neutral image access
+```text
+slot -> sprite-frame name
+```
 
-Core image data should use one simple canonical pixel representation: RGBA8. The public API should provide a lightweight non-owning view rather than expose `stb_image` or renderer-specific image objects. Conceptually:
+The explicit state map merely leaves room for animation without introducing a second binding model later.
+
+### 5.2 Sprite-state animation events
+
+The existing `sm::animation` already has a timeline of event variants. Today the event variant contains skeletal rotation and translation events. Sprite animation should extend that same timeline with a discrete semantic state event rather than introduce a second independent animation clock.
+
+Conceptually:
 
 ```cpp
-struct image_view {
-    std::uint32_t width = 0;
-    std::uint32_t height = 0;
-    std::uint32_t stride = 0; // bytes per row
-    const std::uint8_t* pixels = nullptr; // RGBA8
-};
-
-struct sprite_region {
-    image_view page;
-    rect source_rect; // actual sprite pixels within page
+struct sprite_state {
+    std::string slot;
+    std::string state;
 };
 ```
 
-A runtime can upload returned atlas-page pixels into its own texture type and use `source_rect` for sampling. The editor can use the same data for thumbnails and canvas rendering through Qt. Core owns the lifetime of the backing image buffer through the character's artwork; callers receive read-only views.
+The event contains **no concrete sprite-frame name** and normally needs no duration. Once a `sprite_state` event occurs for a slot, that state remains active until another state event for the same slot occurs.
 
-Imported sprites may be backed by standalone RGBA8 buffers while being authored. Packing may assign them to one or more atlas pages and update page/rectangle resource metadata. This storage distinction should be hidden behind Core resource-resolution APIs so page layout never becomes semantic identity.
+If no event has yet occurred for a slot, its current state is `default`.
 
-# 5. Sprite Binding Transform Semantics
+Example blink:
 
-## 5.1 Canonical bone-local orientation
+```text
+0 ms      eyes = open
+80 ms     eyes = half
+120 ms    eyes = closed
+180 ms    eyes = half
+220 ms    eyes = open
+```
 
-A sprite binding must be independent of the pose in which it was authored. The stored transform therefore uses a canonical local orientation derived from the bone:
+At 120 ms:
+
+```text
+animation      -> (eyes, closed)
+Human          -> human_eye_closed
+Robot          -> robot_eye_closed
+Skeleton       -> skull_eye_closed, or default if no closed mapping exists
+```
+
+The persisted animation therefore remains appearance-independent.
+
+### 5.3 Why timing belongs to animation, not appearance
+
+An alternative design would let each appearance define a named frame sequence such as `blink`. That would make Human and Robot appearances responsible for animation timing, which creates ambiguity when animations synchronize sprite changes with skeletal motion or when the active appearance changes mid-animation.
+
+The initial design instead uses a clean separation:
+
+```text
+animation  = when a semantic state changes
+appearance = what concrete image represents that state
+```
+
+An appearance may map several semantic states to the same frame if it intentionally has fewer unique frames.
+
+A future editor convenience such as “cycle these states every N ms” may generate ordinary `sprite_state` timeline events. A separate persisted `sprite_cycle` event is not required initially.
+
+### 5.4 Switching appearances during animation
+
+The current sprite state is part of animation-instance evaluation, not appearance state.
+
+If an animation is currently at:
+
+```text
+eyes  = closed
+mouth = open_2
+```
+
+and the runtime switches from Human to Robot, the same semantic state continues to apply. The renderer immediately resolves `(eyes, closed)` and `(mouth, open_2)` through Robot instead of Human.
+
+No animation restart or state conversion is required.
+
+### 5.5 Multiple appearance items on one slot
+
+All items targeting one slot observe the same semantic slot state. Each item resolves that state independently and falls back to its own `default` mapping when necessary.
+
+This supports layered artwork naturally:
+
+```text
+slot: lower_leg_l
+
+item A (leg art)
+    default -> trouser_leg
+
+item B (joint cover)
+    default -> knee_cover
+    hidden  -> none
+```
+
+If future use cases require several independently animated semantic channels attached to exactly the same bone transform, the design can later allow multiple declared slots on a bone. The initial model keeps the current simpler zero-or-one slot property per bone.
+
+## 6. Transform, Registration, and Image Coordinate Semantics
+
+### 6.1 Canonical bone-local orientation
+
+A stored appearance-item transform must be independent of the pose in which it was authored.
 
 ```text
               +Y
@@ -271,11 +560,11 @@ root node o----+-------------------------o tip node
 rotation = 0 radians when aligned with +X
 ```
 
-The zero-angle direction always follows the bone from its root node to its tip node. The sign convention for +Y follows the coordinate-system conventions already used by Core and should be documented in the implementation. The binding origin is supplied separately by its root/tip anchor.
+The binding's bone-local orientation is always root-to-tip.
 
-## 5.2 Root and tip anchors
+### 6.2 Root and tip anchors
 
-Every sprite binding explicitly chooses one endpoint of its bone as its origin. A root-anchored binding uses the current root-node position; a tip-anchored binding uses the current tip-node position. Both anchors use the same root-to-tip orientation, so choosing tip changes translation only and never reverses the axes.
+Every appearance item chooses a root or tip anchor.
 
 ```text
 root anchor origin = current root-node position
@@ -283,165 +572,280 @@ tip anchor origin  = current tip-node position
 orientation        = current bone angle, root -> tip
 ```
 
-Root/tip anchoring removes the need for node sprite binding: artwork that belongs at a joint can be bound to an incident bone and anchored at the endpoint coincident with that joint. It also keeps distal artwork, such as a hand or foot, attached to the correct endpoint if bone length changes.
+Choosing tip changes the origin only. It does not reverse local axes.
 
-## 5.3 Default binding
+This keeps joint-position artwork possible without node bindings and makes distal pieces such as hands/feet follow the correct endpoint when bone length changes.
 
-When a sprite is first bound to a bone, the default mapping should be:
+### 6.3 Item transform
 
-- sprite center coincident with the selected root-or-tip anchor;
-
-- sprite rotation = 0 radians relative to the bone-local +X direction;
-
-- translation = (0, 0); and
-
-- scale = (1, 1).
-
-## 5.4 Evaluation
-
-At runtime or during editor rendering, the bound bone supplies a world-space orientation and the selected anchor supplies the world-space origin. The final sprite transform is ordinary transform composition:
+The final item transform is:
 
 ```text
 binding_world = translate(current_anchor_position)
               * rotate(current_bone_angle)
 
-sprite_world  = binding_world
-              * binding_local_translation
-              * binding_local_rotation
-              * binding_local_scale
+item_world    = binding_world
+              * local_translation
+              * local_rotation
+              * local_scale
 ```
 
-Bone length should not automatically scale a sprite in the initial implementation. If bone length changes, a root-anchored sprite remains at the root and a tip-anchored sprite follows the tip; neither is implicitly stretched. Stretch behavior can be designed explicitly later if needed.
+Bone length does not implicitly scale artwork.
 
-Rotation values should be stored in radians in Core and in project JSON, consistent with the rest of the system. The editor may present degrees in numeric controls and convert only at the UI boundary.
+Rotation is stored in radians in Core and JSON. Editor controls may display degrees.
 
-# 6. Editor Artwork Browser
+Non-uniform scale is supported. Negative scale is also valid and intentionally allows mirroring a frame without duplicating the image resource.
 
-## 6.1 Presentation
+### 6.4 Sprite-frame registration origin
 
-The Artwork Browser is character-scoped. It should show and edit the artwork owned by the currently selected/active character; when there is no character context, the pane can be disabled or show an explanatory empty state. Loose skeletons do not independently own artwork.
+Changing from one sprite frame to another must not make an animated feature jump merely because the source images have different pixel dimensions.
 
-The browser does not need a tree view unless future requirements introduce hierarchy deeper than appearances and the sprites in the character's atlas. An appearance combo box plus an icon/thumbnail view of the character's shared logical atlas is the simpler model:
+Each sprite frame therefore has a registration `origin` in addition to its pixels.
+
+The initial coordinate convention is:
+
+- frame-local origin before registration is the geometric center of the image;
+- +X points right;
+- +Y points up, matching Core/canvas world orientation;
+- origin values are expressed in source-image pixel units;
+- `origin = {0,0}` means the geometric image center is the registration point; and
+- the registration point is what the appearance-item transform positions.
+
+Thus `eye_open.png` and `eye_closed.png` may have different dimensions while retaining identical apparent placement by adjusting their frame origins.
+
+The default import origin is `{0,0}`.
+
+This is resource metadata, not appearance-specific transform data. Every use of a particular frame shares its intrinsic registration origin; appearance-item translation remains available when one binding needs additional placement adjustment.
+
+### 6.5 Pixel/world scale and Y direction
+
+The initial editor/runtime convention should be explicit:
+
+- one source image pixel corresponds to one Core world/scene unit before appearance-item scale;
+- image rows are converted to the Core frame convention in which +Y is up; and
+- renderer adapters are responsible for any texture-coordinate convention differences in Qt/SDL/GPU APIs.
+
+Because appearance items already have scale, no separate pixels-per-unit property is required initially. A later project/artwork-level density setting can be introduced if real use demonstrates a need.
+
+### 6.6 RGBA convention
+
+Core's canonical decoded image representation is RGBA8 with **straight/unpremultiplied alpha**.
+
+Renderer adapters may convert to a premultiplied representation where their host API prefers it, but Core resource APIs and package decode semantics should remain stable and renderer-independent.
+
+## 7. Naming, Rename, Deletion, and Topology-Lifetime Rules
+
+### 7.1 Sprite-frame naming
+
+Imported frame names are derived from source filenames without the extension.
+
+Names must be unique within the character's atlas. On conflict, the editor should use a predictable auto-rename policy such as:
+
+```text
+head
+head-2
+head-3
+```
+
+The exact punctuation is UI policy; deterministic conflict handling is preferable to interrupting bulk folder import with repeated dialogs.
+
+### 7.2 Renaming a sprite frame
+
+Because the name **is** the resource identity, rename is a semantic operation.
+
+Renaming:
+
+```text
+human_eye_closed -> human_eye_shut
+```
+
+must atomically update every appearance state mapping in that character that refers to `human_eye_closed`.
+
+Animation events do not require changes because animations refer to slot/state, not concrete frame names.
+
+The rename must be undoable as one operation.
+
+### 7.3 Deleting a sprite frame
+
+A valid character must not contain an appearance mapping to a nonexistent frame name.
+
+Core should therefore reject raw deletion of a referenced frame. The editor may offer a compound user action such as:
+
+```text
+Delete "human_eye_closed" and remove 3 appearance mappings?
+```
+
+If confirmed, removal of the mappings plus the frame is one undoable command.
+
+Explicit `none` is the representation for intentionally hidden states; dangling names are not.
+
+### 7.4 Slot uniqueness and rename
+
+A character's live rig may contain at most one bone declaring a particular non-empty slot.
+
+Renaming a live slot is also a semantic operation. It must atomically update:
+
+- the bone's `sprite_slot`;
+- every appearance item in the character whose `slot` has the old value; and
+- once sprite-state animation exists, every `sprite_state` event in that character's animations that uses the old slot.
+
+This is exactly why ordinary bone display-name rename and slot rename are separate operations.
+
+### 7.5 Deleting topology does not delete artwork bindings
+
+Deleting a bone whose slot is referenced by appearances does **not** automatically delete those appearance items.
+
+The character's artwork is intentionally more durable than any one topology component. The items become unresolved and are simply not rendered while no live bone supplies the slot.
+
+The editor should visually indicate unresolved slots in the Artwork Browser/properties, but they remain valid character data.
+
+This behavior also allows undo, rig restructuring, or later skeleton adoption to restore the slot without reconstructing its artwork configuration.
+
+### 7.6 Character membership operations must consider slots
+
+Once sprite slots exist, Make Character and Adopt Skeletons acquire an additional validation rule: the resulting rig's non-empty slot names must remain unique.
+
+Adopting a skeleton whose slot name matches an **unresolved** appearance slot is desirable and should resolve the artwork. The only conflict is two live bones in the resulting rig claiming the same slot.
+
+## 8. Draw Order and Layering
+
+Every appearance item has explicit integer `draw_order`.
+
+- lower values render first;
+- higher values render later/in front;
+- order is independent of item container order;
+- order is independent of atlas packing/page order; and
+- order is independent of skeleton guide rendering.
+
+The editor should avoid ambiguous ties, for example by resequencing the items in one appearance to unique integer values after reordering actions.
+
+User operations should include:
+
+- Bring Forward;
+- Send Backward;
+- Bring to Front;
+- Send to Back; and
+- optional direct numeric editing.
+
+The design deliberately allows several items with the same slot but different draw orders.
+
+Character-to-character stage ordering is a separate question. The current project supports multiple characters and the character container must not accidentally determine rendering order through `unordered_map` iteration. Initial artwork implementation may render only according to an editor-defined deterministic character order, but a persistent stage/character Z-order should be designed separately if overlapping multiple characters becomes a required final-output feature.
+
+## 9. Editor Artwork Browser and Authoring UX
+
+### 9.1 Active character
+
+The Artwork Browser is character-scoped.
+
+The editor's current `selected_character()` concept is narrower than the browser needs because it succeeds only for direct character-frame selection. For artwork authoring, **active character** should resolve from semantic selection:
+
+- selecting a character makes it active;
+- selecting a skeleton, bone, or node that belongs to a character makes that parent character active; and
+- selecting only loose topology clears the active character.
+
+The initial implementation does not need a separately pinned Artwork Browser context, although that could be added later.
+
+### 9.2 Browser presentation
+
+The sprite library belongs to the character, not to the active appearance. Therefore switching appearances does not change which sprite frames exist in the browser.
+
+A simple UI is:
 
 ```text
 Character:  Alice
-Appearance: [ Human v ] [New Appearance v] [Actions ...]
+Appearance: [ Human v ] [New Appearance] [Appearance Actions...]
 
-+----------------------------------------------------+
-| [thumbnail] [thumbnail] [thumbnail]                |
-| Head        Torso       Upper Arm                  |
-|                                                    |
-| [thumbnail] [thumbnail] [thumbnail]                |
-| Forearm     Hand        Thigh                      |
-|                                                    |
-| Drop image files here                              |
-+----------------------------------------------------+
+Sprite Library                                [Add Image...] [Add Folder...]
++-----------------------------------------------------------+
+| [thumbnail] [thumbnail] [thumbnail] [thumbnail]           |
+| head        eye-open   eye-half    eye-closed             |
+|                                                           |
+| [thumbnail] [thumbnail] ...                               |
+| torso       upper-arm                                    |
+|                                                           |
+| Drop image files here                                     |
++-----------------------------------------------------------+
 ```
 
-A `QListView` in icon mode or an equivalent thumbnail view is a natural Qt implementation. The user sees logical sprites by name and thumbnail, never packed atlas pages or rectangles.
+`QListView` icon mode or an equivalent thumbnail view is appropriate.
 
-## 6.2 Appearance creation and sprite import
+The user sees logical frame names and thumbnails. Packed atlas pages and rectangles are never an editor-level organizational concept.
 
-Appearance creation and management should live in the Artwork Browser rather than primarily in the application menu bar. The selected character already owns the atlas, so creating an appearance never creates or attaches a separate atlas.
+### 9.3 Appearance creation
 
-| User operation | Behavior |
-|---|---|
-| New Appearance -> Empty Appearance | Add an empty appearance to the selected character's artwork. The character's existing atlas is unchanged. |
-| New Appearance -> Appearance from Folder... | Add an appearance, then import all supported image files from one selected directory into that character's atlas. Initial implementation should not recurse into subdirectories. |
-| Drag image file(s) into browser | Import one or several images into the selected character's atlas. |
-| Add Image... | Open a file picker; allow one or multiple supported image files and add them to the selected character's atlas. |
-| Add Folder... | Import all supported image files from a selected directory into the selected character's atlas. |
-| Optional: drag directory into browser | Can later be made equivalent to Add Folder... if useful. |
+The shared character-level sprite library makes the old “Appearance from Folder” operation conceptually misleading: importing a folder adds frames to the character's shared atlas, not to the appearance that happened to be active when import occurred.
 
-Importing a sprite adds a concrete sprite resource to the selected character's atlas. It does not automatically create an appearance item or bind the sprite to a bone slot.
-
-A sprite from one character is not a live resource that another character can reference. If artwork needs to move or be reused across characters, the editor should perform an explicit copy/import that creates sprite resources in the destination character's atlas.
-
-## 6.3 Sprite identity and naming
-
-On import, Core assigns the sprite a new opaque ID and the editor derives a default display name from the source filename without its extension. Because appearance items refer to sprite IDs, names are not semantic resource keys and renaming a sprite requires no reference propagation. The editor may still choose unique-ish default names for readability, but uniqueness is not a Core invariant.
-
-The editor may optionally retain the source filesystem path as transient authoring metadata for a future “Reload from Source” operation, but saved projects must not depend on external paths.
-
-# 7. Binding Sprites to Bones
-
-## 7.1 Bone sprite slots
-
-A user should be able to assign or edit a bone sprite slot, for example through the selected bone’s context menu or property editor:
+The initial commands should therefore be separate:
 
 ```text
-Sprite Slot >
-  None
-  head
-  torso
-  upper_arm_l
-  forearm_l
-  ...
-  New Slot...
+New Appearance
+Add Image...
+Add Folder...
 ```
 
-## 7.2 Dragging a sprite onto a bone
+`New Appearance` creates only an appearance.
 
-Dragging a sprite from the active character's Artwork Browser onto a bone in that character's rig should create or replace the active appearance's item for the bone's sprite slot. The item records the slot string and the dragged sprite's opaque ID; the sprite must belong to the atlas directly owned by that same character. The item also stores the explicit root-or-tip anchor, local T/R/S, and draw order.
+`Add Image...` / `Add Folder...` add frames to the active character's sprite library.
 
-The browser/drag source should normally make a cross-character binding impossible. If the UI nevertheless receives a sprite from another character, Core must reject the binding rather than create a hidden cross-character resource reference. The sprite must first be copied/imported into the destination character's artwork.
+A future convenience command may create an appearance and then import a folder in one workflow, but it should be presented as convenience rather than imply resource ownership by the appearance.
 
-Recommended behavior when the target bone does not yet have a sprite slot: automatically offer/create a slot, using a sensible default name. The exact naming rule remains a review item; candidates include the sprite name or a normalized form of the target display name.
+### 9.4 Import
 
-## 7.3 Root/tip anchor selection
+Supported image files are decoded in Core and normalized to canonical RGBA8.
 
-The editor must let the user choose whether a sprite binding is anchored at the bone root or bone tip. This makes joint-centered artwork possible without node bindings: a knee-cover sprite can be bound to either the thigh or lower-leg bone and anchored at whichever endpoint coincides with the knee, thereby choosing both its joint position and the bone whose rotation it follows.
+Initial import operations:
 
-- The root/tip choice is an explicit property of the binding and must be persisted.
+- Add Image... with multi-selection;
+- Add Folder... without recursive traversal;
+- drag one or more image files into the Sprite Library; and
+- optional directory drag/drop later.
 
-- Changing a binding from root to tip changes its frame origin but keeps the local +X axis pointing root -> tip.
+The source filesystem path may be retained as transient editor metadata for a future Reload from Source feature, but a saved project must not depend on the external path.
 
-- The initial anchor chosen when a sprite is first dropped on a bone remains a small editor-UX decision; the binding must always be user-editable afterward.
+### 9.5 Binding by drag/drop
 
-## 7.4 Why slot strings and sprite IDs are different
+Dragging a sprite frame from the library onto a bone in the active character creates a new appearance item for that bone's slot.
 
-A sprite slot expresses rig semantics and is intentionally symbolic; a sprite ID identifies one concrete resource in the owning character's atlas. Keeping this boundary string-based on the skeleton side and ID-based on the resource side allows:
+If the bone does not yet have a slot, the editor should offer/create one. Exact default naming remains an editor-UX decision.
 
-- different appearances to map the same semantic slot to different concrete sprite IDs;
+Dragging does **not** replace an existing item merely because another item already uses the slot. Multiple items per slot are valid.
 
-- two slots to reuse one sprite ID when appropriate (for example, both eyes using one sprite with different transforms); and
+The new item initially contains:
 
-- sprite display names and atlas packing to change without renaming the skeleton interface or rewriting bindings.
+```text
+slot       = target bone's sprite slot
+states     = { "default" -> dragged frame name }
+anchor     = chosen initial root/tip anchor
+translation= (0,0)
+rotation   = 0
+scale      = (1,1)
+draw_order = a deterministic front/back insertion value
+```
 
-## 7.5 Explicit draw order
+The user may then add additional state mappings or additional layered items.
 
-Every sprite binding has an explicit `draw_order` value. Draw order is important authoring data for articulated cutout artwork: overlapping limb pieces and joint-cover sprites depend on predictable painter's order to conceal seams. The order must not be inferred from the binding vector or atlas packing order.
+Cross-character drag/drop must not create a hidden reference to the source character's frame. The editor should either reject it or perform an explicit copy/import into the destination character before creating the item.
 
-- Lower `draw_order` values are rendered first; higher values are rendered later and therefore appear in front.
-- The editor should maintain a deterministic order and avoid ambiguous ties, for example by keeping `draw_order` values unique within an appearance and resequencing when necessary.
-- The user should be able to edit draw order explicitly, with a numeric property and convenience actions such as Bring Forward, Send Backward, Bring to Front, and Send to Back.
-- Draw order belongs to the character-owned appearance semantic data, not to sprite-atlas page metadata.
+### 9.6 Sprite Transform tool
 
-# 8. Sprite Transform Tool
+The Sprite Transform tool edits one appearance item while the rig is fixed reference geometry.
 
-The Sprite Transform tool is an editor mode for modifying the binding transform while treating the skeleton as fixed reference geometry.
+- dragging changes local translation;
+- rotation handle changes local rotation;
+- corner/edge handles change scale;
+- negative scale is allowed;
+- exact numeric T/R/S is available in properties;
+- skeleton nodes/bones do not move;
+- FABRIK/IK is not invoked; and
+- only the selected item shows manipulation widgets.
 
-- The skeleton remains fixed; dragging must not move nodes, change bone geometry, or invoke IK.
+The selection is tool-local rather than forcing appearance items into normal topology/model selection.
 
-- The user selects a sprite-bound bone or its sprite.
+Frame registration origin is edited as a property of the sprite frame/resource, not by the ordinary binding transform tool. A later dedicated registration-origin editor may be added; initially numeric controls and/or a simple thumbnail-origin editor are sufficient.
 
-- Only the selected sprite displays manipulation widgets to avoid visual clutter.
+## 10. View and Rendering Controls
 
-- Dragging the sprite changes local translation.
-
-- A rotation handle changes local rotation.
-
-- Corner or edge handles change scale.
-
-- The data model should support non-uniform X/Y scale even if the default UI emphasizes uniform scaling.
-
-- Exact numeric T/R/S values should also be available in the properties pane while the tool is active. Rotation may be displayed in degrees for user convenience while Core and JSON store radians.
-
-An arbitrary custom pivot is not required in the first implementation. Rotation about the sprite center plus an editable translation relative to the selected bone endpoint should be sufficient initially. The binding anchor supplies either the bone root or bone tip as the frame origin.
-
-# 9. View and Rendering Controls
-
-Bone-driven sprite artwork introduces two independent visual layers: artwork and rigging guides. The View menu should make these explicit.
+Bone-driven artwork introduces separate character artwork and rig-guide layers.
 
 ```text
 View
@@ -452,27 +856,69 @@ View
     Wireframe
 ```
 
-Recommended behavior: when both sprites and skeleton are visible during editing, draw the skeleton as a foreground guide, with wireframe presentation available (and likely preferable during sprite placement). Previewing the final character is simply Show Sprites = on and Show Skeleton = off.
+Recommended editor behavior:
 
-Within the sprite layer itself, bound sprites are rendered strictly by each binding's explicit draw_order. This semantic sprite ordering is independent of the editor-only decision to draw skeleton guides above or below the completed sprite layer.
+- Show Sprites on + Show Skeleton on: authoring mode;
+- skeleton guide is normally drawn above sprites;
+- Wireframe is useful while positioning artwork;
+- Show Sprites on + Show Skeleton off: final-character preview; and
+- item `draw_order` applies only within the appearance sprite layer.
 
-A general-purpose user setting for arbitrary sprite-over-bone versus bone-over-sprite ordering is not necessary for the first version. Internally, keeping rendering order flexible is inexpensive and leaves room for future editor display modes.
+The renderer must resolve one active appearance per rendered character instance and one current semantic sprite state per slot from animation evaluation.
 
-# 10. Project Package Format
+## 11. Undo/Redo Model
 
-## 10.1 Container
+Artwork operations should use the same command architecture as existing editor mutations.
 
-The current implementation already saves `.stickman` projects as ZIP archives owned by Core. `sm::project::serialize()` writes a `project.json` entry with `miniz`, and `deserialize()` reads the same archive back. Artwork should extend this existing package.
+Undoable operations include:
+
+- create/delete/rename appearance;
+- import/delete/rename sprite frame;
+- edit frame registration origin;
+- assign/rename/clear bone slot;
+- add/delete/update appearance item;
+- add/remove/change a state mapping;
+- root/tip anchor change;
+- transform edit;
+- draw-order edit; and
+- future sprite-state animation edits.
+
+Continuous mouse manipulation should create one logical undo step, not one command for every mouse-move event. The transform tool can edit transient state during drag and commit a before/after command at drag completion, following existing editor conventions where practical.
+
+Image buffers are comparatively large. Command history should not repeatedly deep-copy immutable RGBA pixels for routine edits. Internal image resources may use shared immutable storage or move-owned snapshot objects even though semantic ownership remains character-local and no two characters share a mutable sprite resource.
+
+Most importantly, character destruction undo must use the full character-payload snapshot described in section 2.3.
+
+## 12. Clipboard Semantics
+
+The current whole-character clipboard serializes topology/name-oriented data as JSON. Artwork should eventually participate in whole-character cut/copy/paste, but Phase 1 should not invent an ad-hoc second binary-image encoding merely for the clipboard before package resource serialization exists.
+
+Artwork-aware whole-character clipboard support belongs with package/resource serialization in Phase 2.
+
+When implemented:
+
+- copying a whole character copies its complete artwork deeply;
+- pasted characters do not share live image resources with the source character;
+- sprite-frame names may be preserved because they are character-local;
+- appearance-local IDs are regenerated or otherwise made independent as appropriate for duplicated character data;
+- rig/topology IDs follow the existing duplication policy; and
+- internal appearance mappings continue to refer to the copied frame names without remapping through project-global sprite IDs because no such IDs exist.
+
+Loose topology copy/paste does not implicitly carry character artwork.
+
+## 13. Project Package Format
+
+### 13.1 Container
+
+The current implementation already stores `.stickman` as a ZIP archive owned by Core with a `project.json` entry. Artwork extends this existing format.
 
 ```text
-character.stickman  // physically a ZIP archive
+character.stickman   // physically a ZIP archive
 ```
 
-Users continue to treat the package as one project file, while advanced users can inspect it with ordinary ZIP tools.
+### 13.2 Character-scoped package resources
 
-## 10.2 Suggested internal layout
-
-Because artwork is owned by characters, package resource paths should mirror that ownership rather than use a project-level atlas directory. One straightforward layout is:
+Because artwork belongs directly to characters, image resource paths should be character-scoped:
 
 ```text
 project.json
@@ -480,291 +926,499 @@ characters/
   <character-id-1>/
     artwork/
       page-0.png
-      page-0.json
       page-1.png
-      page-1.json
   <character-id-2>/
     artwork/
       page-0.png
-      page-0.json
 ```
 
-Each character has one logical atlas that may span any number of packed bitmap pages. There is no package-level atlas object that two characters point at. Repacking changes page images and rectangle metadata only; sprite IDs, appearance IDs, slot strings, appearance-item references, character IDs, and rig membership remain unchanged.
+There is no project-level atlas resource that several characters reference.
 
-## 10.3 `project.json` responsibilities
+### 13.3 `project.json` is authoritative
 
-`project.json` remains the authoritative semantic document within the Core-owned package format. The current format already stores the project version, topology, and characters with their rig skeleton IDs. Artwork extends each character record with its directly owned artwork semantic data.
+`project.json` stores both semantic artwork data and the resource-location metadata Core needs to reconstruct the logical atlas.
 
-Conceptually, each serialized character contains:
+A conceptual character entry is:
 
 ```json
 {
   "id": "<character-id>",
   "name": "Alice",
-  "skeletons": ["<skeleton-id>", "<skeleton-id>"],
+  "skeletons": ["<skeleton-id>"],
   "artwork": {
-    "sprites": [
-      {"id": "<sprite-id>", "name": "head"}
-    ],
+    "frames": {
+      "human_eye_open": {
+        "origin": [0.0, 0.0],
+        "page": 0,
+        "rect": [10, 20, 60, 30]
+      },
+      "human_eye_closed": {
+        "origin": [1.0, -2.0],
+        "page": 0,
+        "rect": [80, 20, 54, 12]
+      }
+    },
     "appearances": [
       {
         "id": "<appearance-id>",
         "name": "Human",
-        "items": []
+        "items": [
+          {
+            "slot": "eyes",
+            "states": {
+              "default": "human_eye_open",
+              "open": "human_eye_open",
+              "closed": "human_eye_closed"
+            },
+            "anchor": "root",
+            "translation": [0.0, 0.0],
+            "rotation": 0.0,
+            "scale": [1.0, 1.0],
+            "draw_order": 20
+          }
+        ]
       }
     ]
   }
 }
 ```
 
-The exact JSON schema can follow existing serialization conventions, but it should contain or reference:
-
-- format version;
-- topology contents, including skeleton structure and persistent object IDs;
-- character IDs, names, and rig membership;
-- each character's sprite definitions, sprite IDs, and sprite display names;
-- each character's appearance definitions and appearance IDs;
-- bone sprite slots and appearance items once binding is implemented;
-- each appearance item's `sprite_id`, binding transform, explicit root/tip anchor, and explicit draw order;
-- poses and animations when those systems are added; and
-- the character-local atlas-page resource files necessary to resolve each sprite ID to pixels.
-
-No appearance stores a project-level `sprite_atlas_id` because its atlas is implied by character ownership.
-
-## 10.4 Atlas JSON responsibilities
-
-Every packed atlas-page image should have sibling JSON metadata. That metadata answers only: “which sprite IDs currently occupy which rectangles on this page?” It may include sprite names as human-readable/debugging metadata, but IDs are authoritative. It should not contain skeleton slots, appearance items, transforms, root/tip anchor choices, draw order, pivots, or other rig semantics.
+Explicit hidden state may be encoded as JSON `null`:
 
 ```json
-{
-  "format_version": 1,
-  "image": "page-0.png",
-  "width": 2048,
-  "height": 2048,
-  "sprites": {
-    "7f1d...": {
-      "name": "forearm",
-      "x": 100,
-      "y": 20,
-      "width": 80,
-      "height": 220
-    },
-    "a93b...": {
-      "name": "head",
-      "x": 220,
-      "y": 20,
-      "width": 180,
-      "height": 190
-    }
-  }
-}
+"hidden": null
 ```
 
-Atlas-page entries are keyed by opaque sprite ID. A sprite name may be repeated or changed without affecting identity. The containing character determines which logical atlas the page belongs to; page assignment and rectangles are current packing metadata.
+The exact JSON shape may be adjusted to match current serialization style, but the responsibilities should remain as above.
 
-## 10.5 Packing ownership
+### 13.4 No separate per-page atlas JSON is required
 
-Rectangle packing is a private Core persistence/resource function. When a project is saved, Core may repack each character's `artwork.atlas` into one or more atlas pages. The editor simply requests that Core save the `sm::project`. Read-only runtimes do not invoke packing, but they use the same Core package loader and resource-resolution APIs.
+A sibling `page-N.json` file does not buy much when Core is the only canonical loader and `project.json` already names every logical sprite frame.
 
-On load, Core reads the package, reconstructs topology and characters first, reconstructs each character's artwork, decodes that character's atlas-page PNGs into RGBA8 buffers, validates sprite-ID/page/rectangle metadata, and exposes logical sprites through renderer-neutral resource views. The editor and runtimes do not need their own ZIP, PNG, or atlas parsers. Because stick_man is not a bitmap editor, the package does not need to reconstruct original individual source files on disk.
+Page index/rectangle can be stored with each frame's package resource metadata in `project.json`. The physical page PNG then contains only pixels.
 
-Character lifetime and artwork lifetime are the same. Loading does not populate a project-level atlas table and then reconnect characters to it; it directly constructs the artwork inside each character.
+This removes an unnecessary consistency relationship among:
 
-## 10.6 Atlas packing rules
+- project semantic data;
+- page JSON; and
+- page image.
 
-The initial atlas implementation should deliberately favor simplicity and predictable sampling over maximum packing density:
+Atlas placement remains non-semantic even though its current generated placement is recorded in `project.json`; repacking is free to change page/rectangle values on the next save.
 
-- Use `stb_rect_pack` for rectangle placement.
-- Never rotate sprites during packing. Their width and height remain in authored orientation, and atlas metadata needs no rotated flag.
-- Reserve a one-pixel transparent gutter around every sprite by packing a rectangle two pixels wider and two pixels taller than the actual sprite, then placing the sprite at +1,+1 within that reserved rectangle.
-- Initialize atlas pages as transparent RGBA8 `(0,0,0,0)`, so all unused pixels and gutters remain transparent.
-- Store only the actual sprite-pixel rectangle in page metadata; gutter pixels are an internal packing detail and are excluded from x/y/width/height.
-- Write atlas pages as PNG with alpha preserved.
+### 13.5 Package reader/writer refactor
 
-The one-pixel border on each packed rectangle means adjacent sprite content will normally have two transparent pixels between it. This small amount of extra atlas space is intentional and avoids texture-filtering bleed without complicating runtime sampling.
+The current serializer is simple because the archive contains essentially one logical document. Artwork loading requires the archive to remain available while multiple images are read and decoded.
 
-## 10.7 Vendored implementation dependencies
+Before extending persistence, Core should introduce a small private RAII package reader/writer abstraction around `miniz` rather than spreading archive-open/extract/cleanup code through `sm_project.cpp`.
 
-Core should vendor the small source/header dependencies required by the project format. The intended set is:
+This helper remains private implementation detail and should preserve the current atomic-load property: all project/topology/character/artwork data is staged and validated before replacing the live project.
 
-- the existing vendored JSON parser for `project.json` and atlas JSON;
-- the existing vendored `miniz` for ZIP archive reading and writing;
-- `stb_image` for decoding imported/package image files into RGBA8 buffers;
-- `stb_image_write` for encoding RGBA8 atlas pages as PNG; and
-- `stb_rect_pack` for non-rotating atlas rectangle packing.
+### 13.6 Packing ownership
 
-These are Core implementation dependencies only. Consumers linking against Core should not need Qt, SDL, libpng, zlib, or a separately installed JSON/ZIP/image package merely to load a stick_man project.
+Packing is a private Core save/resource operation.
 
-# 11. Runtime Resource Resolution
+When saving a character's artwork, Core:
 
-A read-only runtime needs to resolve an appearance item's sprite ID into pixels and a source rectangle. Because artwork is character-owned, the character itself supplies the resource scope:
+1. obtains each logical frame's pixels;
+2. packs frames into one or more atlas pages with `stb_rect_pack`;
+3. generates page PNGs;
+4. records page/rectangle resource metadata in `project.json`; and
+5. writes all entries through the package writer.
+
+Repacking must not change:
+
+- character IDs;
+- rig membership;
+- appearance IDs;
+- slot names;
+- state names;
+- frame names;
+- appearance mappings;
+- registration origins;
+- transforms; or
+- draw order.
+
+### 13.7 Packing rules
+
+Initial packing should favor correctness and predictable sampling over maximum density:
+
+- use `stb_rect_pack`;
+- never rotate frames during packing;
+- reserve at least a one-pixel padding border around every packed frame;
+- **extrude the frame's edge texels into the padding** rather than filling the padding with unrelated transparent black;
+- store only the true frame rectangle, excluding padding, in resource metadata;
+- initialize unused page area as transparent RGBA8; and
+- encode pages as alpha-preserving PNG.
+
+Edge extrusion makes linear-filtered sampling safer at frame boundaries and avoids relying on renderer-specific treatment of transparent RGB values.
+
+Maximum page size and multi-page policy remain implementation decisions. The logical atlas may always span multiple physical pages.
+
+### 13.8 Vendored implementation dependencies
+
+Core already vendors the JSON parser and `miniz`. Artwork resource support should add:
+
+- `stb_image` for imported/package image decoding;
+- `stb_image_write` for PNG atlas-page encoding; and
+- `stb_rect_pack` for rectangle packing.
+
+All remain private Core implementation dependencies.
+
+## 14. Runtime Resource Resolution
+
+A read-only runtime receives a character, selected appearance, evaluated animation state, and pose.
+
+For each appearance item:
 
 ```text
-(character, appearance, appearance_item.sprite_id)
-              |
-              v
-character.artwork.atlas
-              |
-              v
-Core atlas/resource resolution
-              |
-              v
-(RGBA8 atlas-page image_view, source rectangle)
-              |
-              v
-host creates texture + Core-computed appearance-item transform
+item.slot
+   |
+   +--> resolve live bone with matching slot
+   |
+current animation slot state (or "default")
+   |
+   v
+item.states[state]
+   |
+   +--> missing state: use item.states["default"]
+   +--> explicit none: item is hidden
+   |
+   v
+sprite-frame name
+   |
+   v
+character.artwork.atlas[name]
+   |
+   v
+Core returns frame/page image_view + source rectangle + frame origin
+   |
+   v
+host uploads/uses texture and applies Core-defined transform semantics
 ```
 
-There is no `appearance.sprite_atlas_id` lookup. The selected appearance already belongs to the character whose atlas contains all sprites that the appearance may reference.
+Core supplies renderer-neutral bytes, geometry, and semantics. Host integrations create `QImage`/`QPixmap`, `SDL_Texture`, GPU textures, or engine-specific objects as appropriate.
 
-A Cephalopod/SDL integration can create SDL textures from Core-provided RGBA8 atlas-page buffers and use the returned source rectangles. The Qt editor can wrap the same buffers in its own image/texture objects. Another engine integration can upload or preprocess them differently. Core remains renderer-agnostic because it supplies bytes and geometry, not Qt, SDL, or engine texture types.
+A runtime should be able to cache textures per decoded atlas page while resolving logical frames by name.
 
-# 12. Phased Implementation Plan
+## 15. Animation Integration
 
-The original draft assumed that `sm::project`, the packaged project, and character-independent artwork resources still needed to be introduced. The current code has moved past that baseline: `sm::project`, `sm::topology`, `sm::character`, `sm::rig`, character membership rules, and ZIP-backed `.stickman` serialization already exist. The artwork work should build on those objects rather than reintroduce `sm_world` or project-owned atlases.
+### 15.1 Character ownership
 
-## Phase 1 — Character-owned in-memory artwork and Artwork Browser
+The character design already identifies animation as future character-level data. When animation ownership is implemented, animations should belong to the same durable `sm::character` that owns artwork, not to transient skeleton components.
 
-Goal: add the in-memory artwork model directly to `sm::character` and provide editor-side appearance/sprite authoring without yet binding sprites to bones.
+This matters for sprite-state events because their semantic slot names belong to the character rig/artwork contract.
 
-- Add `sm::artwork` and make it a direct member of `sm::character`, alongside `rig_`.
-- Give each artwork object one logical `sm::sprite_atlas` and a collection of appearances. Do not add project-level atlas or appearance ownership tables.
-- Add sprite IDs/names and the renderer-neutral RGBA8 image resource/view abstraction; keep Qt image/texture objects on the editor side.
-- Ensure every newly created character begins with an empty artwork member.
-- Add the Artwork Browser UI scoped to the selected/active character: appearance combo box, New Appearance control, appearance actions, and thumbnail/icon view of the sprites in that character's atlas.
-- Implement Empty Appearance creation without creating a new atlas.
-- Implement Appearance from Folder..., adding the appearance and importing all supported image files into the same character-owned atlas without recursion.
-- Implement Add Image... with multi-selection.
-- Implement Add Folder....
-- Decode imported images through Core using vendored `stb_image` and normalize them to RGBA8.
-- Implement drag-and-drop of one or more image files onto the sprite browser.
-- Assign a new opaque ID to every imported sprite and derive a readable default name from its filename. Names need not be unique at the Core level.
-- Implement basic appearance and sprite management such as rename/delete as needed for a usable browser. Deleting a sprite must validate or repair appearance-item references once binding exists.
-- Maintain editor-only active character/appearance state.
-- Extend whole-character clipboard behavior so that character data is copied deeply, including artwork; do not share the source character's atlas with the pasted character.
+### 15.2 Extend the existing event variant
 
-Explicitly out of scope for Phase 1:
+The current `sm::animation` timeline stores `animation_event` variants and presently supports skeletal rotation and translation. Sprite animation should add `sprite_state` to the same variant/concept:
 
-- persistence of artwork and imagery in the `.stickman` archive;
+```cpp
+struct sprite_state {
+    std::string slot;
+    std::string state;
+};
+
+using animation_event = std::variant<rotation, translation, sprite_state>;
+```
+
+Exact type names are not important; the semantic rule is.
+
+### 15.3 Evaluation rule
+
+At animation time `t`, the current state of a slot is the state in the latest `sprite_state` event for that slot at or before `t`.
+
+If there is none, the state is `default`.
+
+There should not be two contradictory state events for the same slot at the same timestamp. Editor/model APIs should either replace the existing event or define one deterministic ordering policy; rejecting/replacing the duplicate is preferable to depending on vector insertion order.
+
+### 15.4 Appearance independence
+
+Animations never store concrete sprite-frame names.
+
+This is the core invariant that allows one animation to work across Human, Robot, Skeleton, Summer, Winter, damaged, armored, and other appearances.
+
+The animation's vocabulary is the slot/state vocabulary. The appearance's vocabulary is the frame-name mapping.
+
+## 16. Phased Implementation Plan
+
+### Phase 0 — Character payload restoration prerequisite
+
+Goal: make the current character lifetime/undo machinery safe for character-owned payload before adding bitmap resources.
+
+- Preserve current lightweight membership snapshots for ordinary topology editing.
+- Add a full character-payload snapshot path used only when an operation actually destroys character lifetime.
+- Use the existing replacement plan's deleted-character information or equivalent explicit command knowledge to capture payload before destruction.
+- Restore artwork/future animation along with character ID/name when undo recreates a destroyed character.
+- Add tests proving that deleting/restoring a payload-bearing character does not recreate it empty.
+
+Acceptance criteria: a test character carrying synthetic payload can be destroyed by structural replacement and restored with the same payload without causing every topology command to deep-copy that payload.
+
+### Phase 1 — Character-owned in-memory artwork and Sprite Library
+
+Goal: establish character-local frame resources and appearance data in memory without binding them to the rig or persisting imagery yet.
+
+Core:
+
+- add `sm::artwork` as a direct `sm::character` member;
+- add logical named `sm::sprite_atlas` / sprite-frame resources;
+- add renderer-neutral RGBA8 image ownership/view APIs;
+- add frame registration origin;
+- add character-local appearances and appearance IDs;
+- add project-controlled artwork mutation APIs;
+- enforce unique frame names per character; and
+- vendor/use `stb_image` for import decoding.
+
+Editor:
+
+- add character-scoped Artwork Browser;
+- resolve active character from character/member selection;
+- add New Appearance;
+- add Add Image... and Add Folder...;
+- add file drag/drop;
+- show shared character Sprite Library thumbnails;
+- implement frame rename/delete/origin editing; and
+- maintain editor-only active appearance.
+
+Explicitly out of scope:
+
+- package persistence of artwork imagery;
 - atlas-page packing;
-- bone sprite slots;
-- sprite-to-bone bindings;
-- sprite rendering on the rig; and
-- the Sprite Transform tool.
+- whole-character artwork clipboard;
+- bone slots;
+- appearance-item binding;
+- sprite rendering on the rig;
+- Sprite Transform tool; and
+- sprite-state animation.
 
-Phase 1 acceptance criteria: multiple characters can each have independent artwork; the user can create multiple appearances for one character, switch between them, populate the character's shared atlas through every planned import path, see thumbnail sprites, and rename/delete content in memory. Creating or editing artwork for one character has no effect on another character.
+Acceptance criteria: independent characters can contain independent named frame libraries and appearances in memory; frame name conflicts and renames behave predictably; no artwork mutation leaks into another character.
 
-## Phase 2 — Extend packaged-project serialization for character artwork
+### Phase 2 — Package persistence and artwork-aware whole-character clipboard
 
-Goal: extend the existing Core-owned `.stickman` ZIP format so character-owned artwork and imagery round-trip with the topology and current character/rig data.
+Goal: make character artwork durable and reuse the resource serialization machinery for complete character duplication.
 
-- Bump the project format version when the artwork schema lands.
-- Extend each serialized character entry in `project.json` with its artwork semantic data rather than adding project-level atlas/appearance tables.
-- Serialize sprite IDs/names and appearance IDs/names inside the owning character's artwork.
-- Add Core-side rectangle packing with vendored `stb_rect_pack` and generate one or more RGBA8 atlas-page images per character; do not rotate sprites and reserve a one-pixel transparent gutter around each sprite.
-- Write each character's page images and page JSON under character-scoped archive paths.
-- Encode atlas-page images as alpha-preserving PNGs with vendored `stb_image_write`; continue writing the archive with the existing vendored `miniz` implementation.
-- On deserialize, reconstruct each character and its rig membership, then reconstruct that character's artwork and decode its page images with `stb_image`.
-- Validate sprite IDs, page rectangles, appearance items, and character-local resource boundaries. An appearance item must never resolve to a sprite owned by another character.
-- Ensure repacking does not change character identity, rig membership, sprite IDs, appearance identity, slot strings, or semantic bindings.
-- Add corruption/error handling for missing character artwork files, missing pages, unknown sprite IDs, invalid rectangles, duplicate IDs where uniqueness is required, and unsupported package versions.
+- bump project format version as required;
+- add private RAII package reader/writer abstraction;
+- serialize each character's artwork semantic data in `project.json`;
+- pack character frames into one or more pages with `stb_rect_pack`;
+- use edge-extruded padding and no packed rotation;
+- encode pages with `stb_image_write`;
+- store frame page/rect metadata in `project.json`;
+- deserialize/decode/validate all character resources atomically;
+- keep loaded storage details hidden behind logical frame APIs;
+- add whole-character clipboard deep-copy including artwork; and
+- ensure pasted characters own independent artwork/resources.
 
-Phase 2 acceptance criteria: closing and reopening a packaged project through Core reproduces the same topology, characters, rig memberships, character-owned sprite resources, appearances, and imagery. No post-load project-level reconnection of atlas references is required, because the artwork is reconstructed directly inside its character.
+Acceptance criteria: save/reopen reproduces character artwork exactly at the semantic level; page layout may change without changing names/mappings; whole-character copy/paste carries artwork without cross-character sharing.
 
-## Phase 3 — Bone sprite binding, root/tip anchors, draw order, and Sprite Transform tool
+### Phase 3 — Bone slots, appearance binding, rendering, and Sprite Transform
 
-Goal: make appearances drive visible character artwork and provide the complete authoring workflow for bone binding, endpoint anchoring, placement, and explicit layering.
+Goal: make static appearances drive visible character artwork.
 
-- Add the explicit string-valued `sprite_slot` property to bones and expose it in the editor (context menu and/or properties UI). Nodes do not receive sprite slots.
-- Add Core appearance-item data: slot string -> `sprite_id` plus explicit `bone_anchor` (root or tip), local translation/rotation/scale, and explicit `draw_order`.
-- Validate that every `sprite_id` resolves in the atlas owned by the same character as the appearance and target rig.
-- Extend project serialization to persist bone sprite slots, appearance items, sprite IDs, root/tip anchors, T/R/S (rotation in radians), and explicit draw order.
-- Render the active character/appearance's bound sprites on the editor canvas by matching bone slot strings to appearance items, resolving each `sprite_id` through `character.artwork.atlas`, and sorting items by explicit `draw_order`.
-- Implement drag-and-drop from the Artwork Browser onto a bone to create or replace a binding.
-- Reject cross-character sprite bindings rather than creating shared resource references.
-- Finalize behavior for dropping onto a bone that has no sprite slot yet, and finalize the initial root/tip choice on drop.
-- Implement the canonical bone-local orientation: zero-angle +X runs from root node to tip node.
-- Implement explicit root/tip binding anchors. Root uses the root-node position; tip uses the tip-node position; both retain the same root-to-tip axes. Do not implement node sprite binding.
-- Implement the default center-to-anchor, zero-rotation, unit-scale binding for bone targets.
-- Implement the Sprite Transform tool with rig locking, sprite selection, and translation/rotation/scale manipulation handles for bone-bound sprites.
-- Expose exact numeric binding T/R/S values in the property UI; display rotation in degrees if desired while persisting radians.
-- Add View commands for Show Sprites, Show Skeleton, and Normal/Wireframe skeleton display.
-- Implement explicit per-binding `draw_order` in Core, serialization, rendering, and editor controls. Provide numeric editing plus Bring Forward, Send Backward, Bring to Front, and Send to Back actions; draw order must not depend on vector order.
+Core/model:
 
-Phase 3 acceptance criteria: the user can assign semantic sprite slots to bones, drag sprites from the active character's atlas onto bones in that character's rig, select root or tip anchoring, explicitly control sprite draw order, adjust each appearance item with T/R/S controls while the rig stays fixed, switch active appearances, pose/animate the character, and see artwork follow the correct bone endpoint and orientation with predictable overlap. All slot strings, sprite-ID references, anchors, transforms, and draw-order data round-trip through the packaged project format.
+- add string-valued `sprite_slot` to bones;
+- enforce unique non-empty live slots within a character rig;
+- update Make Character/Adopt Skeletons validation;
+- add appearance items with slot, default/state map, anchor, T/R/S, and draw order;
+- allow multiple items per slot;
+- add semantic slot rename with appearance-reference propagation;
+- keep unresolved appearance items when topology removes their slot;
+- add binding/resource validation; and
+- serialize all slot/item data.
 
-# 13. Recommended Testing Strategy
+Editor/rendering:
 
-Even without a large GUI unit-test suite, the design creates several testable non-GUI seams. Useful automated coverage would include:
+- add bone slot editing;
+- drag frames onto bones to add appearance items;
+- render the active appearance using `default` state;
+- add root/tip controls;
+- add Sprite Transform tool with tool-local item selection;
+- add frame-origin editing support sufficient to register differing frame sizes;
+- add draw-order controls; and
+- add Show Sprites / Show Skeleton / Wireframe view controls.
 
-- character ownership invariants: each character directly owns one artwork object and no artwork object is reachable as a shared project-owned atlas resource;
-- isolation between two characters with similarly named appearances/sprites: editing, deleting, repacking, or renaming one character's artwork cannot affect the other;
-- whole-character copy/paste deep-copy behavior, including fresh character identity and non-shared artwork resources;
-- character deletion destroying artwork without leaving any external atlas/appearance reference to repair;
-- rig split/merge/adoption behavior leaving the character's artwork exactly where it is, because artwork follows character identity rather than individual skeleton components;
-- package round-trip tests for `project.json`, character-owned artwork metadata, atlas-page JSON, and image resources;
-- RGBA8 PNG encode/decode round trips that preserve alpha;
-- atlas packing invariants: sprites are never rotated, each has the required transparent gutter, stored rectangles exclude padding, and repacking may change page/rect without changing sprite IDs;
-- package loading through Core without Qt or a renderer present;
-- atlas validation and missing/corrupt page or unknown-sprite-ID handling;
-- explicit rejection of an appearance item that attempts to reference a sprite outside its owning character's atlas;
-- bone-local transform math for known root-anchor and tip-anchor cases;
-- root/tip anchor behavior, including the invariant that both anchors retain the same root-to-tip orientation;
-- binding transform composition for translation, rotation, and non-uniform scale;
-- draw-order sorting and editor resequencing invariants;
-- sprite-slot resolution across two appearances of the same character that reuse the same slot names but map them to different sprite IDs; and
-- repacking invariants: character IDs, rig membership, sprite IDs, appearance IDs, slot strings, and appearance-item references remain unchanged after packing layout changes.
+Acceptance criteria: static cutout characters can be fully authored, layered, transformed, saved, reopened, and posed while artwork follows the correct rig slots and survives ordinary topology restructuring.
 
-GUI behavior can then be validated with focused manual scenarios: switching character selection in the Artwork Browser, importing images, switching appearances, verifying that another character's browser contents remain independent, drag/drop onto bones, switching bindings between root and tip anchors, transform-handle interaction, numeric T/R/S editing, draw-order changes around deliberately overlapping joints, view toggles, save/reopen, and a few deliberately asymmetric poses that make incorrect transforms obvious.
+### Phase 4 — Sprite-state animation
 
-# 14. Review Items / Decisions Still Open
+Goal: allow animation timelines to switch semantic sprite states while remaining appearance-independent.
+
+- make animation character-owned as required by the broader character animation design;
+- add discrete `sprite_state {slot, state}` events to the existing animation event system;
+- evaluate current slot state as the latest event at/before current time, defaulting to `default`;
+- resolve state through the active appearance;
+- support explicit hidden (`none`) mappings;
+- fall back to the item's `default` mapping when a requested state is absent;
+- update slot rename to rewrite sprite-state events;
+- add timeline/editor controls for inserting/changing sprite-state events; and
+- optionally add authoring conveniences that generate repeated state sequences without changing the persisted semantic model.
+
+Acceptance criteria: one animation containing sprite-state events can be played unchanged with several appearances, including appearances that reuse a frame for several states or omit a state and fall back to default.
+
+## 17. Recommended Testing Strategy
+
+### 17.1 Core ownership and lifetime
+
+- every character owns exactly one artwork object;
+- artwork is not present as a shared project-owned resource;
+- deleting a character destroys its artwork;
+- undoing actual character destruction restores its full artwork payload;
+- routine topology split/merge undo does not deep-copy artwork merely because membership changed;
+- rig split/merge leaves surviving character artwork untouched; and
+- adopting topology never transfers artwork out of the character.
+
+### 17.2 Names and symbolic resolution
+
+- frame names are unique within one character atlas;
+- two characters may use identical frame names independently;
+- frame rename updates every appearance mapping atomically;
+- slot names are unique among live bones in one character;
+- slot rename updates all appearance items and future sprite-state animation events;
+- unresolved slot items remain valid after their bone is deleted; and
+- later reintroduction/adoption of that slot resolves them again.
+
+### 17.3 Appearance resolution
+
+- `default` state resolution;
+- requested defined state resolution;
+- requested missing state falls back to `default`;
+- explicit `none` hides an item;
+- multiple items on one slot resolve independently;
+- two appearances map one slot/state to different frame names; and
+- active-appearance switching preserves current semantic state.
+
+### 17.4 Transform and registration
+
+- known root-anchor transform case;
+- known tip-anchor transform case;
+- both anchors retain root-to-tip orientation;
+- translation/rotation/non-uniform scale composition;
+- negative-X scale mirrors correctly;
+- differing-size frames with adjusted registration origin stay visually aligned; and
+- image Y convention is correct in editor and a renderer-neutral test adapter.
+
+### 17.5 Persistence/resource tests
+
+- RGBA8 decode/encode round trip preserves alpha;
+- logical frame names/origins survive package round trip;
+- appearance mappings survive package round trip;
+- atlas pages may repack without semantic changes;
+- frames are never packed rotated;
+- padding is present and edge-extruded;
+- invalid page rectangles are rejected;
+- missing page images are rejected;
+- appearance reference to an unknown frame name is rejected;
+- duplicate frame names in serialized character artwork are rejected;
+- package loading succeeds without Qt/renderer dependencies; and
+- failed artwork loading does not partially replace the live project.
+
+### 17.6 Editor/manual scenarios
+
+- select a bone belonging to a character and verify the browser scopes to its parent character;
+- select loose topology and verify the browser clears/disables;
+- bulk import frames with duplicate filenames;
+- rename a referenced frame and verify appearance mappings survive;
+- delete a referenced frame through the compound UI path;
+- create two layered items on one slot;
+- change draw order around a joint seam;
+- switch root/tip anchor;
+- edit frame origin for differently sized eye frames;
+- delete a slotted bone and verify artwork becomes unresolved rather than deleted;
+- undo the deletion and verify immediate re-resolution;
+- save/reopen;
+- copy/paste a whole character after Phase 2 and verify independent imagery;
+- play a blink state sequence against Human and Robot appearances after Phase 4; and
+- switch appearances midway through that animation.
+
+## 18. Open Decisions / Deferred Extensions
 
 | Decision | Current recommendation / status |
 |---|---|
-| Project file extension | Resolved in current code: `.stickman`, physically a ZIP archive. |
-| Drop onto bone with no sprite slot | Create/offer a slot automatically. Exact default naming rule still needs to be chosen. |
-| Initial root/tip anchor on drop | Still open as an editor-UX detail. The binding is always explicitly root or tip and remains user-editable afterward. |
-| Sprite naming and identity | Resolved: every sprite has an opaque ID used for references. Sprite names are human-facing labels, are not load-bearing, and need not be unique at the Core level. |
-| Supported image formats | Core decodes through vendored `stb_image` and normalizes to RGBA8. PNG is the required package format; the exact set of additional import formats may remain limited by policy. |
-| Packing algorithm and atlas-page limits | Packing algorithm resolved for the initial implementation: vendored `stb_rect_pack`, no 90-degree rotation, one-pixel transparent gutter around every sprite. A character's logical atlas may be backed by multiple packed atlas pages; maximum page size / multi-page policy remains to be chosen. |
-| Custom sprite pivot | Defer. Start with sprite-center rotation plus translation and scale relative to the selected root/tip anchor. |
-| Binding draw order | Resolved: explicit per-binding integer `draw_order`, lower drawn first; user-editable and not inferred from container order. |
-| Legacy project compatibility | Current character design does not require backward compatibility with older project files. Artwork serialization may bump the format version rather than add a migration path unless that requirement changes. |
-| Default appearance persisted in project | Optional future character metadata; active appearance remains instance/editor state. |
-| Node sprite binding | Resolved: not included. Root/tip anchoring on a bone covers joint-position use cases while keeping rotation ownership unambiguous. |
-| Bone endpoint terminology | Resolved: the endpoint closer to the skeleton root is the root node; the other endpoint is the tip node. |
-| Root/tip orientation | Resolved: both anchors use the same root -> tip local axes. Tip anchoring changes only the origin. |
-| Rotation units | Resolved: radians in Core and JSON; editor numeric controls may display degrees. |
-| Core package ownership | Resolved and already implemented for current project data: Core is authoritative for `.stickman` ZIP serialization/deserialization and format validation. Artwork/image resources extend that implementation. |
-| Atlas pixel format | Resolved: RGBA8; atlas pages are alpha-preserving PNGs with transparent unused space. |
-| Atlas rotation | Resolved: never rotate sprites during atlas-page packing. |
-| Atlas gutter | Resolved: reserve a one-pixel transparent border around each sprite; page metadata rectangles exclude the gutter. |
-| Vendored persistence dependencies | Current code already vendors the JSON parser and `miniz`; add `stb_image`, `stb_image_write`, and `stb_rect_pack` as private Core implementation dependencies. |
-| Project root object | Resolved and implemented: `sm::project` owns topology and characters. It does **not** own artwork atlases or appearances as independent project resources. |
-| Topology ownership | Resolved and implemented: `sm::topology` owns skeleton/node/bone topology; characters own semantic rig membership above it. Artwork is not topology. |
-| Character -> artwork relationship | Resolved: every `sm::character` directly owns its `sm::artwork` member. Artwork lifetime is character lifetime. |
-| Artwork -> atlas relationship | Resolved: each character's artwork directly owns one logical `sm::sprite_atlas`. There is no project-level atlas reference. |
-| Appearance -> atlas relationship | Resolved: appearances do not store an atlas ID. Every appearance uses the atlas of its owning character's artwork. |
-| Cross-character sprite-sheet sharing | Resolved: not supported. Reuse across characters is by explicit copy/import, producing destination-owned resources. |
-| Appearance item -> sprite relationship | Resolved: appearance items store a string slot name plus an opaque `sprite_id`, not a sprite name. The sprite ID must resolve within the owning character's atlas. |
-| Sprite atlas terminology | Resolved: use `sm::sprite_atlas` for the logical collection because it may span multiple packed bitmaps. Use atlas page for each actual packed bitmap. |
+| Sprite-frame identity | **Resolved:** unique load-bearing name within one character atlas; no opaque sprite ID. |
+| Sprite-frame rename | **Resolved:** semantic rename; rewrite appearance mappings. |
+| Appearance identity | Stable character-local ID is useful; it is not a project handle/object-index member. |
+| Appearance-item identity | **Resolved for initial design:** no persistent opaque ID; item is an appearance-owned value and editor selection is transient/tool-local. |
+| Slot identity | **Resolved:** semantic string on bone; unique among live bones in one character. |
+| Slot rename | **Resolved:** propagate to appearance items and future sprite-state events. |
+| Multiple items per slot | **Resolved:** allowed for layered artwork. |
+| Multiple slots per bone | Deferred. Initial bone has zero/one slot. Can be generalized later if independent animated visual channels on one transform are needed. |
+| Missing live bone for an appearance slot | **Resolved:** keep item as unresolved character data; do not delete it. |
+| State mapping | **Resolved:** appearance item maps semantic state names to frame names; every item has `default`. |
+| Missing requested state | **Resolved:** fall back to the item's `default`. |
+| Intentional hidden state | **Resolved:** explicit `none`/JSON `null`. |
+| Sprite animation timing | **Resolved:** animation timeline owns timing; appearances own imagery. |
+| Sprite animation event | **Resolved conceptually:** discrete `sprite_state(slot,state)` event that persists until changed. |
+| Named sprite cycles | Deferred as editor convenience; can generate ordinary state events. |
+| Frame registration | **Resolved:** resource-level origin, default image center. |
+| Per-state transform deltas | Deferred; registration origin + common item transform should cover initial needs. |
+| Pixel/world scale | **Resolved initially:** 1 source pixel = 1 Core unit before item scale. |
+| Alpha convention | **Resolved:** Core canonical RGBA8 uses straight alpha. |
+| Negative scale / mirroring | **Resolved:** allowed. |
+| Node sprite binding | **Resolved:** not included initially; bone root/tip anchoring remains the model. |
+| Root/tip orientation | **Resolved:** both use root -> tip axes; tip changes origin only. |
+| Bone-length stretching | **Resolved initially:** none. |
+| Draw order | **Resolved:** explicit per item, lower drawn first. |
+| Character-to-character stage order | Deferred; do not derive from unordered character storage. |
+| Appearance from Folder | **Removed as a core concept:** New Appearance and Import Folder are separate because frames belong to the character library, not an appearance. |
+| Supported import formats | PNG required baseline; additional `stb_image` formats may be allowed by editor policy. |
+| Source-file reload metadata | Optional transient/editor metadata; package never depends on source path. |
+| Atlas page size | Open implementation choice. |
+| Atlas page count | Logical atlas may span multiple pages. |
+| Packed sprite rotation | **Resolved:** never rotate. |
+| Atlas padding | **Resolved:** at least 1 pixel with edge extrusion. |
+| Separate page JSON | **Resolved:** unnecessary; keep current page/rect resource metadata in `project.json`. |
+| Active appearance persistence | Editor/runtime-instance state. Optional preferred/default appearance may be added later as character metadata. |
+| Cross-character atlas sharing | **Resolved:** unsupported; reuse is explicit copy/import. |
+| Whole-character artwork clipboard | Phase 2, after resource serialization exists. |
+| Character payload undo | **Required prerequisite:** restore full payload when character lifetime is destroyed/recreated. |
 
-# 15. Intended User Workflow
+## 19. Intended User Workflow
 
-1. Create/open a `.stickman` project and build one or more skeletons.
-2. Promote the relevant loose skeleton(s) into a character, or select an existing character.
-3. Open the Artwork Browser; it displays the selected character's directly owned artwork.
-4. Create an Empty Appearance or an Appearance from Folder. The appearance is added to that character; it does not create or reference a project-owned atlas.
-5. Add/rename logical sprites as needed. All sprites live in that character's atlas, and sprite IDs remain stable when names change.
-6. Assign semantic sprite slots to bones in the character's rig.
-7. Drag a sprite from the character's atlas onto a bone in the same character.
-8. The appearance item records the bone slot string and concrete sprite ID; resource resolution remains inside the character's artwork.
-9. Choose whether the item is anchored at the bone root or tip.
-10. Set or adjust the item's explicit draw order so overlapping pieces conceal joints correctly.
-11. Enter Sprite Transform mode.
-12. Translate / rotate / scale the sprite relative to its selected bone endpoint.
-13. Repeat for the rest of the character; joint-cover sprites bind to an incident bone and use the appropriate root or tip anchor.
-14. Switch active appearances to author alternate artwork against the same rig slots and shared character-local sprite atlas.
-15. Switch to another character and verify that its appearances and atlas are independent; there is no cross-character sprite-sheet sharing.
-16. Pose or animate the character and verify that sprites follow the correct rig component, endpoint, and orientation.
-17. Save the self-contained `.stickman` project through Core; each character's artwork is serialized as part of that character, while atlas packing, PNG encoding, page metadata, and ZIP writing remain invisible to the user.
+1. Create/open a `.stickman` project and build topology.
+2. Create/select a character.
+3. Open the Artwork Browser; it scopes itself to that character even when a member bone/node/skeleton is selected.
+4. Import image files into the character's Sprite Library. Each receives a unique frame name.
+5. Create an appearance such as Human.
+6. Assign semantic slot names to the relevant bones.
+7. Drag a frame onto a slotted bone to create an appearance item whose `default` state uses that frame.
+8. Add layered items to the same slot when needed for joint covers, highlights, etc.
+9. Choose root/tip anchor and adjust local T/R/S.
+10. Set draw order so overlapping pieces conceal seams correctly.
+11. Adjust frame registration origins where alternate frames have different source dimensions.
+12. Create another appearance such as Robot, reusing the same slot vocabulary but mapping it to different frame names.
+13. Pose the character and verify both appearances follow the rig correctly.
+14. Save through Core; sprite frames are packed into character-scoped atlas pages inside the `.stickman` archive.
+15. When sprite animation is implemented, author semantic state events such as `eyes=open/half/closed` on the character animation timeline.
+16. Map those states to appropriate frame names in each appearance.
+17. Play the same animation with Human or Robot; animation timing/state remains unchanged while concrete imagery is resolved by the active appearance.
+
+## 20. Design Summary
+
+The central abstraction is intentionally simple:
+
+```text
+RIG
+bone -> semantic slot name
+
+ANIMATION
+(slot, time) -> semantic state name
+
+APPEARANCE
+(slot, state) -> sprite-frame name
+
+ARTWORK ATLAS
+sprite-frame name -> image + registration origin
+```
+
+Static artwork is the same model with `state = default`.
+
+This keeps each layer responsible for one kind of meaning:
+
+- topology/bones determine **where** artwork attaches;
+- slot names determine **what semantic channel** that attachment represents;
+- animation determines **when the semantic visual state changes**;
+- appearance determines **which concrete image represents that state**;
+- the character atlas owns **the actual named image resources**; and
+- the renderer evaluates the resulting transform and draws items in explicit order.
+
+No sprite IDs, project-level artwork resources, appearance-owned atlases, or appearance-specific animation timelines are needed for the initial architecture.
