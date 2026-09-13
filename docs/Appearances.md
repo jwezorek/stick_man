@@ -160,6 +160,21 @@ The initial scale convention is:
 
 Renderer adapters may convert the pixels to whatever representation their host API prefers.
 
+### 3.4 Logical frames and physical image backing
+
+A sprite frame is a logical image resource. Its physical backing is not part of its semantic identity and may change during the lifetime of a project.
+
+Core must support frames backed by either:
+
+- standalone RGBA8 image data, such as a bitmap newly imported by the editor; or
+- a rectangular region of a decoded packed sprite sheet, such as a frame reconstructed when loading a `.stickman` package.
+
+Both forms are exposed uniformly through the frame/resource API. Code using artwork should not need to know whether a named frame owns standalone pixels or refers to a region of shared sheet storage.
+
+A live character may therefore contain both kinds of backing at the same time. For example, frames loaded from the package may still refer to decoded sheet regions while newly imported frames are backed by standalone images. This mixed representation is normal and must not require immediate repacking.
+
+The exact storage mechanism is private to Core. An implementation might use shared sheet buffers plus image cells, standalone image buffers, variants, or another representation. The semantic model only requires that every frame can be accessed as a logical image with its dimensions, pixels, and registration origin.
+
 ## 4. Slot Definitions
 
 A slot definition is a stable character-artwork visual channel. It connects artwork semantics to one live bone in the character's rig.
@@ -869,11 +884,11 @@ On load, Core:
 2. decodes the packed PNG page resources;
 3. validates every recorded frame rectangle;
 4. reconstructs the character-local logical frame library; and
-5. presents individual frames to the rest of Core/editor code.
+5. presents logical individual frames to the rest of Core/editor code.
 
-The loaded in-memory artwork does not depend on its previous packing layout.
+Reconstructing the logical frame library does not require copying every frame into a separate image buffer. Core may retain the decoded page images and represent loaded frames as regions within those shared buffers. If the user subsequently imports or modifies artwork, those new frames may instead be backed by standalone image data. Loaded and newly authored frames may coexist in the same frame library without repacking.
 
-Core may internally retain shared page storage or a packed-resource cache for efficiency, but that must remain an implementation detail. The semantic API behaves as though each named frame is an independent logical image.
+The loaded in-memory artwork does not semantically depend on its previous packing layout. Physical backing remains private to Core, and the frame/resource API must present sheet-backed and standalone frames uniformly. Saving may repack all current logical frames into a new set of sheets; this may change their physical backing and packed rectangles without changing frame names, registration origins, or appearance references.
 
 ### 11.4 No separate atlas JSON
 
@@ -1033,7 +1048,7 @@ Core:
 - add narrow artwork access/semantic operations without reopening generic mutable character lookup;
 - extend `.stickman` serialization for artwork;
 - pack frame resources into PNG pages during serialization;
-- unpack them back into logical frames during deserialization; and
+- reconstruct logical frames during deserialization without requiring standalone copies of sheet-backed images; and
 - add atomic validation/error handling for artwork resources.
 
 Editor:
