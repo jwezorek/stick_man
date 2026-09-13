@@ -141,60 +141,101 @@ Appearance items do not require persistent opaque IDs in the initial design. The
 
 ### 2.3 Character destruction/undo must preserve full character payload
 
-The current topology replacement machinery stores semantic membership snapshots separately from scratch topology. Its `character_state` contains only character ID and name. When topology replacement has destroyed a character and undo later restores it, Core can currently recreate the character from only those fields because a character has no other payload.
+The current topology replacement and undo machinery is correct for the character model that exists today. A character currently has no owned semantic payload beyond its identity/name and rig membership, so when topology replacement destroys a character and undo later restores it, Core can reconstruct the complete character from the existing lightweight membership state.
 
-That ceases to be correct as soon as `character` owns artwork.
+Adding `artwork_` to `sm::character` changes that requirement. From that point onward, an undoable operation that actually destroys a character must retain and restore that character's owned artwork as part of its undo state. The same rule will later apply to other character-owned payload such as animation or poses.
 
-Ordinary membership snapshots should **not** be changed to copy artwork every time a bone edit affects topology. Bitmap resources may be large and most topology edits do not destroy the character.
+This does **not** mean ordinary membership snapshots should begin copying artwork. Membership snapshots are used by routine topology edits that split, merge, replace, or reassign skeletons while the character itself survives. They should remain lightweight and continue to record only the state needed to restore skeleton-to-character membership.
 
-Instead, Core/model command state should distinguish:
+The distinction is:
 
 ```text
-membership snapshot
-    lightweight: skeleton -> parent character relationships,
-                 character identity/name needed for membership restoration
+ordinary topology/membership change
+    character survives
+    -> preserve topology and membership state only
 
-character payload snapshot
-    only when a character itself is actually destroyed:
-        character identity/name
-        artwork
-        future animation/poses
-        other future character-owned payload
+character lifetime actually ends
+    for example, deleting its last skeleton or deleting the whole character
+    -> undo state must also retain the character's owned payload
+       so undo restores the same character, including artwork
 ```
 
-The current `replacement_plan::deleted_character_ids` already identifies the important case: an affected character no longer survives the replacement. That is the natural point for the command layer to preserve a full character snapshot for undo.
+The existing `replacement_plan::deleted_character_ids` already identifies the important case in the current replacement machinery: an affected character will no longer survive the replacement. That can be used by the artwork implementation to determine which character payload must be retained for undo.
 
-Deleting the last skeleton of a character, deleting a whole character, cut, and any other command that actually destroys character lifetime must therefore restore **the same character payload**, not an empty character with the same ID and name.
+This is **not a pre-existing bug or a prerequisite refactor**. It is a requirement that must be handled as part of Phase 1 when `artwork_` is added to `sm::character`.
 
-This should be implemented before Phase 1 adds `artwork_`.
+### 2.4 Character-owned artwork may be mutable below the project boundary
 
-### 2.4 Character-owned artwork should remain project-controlled mutable state
+The reason skeleton, bone, node, and rig mutation is tightly controlled by `sm::project` is that those objects participate in project-wide identity and topology invariants. Nodes, bones, skeletons, and characters use project-level IDs; topology edits can split and merge skeletons; and skeleton/character membership must remain consistent on both sides.
 
-The current Core API deliberately prevents general external mutable access to aggregate objects such as skeletons and characters. That is a useful boundary and artwork should not require weakening it.
+Artwork does not need the same restriction. Under this design, the character is the project-owned object. Sprite-frame names, appearances, appearance items, and other artwork data are scoped to that character rather than participating in the project's live object-ID namespace.
 
-`character::artwork()` may expose a const read interface, while mutation flows through `sm::project` operations that can enforce invariants. Conceptually:
+It is therefore reasonable for `sm::project` to expose mutable character access, while `sm::character` itself controls which owned subobjects may be mutated directly. Conceptually:
 
 ```cpp
-const sm::artwork& character::artwork() const noexcept;
+class project {
+public:
+    const character& character(object_id id) const;
+    character& character(object_id id);
+};
 
-// Representative project-controlled operations, exact names TBD.
-project.create_appearance(character_id, name);
-project.rename_appearance(character_id, appearance_id, name);
-project.delete_appearance(character_id, appearance_id);
+class character {
+public:
+    const sm::rig& rig() const noexcept;       // membership remains project-controlled
 
-project.import_sprite_frame(character_id, frame_name, rgba8_image, origin);
-project.rename_sprite_frame(character_id, old_name, new_name);
-project.delete_sprite_frame(character_id, frame_name);
-
-project.set_bone_sprite_slot(bone_id, slot_name);
-project.rename_sprite_slot(character_id, old_slot, new_slot);
-
-project.add_appearance_item(character_id, appearance_id, item);
-project.update_appearance_item(character_id, appearance_id, item_index, item);
-project.delete_appearance_item(character_id, appearance_id, item_index);
+    const sm::artwork& artwork() const noexcept;
+    sm::artwork& artwork() noexcept;           // character-local mutable state
+};
 ```
 
-`mdl::project` should wrap user-visible mutations in undoable commands and emit the appropriate editor notifications.
+The important distinction is that mutable access to a character does **not** imply unrestricted mutable access to its rig. Rig membership still crosses project/topology boundaries and must remain under `sm::project` control.
+
+By contrast, mutations that are entirely internal to artwork can naturally live on `sm::artwork` itself. `sm::artwork` should expose semantic operations that preserve its own local invariants rather than raw mutable access to internal maps/vectors. For example, exact names TBD:
+
+```cpp
+artwork.create_appearance(name);
+artwork.rename_appearance(appearance_id, name);
+artwork.delete_appearance(appearance_id);
+
+artwork.import_sprite_frame(frame_name, rgba8_image, origin);
+artwork.rename_sprite_frame(old_name, new_name);
+artwork.delete_sprite_frame(frame_name);
+
+artwork.add_appearance_item(appearance_id, item);
+artwork.update_appearance_item(appearance_id, item_index, item);
+artwork.delete_appearance_item(appearance_id, item_index);
+```
+
+An operation such as `rename_sprite_frame()` is artwork-local even though it may touch several internal structures: it can rename the atlas entry and rewrite every appearance mapping that refers to that frame while keeping the artwork valid.
+
+Operations that cross the artwork/topology boundary should remain project-controlled. Sprite-slot changes are the clearest example. A slot is declared on a bone but is referenced by appearances and, later, by sprite-animation events. A semantic slot rename therefore needs one operation that can update all affected character state consistently, conceptually:
+
+```cpp
+project.rename_sprite_slot(character_id, old_slot, new_slot);
+```
+
+That operation may update bone slot declarations, artwork mappings, and future animation slot references. The editor should not need to know every Core subsystem that happens to refer to a slot name.
+
+`mdl::project` remains responsible for wrapping user-visible mutations in undoable commands and emitting the appropriate editor notifications. The intended layering is therefore:
+
+```text
+UI / mdl::project
+    undo/redo and editor notifications
+        |
+        v
+sm::project
+    project-wide identity/topology operations
+    mutable access to project-owned characters
+        |
+        v
+sm::character
+    rig exposed read-only
+    artwork exposed as character-owned mutable state
+        |
+        v
+sm::artwork
+    enforces artwork-local invariants through semantic operations
+```
 
 ### 2.5 Sprite editing should not be forced into topology selection
 
