@@ -473,8 +473,7 @@ struct appearance_item {
 };
 
 struct appearance {
-    object_id id;       // character-local identity; not a project handle
-    std::string name;   // cosmetic display name
+    std::string name;   // unique, load-bearing within the owning artwork
     std::vector<appearance_item> items;
 };
 
