@@ -1,0 +1,2 @@
+#define IDI_STICK_MAN 101
+IDI_STICK_MAN ICON "stick_man.ico"

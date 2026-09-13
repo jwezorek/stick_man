@@ -1,6 +1,7 @@
 #include "ui/stick_man.hpp"
 
 #include <QtWidgets/QApplication>
+#include <QIcon>
 #include <QPalette>
 #include <QStyleHints>
 
@@ -53,6 +54,7 @@ int main(int argc, char* argv[])
     QApplication::setStyle("Fusion");
 
     QApplication app(argc, argv);
+    QApplication::setWindowIcon(QIcon(":/app/stick_man.png"));
 
     // Let Qt/Windows handle native dark-mode behavior, including title bars.
     QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);

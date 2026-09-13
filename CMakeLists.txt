@@ -79,6 +79,7 @@ add_executable(stick_man
     ${MINIZ_SOURCES}
 
     src/ui/stick_man.qrc
+    resources/stick_man.qrc
     src/ui/stick_man.cpp
     src/ui/panes/properties.cpp
     src/ui/clipboard.cpp
@@ -96,10 +97,18 @@ set_target_properties(stick_man PROPERTIES
     MACOSX_BUNDLE ON
 )
 
+if(WIN32)
+    target_sources(stick_man PRIVATE resources/stick_man.rc)
+endif()
+
 include(CTest)
 if(BUILD_TESTING)
     get_target_property(SELECTION_TEST_SOURCES stick_man SOURCES)
-    list(REMOVE_ITEM SELECTION_TEST_SOURCES src/main.cpp)
+    list(REMOVE_ITEM SELECTION_TEST_SOURCES
+        src/main.cpp
+        resources/stick_man.qrc
+        resources/stick_man.rc
+    )
     add_executable(selection_regressions tests/selection_regressions.cpp ${SELECTION_TEST_SOURCES})
     target_include_directories(selection_regressions PRIVATE src "${MINIZ_DIR}" "${MINIZ_GENERATED_DIR}")
     target_compile_definitions(selection_regressions PRIVATE MINIZ_NO_STDIO)
