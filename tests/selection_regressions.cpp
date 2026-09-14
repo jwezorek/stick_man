@@ -198,6 +198,65 @@ void artwork_canvas_test(fixture& f, bool visual) {
 }
 void character_test(fixture& f, const std::string& mode) {
     auto& model = f.window.project();
+    if (mode == "character_artwork_phase3" || mode == "character_artwork_phase3_visual") {
+        auto id = f.make_character(false);
+        auto bone = (*f.skeleton(f.first).bones().begin())->id();
+        model.edit_artwork(id, [&](auto& a) {
+            a.insert_frame("red", {sm::image_resource::from_rgba(1,1,{255,0,0,255}), {}});
+            a.insert_frame("blue", {sm::image_resource::from_rgba(1,1,{0,0,255,255}), {}});
+            a.add_slot("eyes", {bone});
+            a.add_state("eyes", "closed"); a.add_state("eyes", "half");
+            a.add_appearance("Human", {{{"eyes", {{"default","red"}, {"closed","blue"}}}}});
+            a.add_appearance("Robot", {{{"eyes", {{"default","blue"}, {"closed",std::nullopt}}}}});
+        });
+        auto& layer = f.canvas().artwork();
+        layer.set_active_appearance(id,"Human"); layer.set_selected_slot(id,"eyes");
+        auto* browser = f.window.findChild<ui::pane::artwork_browser*>();
+        auto* preview = browser->findChild<QComboBox*>("artwork_preview_state");
+        require(preview && preview->isEnabled(), "missing semantic state preview selector");
+        auto choose = [&](const char* name) {
+            int index = preview->findText(name); require(index >= 0, "preview state missing");
+            preview->setCurrentIndex(index); QMetaObject::invokeMethod(preview,"activated",Qt::DirectConnection,Q_ARG(int,index));
+        };
+        auto color = [&] {
+            QImage image(8,8,QImage::Format_RGBA8888); image.fill(Qt::white);
+            QPainter painter(&image); painter.translate(4,4); painter.scale(4,-4); layer.paint(painter); painter.end();
+            return image.pixelColor(4,4);
+        };
+        choose("closed"); require(color() == QColor(Qt::blue), "explicit state did not render");
+        require(layer.hit_test({0,0}).has_value(), "visible preview not selectable");
+        layer.set_active_appearance(id,"Robot");
+        require(preview->currentText() == "closed" && color() == QColor(Qt::white), "appearance switch lost semantic state or hidden mapping");
+        require(!layer.hit_test({0,0}), "hidden preview remained selectable");
+        auto* tree = browser->findChild<QTreeWidget*>("artwork_appearance_structure");
+        tree->setCurrentItem(tree->topLevelItem(0)->child(1));
+        auto* mapping = browser->findChild<QComboBox*>("artwork_mapping");
+        require(mapping->currentIndex() == 1, "hidden mapping not represented in browser");
+        mapping->setCurrentIndex(0); QMetaObject::invokeMethod(mapping,"activated",Qt::DirectConnection,Q_ARG(int,0));
+        require(color() == QColor(Qt::blue), "editing unmapped fallback did not refresh preview");
+        model.undo(); require(color() == QColor(Qt::white), "mapping undo lost preview state");
+        choose("half"); require(color() == QColor(Qt::blue), "unmapped state did not fall back");
+        layer.set_active_appearance(id,"Human"); require(color() == QColor(Qt::red), "fallback used other appearance");
+        for (auto* button : browser->findChildren<QPushButton*>()) if (button->text() == "Reset all preview states") button->click();
+        require(preview->currentText() == "default", "preview reset failed");
+        choose("closed");
+        model.edit_artwork(id, [](auto& a) { a.rename_state("eyes","closed","shut"); });
+        require(preview->currentText() == "default", "renamed preview state did not reset safely");
+        require(model.core().artwork(id).resolve_frame("Human","eyes","shut") == "blue" &&
+            !model.core().artwork(id).resolve_frame("Robot","eyes","shut"), "rename did not propagate across appearances");
+        choose("shut"); model.edit_artwork(id, [](auto& a) { a.delete_state("eyes","shut"); });
+        require(preview->currentText() == "default" && color() == QColor(Qt::red), "deleted state left stale preview");
+        model.undo(); require(preview->findText("shut") >= 0, "undo did not restore vocabulary");
+        choose("shut");
+        if (mode.ends_with("visual")) {
+            browser->findChild<QTabWidget*>()->setCurrentIndex(1);
+            f.window.resize(1400,950); f.window.show(); QApplication::processEvents();
+            require(f.window.grab().save("out/appearances-phase3.png"), "phase3 visual capture failed");
+        }
+        auto saved = model.serialize(); require(saved.has_value() && model.deserialize(*saved), "state preview reopen failed");
+        require(color() == QColor(Qt::red), "preview state leaked into saved project");
+        return;
+    }
     if (mode == "character_artwork_phase2" || mode == "character_artwork_phase2_visual") { artwork_canvas_test(f, mode.ends_with("visual")); return; }
     if (mode == "character_artwork" || mode == "character_artwork_visual") {
         auto id = f.make_character(false);

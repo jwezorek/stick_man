@@ -22,12 +22,13 @@ namespace ui::pane {
         QPushButton* add_to_appearance_;
         QPushButton* remove_from_appearance_;
         QComboBox* mapping_;
+        QComboBox* preview_state_;
         QDoubleSpinBox* origin_x_;
         QDoubleSpinBox* origin_y_;
         std::array<QDoubleSpinBox*, 5> transform_;
         std::vector<QPushButton*> order_buttons_;
         QPointer<QObject> connected_layer_;
-        QMetaObject::Connection layer_selection_, layer_appearance_;
+        QMetaObject::Connection layer_selection_, layer_appearance_, layer_preview_;
         bool refreshing_ = false;
         void reorder_slot(const std::string& slot, int index);
         void move_selected_slot(int direction);

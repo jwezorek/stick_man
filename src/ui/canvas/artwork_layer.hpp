@@ -17,6 +17,7 @@ namespace ui::canvas {
         scene& scene_;
         mdl::project& project_;
         std::unordered_map<sm::object_id, std::string> active_;
+        std::unordered_map<sm::object_id, std::map<std::string, std::string>> preview_states_;
         std::optional<sprite_selection> selected_;
         bool show_artwork_ = true, show_skeleton_ = true, wireframe_ = false;
         struct drag_state {
@@ -38,6 +39,9 @@ namespace ui::canvas {
         artwork_layer(scene& scene, mdl::project& project);
         std::string active_appearance(const sm::object_id& character) const;
         void set_active_appearance(const sm::object_id& character, const std::string& appearance);
+        std::string preview_state(const sm::object_id& character, const std::string& slot) const;
+        void set_preview_state(const sm::object_id& character, const std::string& slot, const std::string& state);
+        void reset_preview_states(const sm::object_id& character);
         void set_selected_slot(const sm::object_id& character, const std::string& slot);
         const std::optional<sprite_selection>& selected_slot() const { return selected_; }
         std::optional<sprite_selection> hit_test(QPointF position) const;
@@ -65,5 +69,6 @@ namespace ui::canvas {
     signals:
         void selection_changed();
         void appearance_changed();
+        void preview_changed();
     };
 }

@@ -229,6 +229,18 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
     add_to_appearance_ = membership.at(0); remove_from_appearance_ = membership.at(1);
     mapping_ = new QComboBox(appearance_tab); mapping_->setObjectName("artwork_mapping");
     appearance_layout->addWidget(new QLabel("Image for selected state", appearance_tab)); appearance_layout->addWidget(mapping_);
+    preview_state_ = new QComboBox(appearance_tab); preview_state_->setObjectName("artwork_preview_state");
+    preview_state_->setToolTip("Preview this slot's semantic state across appearances. Preview choices are not saved.");
+    auto* preview_form = new QFormLayout;
+    preview_form->addRow("Preview slot state", preview_state_); appearance_layout->addLayout(preview_form);
+    buttons(appearance_layout, {{"Reset all preview states", [this] {
+        if (character_) canvases_.active_canvas().artwork().reset_preview_states(*character_);
+    }}});
+    connect(preview_state_, &QComboBox::activated, this, [this](int) {
+        if (refreshing_ || !character_) return;
+        auto [slot, state] = selected_appearance_item(appearance_structure_);
+        if (!slot.empty()) canvases_.active_canvas().artwork().set_preview_state(*character_, slot, preview_state_->currentText().toStdString());
+    });
     auto* transform_form = new QFormLayout;
     const QStringList transform_labels{"Translation X", "Translation Y (up)", "Rotation (degrees)", "Scale X", "Scale Y"};
     const QStringList transform_names{"artwork_translation_x", "artwork_translation_y", "artwork_rotation", "artwork_scale_x", "artwork_scale_y"};
@@ -348,10 +360,11 @@ void ui::pane::artwork_browser::edit(const std::function<void(sm::artwork&)>& fn
 void ui::pane::artwork_browser::connect_canvas() {
     auto* layer = &canvases_.active_canvas().artwork();
     if (connected_layer_ == layer) return;
-    disconnect(layer_selection_); disconnect(layer_appearance_);
+    disconnect(layer_selection_); disconnect(layer_appearance_); disconnect(layer_preview_);
     connected_layer_ = layer;
     layer_selection_ = connect(layer, &canvas::artwork_layer::selection_changed, this, [this] { refresh(); });
     layer_appearance_ = connect(layer, &canvas::artwork_layer::appearance_changed, this, [this] { refresh(); });
+    layer_preview_ = connect(layer, &canvas::artwork_layer::preview_changed, this, [this] { refresh(); });
 }
 void ui::pane::artwork_browser::reorder_slot(const std::string& slot, int index) {
     if (refreshing_ || !character_) return;
@@ -440,6 +453,8 @@ void ui::pane::artwork_browser::refresh() {
             const auto& definition = art.slot_definitions().at(name);
             auto* implementation = active ? appearance_slot(*active, name) : nullptr;
             auto label = QString::fromStdString(name);
+            auto preview = canvases_.active_canvas().artwork().preview_state(*character_, name);
+            label += " [" + QString::fromStdString(preview) + "]";
             if (!project_.core().slot_resolved(*character_, name)) label += " — unresolved";
             auto* top = new QTreeWidgetItem(appearance_structure_, QStringList{
                 label, implementation ? QStringLiteral("Included") : QStringLiteral("Not in this appearance")
@@ -469,6 +484,7 @@ void ui::pane::artwork_browser::refresh_details() {
     auto frame = selected(frames_);
     origin_x_->setEnabled(!frame.empty()); origin_y_->setEnabled(!frame.empty());
     mapping_->clear(); mapping_->setEnabled(false);
+    preview_state_->clear(); preview_state_->setEnabled(false);
     add_to_appearance_->setEnabled(false); remove_from_appearance_->setEnabled(false);
     for (auto* spin : transform_) spin->setEnabled(false);
     for (auto* button : order_buttons_) button->setEnabled(false);
@@ -478,6 +494,9 @@ void ui::pane::artwork_browser::refresh_details() {
         auto app = art.appearances().find(active_appearance().toStdString());
         auto [slot, state] = selected_appearance_item(appearance_structure_);
         if (app != art.appearances().end() && !slot.empty()) {
+            for (const auto& value : art.slot_definitions().at(slot).states) preview_state_->addItem(QString::fromStdString(value));
+            preview_state_->setCurrentText(QString::fromStdString(canvases_.active_canvas().artwork().preview_state(*character_, slot)));
+            preview_state_->setEnabled(true);
             auto* implementation = appearance_slot(app->second, slot);
             add_to_appearance_->setEnabled(!implementation);
             remove_from_appearance_->setEnabled(implementation);

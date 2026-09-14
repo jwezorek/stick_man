@@ -60,6 +60,28 @@ void ui::canvas::artwork_layer::set_selected_slot(const sm::object_id& id, const
     if (selected_ && *selected_ == value) return;
     cancel_transform(); selected_ = value; scene_.update(); emit selection_changed();
 }
+std::string ui::canvas::artwork_layer::preview_state(const sm::object_id& id, const std::string& slot) const {
+    if (!project_.core().character(id)) return "default";
+    const auto& definitions = project_.core().artwork(id).slot_definitions();
+    auto definition = definitions.find(slot);
+    auto character = preview_states_.find(id);
+    if (definition == definitions.end() || character == preview_states_.end()) return "default";
+    auto state = character->second.find(slot);
+    if (state == character->second.end() || std::ranges::find(definition->second.states, state->second) == definition->second.states.end()) return "default";
+    return state->second;
+}
+void ui::canvas::artwork_layer::set_preview_state(const sm::object_id& id, const std::string& slot, const std::string& state) {
+    const auto& vocabulary = project_.core().artwork(id).slot_definitions().at(slot).states;
+    if (std::ranges::find(vocabulary, state) == vocabulary.end()) throw std::invalid_argument("Unknown preview state.");
+    if (preview_state(id, slot) == state) return;
+    cancel_transform();
+    if (state == "default") preview_states_[id].erase(slot);
+    else preview_states_[id][slot] = state;
+    scene_.update(); emit preview_changed();
+}
+void ui::canvas::artwork_layer::reset_preview_states(const sm::object_id& id) {
+    cancel_transform(); preview_states_.erase(id); scene_.update(); emit preview_changed();
+}
 std::vector<ui::canvas::artwork_layer::drawable> ui::canvas::artwork_layer::drawables() const {
     std::vector<drawable> result;
     if (!show_artwork_) return result;
@@ -69,7 +91,10 @@ std::vector<ui::canvas::artwork_layer::drawable> ui::canvas::artwork_layer::draw
     std::ranges::sort(ids);
     for (const auto& id : ids) {
         auto name = active_appearance(id); if (name.empty()) continue;
-        for (auto sprite : project_.core().resolve_artwork(id, name)) {
+        std::map<std::string, std::string> states;
+        for (const auto& [slot, _] : project_.core().artwork(id).slot_definitions())
+            states.emplace(slot, preview_state(id, slot));
+        for (auto sprite : project_.core().resolve_artwork(id, name, states)) {
             sprite_selection selection{id, name, sprite.slot};
             if (drag_ && drag_->selection == selection)
                 sprite.transform = sprite.bone_transform * local_matrix(drag_->preview, sprite.registration_origin);
@@ -120,11 +145,14 @@ std::optional<sm::sprite_transform> ui::canvas::artwork_layer::selected_transfor
 }
 void ui::canvas::artwork_layer::refresh() {
     std::erase_if(active_, [&](const auto& entry) { return !project_.core().character(entry.first); });
+    for (auto& [id, states] : preview_states_)
+        std::erase_if(states, [&](const auto& state) { return preview_state(id, state.first) == "default"; });
+    std::erase_if(preview_states_, [](const auto& entry) { return entry.second.empty(); });
     if (selected_ && !selected_transform()) { selected_.reset(); emit selection_changed(); }
     refresh_guides(); scene_.update();
 }
 void ui::canvas::artwork_layer::reset() {
-    drag_.reset(); selected_.reset(); active_.clear(); refresh(); emit selection_changed(); emit appearance_changed();
+    drag_.reset(); selected_.reset(); active_.clear(); preview_states_.clear(); refresh(); emit selection_changed(); emit appearance_changed(); emit preview_changed();
 }
 void ui::canvas::artwork_layer::set_show_artwork(bool show) { cancel_transform(); show_artwork_ = show; scene_.update(); }
 void ui::canvas::artwork_layer::set_show_skeleton(bool show) { show_skeleton_ = show; refresh_guides(); scene_.update(); }

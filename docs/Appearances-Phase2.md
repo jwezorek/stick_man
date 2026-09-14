@@ -33,8 +33,8 @@ are centered Cartesian coordinates (+Y up); image rows remain top-down RGBA8.
 
 The optional state map selects declared semantic states. Missing selections use
 `default`; missing mappings fall back to `default`; explicit hidden targets and
-unresolved bones produce no sprite. Editor-selectable state preview remains
-Phase 3 work.
+unresolved bones produce no sprite. Editor-selectable state preview is described
+in [Phase 3](Appearances-Phase3.md).
 
 Core continues to accept and return memory buffers, with no filesystem or Qt
 dependencies. The existing packed sprite-sheet resource API is unchanged. The
