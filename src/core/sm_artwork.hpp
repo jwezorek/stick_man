@@ -39,8 +39,9 @@ namespace sm {
         std::vector<packed_frame_region> frames;
     };
 
-    // Access is read-only; semantic operations reject invalid edits by throwing
-    // invalid_argument. Copies have independent semantics and share immutable pixels.
+    // Access is read-only; semantic operations throw invalid_argument for invalid
+    // edits and out_of_range for missing lookup targets. Copies have independent
+    // semantics and share immutable pixels.
     class artwork {
         std::map<std::string, sprite_frame> frames_;
         std::map<std::string, slot_definition> definitions_;

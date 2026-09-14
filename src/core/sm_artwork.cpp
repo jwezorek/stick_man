@@ -14,11 +14,12 @@ namespace {
         name_ok(name); check(!map.contains(name), "Name already exists.");
     }
     template<class Map> void rename(Map& map, const std::string& from, const std::string& to) {
-        check(map.contains(from), "Name not found.");
+        auto it = map.find(from);
+        if (it == map.end()) throw std::out_of_range("Name not found.");
         if (from == to) return;
         available(map, to);
-        auto value = map.at(from);
-        map.emplace(to, std::move(value)); map.erase(from);
+        auto value = it->second;
+        map.emplace(to, std::move(value)); map.erase(it);
     }
 }
 void sm::artwork::insert_frame(const std::string& name, std::span<const std::uint8_t> encoded) {
@@ -38,7 +39,7 @@ void sm::artwork::rename_frame(const std::string& name, const std::string& repla
         for (auto& [state, frame] : slot.states) if (frame == name) frame = replacement;
 }
 void sm::artwork::delete_frame(const std::string& name) {
-    check(frames_.contains(name), "Frame not found.");
+    if (!frames_.contains(name)) throw std::out_of_range("Frame not found.");
     for (const auto& [_, app] : appearances_) for (const auto& slot : app.appearance_slots)
         for (const auto& [state, frame] : slot.states)
             check(frame != name, "Frame is referenced by an appearance. Change its mappings before deleting it.");
@@ -60,7 +61,7 @@ void sm::artwork::rename_slot(const std::string& name, const std::string& replac
     for (auto& [_, app] : appearances_) for (auto& slot : app.appearance_slots) if (slot.slot == name) slot.slot = replacement;
 }
 void sm::artwork::delete_slot(const std::string& name) {
-    check(definitions_.contains(name), "Slot not found.");
+    if (!definitions_.contains(name)) throw std::out_of_range("Slot not found.");
     definitions_.erase(name);
     for (auto& [_, app] : appearances_) std::erase_if(app.appearance_slots, [&](const auto& slot) { return slot.slot == name; });
 }
@@ -73,18 +74,20 @@ void sm::artwork::add_state(const std::string& slot, const std::string& state) {
     check(std::ranges::find(states, state) == states.end(), "State already exists."); states.push_back(state);
 }
 void sm::artwork::rename_state(const std::string& slot, const std::string& state, const std::string& replacement) {
-    check(state != "default", "Cannot rename default state."); name_ok(replacement);
     auto& states = definitions_.at(slot).states;
-    auto it = std::ranges::find(states, state); check(it != states.end(), "State not found.");
+    auto it = std::ranges::find(states, state);
+    if (it == states.end()) throw std::out_of_range("State not found.");
+    check(state != "default", "Cannot rename default state."); name_ok(replacement);
     if (state == replacement) return;
     check(std::ranges::find(states, replacement) == states.end(), "State already exists."); *it = replacement;
     for (auto& [_, app] : appearances_) for (auto& s : app.appearance_slots)
         if (s.slot == slot && s.states.contains(state)) rename(s.states, state, replacement);
 }
 void sm::artwork::delete_state(const std::string& slot, const std::string& state) {
-    check(state != "default", "Cannot delete default state.");
     auto& states = definitions_.at(slot).states;
-    check(std::ranges::find(states, state) != states.end(), "State not found."); std::erase(states, state);
+    if (std::ranges::find(states, state) == states.end()) throw std::out_of_range("State not found.");
+    check(state != "default", "Cannot delete default state.");
+    std::erase(states, state);
     for (auto& [_, app] : appearances_) for (auto& s : app.appearance_slots) if (s.slot == slot) s.states.erase(state);
 }
 void sm::artwork::validate_appearance(const appearance& app) const {
@@ -107,13 +110,19 @@ void sm::artwork::add_appearance(const std::string& name, appearance value) {
 }
 void sm::artwork::rename_appearance(const std::string& name, const std::string& replacement) { rename(appearances_, name, replacement); }
 void sm::artwork::delete_appearance(const std::string& name) {
-    check(appearances_.contains(name), "Appearance not found."); appearances_.erase(name);
+    if (!appearances_.contains(name)) throw std::out_of_range("Appearance not found.");
+    appearances_.erase(name);
 }
 void sm::artwork::set_appearance(const std::string& name, appearance value) {
-    check(appearances_.contains(name), "Appearance not found."); validate_appearance(value); appearances_.at(name) = std::move(value);
+    if (!appearances_.contains(name)) throw std::out_of_range("Appearance not found.");
+    validate_appearance(value); appearances_.at(name) = std::move(value);
 }
 sm::frame_target sm::artwork::resolve_frame(const std::string& app, const std::string& slot, const std::string& state) const {
-    for (const auto& s : appearances_.at(app).appearance_slots) if (s.slot == slot) {
+    const auto& appearance = appearances_.at(app);
+    const auto& definition = definitions_.at(slot);
+    if (std::ranges::find(definition.states, state) == definition.states.end())
+        throw std::out_of_range("State not found.");
+    for (const auto& s : appearance.appearance_slots) if (s.slot == slot) {
         auto it = s.states.find(state); return it == s.states.end() ? s.states.at("default") : it->second;
     }
     return std::nullopt;
