@@ -1,5 +1,6 @@
 #include "stick_man.hpp"
 #include "panes/artwork_browser.hpp"
+#include "canvas/artwork_layer.hpp"
 #include "panes/skeleton_pane.hpp"
 #include "panes/animation_pane.hpp"
 #include "panes/tools_pane.hpp"
@@ -274,6 +275,19 @@ void ui::stick_man::update_undo_and_redo(bool can_redo, bool can_undo) {
 }
 void ui::stick_man::insert_view_menu() {
     auto view_menu = menuBar()->addMenu(tr("View"));
+    auto* show_artwork = view_menu->addAction("Show Artwork");
+    show_artwork->setObjectName("show_artwork"); show_artwork->setCheckable(true); show_artwork->setChecked(true);
+    connect(show_artwork, &QAction::toggled, this, [this](bool show) { canvases_->active_canvas().artwork().set_show_artwork(show); });
+    auto* show_skeleton = view_menu->addAction("Show Skeleton");
+    show_skeleton->setObjectName("show_skeleton"); show_skeleton->setCheckable(true); show_skeleton->setChecked(true);
+    connect(show_skeleton, &QAction::toggled, this, [this](bool show) { canvases_->active_canvas().artwork().set_show_skeleton(show); });
+    auto* display = view_menu->addMenu("Skeleton Display");
+    auto* display_group = new QActionGroup(this);
+    auto* normal = display->addAction("Normal"); auto* wire = display->addAction("Wireframe");
+    normal->setCheckable(true); wire->setCheckable(true); normal->setChecked(true);
+    display_group->addAction(normal); display_group->addAction(wire);
+    connect(wire, &QAction::toggled, this, [this](bool value) { canvases_->active_canvas().artwork().set_wireframe(value); });
+    view_menu->addSeparator();
     for (auto* dock : findChildren<pane::artwork_browser*>()) view_menu->addAction(dock->toggleViewAction());
     QMenu* magnification_menu = view_menu->addMenu(tr("Magnification"));
     // Create an action group to make the actions mutually exclusive (like radio buttons)

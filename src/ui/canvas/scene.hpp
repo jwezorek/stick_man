@@ -39,6 +39,7 @@ namespace ui {
 
     namespace canvas {
         class manager;
+        class artwork_layer;
 
         namespace item {
             class base;
@@ -74,6 +75,7 @@ namespace ui {
             tool::input_handler& inp_handler_;
             item::rubber_band* rubber_band_;
             std::optional<int> zoom_level_;
+            artwork_layer* artwork_ = nullptr; // QObject child, lives with the scene.
 
             
             QGraphicsView& view();
@@ -91,11 +93,16 @@ namespace ui {
             void drawBackground(QPainter* painter, const QRectF& rect) override;
             void drawForeground(QPainter* painter, const QRectF& rect) override;
             void focusOutEvent(QFocusEvent* focusEvent) override;
+            void dragEnterEvent(QGraphicsSceneDragDropEvent* event) override;
+            void dragMoveEvent(QGraphicsSceneDragDropEvent* event) override;
+            void dropEvent(QGraphicsSceneDragDropEvent* event) override;
             void set_scale_aux(double scale, std::optional<QPointF> pt = {});
         public:
 
             scene(tool::input_handler& inp_handler);
             void init();
+            void init_artwork(mdl::project& project);
+            artwork_layer& artwork() const;
             item::node* top_node(const QPointF& pt) const;
             item::base* top_item(const QPointF & pt) const;
             std::vector<item::base*> items_in_rect(const QRectF& pt) const;

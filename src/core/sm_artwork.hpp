@@ -27,6 +27,16 @@ namespace sm {
         sprite_transform transform;
     };
     struct appearance { std::vector<appearance_slot> appearance_slots; };
+    struct resolved_sprite {
+        std::string slot;
+        std::string frame;
+        image_resource image;
+        point registration_origin;
+        // Maps centered Cartesian image coordinates into the current scene pose.
+        matrix transform;
+        // Bone endpoint frame, before appearance and registration transforms.
+        matrix bone_transform;
+    };
     struct packed_frame_region {
         std::string name;
         std::size_t page;

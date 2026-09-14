@@ -108,6 +108,8 @@ namespace sm {
         sm::artwork& artwork(const object_id& character_id);
         const sm::artwork& artwork(const object_id& character_id) const;
         bool slot_resolved(const object_id& character_id, const std::string& slot) const;
+        std::vector<resolved_sprite> resolve_artwork(const object_id& character_id,
+            const std::string& appearance, const std::map<std::string, std::string>& states = {}) const;
         auto characters() const { return detail::to_range_view<const_character_ref>(characters_); }
 
         // Mutable lookup accepts nodes and bones only; use const lookup for aggregate objects.

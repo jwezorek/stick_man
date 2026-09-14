@@ -69,7 +69,8 @@ are changed. All artwork edits are undoable. Character copy/paste preserves
 independent artwork semantics and remaps bone IDs; topology undo restores artwork.
 
 Canvas sprite rendering, painter-order controls and sprite transform authoring
-remain Phase 2 work. Active appearance selection is session state.
+are described in [Phase 2](Appearances-Phase2.md). Active appearance selection is
+session state.
 
 ## Verification
 

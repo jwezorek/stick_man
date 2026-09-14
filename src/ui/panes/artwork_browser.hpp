@@ -1,8 +1,9 @@
 #pragma once
 #include <QtWidgets>
+#include <array>
 #include "../../model/project.hpp"
 
-namespace ui::canvas { class manager; }
+namespace ui::canvas { class manager; class artwork_layer; }
 namespace ui::pane {
     std::optional<sm::object_id> artwork_character(const mdl::selection& selection);
     class artwork_browser : public QDockWidget {
@@ -10,7 +11,6 @@ namespace ui::pane {
         mdl::project& project_;
         canvas::manager& canvases_;
         std::optional<sm::object_id> character_;
-        std::unordered_map<sm::object_id, QString> active_;
         std::map<std::string, std::pair<sm::image_resource, QIcon>> thumbnails_;
         QWidget* body_;
         QLabel* character_label_;
@@ -24,7 +24,14 @@ namespace ui::pane {
         QComboBox* mapping_;
         QDoubleSpinBox* origin_x_;
         QDoubleSpinBox* origin_y_;
+        std::array<QDoubleSpinBox*, 5> transform_;
+        std::vector<QPushButton*> order_buttons_;
+        QPointer<QObject> connected_layer_;
+        QMetaObject::Connection layer_selection_, layer_appearance_;
         bool refreshing_ = false;
+        void reorder_slot(const std::string& slot, int index);
+        void move_selected_slot(int direction);
+        void connect_canvas();
         void edit(const std::function<void(sm::artwork&)>& fn);
         void refresh_details();
         void import_frames();

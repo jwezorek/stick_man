@@ -4,6 +4,8 @@
 #include "core/sm_package.hpp"
 #include <algorithm>
 #include <limits>
+#include <cmath>
+#include <numbers>
 #include <iostream>
 #include <stdexcept>
 
@@ -36,6 +38,7 @@ void resources_and_semantics() {
     art.add_slot("eyes", {bone}); art.add_slot("glasses", {bone});
     rejects([&] { art.add_slot("eyes", {bone}); });
     art.add_state("eyes", "closed");
+    art.add_state("eyes", "open"); // Declared but unmapped: falls back to default.
     art.add_appearance("Human", {{{"eyes", {{"default", "eye"}, {"closed", std::nullopt}}}}});
     rejects([&] { art.add_appearance("Human"); });
     rejects([&] { art.add_appearance("bad", {{{"unknown"}}}); });
@@ -144,11 +147,80 @@ void bone_replacement() {
     require(p.slot_resolved(id, "part"), "replacement remap lost artwork binding");
     require(p.artwork(id).slot_definitions().at("part").bone != bone_id, "replacement failed to remap bone");
 }
+void near_point(sm::point actual, sm::point expected, const char* message) {
+    require(std::abs(actual.x - expected.x) < 1e-9 && std::abs(actual.y - expected.y) < 1e-9, message);
+}
+void artwork_resolution() {
+    sm::project p;
+    auto& root = p.create_skeleton({10, 20});
+    auto& tip = p.create_skeleton({10, 30});
+    auto bone = p.create_bone("vertical", root.root_node(), tip.root_node());
+    require(bone.has_value(), "resolution bone fixture failed");
+    std::vector<sm::const_skel_ref> members{bone->get().owner()};
+    const auto id = p.create_character(members)->get().id();
+    auto& art = p.artwork(id);
+    art.insert_frame("plain", {fixture(), {}});
+    art.insert_frame("registered", {fixture(), {1, -2}});
+    art.add_slot("root", {bone->get().id()});
+    art.add_slot("tip", {bone->get().id(), sm::bone_anchor::tip});
+    art.add_slot("transformed", {bone->get().id()});
+    art.add_slot("omitted", {bone->get().id()});
+    art.add_appearance("pose", {{
+        {"tip", {{"default", "plain"}}},
+        {"root", {{"default", "plain"}}},
+        {"transformed", {{"default", "registered"}}, {{3, 4}, std::numbers::pi / 2, {-2, 3}}}
+    }});
+    auto sprites = p.resolve_artwork(id, "pose");
+    require(sprites.size() == 3 && sprites[0].slot == "tip" && sprites[1].slot == "root", "painter order or omitted slot wrong");
+    near_point(sm::transform({1, 0}, sprites[0].transform), {10, 31}, "tip anchor reversed or misplaced");
+    near_point(sm::transform({1, 0}, sprites[1].transform), {10, 21}, "root anchor misplaced");
+    const auto& transformed = sprites[2];
+    require(transformed.frame == "registered" && transformed.registration_origin == sm::point{1, -2}, "resolved frame metadata lost");
+    same_pixels(transformed.image, fixture());
+    near_point(sm::transform({1, -2}, transformed.transform), {6, 23}, "registration must land at bone-local translation");
+    near_point(sm::transform({2, -2}, transformed.transform), {8, 23}, "negative X scale or rotation order wrong");
+    near_point(sm::transform({1, -1}, transformed.transform), {6, 20}, "nonuniform Y scale or rotation order wrong");
+    near_point(sm::transform({0, 0}, transformed.bone_transform), {10, 20}, "bone transform contains sprite translation");
+    near_point(sm::transform({1, 0}, transformed.bone_transform), {10, 21}, "bone transform contains sprite rotation or scale");
+    bone->get().child_node().set_world_pos({20, 20});
+    sprites = p.resolve_artwork(id, "pose");
+    near_point(sm::transform({1, 0}, sprites[0].transform), {21, 20}, "tip artwork did not follow pose");
+    near_point(sm::transform({1, -2}, sprites[2].transform), {13, 24}, "registered artwork did not follow pose");
+
+    art.add_state("root", "closed");
+    art.add_state("root", "alternate");
+    art.add_state("root", "unmapped");
+    auto appearance = art.appearances().at("pose");
+    appearance.appearance_slots[1].states["closed"] = std::nullopt;
+    appearance.appearance_slots[1].states["alternate"] = "registered";
+    art.set_appearance("pose", appearance);
+    require(p.resolve_artwork(id, "pose", {{"root", "unmapped"}})[1].frame == "plain", "missing state failed to fall back");
+    require(p.resolve_artwork(id, "pose", {{"root", "alternate"}})[1].frame == "registered", "explicit state ignored");
+    sprites = p.resolve_artwork(id, "pose", {{"root", "closed"}});
+    require(sprites.size() == 2 && sprites[1].slot == "transformed", "hidden state fell back or disturbed order");
+    art.bind_slot("tip", sm::object_id::generate(), sm::bone_anchor::tip);
+    sprites = p.resolve_artwork(id, "pose");
+    require(sprites.size() == 2 && sprites[0].slot == "root", "missing bone rendered");
+    auto& foreign_root = p.create_skeleton({0, 0});
+    auto& foreign_tip = p.create_skeleton({1, 0});
+    auto foreign_bone = p.create_bone("foreign", foreign_root.root_node(), foreign_tip.root_node());
+    require(foreign_bone.has_value(), "foreign bone fixture failed");
+    art.bind_slot("tip", foreign_bone->get().id(), sm::bone_anchor::tip);
+    require(p.resolve_artwork(id, "pose").size() == 2, "loose bone rendered as owned artwork");
+    std::vector<sm::const_skel_ref> foreign_members{foreign_bone->get().owner()};
+    require(p.create_character(foreign_members).has_value(), "foreign character fixture failed");
+    require(p.resolve_artwork(id, "pose").size() == 2, "foreign character bone rendered");
+    art.bind_slot("tip", bone->get().parent_node().id(), sm::bone_anchor::tip);
+    require(p.resolve_artwork(id, "pose").size() == 2, "node rendered as a bone");
+    art.bind_slot("tip", bone->get().id(), sm::bone_anchor::tip);
+    require(p.resolve_artwork(id, "pose").size() == 3, "restored bone binding remained unresolved");
+}
 int main() {
     try {
         resources_and_semantics();
         persistence();
         bone_replacement();
+        artwork_resolution();
         sm::project project;
         auto& skeleton = project.create_skeleton({0, 0});
         std::vector<sm::const_skel_ref> members{skeleton};

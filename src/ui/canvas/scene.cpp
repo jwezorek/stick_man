@@ -1,4 +1,5 @@
 #include "scene.hpp"
+#include "artwork_layer.hpp"
 #include "node_item.hpp"
 #include "bone_item.hpp"
 #include "skel_item.hpp"
@@ -149,6 +150,10 @@ ui::canvas::scene::scene(tool::input_handler& inp_handler) :
 
 void ui::canvas::scene::init() {
 }
+void ui::canvas::scene::init_artwork(mdl::project& project) {
+    if (!artwork_) artwork_ = new artwork_layer(*this, project);
+}
+ui::canvas::artwork_layer& ui::canvas::scene::artwork() const { return *artwork_; }
 
 void ui::canvas::scene::drawBackground(QPainter* painter, const QRectF& dirty_rect) {
     painter->fillRect(dirty_rect, QColor::fromRgb(53,53,53));
@@ -157,6 +162,7 @@ void ui::canvas::scene::drawBackground(QPainter* painter, const QRectF& dirty_re
     auto rect = dirty_rect.intersected(scene_rect);
 
     draw_grid_lines(painter, rect, k_grid_line_spacing);
+    if (artwork_) artwork_->paint(*painter);
 }
 
 QRect client_rectangle(const QGraphicsView* view) {
@@ -174,6 +180,7 @@ QRect client_rectangle(const QGraphicsView* view) {
 
 void ui::canvas::scene::drawForeground(QPainter* painter, const QRectF& rect) {
     QGraphicsScene::drawForeground(painter, rect);
+    if (artwork_) artwork_->paint_selection(*painter);
 
     if (is_status_line_visible()) {
         QGraphicsView* view = views().first();
@@ -196,6 +203,7 @@ void ui::canvas::scene::drawForeground(QPainter* painter, const QRectF& rect) {
 }
 
 void ui::canvas::scene::focusOutEvent(QFocusEvent* focusEvent) {
+    if (artwork_) artwork_->cancel_transform();
     if (is_status_line_visible()) {
         hide_status_line();
     }
@@ -231,6 +239,7 @@ void ui::canvas::scene::sync_to_model() {
     for (auto* child : itms | rv::transform(to_stick_man) | rv::filter([](auto* p) {return p; })) {
         child->sync_to_model();
     }
+    if (artwork_) artwork_->refresh();
 }
 
 void ui::canvas::scene::set_contents(mdl::project& model) {
@@ -379,6 +388,7 @@ void ui::canvas::scene::clear_selection() {
 }
 
 void ui::canvas::scene::clear() {
+    if (artwork_) artwork_->cancel_transform();
     selection_.clear();
     auto items = canvas_items();
 	for (auto* item : items) {
@@ -398,6 +408,7 @@ void ui::canvas::scene::sync_selection() {
         bool selected = selection_.contains(itm);
         itm->set_selected(selected);
     }
+    if (artwork_) artwork_->refresh_guides();
     emit manager().selection_changed(*this);
 }
 
@@ -507,6 +518,7 @@ ui::canvas::item::node* ui::canvas::scene::top_node(const QPointF& pt) const {
 }
 
 ui::canvas::item::base* ui::canvas::scene::top_item(const QPointF& pt) const {
+    if (artwork_ && !artwork_->show_skeleton()) return nullptr;
     for (auto* graphics : items(pt, Qt::IntersectsItemShape, Qt::DescendingOrder, view().viewportTransform())) {
         for (auto* candidate = graphics; candidate; candidate = candidate->parentItem())
             if (auto* item = dynamic_cast<item::base*>(candidate)) return item;
@@ -515,6 +527,7 @@ ui::canvas::item::base* ui::canvas::scene::top_item(const QPointF& pt) const {
 }
 
 std::vector<ui::canvas::item::base*> ui::canvas::scene::items_in_rect(const QRectF& r) const {
+    if (artwork_ && !artwork_->show_skeleton()) return {};
     return qt_to_vector_of_type<ui::canvas::item::base>( items(r.normalized()) );
 }
 
@@ -606,4 +619,18 @@ std::optional<mdl::skel_piece> ui::canvas::selected_single_model(const scene& ca
 		return mdl::skel_piece{ sm::ref(nodes.front()->model()) };
 	}
 	return {};
+}
+void ui::canvas::scene::dragEnterEvent(QGraphicsSceneDragDropEvent* event) {
+    if (artwork_ && event->mimeData()->hasFormat(frame_mime_type)) { event->setDropAction(Qt::CopyAction); event->accept(); }
+    else event->ignore();
+}
+void ui::canvas::scene::dragMoveEvent(QGraphicsSceneDragDropEvent* event) {
+    if (artwork_ && artwork_->can_drop(event->mimeData(), event->scenePos())) { event->setDropAction(Qt::CopyAction); event->accept(); }
+    else event->ignore();
+}
+void ui::canvas::scene::dropEvent(QGraphicsSceneDragDropEvent* event) {
+    try {
+        if (artwork_ && artwork_->drop_frame(event->mimeData(), event->scenePos())) { event->setDropAction(Qt::CopyAction); event->accept(); }
+        else event->ignore();
+    } catch (const std::exception& e) { QMessageBox::warning(views().first(), "Assign image", e.what()); event->ignore(); }
 }

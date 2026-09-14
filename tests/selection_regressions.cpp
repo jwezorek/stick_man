@@ -1,5 +1,8 @@
 #include "ui/stick_man.hpp"
 #include "ui/panes/artwork_browser.hpp"
+#include "ui/canvas/artwork_layer.hpp"
+#include "ui/tools/sprite_transform_tool.hpp"
+#include <numbers>
 #include "ui/canvas/canvas_manager.hpp"
 #include "ui/canvas/skel_item.hpp"
 #include "ui/canvas/node_item.hpp"
@@ -94,8 +97,108 @@ struct fixture {
     }
 };
 
+void artwork_canvas_test(fixture& f, bool visual) {
+    auto& model = f.window.project();
+    auto id = f.make_character(false);
+    auto bone = (*f.skeleton(f.first).bones().begin())->id();
+    sm::image_buffer stripe(20 * 20 * 4), blue(20 * 20 * 4);
+    for (int y=0; y<20; ++y) for (int x=0; x<20; ++x) {
+        auto i = (y*20+x)*4;
+        stripe[i] = y < 10 ? 255 : 0; stripe[i+1] = y < 10 ? 0 : 255; stripe[i+3] = 255;
+        blue[i+2] = 255; blue[i+3] = 255;
+    }
+    model.edit_artwork(id, [&](auto& a) {
+        a.insert_frame("stripe", {sm::image_resource::from_rgba(20,20,stripe), {}});
+        a.insert_frame("blue", {sm::image_resource::from_rgba(20,20,blue), {}});
+        a.add_slot("z_back", {bone}); a.add_slot("a_front", {bone});
+        a.add_appearance("Default", {{{"z_back", {{"default","blue"}}, {{30,30},0,{1,1}}},
+            {"a_front", {{"default","stripe"}}, {{30,30},0,{1,1}}}}});
+    });
+    auto& layer = f.canvas().artwork();
+    auto render = [&] {
+        QImage result(240,240,QImage::Format_RGBA8888); result.fill(Qt::white);
+        QPainter painter(&result); painter.translate(120,120); painter.scale(1,-1);
+        layer.paint(painter); painter.end(); return result;
+    };
+    auto image = render();
+    require(image.pixelColor(150,85) == QColor(Qt::red) && image.pixelColor(150,95) == QColor(Qt::green), "sprite orientation or painter order incorrect");
+    require(layer.hit_test({35,35})->slot == "a_front", "sprite hit test must select front layer");
+    auto pose = model.topology().to_json_str();
+    auto current = [&]() { return model.core().artwork(id).appearances().at("Default").appearance_slots[1].transform; };
+    require(layer.begin_transform({35,35}, ui::canvas::sprite_drag::translate), "sprite translate did not start");
+    layer.update_transform({45,55});
+    require(current().translation == sm::point{30,30}, "drag preview prematurely mutated Core");
+    layer.end_transform({45,55});
+    require(current().translation == sm::point{40,50}, "sprite translation incorrect");
+    require(model.topology().to_json_str() == pose, "sprite tool changed rig");
+    model.undo(); require(current().translation == sm::point{30,30}, "drag did not undo in one step");
+    model.redo(); require(current().translation == sm::point{40,50}, "sprite drag redo failed"); model.undo();
+    require(layer.begin_transform({35,30}, ui::canvas::sprite_drag::rotate), "rotate start failed");
+    layer.end_transform({30,35});
+    require(std::abs(current().rotation - std::numbers::pi/2) < 1e-8, "sprite rotation incorrect"); model.undo();
+    for (auto mode : {ui::canvas::sprite_drag::scale_x, ui::canvas::sprite_drag::scale_y, ui::canvas::sprite_drag::scale_xy}) {
+        require(layer.begin_transform({35,35},mode), "scale start failed"); layer.end_transform({40,40});
+        auto expected = mode == ui::canvas::sprite_drag::scale_x ? sm::point{2,1} : mode == ui::canvas::sprite_drag::scale_y ? sm::point{1,2} : sm::point{2,2};
+        require(current().scale == expected, "sprite scale incorrect"); model.undo();
+    }
+    layer.begin_transform({35,35},ui::canvas::sprite_drag::translate); layer.update_transform({100,100}); layer.cancel_transform();
+    require(current().translation == sm::point{30,30} && !layer.dragging(), "cancelled drag changed Core");
+    auto* browser = f.window.findChild<ui::pane::artwork_browser*>();
+    auto* tree = browser->findChild<QTreeWidget*>("artwork_appearance_structure");
+    require(tree->topLevelItem(0)->data(0,Qt::UserRole).toString() == "z_back", "browser uses name order instead of painter order");
+    layer.set_selected_slot(id,"a_front");
+    auto* x = browser->findChild<QDoubleSpinBox*>("artwork_translation_x");
+    require(x && x->isEnabled(), "sprite numeric controls disabled");
+    x->setValue(44); QMetaObject::invokeMethod(x,"editingFinished",Qt::DirectConnection);
+    require(current().translation.x == 44, "numeric transform not applied"); model.undo();
+    for (auto* button : browser->findChildren<QPushButton*>()) if (button->text() == "Send to Back") button->click();
+    require(model.core().artwork(id).appearances().at("Default").appearance_slots.front().slot == "a_front", "painter order button failed");
+    require(render().pixelColor(150,85) == QColor(Qt::blue), "reordering did not change rendered overlap"); model.undo();
+    layer.set_show_artwork(false); require(!layer.hit_test({35,35}) && render().pixelColor(150,85) == QColor(Qt::white), "Show Artwork did not hide sprites"); layer.set_show_artwork(true);
+    layer.set_show_skeleton(false); require(f.canvas().bone_items().front()->effectiveOpacity() == 0, "Show Skeleton did not hide guides");
+    require(f.canvas().selected_character(), "hiding guides lost semantic selection"); layer.set_show_skeleton(true);
+    layer.set_wireframe(true); require(f.canvas().bone_items().front()->brush().style() == Qt::NoBrush, "wireframe not applied"); layer.set_wireframe(false);
+    layer.assign_frame(id,bone,"stripe");
+    require(model.core().artwork(id).slot_definitions().contains("stripe"), "frame drop did not create channel");
+    require(model.core().artwork(id).resolve_frame("Default","stripe") == "stripe", "frame drop did not map image");
+    model.undo(); require(!model.core().artwork(id).slot_definitions().contains("stripe"), "compound frame assignment undo failed");
+    QMimeData mime; mime.setData(ui::canvas::frame_mime_type, QJsonDocument(QJsonObject{{"character",QString::fromStdString(id.to_string())},{"frame","stripe"}}).toJson());
+    require(layer.can_drop(&mime,{30,0}) && !layer.can_drop(&mime,{200,0}), "frame drag character/bone validation failed");
+    // Exercise real tool dispatch and Escape, with no topology edits.
+    f.window.tool_mgr().set_current_tool(f.window.canvases(),ui::tool::id::sprite_transform);
+    QGraphicsSceneMouseEvent press(QEvent::GraphicsSceneMousePress); press.setButton(Qt::LeftButton); press.setScenePos({35,35});
+    f.window.tool_mgr().mousePressEvent(f.canvas(),&press);
+    QKeyEvent escape(QEvent::KeyPress,Qt::Key_Escape,Qt::NoModifier); f.window.tool_mgr().keyPressEvent(f.canvas(),&escape);
+    require(!layer.dragging() && model.topology().to_json_str() == pose, "Sprite Transform Escape changed rig");
+    layer.begin_transform({500,500},ui::canvas::sprite_drag::translate);
+    require(!layer.selected_slot(), "empty canvas click should deselect the sprite");
+    QTimer::singleShot(0, [] {
+        for (auto* widget : QApplication::topLevelWidgets()) if (auto* dialog = qobject_cast<QInputDialog*>(widget)) dialog->accept();
+    });
+    require(layer.drop_frame(&mime,{30,0}), "frame MIME drop failed");
+    require(model.core().artwork(id).slot_definitions().contains("stripe"), "drop did not create slot");
+    model.undo(); require(!model.core().artwork(id).slot_definitions().contains("stripe"), "drop was not one undo command");
+    if (visual) {
+        layer.set_selected_slot(id,"a_front");
+        auto* tabs = browser->findChild<QTabWidget*>(); tabs->setCurrentIndex(1);
+        f.window.resize(1400,950); f.window.show(); QApplication::processEvents();
+        f.canvas().set_scale(3); f.canvas().views().first()->centerOn(40,20);
+        require(f.window.grab().save("out/appearances-phase2.png"), "phase2 visual capture failed");
+    }
+    // Artwork selection notifications must run only after obsolete canvas items
+    // have been removed, including while a character's Core object is destroyed.
+    layer.set_selected_slot(id,"a_front");
+    model.delete_character(id);
+    require(!layer.selected_slot(), "deleted character kept sprite selection");
+    model.undo();
+    layer.set_selected_slot(id,"a_front");
+    auto saved = model.serialize(); require(saved.has_value(), "phase2 save failed");
+    require(model.deserialize(*saved), "reopen with sprite selected failed");
+    require(!layer.selected_slot(), "new project retained stale sprite selection");
+}
 void character_test(fixture& f, const std::string& mode) {
     auto& model = f.window.project();
+    if (mode == "character_artwork_phase2" || mode == "character_artwork_phase2_visual") { artwork_canvas_test(f, mode.ends_with("visual")); return; }
     if (mode == "character_artwork" || mode == "character_artwork_visual") {
         auto id = f.make_character(false);
         auto* browser = f.window.findChild<ui::pane::artwork_browser*>();

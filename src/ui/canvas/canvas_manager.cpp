@@ -63,6 +63,8 @@ void ui::canvas::manager::init(mdl::project& proj) {
             }
         }
     );
+    // Browser notifications must see the rebuilt scene after topology changes.
+    active_canvas().init_artwork(proj);
 }
 void ui::canvas::manager::clear() {
     active_canvas().clear();

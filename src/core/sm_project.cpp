@@ -810,3 +810,33 @@ bool sm::project::slot_resolved(const object_id& id, const std::string& slot) co
     auto parent = bone->get().owner().parent_character();
     return parent && parent->get().id() == id;
 }
+
+std::vector<sm::resolved_sprite> sm::project::resolve_artwork(const object_id& id,
+    const std::string& appearance_name, const std::map<std::string, std::string>& states) const {
+    const auto& art = artwork(id);
+    const auto& appearance = art.appearances().at(appearance_name);
+    std::vector<resolved_sprite> sprites;
+    sprites.reserve(appearance.appearance_slots.size());
+    for (const auto& slot : appearance.appearance_slots) {
+        if (!slot_resolved(id, slot.slot)) continue;
+        const auto state = states.find(slot.slot);
+        const auto target = art.resolve_frame(appearance_name, slot.slot,
+            state == states.end() ? "default" : state->second);
+        if (!target) continue;
+
+        const auto& definition = art.slot_definitions().at(slot.slot);
+        const auto& bone = std::get<bone_ref>(objects_.at(definition.bone)).get();
+        const auto anchor = definition.anchor == bone_anchor::root
+            ? bone.parent_node().world_pos() : bone.child_node().world_pos();
+        const matrix bone_transform = translation_matrix(anchor) * rotation_matrix(bone.world_rotation());
+        const auto& frame = art.frames().at(*target);
+        const auto& local = slot.transform;
+        const matrix transform = bone_transform
+            * translation_matrix(local.translation)
+            * rotation_matrix(local.rotation)
+            * scale_matrix(local.scale.x, local.scale.y)
+            * translation_matrix(-frame.registration_origin);
+        sprites.push_back({slot.slot, *target, frame.image, frame.registration_origin, transform, bone_transform});
+    }
+    return sprites;
+}

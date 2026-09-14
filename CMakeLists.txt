@@ -34,6 +34,8 @@ file(WRITE "${MINIZ_GENERATED_DIR}/miniz_export.h"
     "#pragma once\n#ifndef MINIZ_EXPORT\n#define MINIZ_EXPORT\n#endif\n")
 
 add_executable(stick_man
+    src/ui/canvas/artwork_layer.cpp
+    src/ui/tools/sprite_transform_tool.cpp
     src/ui/tools/tool_manager.cpp
     src/ui/tools/zoom_tool.cpp
     src/ui/tools/pan_tool.cpp
@@ -119,7 +121,7 @@ if(BUILD_TESTING)
     target_link_libraries(selection_regressions PRIVATE Qt6::Widgets Eigen3::Eigen)
     foreach(case IN ITEMS rectangle partial modifiers tree clipboard drag rubber_band_directions fast_release release_endpoint
         character_hierarchy character_commands character_pane character_inference character_drag
-        character_artwork character_clipboard character_delete character_actions character_error)
+        character_artwork character_artwork_phase2 character_clipboard character_delete character_actions character_error)
         if(WIN32)
             add_test(NAME selection_${case} COMMAND "${CMAKE_COMMAND}" -E env
                 "QT_QPA_PLATFORM=offscreen" "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
