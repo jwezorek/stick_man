@@ -15,6 +15,42 @@ namespace {
     QDoubleSpinBox* coordinate(QWidget* parent) {
         auto* spin = new QDoubleSpinBox(parent); spin->setRange(-1e9, 1e9); spin->setDecimals(4); return spin;
     }
+    std::pair<std::string, std::string> selected_appearance_item(QTreeWidget* tree) {
+        auto* current = tree->currentItem();
+        if (!current) return {};
+        return {
+            current->data(0, Qt::UserRole).toString().toStdString(),
+            current->data(0, Qt::UserRole + 1).toString().toStdString()
+        };
+    }
+    void restore_appearance_item(QTreeWidget* tree, const std::string& slot, const std::string& state) {
+        QTreeWidgetItem* fallback = nullptr;
+        for (int i = 0; i < tree->topLevelItemCount(); ++i) {
+            auto* top = tree->topLevelItem(i);
+            if (!fallback) fallback = top->childCount() ? top->child(0) : top;
+            if (top->data(0, Qt::UserRole).toString().toStdString() != slot) continue;
+            if (state.empty()) { tree->setCurrentItem(top); return; }
+            for (int j = 0; j < top->childCount(); ++j) {
+                auto* child = top->child(j);
+                if (child->data(0, Qt::UserRole + 1).toString().toStdString() == state) {
+                    tree->setCurrentItem(child); return;
+                }
+            }
+            tree->setCurrentItem(top); return;
+        }
+        if (fallback) tree->setCurrentItem(fallback);
+    }
+    const sm::appearance_slot* appearance_slot(const sm::appearance& appearance, const std::string& slot) {
+        for (const auto& candidate : appearance.appearance_slots) if (candidate.slot == slot) return &candidate;
+        return nullptr;
+    }
+    QString mapping_text(const sm::appearance_slot* implementation, const std::string& state) {
+        if (!implementation) return QStringLiteral("—");
+        auto mapping = implementation->states.find(state);
+        if (mapping == implementation->states.end()) return QStringLiteral("Use default");
+        if (!mapping->second) return QStringLiteral("Hidden");
+        return QString::fromStdString(*mapping->second);
+    }
 }
 std::optional<sm::object_id> ui::pane::artwork_character(const mdl::selection& selection) {
     std::optional<sm::object_id> result;
@@ -41,19 +77,56 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
     body_ = new QWidget(this); setWidget(body_);
     auto* layout = new QVBoxLayout(body_);
     character_label_ = new QLabel(body_); layout->addWidget(character_label_);
-    appearances_ = new QComboBox(body_); appearances_->setObjectName("artwork_appearance"); layout->addWidget(appearances_);
-    auto buttons = [this](QVBoxLayout* layout, std::initializer_list<std::pair<QString, std::function<void()>>> actions) {
+    auto buttons = [this](QVBoxLayout* target, std::initializer_list<std::pair<QString, std::function<void()>>> actions) {
+        std::vector<QPushButton*> result;
         auto* row = new QHBoxLayout;
         for (const auto& [label, fn] : actions) {
-            auto* button = new QPushButton(label, body_); row->addWidget(button);
+            auto* button = new QPushButton(label, body_); row->addWidget(button); result.push_back(button);
             connect(button, &QPushButton::clicked, this, [this, fn] {
                 if (!character_) return;
                 try { fn(); } catch (const std::exception& e) { QMessageBox::warning(this, "Artwork", e.what()); }
             });
         }
-        layout->addLayout(row);
+        target->addLayout(row);
+        return result;
     };
-    buttons(layout, {{"New appearance", [this] {
+
+    auto* tabs = new QTabWidget(body_); layout->addWidget(tabs);
+
+    // Character-wide artwork structure. Nothing on this page is scoped to an appearance.
+    auto* structure_tab = new QWidget(tabs); auto* structure_layout = new QVBoxLayout(structure_tab); tabs->addTab(structure_tab, "Structure");
+    auto* structure_help = new QLabel("Slots and states define the artwork structure shared by every appearance.", structure_tab);
+    structure_help->setWordWrap(true); structure_layout->addWidget(structure_help);
+    structure_layout->addWidget(new QLabel("Slots", structure_tab));
+    slots_ = new QListWidget(structure_tab); slots_->setObjectName("artwork_slots"); structure_layout->addWidget(slots_);
+    buttons(structure_layout, {{"New slot…", [this] { slot_dialog(false); }}, {"Rebind…", [this] { slot_dialog(true); }}, {"Rename", [this] {
+        auto old = selected(slots_); if (old.empty()) return;
+        auto name = ask_name("Rename slot", QString::fromStdString(old)); if (name.isEmpty()) return;
+        edit([&](auto& a) { a.rename_slot(old, name.toStdString()); }); restore(slots_, name.toStdString());
+    }}, {"Delete", [this] {
+        auto name = selected(slots_); if (!name.empty()) edit([&](auto& a) { a.delete_slot(name); });
+    }}});
+    structure_layout->addWidget(new QLabel("States for selected slot", structure_tab));
+    states_ = new QListWidget(structure_tab); states_->setObjectName("artwork_states"); structure_layout->addWidget(states_);
+    buttons(structure_layout, {{"New state", [this] {
+        auto slot = selected(slots_); if (slot.empty()) return;
+        auto name = ask_name("New state"); if (!name.isEmpty()) edit([&](auto& a) { a.add_state(slot, name.toStdString()); });
+    }}, {"Rename", [this] {
+        auto slot = selected(slots_), state = selected(states_); if (state.empty()) return;
+        auto name = ask_name("Rename state", QString::fromStdString(state)); if (name.isEmpty()) return;
+        edit([&](auto& a) { a.rename_state(slot, state, name.toStdString()); });
+    }}, {"Delete", [this] {
+        auto slot = selected(slots_), state = selected(states_); if (!state.empty()) edit([&](auto& a) { a.delete_state(slot, state); });
+    }}});
+
+    // One concrete implementation of the shared structure.
+    auto* appearance_tab = new QWidget(tabs); auto* appearance_layout = new QVBoxLayout(appearance_tab); tabs->addTab(appearance_tab, "Appearances");
+    auto* appearance_help = new QLabel("Each appearance maps the shared structure to concrete images.", appearance_tab);
+    appearance_help->setWordWrap(true); appearance_layout->addWidget(appearance_help);
+    auto* appearance_selector = new QFormLayout;
+    appearances_ = new QComboBox(appearance_tab); appearances_->setObjectName("artwork_appearance");
+    appearance_selector->addRow("Appearance", appearances_); appearance_layout->addLayout(appearance_selector);
+    buttons(appearance_layout, {{"New appearance", [this] {
         auto name = ask_name("New appearance"); if (name.isEmpty()) return;
         edit([&](auto& a) { a.add_appearance(name.toStdString()); });
         appearances_->setCurrentText(name);
@@ -64,20 +137,48 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
     }}, {"Delete", [this] {
         auto name = active_appearance().toStdString(); if (!name.empty()) edit([&](auto& a) { a.delete_appearance(name); });
     }}});
-    auto* tabs = new QTabWidget(body_); layout->addWidget(tabs);
-    auto* frame_tab = new QWidget(tabs); auto* frame_layout = new QVBoxLayout(frame_tab); tabs->addTab(frame_tab, "Frames");
-    frames_ = new QListWidget(frame_tab); frames_->setObjectName("artwork_frames"); frames_->setIconSize({64, 64}); frame_layout->addWidget(frames_);
-    buttons(frame_layout, {{"Import…", [this] { import_frames(); }}, {"Rename", [this] {
+    appearance_structure_ = new QTreeWidget(appearance_tab);
+    appearance_structure_->setObjectName("artwork_appearance_structure");
+    appearance_structure_->setHeaderLabels({"Slot / state", "Image"});
+    appearance_structure_->setRootIsDecorated(true);
+    appearance_layout->addWidget(appearance_structure_);
+    auto membership = buttons(appearance_layout, {{"Add to appearance", [this] {
+        auto [slot, _] = selected_appearance_item(appearance_structure_);
+        auto name = active_appearance().toStdString(); if (slot.empty() || name.empty()) return;
+        edit([&](auto& a) {
+            auto app = a.appearances().at(name);
+            if (!appearance_slot(app, slot)) app.appearance_slots.push_back({slot});
+            a.set_appearance(name, std::move(app));
+        });
+    }}, {"Remove from appearance", [this] {
+        auto [slot, _] = selected_appearance_item(appearance_structure_);
+        auto name = active_appearance().toStdString(); if (slot.empty() || name.empty()) return;
+        edit([&](auto& a) {
+            auto app = a.appearances().at(name);
+            std::erase_if(app.appearance_slots, [&](const auto& s) { return s.slot == slot; });
+            a.set_appearance(name, std::move(app));
+        });
+    }}});
+    add_to_appearance_ = membership.at(0); remove_from_appearance_ = membership.at(1);
+    mapping_ = new QComboBox(appearance_tab); mapping_->setObjectName("artwork_mapping");
+    appearance_layout->addWidget(new QLabel("Image for selected state", appearance_tab)); appearance_layout->addWidget(mapping_);
+
+    // Character-local image resources shared by all appearances.
+    auto* image_tab = new QWidget(tabs); auto* image_layout = new QVBoxLayout(image_tab); tabs->addTab(image_tab, "Images");
+    auto* image_help = new QLabel("Images are character resources shared by all appearances.", image_tab);
+    image_help->setWordWrap(true); image_layout->addWidget(image_help);
+    frames_ = new QListWidget(image_tab); frames_->setObjectName("artwork_frames"); frames_->setIconSize({64, 64}); image_layout->addWidget(frames_);
+    buttons(image_layout, {{"Import…", [this] { import_frames(); }}, {"Rename", [this] {
         auto old = selected(frames_); if (old.empty()) return;
-        auto name = ask_name("Rename frame", QString::fromStdString(old)); if (name.isEmpty()) return;
+        auto name = ask_name("Rename image", QString::fromStdString(old)); if (name.isEmpty()) return;
         edit([&](auto& a) { a.rename_frame(old, name.toStdString()); }); restore(frames_, name.toStdString());
     }}, {"Delete", [this] {
         auto name = selected(frames_); if (!name.empty()) edit([&](auto& a) { a.delete_frame(name); });
     }}});
     auto* origin = new QFormLayout;
-    origin_x_ = coordinate(frame_tab); origin_y_ = coordinate(frame_tab);
+    origin_x_ = coordinate(image_tab); origin_y_ = coordinate(image_tab);
     origin_x_->setObjectName("artwork_origin_x"); origin_y_->setObjectName("artwork_origin_y");
-    origin->addRow("Origin X", origin_x_); origin->addRow("Origin Y (up)", origin_y_); frame_layout->addLayout(origin);
+    origin->addRow("Origin X", origin_x_); origin->addRow("Origin Y (up)", origin_y_); image_layout->addLayout(origin);
     auto save_origin = [this] {
         if (refreshing_ || !character_) return;
         auto name = selected(frames_); if (name.empty()) return;
@@ -87,37 +188,12 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
     };
     connect(origin_x_, &QDoubleSpinBox::editingFinished, this, save_origin);
     connect(origin_y_, &QDoubleSpinBox::editingFinished, this, save_origin);
-    auto* slot_tab = new QWidget(tabs); auto* slot_layout = new QVBoxLayout(slot_tab); tabs->addTab(slot_tab, "Slots and states");
-    slots_ = new QListWidget(slot_tab); slots_->setObjectName("artwork_slots"); slot_layout->addWidget(slots_);
-    buttons(slot_layout, {{"New slot…", [this] { slot_dialog(false); }}, {"Rebind…", [this] { slot_dialog(true); }}, {"Rename", [this] {
-        auto old = selected(slots_); if (old.empty()) return;
-        auto name = ask_name("Rename slot", QString::fromStdString(old)); if (name.isEmpty()) return;
-        edit([&](auto& a) { a.rename_slot(old, name.toStdString()); }); restore(slots_, name.toStdString());
-    }}, {"Delete", [this] {
-        auto name = selected(slots_); if (!name.empty()) edit([&](auto& a) { a.delete_slot(name); });
-    }}});
-    buttons(slot_layout, {{"Add to appearance", [this] {
-        auto slot = selected(slots_), name = active_appearance().toStdString(); if (slot.empty() || name.empty()) return;
-        edit([&](auto& a) { auto app = a.appearances().at(name); app.appearance_slots.push_back({slot}); a.set_appearance(name, std::move(app)); });
-    }}, {"Remove from appearance", [this] {
-        auto slot = selected(slots_), name = active_appearance().toStdString(); if (slot.empty() || name.empty()) return;
-        edit([&](auto& a) { auto app = a.appearances().at(name); std::erase_if(app.appearance_slots, [&](const auto& s) { return s.slot == slot; }); a.set_appearance(name, std::move(app)); });
-    }}});
-    states_ = new QListWidget(slot_tab); states_->setObjectName("artwork_states"); slot_layout->addWidget(states_);
-    buttons(slot_layout, {{"New state", [this] {
-        auto slot = selected(slots_); if (slot.empty()) return;
-        auto name = ask_name("New state"); if (!name.isEmpty()) edit([&](auto& a) { a.add_state(slot, name.toStdString()); });
-    }}, {"Rename", [this] {
-        auto slot = selected(slots_), state = selected(states_); if (state.empty()) return;
-        auto name = ask_name("Rename state", QString::fromStdString(state)); if (name.isEmpty()) return;
-        edit([&](auto& a) { a.rename_state(slot, state, name.toStdString()); });
-    }}, {"Delete", [this] {
-        auto slot = selected(slots_), state = selected(states_); if (!state.empty()) edit([&](auto& a) { a.delete_state(slot, state); });
-    }}});
-    mapping_ = new QComboBox(slot_tab); mapping_->setObjectName("artwork_mapping"); slot_layout->addWidget(new QLabel("Frame for selected state", slot_tab)); slot_layout->addWidget(mapping_);
+
     connect(mapping_, &QComboBox::activated, this, [this](int index) {
         if (refreshing_ || !character_) return;
-        auto slot = selected(slots_), state = selected(states_), name = active_appearance().toStdString();
+        auto [slot, state] = selected_appearance_item(appearance_structure_);
+        auto name = active_appearance().toStdString();
+        if (slot.empty() || state.empty() || name.empty()) return;
         auto frame = mapping_->currentData().toString().toStdString();
         edit([&](auto& a) {
             auto app = a.appearances().at(name);
@@ -133,7 +209,7 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
     });
     connect(frames_, &QListWidget::currentRowChanged, this, [this] { if (!refreshing_) refresh_details(); });
     connect(slots_, &QListWidget::currentRowChanged, this, [this] { if (!refreshing_) refresh(); });
-    connect(states_, &QListWidget::currentRowChanged, this, [this] { if (!refreshing_) refresh_details(); });
+    connect(appearance_structure_, &QTreeWidget::currentItemChanged, this, [this] { if (!refreshing_) refresh_details(); });
     connect(&canvases_, &canvas::manager::selection_changed, this, [this] { refresh(); });
     connect(&project_, &mdl::project::project_changed, this, [this] { refresh(); });
     connect(&project_, &mdl::project::new_project_opened, this, [this] { active_.clear(); refresh(); });
@@ -155,7 +231,8 @@ void ui::pane::artwork_browser::refresh() {
     if (context != character_) thumbnails_.clear();
     character_ = context;
     auto frame = selected(frames_), slot = selected(slots_), state = selected(states_);
-    appearances_->clear(); frames_->clear(); slots_->clear(); states_->clear(); mapping_->clear();
+    auto [appearance_slot_name, appearance_state] = selected_appearance_item(appearance_structure_);
+    appearances_->clear(); frames_->clear(); slots_->clear(); states_->clear(); appearance_structure_->clear(); mapping_->clear();
     body_->setEnabled(character_.has_value());
     character_label_->setText("Select a character or one of its members");
     if (character_) {
@@ -164,6 +241,7 @@ void ui::pane::artwork_browser::refresh() {
         for (const auto& [name, _] : art.appearances()) appearances_->addItem(QString::fromStdString(name));
         if (appearances_->findText(active_[*character_]) >= 0) appearances_->setCurrentText(active_[*character_]);
         active_[*character_] = appearances_->currentText();
+
         std::erase_if(thumbnails_, [&](const auto& entry) { return !art.frames().contains(entry.first); });
         for (const auto& [name, f] : art.frames()) {
             auto cached = thumbnails_.find(name);
@@ -188,31 +266,59 @@ void ui::pane::artwork_browser::refresh() {
         slot = selected(slots_);
         if (!slot.empty()) for (const auto& name : art.slot_definitions().at(slot).states) item(states_, name, QString::fromStdString(name));
         restore(states_, state);
+
+        const sm::appearance* active = nullptr;
+        if (auto found = art.appearances().find(active_appearance().toStdString()); found != art.appearances().end()) active = &found->second;
+        for (const auto& [name, definition] : art.slot_definitions()) {
+            auto* implementation = active ? appearance_slot(*active, name) : nullptr;
+            auto* top = new QTreeWidgetItem(appearance_structure_, QStringList{
+                QString::fromStdString(name), implementation ? QStringLiteral("Included") : QStringLiteral("Not in this appearance")
+            });
+            top->setData(0, Qt::UserRole, QString::fromStdString(name));
+            top->setData(0, Qt::UserRole + 1, QString{});
+            for (const auto& semantic_state : definition.states) {
+                auto* child = new QTreeWidgetItem(top, QStringList{
+                    QString::fromStdString(semantic_state), mapping_text(implementation, semantic_state)
+                });
+                child->setData(0, Qt::UserRole, QString::fromStdString(name));
+                child->setData(0, Qt::UserRole + 1, QString::fromStdString(semantic_state));
+            }
+            top->setExpanded(true);
+        }
+        restore_appearance_item(appearance_structure_, appearance_slot_name, appearance_state);
+        appearance_structure_->resizeColumnToContents(0);
     }
     refreshing_ = false; refresh_details();
 }
 void ui::pane::artwork_browser::refresh_details() {
     refreshing_ = true;
-    auto frame = selected(frames_), slot = selected(slots_), state = selected(states_);
+    auto frame = selected(frames_);
     origin_x_->setEnabled(!frame.empty()); origin_y_->setEnabled(!frame.empty());
     mapping_->clear(); mapping_->setEnabled(false);
+    add_to_appearance_->setEnabled(false); remove_from_appearance_->setEnabled(false);
     if (character_) {
         const auto& art = project_.core().artwork(*character_);
         if (!frame.empty()) { auto p = art.frames().at(frame).registration_origin; origin_x_->setValue(p.x); origin_y_->setValue(p.y); }
         auto app = art.appearances().find(active_appearance().toStdString());
-        if (app != art.appearances().end() && !state.empty()) for (const auto& s : app->second.appearance_slots) if (s.slot == slot) {
-            mapping_->addItem("Use default (unmapped)"); mapping_->addItem("Hidden (none)");
-            for (const auto& [name, _] : art.frames()) mapping_->addItem(QString::fromStdString(name), QString::fromStdString(name));
-            auto it = s.states.find(state);
-            int index = it == s.states.end() ? 0 : !it->second ? 1 : mapping_->findData(QString::fromStdString(*it->second));
-            mapping_->setCurrentIndex(index); mapping_->setEnabled(true);
-            if (state == "default") qobject_cast<QStandardItemModel*>(mapping_->model())->item(0)->setEnabled(false);
+        auto [slot, state] = selected_appearance_item(appearance_structure_);
+        if (app != art.appearances().end() && !slot.empty()) {
+            auto* implementation = appearance_slot(app->second, slot);
+            add_to_appearance_->setEnabled(!implementation);
+            remove_from_appearance_->setEnabled(implementation);
+            if (implementation && !state.empty()) {
+                mapping_->addItem("Use default (unmapped)"); mapping_->addItem("Hidden (none)");
+                for (const auto& [name, _] : art.frames()) mapping_->addItem(QString::fromStdString(name), QString::fromStdString(name));
+                auto it = implementation->states.find(state);
+                int index = it == implementation->states.end() ? 0 : !it->second ? 1 : mapping_->findData(QString::fromStdString(*it->second));
+                mapping_->setCurrentIndex(index); mapping_->setEnabled(true);
+                if (state == "default") qobject_cast<QStandardItemModel*>(mapping_->model())->item(0)->setEnabled(false);
+            }
         }
     }
     refreshing_ = false;
 }
 void ui::pane::artwork_browser::import_frames() {
-    auto files = QFileDialog::getOpenFileNames(this, "Import sprite frames", {}, "Images (*.png *.jpg *.jpeg *.bmp *.tga *.gif *.psd *.pic *.pnm)");
+    auto files = QFileDialog::getOpenFileNames(this, "Import sprite images", {}, "Images (*.png *.jpg *.jpeg *.bmp *.tga *.gif *.psd *.pic *.pnm)");
     if (files.empty()) return;
     // All file access belongs to the editor; Core receives encoded memory buffers.
     std::vector<std::pair<std::string, sm::image_buffer>> imports;
