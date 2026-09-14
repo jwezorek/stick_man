@@ -273,6 +273,23 @@ namespace {
                 if (!skel->copy_to(rig)) return {};
             }
             json payload{{"kind", "character"}, {"name", character->model().name()}, {"topology", rig.to_json()}};
+            if (op != selection_operation::del) {
+                // A Core package preserves artwork without exposing atlas resources to the editor.
+                sm::project resources;
+                std::vector<sm::const_skel_ref> members;
+                for (auto skel : character->model().rig().skeletons()) {
+                    auto copied = resources.copy_skeleton(skel.get());
+                    if (!copied) return {};
+                    members.emplace_back(copied->get());
+                }
+                auto copied = resources.create_character(members);
+                if (!copied) return {};
+                resources.artwork(copied->get().id()) = character->model().artwork();
+                auto encoded = resources.serialize();
+                if (!encoded) return {};
+                payload["artwork_package"] = QByteArray(reinterpret_cast<const char*>(encoded->data()),
+                    qsizetype(encoded->size())).toBase64().toStdString();
+            }
             if (op != selection_operation::copy) {
                 if (project.delete_character(id) != sm::result::success) return {};
             }
@@ -342,7 +359,17 @@ namespace {
 
         auto& project = main_wnd.project();
         if (character) {
-            auto pasted = project.paste_character(clipboard_topology, payload["name"].get<std::string>());
+            sm::artwork artwork;
+            if (payload.contains("artwork_package")) {
+                if (!payload["artwork_package"].is_string()) return;
+                auto encoded = QByteArray::fromBase64(QByteArray::fromStdString(payload["artwork_package"].get<std::string>()),
+                    QByteArray::AbortOnBase64DecodingErrors);
+                sm::project resources;
+                if (resources.deserialize({reinterpret_cast<const std::uint8_t*>(encoded.constData()), std::size_t(encoded.size())}) != sm::project_result::success ||
+                    std::ranges::distance(resources.characters()) != 1) return;
+                artwork = (*resources.characters().begin())->artwork();
+            }
+            auto pasted = project.paste_character(clipboard_topology, payload["name"].get<std::string>(), artwork);
             if (!pasted) QMessageBox::warning(&main_wnd, "Paste Character", "Cannot paste this character.");
             return;
         }

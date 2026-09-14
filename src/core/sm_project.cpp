@@ -1,4 +1,6 @@
 #include "sm_project.hpp"
+#include "sm_artwork_io.hpp"
+#include <set>
 #include "json.hpp"
 #include "miniz.h"
 #include <cstring>
@@ -19,7 +21,7 @@ namespace {
     template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 
     constexpr std::string_view project_json_name = "project.json";
-    constexpr double project_json_version = 4.0;
+    constexpr double project_json_version = 5.0;
 
     template<typename Object>
     sm::object_id object_id_of(const Object& object) {
@@ -303,6 +305,17 @@ sm::topology_change sm::project::replace_skeletons(
         if (!copied) {
             return {{}, {}, copied.error()};
         }
+        // Artwork follows surviving bones when replacement assigns fresh IDs.
+        // Apply only this component's bone remap to its owning character's staged
+        // semantic state; unresolved references to deleted bones remain intact.
+        const auto parent = plan->membership.parents.at(replacement->id());
+        if (parent) {
+            std::unordered_map<object_id, object_id> bone_remap;
+            for (auto bone : replacement->bones())
+                if (auto it = id_remap.find(bone->id()); it != id_remap.end()) bone_remap.emplace(*it);
+            for (auto& state : plan->membership.characters)
+                if (state.id == *parent) state.artwork.remap_bones(bone_remap);
+        }
         change.added_skeleton_ids.push_back(copied->get().id());
         staged_parents.emplace(copied->get().id(), plan->membership.parents.at(replacement->id()));
     }
@@ -316,6 +329,7 @@ sm::topology_change sm::project::replace_skeletons(
     for (const auto& state : plan->membership.characters) {
         if (!characters_.contains(state.id)) characters_.emplace(state.id,
             sm::character::make_unique(*this, state.id, state.name, sm::rig(*this)));
+        characters_.at(state.id)->artwork_ = state.artwork;
     }
     invalidate_object_index();
     for (const auto& id : change.added_skeleton_ids) {
@@ -341,7 +355,7 @@ sm::membership_state sm::project::snapshot_membership(const std::vector<object_i
         auto parent = skel->get().parent_character();
         state.parents[id] = parent ? std::optional(parent->get().id()) : std::nullopt;
         if (parent && seen.insert(parent->get().id()).second)
-            state.characters.push_back({parent->get().id(), parent->get().name()});
+            state.characters.push_back({parent->get().id(), parent->get().name(), parent->get().artwork()});
     }
     return state;
 }
@@ -355,6 +369,7 @@ sm::result sm::project::restore_membership(const membership_state& state) {
         if (!characters_.contains(c.id)) {
             if (objects_.contains(c.id)) return result::duplicate_id;
             prepared.emplace(c.id, sm::character::make_unique(*this, c.id, c.name, sm::rig(*this)));
+            prepared.at(c.id)->artwork_ = c.artwork;
         }
     }
     for (const auto& [sid, parent] : state.parents) {
@@ -646,86 +661,33 @@ std::expected<sm::project_buffer, sm::project_result> sm::project::serialize() c
         return std::unexpected(project_result::invalid_project_json);
     }
 
-    json characters = json::array();
-    for (auto character : this->characters()) {
-        json skeletons = json::array();
-        for (const auto& id : character->rig().skeleton_ids()) {
-            skeletons.push_back(id.to_string());
+    try {
+        detail::package_writer package;
+        json characters = json::array();
+        for (auto character : this->characters()) {
+            json skeletons = json::array();
+            for (const auto& id : character->rig().skeleton_ids()) skeletons.push_back(id.to_string());
+            auto art = detail::write_artwork(character->artwork(),
+                "characters/" + character->id().to_string() + "/artwork/", package);
+            characters.push_back({{"id", character->id().to_string()}, {"name", character->name()},
+                {"skeletons", std::move(skeletons)}, {"artwork", std::move(art)}});
         }
-        characters.push_back({
-            {"id", character->id().to_string()},
-            {"name", character->name()},
-            {"skeletons", std::move(skeletons)}
-        });
-    }
-
-    json semantic_project = {
-        {"version", project_json_version},
-        {"topology", topology_.to_json()},
-        {"characters", std::move(characters)}
-    };
-    auto project_json = semantic_project.dump(4);
-
-    mz_zip_archive archive{};
-    if (!mz_zip_writer_init_heap(&archive, 0, 0)) {
-        return std::unexpected(project_result::archive_error);
-    }
-
-    if (!mz_zip_writer_add_mem(
-            &archive,
-            project_json_name.data(),
-            project_json.data(),
-            project_json.size(),
-            MZ_DEFAULT_COMPRESSION)) {
-        mz_zip_writer_end(&archive);
-        return std::unexpected(project_result::archive_error);
-    }
-
-    void* archive_data = nullptr;
-    size_t archive_size = 0;
-    if (!mz_zip_writer_finalize_heap_archive(&archive, &archive_data, &archive_size)) {
-        mz_zip_writer_end(&archive);
-        return std::unexpected(project_result::archive_error);
-    }
-
-    project_buffer buffer(archive_size);
-    if (archive_size != 0) {
-        std::memcpy(buffer.data(), archive_data, archive_size);
-    }
-    mz_free(archive_data);
-    mz_zip_writer_end(&archive);
-    return buffer;
+        json semantic_project{{"version", project_json_version}, {"topology", topology_.to_json()}, {"characters", std::move(characters)}};
+        auto text = semantic_project.dump(4);
+        package.add(std::string(project_json_name), {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()});
+        return package.finish();
+    } catch (const std::invalid_argument&) { return std::unexpected(project_result::invalid_artwork); }
+    catch (...) { return std::unexpected(project_result::archive_error); }
 }
 
 sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer) {
-    if (buffer.empty()) {
-        return project_result::invalid_archive;
-    }
-
-    mz_zip_archive archive{};
-    if (!mz_zip_reader_init_mem(&archive, buffer.data(), buffer.size(), 0)) {
-        return project_result::invalid_archive;
-    }
-
-    const int file_index = mz_zip_reader_locate_file(
-        &archive, project_json_name.data(), nullptr, 0);
-    if (file_index < 0) {
-        mz_zip_reader_end(&archive);
-        return project_result::missing_project_json;
-    }
-
-    size_t project_json_size = 0;
-    void* project_json_data = mz_zip_reader_extract_to_heap(
-        &archive, static_cast<mz_uint>(file_index), &project_json_size, 0);
-    if (!project_json_data) {
-        mz_zip_reader_end(&archive);
-        return project_result::archive_error;
-    }
-
-    std::string project_json(
-        static_cast<const char*>(project_json_data), project_json_size);
-    mz_free(project_json_data);
-    mz_zip_reader_end(&archive);
+    std::unique_ptr<detail::package_reader> package;
+    try { package = std::make_unique<detail::package_reader>(buffer); }
+    catch (...) { return project_result::invalid_archive; }
+    if (!package->contains(std::string(project_json_name))) return project_result::missing_project_json;
+    image_buffer project_json;
+    try { project_json = package->read(std::string(project_json_name)); }
+    catch (...) { return project_result::archive_error; }
 
     // Keep staged characters alive until after staged topology destruction on every early return,
     // mirroring project member lifetime ordering for skeleton parent references.
@@ -733,8 +695,16 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
     sm::topology new_topology;
     std::size_t new_next_character_name = 1;
     try {
-        auto semantic_project = json::parse(project_json);
-        if (semantic_project.at("version").get<double>() != project_json_version) {
+        std::vector<std::set<std::string>> object_keys;
+        auto semantic_project = json::parse(project_json, [&object_keys](int, json::parse_event_t event, json& value) {
+            if (event == json::parse_event_t::object_start) object_keys.emplace_back();
+            if (event == json::parse_event_t::key && !object_keys.back().insert(value.get<std::string>()).second)
+                throw std::invalid_argument("Duplicate JSON key");
+            if (event == json::parse_event_t::object_end) object_keys.pop_back();
+            return true;
+        });
+        const auto version = semantic_project.at("version").get<double>();
+        if (version != project_json_version && version != 4.0) {
             return project_result::invalid_project_json;
         }
         if (new_topology.from_json(semantic_project.at("topology")) != result::success) {
@@ -782,6 +752,12 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
 
             auto character = sm::character::make_unique(
                 *this, character_id, name, std::move(rig));
+            if (version == project_json_version && !entry.contains("artwork")) return project_result::invalid_artwork;
+            if (entry.contains("artwork")) {
+                try { character->artwork_ = detail::read_artwork(entry.at("artwork"),
+                    "characters/" + character_id.to_string() + "/artwork/", *package); }
+                catch (...) { return project_result::invalid_artwork; }
+            }
             auto* character_ptr = character.get();
             new_characters.emplace(character_id, std::move(character));
             for (const auto& skeleton_id : character_ptr->rig().skeleton_ids()) {
@@ -820,4 +796,17 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
     next_character_name_ = new_next_character_name;
     assert(has_consistent_membership());
     return project_result::success;
+}
+
+sm::artwork& sm::project::artwork(const object_id& id) { return characters_.at(id)->artwork_; }
+const sm::artwork& sm::project::artwork(const object_id& id) const { return characters_.at(id)->artwork_; }
+bool sm::project::slot_resolved(const object_id& id, const std::string& slot) const {
+    const auto bone_id = artwork(id).slot_definitions().at(slot).bone;
+    if (!ensure_object_index()) return false;
+    auto it = objects_.find(bone_id);
+    if (it == objects_.end()) return false;
+    auto bone = std::get_if<bone_ref>(&it->second);
+    if (!bone) return false;
+    auto parent = bone->get().owner().parent_character();
+    return parent && parent->get().id() == id;
 }

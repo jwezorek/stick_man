@@ -1,4 +1,5 @@
 #include "ui/stick_man.hpp"
+#include "ui/panes/artwork_browser.hpp"
 #include "ui/canvas/canvas_manager.hpp"
 #include "ui/canvas/skel_item.hpp"
 #include "ui/canvas/node_item.hpp"
@@ -95,7 +96,69 @@ struct fixture {
 
 void character_test(fixture& f, const std::string& mode) {
     auto& model = f.window.project();
-    if (mode == "character_make") {
+    if (mode == "character_artwork" || mode == "character_artwork_visual") {
+        auto id = f.make_character(false);
+        auto* browser = f.window.findChild<ui::pane::artwork_browser*>();
+        require(browser && browser->character_id() == id, "browser must follow character selection");
+        auto bone = (*f.skeleton(f.first).bones().begin())->id();
+        model.edit_artwork(id, [&](auto& art) {
+            art.insert_frame("head", {sm::image_resource::from_rgba(1, 1, {4, 5, 6, 77}), {2, -3}});
+            art.add_slot("head", {bone});
+            art.add_appearance("Human", {{{"head", {{"default", "head"}}}}});
+            art.add_appearance("Robot");
+        });
+        require(browser->findChild<QListWidget*>("artwork_frames")->count() == 1, "browser thumbnail missing");
+        model.undo(); require(model.core().artwork(id).frames().empty(), "artwork undo failed");
+        model.redo(); require(model.core().artwork(id).frames().contains("head"), "artwork redo failed");
+        auto* choices = browser->findChild<QComboBox*>("artwork_appearance");
+        choices->setCurrentText("Robot");
+        require(browser->active_appearance() == "Robot", "appearance switch failed");
+        f.canvas().set_selection(f.item(f.first), true);
+        require(browser->character_id() == id, "browser must follow member topology");
+        f.canvas().set_selection(f.item(f.second), true);
+        require(!browser->character_id(), "loose topology must clear artwork context");
+        f.canvas().set_selection(f.canvas().character_item(id), true);
+        require(browser->active_appearance() == "Robot", "active appearance session state lost");
+        if (mode == "character_artwork_visual") {
+            choices->setCurrentText("Human");
+            f.window.resize(1280, 900); f.window.show(); QApplication::processEvents();
+            require(f.window.grab().save("out/appearances-browser.png"), "artwork browser screenshot failed");
+            return;
+        }
+        choices->setCurrentText("Human");
+        auto* origin = browser->findChild<QDoubleSpinBox*>("artwork_origin_x");
+        origin->setValue(-7); QMetaObject::invokeMethod(origin, "editingFinished", Qt::DirectConnection);
+        require(model.core().artwork(id).frames().at("head").registration_origin.x == -7, "origin UI did not edit model");
+        model.undo(); require(model.core().artwork(id).frames().at("head").registration_origin.x == 2, "origin UI undo failed");
+        bool rejected = false;
+        try { model.edit_artwork(id, [](auto& a) { a.add_appearance("temporary"); a.add_appearance("Human"); }); }
+        catch (const std::exception&) { rejected = true; }
+        require(rejected && model.can_redo() && !model.core().artwork(id).appearances().contains("temporary"), "failed edit was not atomic");
+        auto* mapping = browser->findChild<QComboBox*>("artwork_mapping");
+        mapping->setCurrentIndex(1); QMetaObject::invokeMethod(mapping, "activated", Qt::DirectConnection, Q_ARG(int, 1));
+        require(!model.core().artwork(id).resolve_frame("Human", "head"), "mapping UI did not hide frame");
+        model.undo(); require(model.core().artwork(id).resolve_frame("Human", "head") == "head", "mapping UI undo failed");
+        ui::clipboard::copy(f.window); ui::clipboard::paste(f.window, true);
+        auto copied = f.canvas().selected_character()->id();
+        require(copied != id && model.core().artwork(copied).frames().contains("head"), "character copy lost artwork");
+        require(model.core().slot_resolved(copied, "head"), "copied artwork bone was not remapped");
+        require(model.core().artwork(copied).slot_definitions().at("head").bone != bone, "copy retained source bone");
+        model.edit_artwork(copied, [](auto& art) { art.rename_frame("head", "copy-head"); });
+        require(model.core().artwork(id).frames().contains("head"), "copy edits changed original artwork");
+        model.undo(); model.undo();
+        require(!model.core().character(copied), "character paste undo failed");
+        model.delete_character(id); model.undo();
+        require(model.core().artwork(id).frames().contains("head"), "character delete undo lost artwork");
+        require(model.core().slot_resolved(id, "head"), "restored artwork bone unresolved");
+        model.undo(); // Undo original artwork edit after topology restoration.
+        require(model.core().artwork(id).frames().empty(), "artwork command invalid after character restoration");
+        model.redo();
+        auto saved = model.serialize(); require(saved.has_value(), "editor artwork save failed");
+        require(model.deserialize(*saved), "editor artwork reopen failed");
+        f.canvas().set_selection(f.canvas().character_item(id), true);
+        require(browser->character_id() == id && browser->findChild<QListWidget*>("artwork_frames")->count() == 1,
+            "browser did not restore reopened frames");
+    } else if (mode == "character_make") {
         f.select_both();
         QPushButton* make = nullptr;
         for (auto* button : f.window.findChildren<QPushButton*>()) if (button->text() == "Make Character") make = button;
@@ -483,7 +546,7 @@ int main(int argc, char** argv) {
     QApplication app(argc, argv);
     // The Windows offscreen platform does not enumerate installed system fonts.
     // Load a real font for the optional rendered UI inspection only.
-    if (argc == 2 && std::string(argv[1]) == "character_visual") {
+    if (argc == 2 && std::string(argv[1]).ends_with("visual")) {
         auto font = QFontDatabase::addApplicationFont("C:/Windows/Fonts/segoeui.ttf");
         if (font >= 0) app.setFont(QFont(QFontDatabase::applicationFontFamilies(font).front(), 9));
     }

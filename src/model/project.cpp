@@ -47,6 +47,15 @@ mdl::project::project() {}
 
 const sm::project& mdl::project::core() const { return core_; }
 sm::project& mdl::project::core() { return core_; }
+void mdl::project::edit_artwork(const sm::object_id& id, const std::function<void(sm::artwork&)>& edit) {
+    auto before = core_.artwork(id);
+    auto after = before;
+    edit(after);
+    execute_command({
+        [id, after](project& p) { p.core_.artwork(id) = after; },
+        [id, before](project& p) { p.core_.artwork(id) = before; }
+    });
+}
 const sm::topology& mdl::project::topology() const { return core_.topology(); }
 
 mdl::model_object mdl::project::get(const sm::object_id& id) {
@@ -212,7 +221,7 @@ std::expected<sm::object_id, sm::result> mdl::project::make_character(
 }
 
 std::expected<sm::object_id, sm::result> mdl::project::paste_character(
-        const sm::topology& rig, const std::string& name) {
+        const sm::topology& rig, const std::string& name, const sm::artwork& artwork) {
     if (rig.empty()) return std::unexpected(sm::result::empty_character);
     struct state_type {
         sm::topology topology;
@@ -227,9 +236,17 @@ std::expected<sm::object_id, sm::result> mdl::project::paste_character(
     auto copied_name = name + " copy";
     for (std::size_t suffix = 2; existing_names.contains(copied_name); ++suffix)
         copied_name = name + " copy " + std::to_string(suffix);
-    state->membership.characters.push_back({state->character, copied_name});
+    std::unordered_map<sm::object_id, sm::object_id> remap;
     for (auto skel : rig.skeletons()) {
-        auto copy = skel->duplicate_to(state->topology);
+        remap.emplace(skel->id(), sm::object_id::generate());
+        for (auto node : skel->nodes()) remap.emplace(node->id(), sm::object_id::generate());
+        for (auto bone : skel->bones()) remap.emplace(bone->id(), sm::object_id::generate());
+    }
+    auto copied_artwork = artwork;
+    copied_artwork.remap_bones(remap);
+    state->membership.characters.push_back({state->character, copied_name, std::move(copied_artwork)});
+    for (auto skel : rig.skeletons()) {
+        auto copy = skel->copy_to(state->topology, remap);
         if (!copy) return std::unexpected(copy.error());
         state->ids.push_back(copy->get().id());
         state->membership.parents.emplace(copy->get().id(), state->character);

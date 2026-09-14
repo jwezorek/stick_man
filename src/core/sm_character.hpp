@@ -2,6 +2,7 @@
 
 #include "sm_object_id.hpp"
 #include "sm_types.hpp"
+#include "sm_artwork.hpp"
 
 #include <cstddef>
 #include <functional>
@@ -41,6 +42,7 @@ namespace sm {
         std::string name_;
         std::reference_wrapper<project> owner_;
         sm::rig rig_;
+        sm::artwork artwork_;
 
     protected:
         character(project& owner, object_id id, std::string name, sm::rig&& rig);
@@ -56,6 +58,7 @@ namespace sm {
         std::string name() const;
         const project& owner() const noexcept;
         const sm::rig& rig() const noexcept;
+        const sm::artwork& artwork() const noexcept { return artwork_; }
     };
 
 }

@@ -30,6 +30,7 @@ namespace sm {
     struct character_state {
         object_id id;
         std::string name;
+        sm::artwork artwork;
     };
     struct membership_state {
         std::unordered_map<object_id, std::optional<object_id>> parents;
@@ -46,7 +47,8 @@ namespace sm {
         missing_project_json,
         invalid_project_json,
         duplicate_object_id,
-        archive_error
+        archive_error,
+        invalid_artwork
     };
 
     class project {
@@ -103,6 +105,9 @@ namespace sm {
         result adopt_skeletons(const object_id& character_id, std::span<const const_skel_ref> skeletons);
         result remove_character(const object_id& id);
         expected_const_character character(const object_id& id) const;
+        sm::artwork& artwork(const object_id& character_id);
+        const sm::artwork& artwork(const object_id& character_id) const;
+        bool slot_resolved(const object_id& character_id, const std::string& slot) const;
         auto characters() const { return detail::to_range_view<const_character_ref>(characters_); }
 
         // Mutable lookup accepts nodes and bones only; use const lookup for aggregate objects.

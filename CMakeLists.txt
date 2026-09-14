@@ -51,6 +51,7 @@ add_executable(stick_man
     src/ui/canvas/rubber_band.cpp
     src/ui/canvas/canvas_item.cpp
     src/ui/canvas/canvas_manager.cpp
+    src/ui/panes/artwork_browser.cpp
     src/ui/panes/tools_pane.cpp
     src/ui/panes/skeleton_pane.cpp
     src/ui/panes/tool_settings_pane.cpp
@@ -63,6 +64,9 @@ add_executable(stick_man
     src/ui/panes/tree_view.cpp
     src/ui/panes/abstract_skeleton_pane.cpp
     src/ui/panes/animation_skeleton_pane.cpp
+    src/core/sm_image.cpp
+    src/core/sm_artwork.cpp
+    src/core/sm_artwork_io.cpp
     src/core/sm_project.cpp
     src/core/sm_character.cpp
     src/core/sm_skeleton.cpp
@@ -115,7 +119,7 @@ if(BUILD_TESTING)
     target_link_libraries(selection_regressions PRIVATE Qt6::Widgets Eigen3::Eigen)
     foreach(case IN ITEMS rectangle partial modifiers tree clipboard drag rubber_band_directions fast_release release_endpoint
         character_hierarchy character_commands character_pane character_inference character_drag
-        character_clipboard character_delete character_actions character_error)
+        character_artwork character_clipboard character_delete character_actions character_error)
         if(WIN32)
             add_test(NAME selection_${case} COMMAND "${CMAKE_COMMAND}" -E env
                 "QT_QPA_PLATFORM=offscreen" "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
@@ -128,6 +132,9 @@ if(BUILD_TESTING)
     endforeach()
     add_executable(topology_regressions
         tests/topology_regressions.cpp
+        src/core/sm_image.cpp
+        src/core/sm_artwork.cpp
+        src/core/sm_artwork_io.cpp
         src/core/sm_project.cpp
         src/core/sm_character.cpp
         src/core/sm_skeleton.cpp
@@ -148,6 +155,9 @@ if(BUILD_TESTING)
 
     add_executable(character_stage1
         tests/character_stage1.cpp
+        src/core/sm_image.cpp
+        src/core/sm_artwork.cpp
+        src/core/sm_artwork_io.cpp
         src/core/sm_project.cpp
         src/core/sm_character.cpp
         src/core/sm_skeleton.cpp
@@ -207,4 +217,12 @@ if(BUILD_TESTING)
     target_compile_definitions(character_stage4 PRIVATE MINIZ_NO_STDIO)
     target_link_libraries(character_stage4 PRIVATE Eigen3::Eigen)
     add_test(NAME character_stage4 COMMAND $<TARGET_FILE:character_stage4>)
+endif()
+
+if(BUILD_TESTING)
+    add_executable(appearances tests/appearances.cpp ${CHARACTER_STAGE4_SOURCES})
+    target_include_directories(appearances PRIVATE src "${MINIZ_DIR}" "${MINIZ_GENERATED_DIR}")
+    target_compile_definitions(appearances PRIVATE MINIZ_NO_STDIO)
+    target_link_libraries(appearances PRIVATE Eigen3::Eigen)
+    add_test(NAME appearances COMMAND $<TARGET_FILE:appearances>)
 endif()

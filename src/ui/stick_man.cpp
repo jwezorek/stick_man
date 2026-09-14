@@ -1,4 +1,5 @@
 #include "stick_man.hpp"
+#include "panes/artwork_browser.hpp"
 #include "panes/skeleton_pane.hpp"
 #include "panes/animation_pane.hpp"
 #include "panes/tools_pane.hpp"
@@ -63,8 +64,9 @@ ui::stick_man::stick_man(QWidget* parent) :
     addDockWidget(Qt::BottomDockWidgetArea, anim_pane_);
     setCentralWidget(canvases_ = new canvas::manager(tool_mgr_));
     setWindowTitle("stick_man - untitled");
-    createMainMenu();
     canvases_->init(project_);
+    addDockWidget(Qt::LeftDockWidgetArea, new pane::artwork_browser(project_, *canvases_, this));
+    createMainMenu();
     skel_pane_->init(*canvases_, project_);
     tool_mgr_.init(*canvases_, project_);
     tool_pane_->init(tool_mgr_);
@@ -272,6 +274,7 @@ void ui::stick_man::update_undo_and_redo(bool can_redo, bool can_undo) {
 }
 void ui::stick_man::insert_view_menu() {
     auto view_menu = menuBar()->addMenu(tr("View"));
+    for (auto* dock : findChildren<pane::artwork_browser*>()) view_menu->addAction(dock->toggleViewAction());
     QMenu* magnification_menu = view_menu->addMenu(tr("Magnification"));
     // Create an action group to make the actions mutually exclusive (like radio buttons)
     QActionGroup* magnification_group = new QActionGroup(this);

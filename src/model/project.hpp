@@ -55,6 +55,8 @@ namespace mdl {
         project();
         const sm::project& core() const;
         sm::project& core();
+        // Validate on an independent semantic snapshot, then record one undoable edit.
+        void edit_artwork(const sm::object_id& character, const std::function<void(sm::artwork&)>& edit);
         const sm::topology& topology() const;
         model_object get(const sm::object_id& id);
         const_model_object get(const sm::object_id& id) const;
@@ -68,7 +70,8 @@ namespace mdl {
         sm::result adopt_skeletons(const sm::object_id& character_id,
             std::span<const sm::const_skel_ref> skeletons);
         std::expected<sm::object_id, sm::result> make_character(std::span<const sm::const_skel_ref> skeletons);
-        std::expected<sm::object_id, sm::result> paste_character(const sm::topology& rig, const std::string& name);
+        std::expected<sm::object_id, sm::result> paste_character(const sm::topology& rig, const std::string& name,
+            const sm::artwork& artwork = {});
         sm::result delete_character(const sm::object_id& id);
         bool rename(const sm::object_id& id, const std::string& new_name);
         void add_new_skeleton_root(sm::point loc);
