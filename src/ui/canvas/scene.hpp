@@ -77,11 +77,27 @@ namespace ui {
             std::optional<int> zoom_level_;
             artwork_layer* artwork_ = nullptr; // QObject child, lives with the scene.
 
+            struct bone_pick_state {
+                sm::object_id character;
+                item::bone* hovered = nullptr;
+                QGraphicsLineItem* highlight = nullptr;
+                QCursor previous_cursor;
+                QGraphicsView::DragMode previous_drag_mode = QGraphicsView::NoDrag;
+                bool view_mouse_tracking = false;
+                bool viewport_mouse_tracking = false;
+                std::function<void(sm::object_id)> picked;
+                std::function<void()> cancelled;
+            };
+            std::optional<bone_pick_state> bone_pick_;
+
             
             QGraphicsView& view();
             const QGraphicsView& view() const;
             void set_drag_mode(drag_mode dm);
             void set_contents(mdl::project& model);
+            item::bone* bone_pick_target(const QPointF& pt) const;
+            void update_bone_pick_hover(const QPointF& pt);
+            void finish_bone_pick(std::optional<sm::object_id> bone);
 
             void keyPressEvent(QKeyEvent* event) override;
             void keyReleaseEvent(QKeyEvent* event) override;
@@ -153,6 +169,10 @@ namespace ui {
             void clear();
             void show_status_line(const QString& txt);
             void hide_status_line();
+            void begin_bone_pick(const sm::object_id& character, const QString& slot,
+                std::function<void(sm::object_id)> picked, std::function<void()> cancelled = {});
+            void cancel_bone_pick();
+            bool bone_pick_active() const { return bone_pick_.has_value(); }
             void filter_selection(std::function<bool(item::base*)> filter);
             void delete_item(item::base* item, bool emit_signals);
             QPointF from_global_to_canvas(const QPoint& pt);

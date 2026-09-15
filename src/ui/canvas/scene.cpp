@@ -203,6 +203,7 @@ void ui::canvas::scene::drawForeground(QPainter* painter, const QRectF& rect) {
 }
 
 void ui::canvas::scene::focusOutEvent(QFocusEvent* focusEvent) {
+    if (bone_pick_active()) cancel_bone_pick();
     if (artwork_) artwork_->cancel_transform();
     if (is_status_line_visible()) {
         hide_status_line();
@@ -388,6 +389,7 @@ void ui::canvas::scene::clear_selection() {
 }
 
 void ui::canvas::scene::clear() {
+    cancel_bone_pick();
     if (artwork_) artwork_->cancel_transform();
     selection_.clear();
     auto items = canvas_items();
@@ -483,6 +485,97 @@ void ui::canvas::scene::hide_status_line() {
     update();
 }
 
+ui::canvas::item::bone* ui::canvas::scene::bone_pick_target(const QPointF& pt) const {
+    if (!bone_pick_) return nullptr;
+    for (auto* graphics : items(pt, Qt::IntersectsItemShape, Qt::DescendingOrder, view().viewportTransform())) {
+        for (auto* candidate = graphics; candidate; candidate = candidate->parentItem()) {
+            auto* bone = dynamic_cast<item::bone*>(candidate);
+            if (!bone || bone->effectiveOpacity() <= 0) continue;
+            auto parent = bone->model().owner().parent_character();
+            if (parent && parent->get().id() == bone_pick_->character) return bone;
+        }
+    }
+    return nullptr;
+}
+
+void ui::canvas::scene::update_bone_pick_hover(const QPointF& pt) {
+    if (!bone_pick_) return;
+    auto* target = bone_pick_target(pt);
+    if (target == bone_pick_->hovered) return;
+    bone_pick_->hovered = target;
+    if (!target) {
+        if (bone_pick_->highlight) bone_pick_->highlight->hide();
+        return;
+    }
+
+    if (!bone_pick_->highlight) {
+        auto* highlight = new QGraphicsLineItem;
+        QPen pen(k_sel_color, 5.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        pen.setCosmetic(true);
+        highlight->setPen(pen);
+        highlight->setZValue(10000);
+        addItem(highlight);
+        bone_pick_->highlight = highlight;
+    }
+    auto [root, tip] = target->model().line_segment();
+    bone_pick_->highlight->setLine(QLineF(to_qt_pt(root), to_qt_pt(tip)));
+    bone_pick_->highlight->show();
+}
+
+void ui::canvas::scene::finish_bone_pick(std::optional<sm::object_id> bone) {
+    if (!bone_pick_) return;
+    auto picked = std::move(bone_pick_->picked);
+    auto cancelled = std::move(bone_pick_->cancelled);
+    auto previous_cursor = bone_pick_->previous_cursor;
+    auto previous_drag_mode = bone_pick_->previous_drag_mode;
+    auto view_mouse_tracking = bone_pick_->view_mouse_tracking;
+    auto viewport_mouse_tracking = bone_pick_->viewport_mouse_tracking;
+    auto* highlight = bone_pick_->highlight;
+    bone_pick_.reset();
+
+    if (highlight) {
+        removeItem(highlight);
+        delete highlight;
+    }
+    view().setDragMode(previous_drag_mode);
+    view().setMouseTracking(view_mouse_tracking);
+    view().viewport()->setMouseTracking(viewport_mouse_tracking);
+    view().viewport()->setCursor(previous_cursor);
+    hide_status_line();
+
+    if (bone) {
+        if (picked) picked(*bone);
+    } else if (cancelled) {
+        cancelled();
+    }
+}
+
+void ui::canvas::scene::begin_bone_pick(const sm::object_id& character, const QString& slot,
+    std::function<void(sm::object_id)> picked, std::function<void()> cancelled) {
+    cancel_bone_pick();
+
+    auto& state = bone_pick_.emplace();
+    state.character = character;
+    state.previous_cursor = view().viewport()->cursor();
+    state.previous_drag_mode = view().dragMode();
+    state.view_mouse_tracking = view().hasMouseTracking();
+    state.viewport_mouse_tracking = view().viewport()->hasMouseTracking();
+    state.picked = std::move(picked);
+    state.cancelled = std::move(cancelled);
+
+    view().setDragMode(QGraphicsView::NoDrag);
+    view().setMouseTracking(true);
+    view().viewport()->setMouseTracking(true);
+    view().viewport()->setCursor(Qt::CrossCursor);
+    show_status_line(QStringLiteral("Pick bone for slot \"%1\" — Esc or right-click to cancel").arg(slot));
+    view().setFocus(Qt::OtherFocusReason);
+    update_bone_pick_hover(from_global_to_canvas(QCursor::pos()));
+}
+
+void ui::canvas::scene::cancel_bone_pick() {
+    finish_bone_pick(std::nullopt);
+}
+
 const ui::canvas::manager& ui::canvas::scene::manager() const {
     auto unconst_this = const_cast<ui::canvas::scene*>(this);
     return unconst_this->manager();
@@ -573,6 +666,11 @@ int ui::canvas::scene::closest_zoom_level() const
 }
 
 void ui::canvas::scene::keyPressEvent(QKeyEvent* event) {
+    if (bone_pick_active()) {
+        if (event->key() == Qt::Key_Escape) cancel_bone_pick();
+        event->accept();
+        return;
+    }
     if (artwork_ && artwork_->transform_editing()) {
         if (event->key() == Qt::Key_Escape) artwork_->cancel_transform();
         event->accept();
@@ -582,6 +680,10 @@ void ui::canvas::scene::keyPressEvent(QKeyEvent* event) {
 }
 
 void ui::canvas::scene::keyReleaseEvent(QKeyEvent* event) {
+    if (bone_pick_active()) {
+        event->accept();
+        return;
+    }
     if (artwork_ && artwork_->transform_editing()) {
         event->accept();
         return;
@@ -590,6 +692,16 @@ void ui::canvas::scene::keyReleaseEvent(QKeyEvent* event) {
 }
 
 void ui::canvas::scene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
+    if (bone_pick_active()) {
+        if (event->button() == Qt::RightButton) {
+            cancel_bone_pick();
+        } else if (event->button() == Qt::LeftButton) {
+            update_bone_pick_hover(event->scenePos());
+            if (bone_pick_ && bone_pick_->hovered) finish_bone_pick(bone_pick_->hovered->model().id());
+        }
+        event->accept();
+        return;
+    }
     if (artwork_ && artwork_->transform_editing()) {
         if (event->button() == Qt::LeftButton) artwork_->begin_transform(event->scenePos());
         event->accept();
@@ -599,6 +711,11 @@ void ui::canvas::scene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
 }
 
 void ui::canvas::scene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
+    if (bone_pick_active()) {
+        update_bone_pick_hover(event->scenePos());
+        event->accept();
+        return;
+    }
     if (artwork_ && artwork_->transform_editing()) {
         artwork_->update_transform(event->scenePos());
         event->accept();
@@ -608,6 +725,10 @@ void ui::canvas::scene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
 }
 
 void ui::canvas::scene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
+    if (bone_pick_active()) {
+        event->accept();
+        return;
+    }
     if (artwork_ && artwork_->transform_editing()) {
         if (event->button() == Qt::LeftButton) artwork_->end_transform(event->scenePos());
         event->accept();
@@ -617,6 +738,10 @@ void ui::canvas::scene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
 }
 
 void ui::canvas::scene::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
+    if (bone_pick_active()) {
+        event->accept();
+        return;
+    }
     if (artwork_ && artwork_->transform_editing()) {
         event->accept();
         return;

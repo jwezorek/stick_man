@@ -100,6 +100,7 @@ namespace {
     constexpr int bone_names_role = Qt::UserRole + 7;
     constexpr int bone_ids_role = Qt::UserRole + 8;
     constexpr int anchor_role = Qt::UserRole + 9;
+    constexpr int bone_pick_command_role = Qt::UserRole + 10;
     enum class mapping_choice { inherited, hidden, frame };
 
     QIcon appearance_membership_icon(bool included) {
@@ -169,6 +170,7 @@ namespace {
     class slot_item_delegate : public QStyledItemDelegate {
     public:
         std::function<void(const std::string&, sm::object_id, sm::bone_anchor)> binding_changed;
+        std::function<void(const std::string&)> bone_pick_requested;
         using QStyledItemDelegate::QStyledItemDelegate;
 
         QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
@@ -181,6 +183,9 @@ namespace {
                 const auto names = index.data(bone_names_role).toStringList();
                 const auto ids = index.data(bone_ids_role).toStringList();
                 for (int i = 0; i < std::min(names.size(), ids.size()); ++i) combo->addItem(names[i], ids[i]);
+                combo->insertSeparator(combo->count());
+                combo->addItem(QStringLiteral("Pick on canvas..."));
+                combo->setItemData(combo->count() - 1, true, bone_pick_command_role);
                 const auto current = index.data(bone_id_role).toString();
                 for (int i = 0; i < combo->count(); ++i)
                     if (combo->itemData(i).toString() == current) { combo->setCurrentIndex(i); break; }
@@ -199,6 +204,11 @@ namespace {
             auto* self = const_cast<slot_item_delegate*>(this);
             connect(combo, &QComboBox::activated, self, [self, combo, column = index.column()](int choice) {
                 auto slot = combo->property("slot").toString().toStdString();
+                if (column == 1 && combo->itemData(choice, bone_pick_command_role).toBool()) {
+                    emit self->closeEditor(combo, QAbstractItemDelegate::NoHint);
+                    if (self->bone_pick_requested) self->bone_pick_requested(slot);
+                    return;
+                }
                 auto bone_text = column == 1 ? combo->itemData(choice).toString() : combo->property("bone").toString();
                 auto bone = sm::object_id::from_string(bone_text.toStdString());
                 if (!bone) return;
@@ -393,6 +403,7 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
         if (refreshing_ || !character_) return;
         if (edit([&](auto& art) { art.bind_slot(slot, bone, endpoint); })) restore(slots_, slot);
     };
+    slot_delegate->bone_pick_requested = [this](const std::string& slot) { begin_bone_pick(slot); };
     slots_->setItemDelegate(slot_delegate);
     structure_layout->addWidget(slots_);
     buttons(structure_layout, {{"New slot…", [this] { new_slot_dialog(); }}, {"Delete", [this] {
@@ -775,7 +786,7 @@ void ui::pane::artwork_browser::refresh() {
         }
         QStringList bone_names, bone_ids;
         for (auto skeleton : project_.core().character(*character_)->get().rig().skeletons()) for (auto bone : skeleton->bones()) {
-            bone_names.push_back(QString::fromStdString(skeleton->name() + "/" + bone->name()));
+            bone_names.push_back(QString::fromStdString(skeleton->name() + " / " + bone->name()));
             bone_ids.push_back(QString::fromStdString(bone->id().to_string()));
         }
         for (const auto& [name, definition] : art.slot_definitions()) {
@@ -919,4 +930,20 @@ void ui::pane::artwork_browser::new_slot_dialog() {
         auto bone = ids.at(bones.currentIndex()); auto endpoint = anchor.currentIndex() == 0 ? sm::bone_anchor::root : sm::bone_anchor::tip;
         art.add_slot(name.text().trimmed().toStdString(), {bone, endpoint});
     });
+}
+
+void ui::pane::artwork_browser::begin_bone_pick(const std::string& slot) {
+    if (refreshing_ || !character_) return;
+    const auto& definitions = project_.core().artwork(*character_).slot_definitions();
+    auto definition = definitions.find(slot);
+    if (definition == definitions.end()) return;
+
+    const auto character = *character_;
+    const auto anchor = definition->second.anchor;
+    restore(slots_, slot);
+    canvases_.active_canvas().begin_bone_pick(character, QString::fromStdString(slot),
+        [this, character, slot, anchor](sm::object_id bone) {
+            if (refreshing_ || character_ != character) return;
+            if (edit([&](auto& art) { art.bind_slot(slot, bone, anchor); })) restore(slots_, slot);
+        });
 }

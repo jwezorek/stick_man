@@ -37,6 +37,7 @@ namespace ui::pane {
         void refresh_details();
         void import_frames();
         void new_slot_dialog();
+        void begin_bone_pick(const std::string& slot);
         QString ask_name(const QString& title, const QString& current = {});
     public:
         artwork_browser(mdl::project& project, canvas::manager& canvases, QWidget* parent);
