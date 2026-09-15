@@ -19,7 +19,6 @@ namespace ui::pane {
         QListWidget* slots_;
         QListWidget* states_;
         QTreeWidget* appearance_structure_;
-        QComboBox* preview_state_;
         QDoubleSpinBox* origin_x_;
         QDoubleSpinBox* origin_y_;
         std::array<QDoubleSpinBox*, 5> transform_;

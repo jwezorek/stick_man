@@ -321,8 +321,6 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
 
     // One concrete implementation of the shared structure.
     auto* appearance_tab = new QWidget(tabs); auto* appearance_layout = new QVBoxLayout(appearance_tab); tabs->addTab(appearance_tab, "Appearances");
-    auto* appearance_help = new QLabel("Each appearance maps the shared structure to concrete images.", appearance_tab);
-    appearance_help->setWordWrap(true); appearance_layout->addWidget(appearance_help);
     auto* appearance_selector = new QFormLayout;
     appearances_ = new QComboBox(appearance_tab); appearances_->setObjectName("artwork_appearance");
     appearance_selector->addRow("Appearance", appearances_); appearance_layout->addLayout(appearance_selector);
@@ -414,18 +412,6 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
     order_button(QStringLiteral("⇊"), QStringLiteral("Bring to Front"), 2)->setObjectName("artwork_bring_to_front");
     order_panel_layout->addWidget(order_toolbar);
     appearance_layout->addWidget(order_panel);
-    preview_state_ = new QComboBox(appearance_tab); preview_state_->setObjectName("artwork_preview_state");
-    preview_state_->setToolTip("Preview this slot's semantic state across appearances. Preview choices are not saved.");
-    auto* preview_form = new QFormLayout;
-    preview_form->addRow("Preview slot state", preview_state_); appearance_layout->addLayout(preview_form);
-    buttons(appearance_layout, {{"Reset all preview states", [this] {
-        if (character_) canvases_.active_canvas().artwork().reset_preview_states(*character_);
-    }}});
-    connect(preview_state_, &QComboBox::activated, this, [this](int) {
-        if (refreshing_ || !character_) return;
-        auto [slot, state] = selected_appearance_item(appearance_structure_);
-        if (!slot.empty()) canvases_.active_canvas().artwork().set_preview_state(*character_, slot, preview_state_->currentText().toStdString());
-    });
     auto* transform_form = new QFormLayout;
     const QStringList transform_labels{"Translation X", "Translation Y (up)", "Rotation (degrees)", "Scale X", "Scale Y"};
     const QStringList transform_names{"artwork_translation_x", "artwork_translation_y", "artwork_rotation", "artwork_scale_x", "artwork_scale_y"};
@@ -663,7 +649,6 @@ void ui::pane::artwork_browser::refresh_details() {
     refreshing_ = true;
     auto frame = selected(frames_);
     origin_x_->setEnabled(!frame.empty()); origin_y_->setEnabled(!frame.empty());
-    preview_state_->clear(); preview_state_->setEnabled(false);
     for (auto* spin : transform_) spin->setEnabled(false);
     for (auto* button : order_buttons_) button->setEnabled(false);
     if (character_) {
@@ -672,9 +657,6 @@ void ui::pane::artwork_browser::refresh_details() {
         auto app = art.appearances().find(active_appearance().toStdString());
         auto [slot, state] = selected_appearance_item(appearance_structure_);
         if (app != art.appearances().end() && !slot.empty()) {
-            for (const auto& value : art.slot_definitions().at(slot).states) preview_state_->addItem(QString::fromStdString(value));
-            preview_state_->setCurrentText(QString::fromStdString(canvases_.active_canvas().artwork().preview_state(*character_, slot)));
-            preview_state_->setEnabled(true);
             auto* implementation = appearance_slot(app->second, slot);
             if (implementation) {
                 const auto& t = implementation->transform;
