@@ -19,9 +19,6 @@ namespace ui::pane {
         QListWidget* slots_;
         QListWidget* states_;
         QTreeWidget* appearance_structure_;
-        QPushButton* add_to_appearance_;
-        QPushButton* remove_from_appearance_;
-        QComboBox* mapping_;
         QComboBox* preview_state_;
         QDoubleSpinBox* origin_x_;
         QDoubleSpinBox* origin_y_;

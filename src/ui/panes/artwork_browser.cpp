@@ -7,6 +7,7 @@
 #include <numbers>
 #include <QPainter>
 #include <QPainterPath>
+#include <QMouseEvent>
 
 namespace {
     class frame_list : public QListWidget {
@@ -33,6 +34,15 @@ namespace {
         using QTreeWidget::QTreeWidget;
         std::function<void(const std::string&, int)> reorder;
     protected:
+        void mousePressEvent(QMouseEvent* event) override {
+            if (event->button() == Qt::LeftButton && !itemAt(event->position().toPoint())) {
+                clearSelection();
+                setCurrentItem(nullptr);
+                event->accept();
+                return;
+            }
+            QTreeWidget::mousePressEvent(event);
+        }
         void startDrag(Qt::DropActions) override {
             if (!currentItem() || currentItem()->parent() || !currentItem()->data(0, Qt::UserRole + 2).toBool()) return;
             QDrag drag(this);
@@ -74,18 +84,30 @@ namespace {
     QDoubleSpinBox* coordinate(QWidget* parent) {
         auto* spin = new QDoubleSpinBox(parent); spin->setRange(-1e9, 1e9); spin->setDecimals(4); return spin;
     }
+    constexpr int slot_role = Qt::UserRole;
+    constexpr int state_role = Qt::UserRole + 1;
+    constexpr int included_role = Qt::UserRole + 2;
+    constexpr int mapping_kind_role = Qt::UserRole + 3;
+    constexpr int mapping_frame_role = Qt::UserRole + 4;
+    constexpr int frame_names_role = Qt::UserRole + 5;
+    enum class mapping_choice { inherited, hidden, frame };
+
     QIcon appearance_membership_icon(bool included) {
         QPixmap pixmap(12, 12);
         pixmap.fill(Qt::transparent);
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing);
         if (included) {
-            QPainter painter(&pixmap);
-            painter.setRenderHint(QPainter::Antialiasing);
             painter.setPen(QPen(QColor(82, 190, 104), 2.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
             QPainterPath path;
             path.moveTo(1.5, 6.0);
             path.lineTo(4.5, 9.0);
             path.lineTo(10.5, 2.5);
             painter.drawPath(path);
+        } else {
+            painter.setPen(QPen(QColor(210, 70, 70), 1.7, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            painter.drawEllipse(QRectF(1.5, 1.5, 9.0, 9.0));
+            painter.drawLine(QPointF(3.0, 9.0), QPointF(9.0, 3.0));
         }
         return QIcon(pixmap);
     }
@@ -98,6 +120,7 @@ namespace {
         };
     }
     void restore_appearance_item(QTreeWidget* tree, const std::string& slot, const std::string& state) {
+        if (slot.empty()) { tree->setCurrentItem(nullptr); return; }
         QTreeWidgetItem* fallback = nullptr;
         for (int i = 0; i < tree->topLevelItemCount(); ++i) {
             auto* top = tree->topLevelItem(i);
@@ -125,6 +148,107 @@ namespace {
         if (!mapping->second) return QStringLiteral("Hidden");
         return QString::fromStdString(*mapping->second);
     }
+    std::pair<mapping_choice, QString> mapping_value(const sm::appearance_slot* implementation, const std::string& state) {
+        if (!implementation) return {mapping_choice::hidden, {}};
+        auto mapping = implementation->states.find(state);
+        if (mapping == implementation->states.end()) return {mapping_choice::inherited, {}};
+        if (!mapping->second) return {mapping_choice::hidden, {}};
+        return {mapping_choice::frame, QString::fromStdString(*mapping->second)};
+    }
+
+    class appearance_item_delegate : public QStyledItemDelegate {
+    public:
+        std::function<void(const std::string&, bool)> membership_changed;
+        std::function<void(const std::string&, const std::string&, mapping_choice, const std::string&)> mapping_changed;
+        using QStyledItemDelegate::QStyledItemDelegate;
+
+        QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem&, const QModelIndex& index) const override {
+            auto metadata = index.siblingAtColumn(0);
+            auto state = metadata.data(state_role).toString();
+            if (index.column() != 1 || state.isEmpty() || !metadata.data(included_role).toBool()) return nullptr;
+
+            auto* combo = new QComboBox(parent);
+            combo->setFrame(false);
+            if (state != QStringLiteral("default")) combo->addItem(QStringLiteral("Use default (unmapped)"), int(mapping_choice::inherited));
+            combo->addItem(QStringLiteral("Hidden (none)"), int(mapping_choice::hidden));
+            for (const auto& frame : index.data(frame_names_role).toStringList()) {
+                combo->addItem(frame, int(mapping_choice::frame));
+                combo->setItemData(combo->count() - 1, frame, Qt::UserRole + 1);
+            }
+
+            auto kind = mapping_choice(index.data(mapping_kind_role).toInt());
+            auto frame = index.data(mapping_frame_role).toString();
+            for (int i = 0; i < combo->count(); ++i) {
+                if (mapping_choice(combo->itemData(i).toInt()) != kind) continue;
+                if (kind == mapping_choice::frame && combo->itemData(i, Qt::UserRole + 1).toString() != frame) continue;
+                combo->setCurrentIndex(i);
+                break;
+            }
+            combo->setProperty("slot", metadata.data(slot_role));
+            combo->setProperty("state", state);
+
+            auto* self = const_cast<appearance_item_delegate*>(this);
+            connect(combo, &QComboBox::activated, self, [self, combo](int index) {
+                auto slot = combo->property("slot").toString().toStdString();
+                auto state = combo->property("state").toString().toStdString();
+                auto kind = mapping_choice(combo->itemData(index).toInt());
+                auto frame = kind == mapping_choice::frame ? combo->itemData(index, Qt::UserRole + 1).toString().toStdString() : std::string{};
+                emit self->closeEditor(combo, QAbstractItemDelegate::NoHint);
+                if (self->mapping_changed) self->mapping_changed(slot, state, kind, frame);
+            });
+            QTimer::singleShot(0, combo, &QComboBox::showPopup);
+            return combo;
+        }
+        void setEditorData(QWidget*, const QModelIndex&) const override {}
+        void setModelData(QWidget*, QAbstractItemModel*, const QModelIndex&) const override {}
+        void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex&) const override {
+            editor->setGeometry(option.rect.adjusted(1, 1, -1, -1));
+        }
+        QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+            auto result = QStyledItemDelegate::sizeHint(option, index);
+            if (index.column() == 1 && !index.siblingAtColumn(0).data(state_role).toString().isEmpty()) result.setHeight(std::max(result.height(), 24));
+            return result;
+        }
+        void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+            auto metadata = index.siblingAtColumn(0);
+            if (index.column() != 1 || metadata.data(state_role).toString().isEmpty()) {
+                QStyledItemDelegate::paint(painter, option, index);
+                return;
+            }
+            QStyleOptionViewItem background(option);
+            initStyleOption(&background, index);
+            auto* style = option.widget ? option.widget->style() : QApplication::style();
+            style->drawPrimitive(QStyle::PE_PanelItemViewItem, &background, painter, option.widget);
+
+            QStyleOptionComboBox combo;
+            combo.rect = option.rect.adjusted(2, 1, -2, -1);
+            combo.palette = option.palette;
+            combo.currentText = index.data(Qt::DisplayRole).toString();
+            combo.state = QStyle::State_Active;
+            if (metadata.data(included_role).toBool()) combo.state |= QStyle::State_Enabled;
+            style->drawComplexControl(QStyle::CC_ComboBox, &combo, painter, option.widget);
+            style->drawControl(QStyle::CE_ComboBoxLabel, &combo, painter, option.widget);
+        }
+        bool editorEvent(QEvent* event, QAbstractItemModel* model, const QStyleOptionViewItem& option,
+            const QModelIndex& index) override {
+            auto slot = index.data(slot_role).toString();
+            if (index.column() == 0 && !slot.isEmpty() && index.data(state_role).toString().isEmpty() &&
+                event->type() == QEvent::MouseButtonRelease) {
+                auto* mouse = static_cast<QMouseEvent*>(event);
+                if (mouse->button() == Qt::LeftButton) {
+                    QStyleOptionViewItem item_option(option);
+                    initStyleOption(&item_option, index);
+                    auto* style = option.widget ? option.widget->style() : QApplication::style();
+                    auto icon_rect = style->subElementRect(QStyle::SE_ItemViewItemDecoration, &item_option, option.widget);
+                    if (icon_rect.contains(mouse->position().toPoint())) {
+                        if (membership_changed) membership_changed(slot.toStdString(), index.data(included_role).toBool());
+                        return true;
+                    }
+                }
+            }
+            return QStyledItemDelegate::editorEvent(event, model, option, index);
+        }
+    };
 }
 std::optional<sm::object_id> ui::pane::artwork_character(const mdl::selection& selection) {
     std::optional<sm::object_id> result;
@@ -155,7 +279,9 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
         std::vector<QPushButton*> result;
         auto* row = new QHBoxLayout;
         for (const auto& [label, fn] : actions) {
-            auto* button = new QPushButton(label, body_); row->addWidget(button); result.push_back(button);
+            auto* button = new QPushButton(label, body_);
+            button->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+            row->addWidget(button); result.push_back(button);
             connect(button, &QPushButton::clicked, this, [this, fn] {
                 if (!character_) return;
                 try { fn(); } catch (const std::exception& e) { QMessageBox::warning(this, "Artwork", e.what()); }
@@ -228,6 +354,37 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
     appearance_structure_->setRootIsDecorated(true);
     appearance_structure_->setIconSize({12, 12});
     appearance_structure_->setFrameShape(QFrame::NoFrame);
+    appearance_structure_->setEditTriggers(QAbstractItemView::CurrentChanged | QAbstractItemView::SelectedClicked | QAbstractItemView::EditKeyPressed);
+    auto* appearance_delegate = new appearance_item_delegate(appearance_structure_);
+    appearance_delegate->membership_changed = [this](const std::string& slot, bool included) {
+        if (refreshing_ || !character_) return;
+        auto name = active_appearance().toStdString();
+        if (name.empty()) return;
+        edit([&](auto& art) {
+            auto app = art.appearances().at(name);
+            if (included) std::erase_if(app.appearance_slots, [&](const auto& candidate) { return candidate.slot == slot; });
+            else if (!appearance_slot(app, slot)) app.appearance_slots.push_back({slot});
+            art.set_appearance(name, std::move(app));
+        });
+    };
+    appearance_delegate->mapping_changed = [this](const std::string& slot, const std::string& state,
+        mapping_choice choice, const std::string& frame) {
+        if (refreshing_ || !character_) return;
+        auto name = active_appearance().toStdString();
+        if (name.empty()) return;
+        edit([&](auto& art) {
+            auto app = art.appearances().at(name);
+            for (auto& implementation : app.appearance_slots) if (implementation.slot == slot) {
+                switch (choice) {
+                case mapping_choice::inherited: implementation.states.erase(state); break;
+                case mapping_choice::hidden: implementation.states[state] = sm::frame_target{}; break;
+                case mapping_choice::frame: implementation.states[state] = sm::frame_target{frame}; break;
+                }
+            }
+            art.set_appearance(name, std::move(app));
+        });
+    };
+    appearance_structure_->setItemDelegate(appearance_delegate);
     order_panel_layout->addWidget(appearance_structure_);
 
     auto* order_toolbar = new QWidget(order_panel);
@@ -257,26 +414,6 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
     order_button(QStringLiteral("⇊"), QStringLiteral("Bring to Front"), 2)->setObjectName("artwork_bring_to_front");
     order_panel_layout->addWidget(order_toolbar);
     appearance_layout->addWidget(order_panel);
-    auto membership = buttons(appearance_layout, {{"Add to appearance", [this] {
-        auto [slot, _] = selected_appearance_item(appearance_structure_);
-        auto name = active_appearance().toStdString(); if (slot.empty() || name.empty()) return;
-        edit([&](auto& a) {
-            auto app = a.appearances().at(name);
-            if (!appearance_slot(app, slot)) app.appearance_slots.push_back({slot});
-            a.set_appearance(name, std::move(app));
-        });
-    }}, {"Remove from appearance", [this] {
-        auto [slot, _] = selected_appearance_item(appearance_structure_);
-        auto name = active_appearance().toStdString(); if (slot.empty() || name.empty()) return;
-        edit([&](auto& a) {
-            auto app = a.appearances().at(name);
-            std::erase_if(app.appearance_slots, [&](const auto& s) { return s.slot == slot; });
-            a.set_appearance(name, std::move(app));
-        });
-    }}});
-    add_to_appearance_ = membership.at(0); remove_from_appearance_ = membership.at(1);
-    mapping_ = new QComboBox(appearance_tab); mapping_->setObjectName("artwork_mapping");
-    appearance_layout->addWidget(new QLabel("Image for selected state", appearance_tab)); appearance_layout->addWidget(mapping_);
     preview_state_ = new QComboBox(appearance_tab); preview_state_->setObjectName("artwork_preview_state");
     preview_state_->setToolTip("Preview this slot's semantic state across appearances. Preview choices are not saved.");
     auto* preview_form = new QFormLayout;
@@ -357,21 +494,6 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
     connect(origin_x_, &QDoubleSpinBox::editingFinished, this, save_origin);
     connect(origin_y_, &QDoubleSpinBox::editingFinished, this, save_origin);
 
-    connect(mapping_, &QComboBox::activated, this, [this](int index) {
-        if (refreshing_ || !character_) return;
-        auto [slot, state] = selected_appearance_item(appearance_structure_);
-        auto name = active_appearance().toStdString();
-        if (slot.empty() || state.empty() || name.empty()) return;
-        auto frame = mapping_->currentData().toString().toStdString();
-        edit([&](auto& a) {
-            auto app = a.appearances().at(name);
-            for (auto& s : app.appearance_slots) if (s.slot == slot) {
-                if (index == 0) s.states.erase(state);
-                else s.states[state] = index == 1 ? sm::frame_target{} : sm::frame_target{frame};
-            }
-            a.set_appearance(name, std::move(app));
-        });
-    });
     connect(appearances_, &QComboBox::currentTextChanged, this, [this](const QString& name) {
         if (!refreshing_ && character_) {
             canvases_.active_canvas().artwork().set_active_appearance(*character_, name.toStdString());
@@ -455,7 +577,7 @@ void ui::pane::artwork_browser::refresh() {
         if (appearance_slot_name != sprite->slot) appearance_state.clear();
         appearance_slot_name = sprite->slot;
     }
-    appearances_->clear(); frames_->clear(); slots_->clear(); states_->clear(); appearance_structure_->clear(); mapping_->clear();
+    appearances_->clear(); frames_->clear(); slots_->clear(); states_->clear(); appearance_structure_->clear();
     body_->setEnabled(character_.has_value());
     character_label_->setText("Select a character or one of its members");
     if (character_) {
@@ -498,7 +620,9 @@ void ui::pane::artwork_browser::refresh() {
         for (const auto& [name, definition] : art.slot_definitions())
             if (!active || !appearance_slot(*active, name)) ordered_names.push_back(name);
         const auto included_icon = appearance_membership_icon(true);
-        const auto empty_icon = appearance_membership_icon(false);
+        const auto excluded_icon = appearance_membership_icon(false);
+        QStringList frame_names;
+        for (const auto& [name, _] : art.frames()) frame_names.push_back(QString::fromStdString(name));
         for (const auto& name : ordered_names) {
             const auto& definition = art.slot_definitions().at(name);
             auto* implementation = active ? appearance_slot(*active, name) : nullptr;
@@ -507,19 +631,26 @@ void ui::pane::artwork_browser::refresh() {
             label += " [" + QString::fromStdString(preview) + "]";
             if (!project_.core().slot_resolved(*character_, name)) label += " — unresolved";
             auto* top = new QTreeWidgetItem(appearance_structure_, QStringList{label, QString{}});
-            top->setIcon(0, implementation ? included_icon : empty_icon);
-            top->setData(0, Qt::UserRole, QString::fromStdString(name));
-            top->setData(0, Qt::UserRole + 1, QString{});
-            top->setData(0, Qt::UserRole + 2, implementation != nullptr);
+            top->setIcon(0, implementation ? included_icon : excluded_icon);
+            top->setToolTip(0, implementation ? "Click the check mark to remove this slot from the appearance."
+                : "Click the prohibition mark to include this slot in the appearance.");
+            top->setData(0, slot_role, QString::fromStdString(name));
+            top->setData(0, state_role, QString{});
+            top->setData(0, included_role, implementation != nullptr);
             top->setFlags((top->flags() & ~Qt::ItemIsDropEnabled & ~Qt::ItemIsDragEnabled) |
                 (implementation ? Qt::ItemIsDragEnabled : Qt::NoItemFlags));
             for (const auto& semantic_state : definition.states) {
+                auto [kind, mapped_frame] = mapping_value(implementation, semantic_state);
                 auto* child = new QTreeWidgetItem(top, QStringList{
                     QString::fromStdString(semantic_state), mapping_text(implementation, semantic_state)
                 });
-                child->setData(0, Qt::UserRole, QString::fromStdString(name));
-                child->setData(0, Qt::UserRole + 1, QString::fromStdString(semantic_state));
-                child->setFlags(child->flags() & ~Qt::ItemIsDragEnabled & ~Qt::ItemIsDropEnabled);
+                child->setData(0, slot_role, QString::fromStdString(name));
+                child->setData(0, state_role, QString::fromStdString(semantic_state));
+                child->setData(0, included_role, implementation != nullptr);
+                child->setData(1, mapping_kind_role, int(kind));
+                child->setData(1, mapping_frame_role, mapped_frame);
+                child->setData(1, frame_names_role, frame_names);
+                child->setFlags((child->flags() | Qt::ItemIsEditable) & ~Qt::ItemIsDragEnabled & ~Qt::ItemIsDropEnabled);
             }
             top->setExpanded(true);
         }
@@ -532,9 +663,7 @@ void ui::pane::artwork_browser::refresh_details() {
     refreshing_ = true;
     auto frame = selected(frames_);
     origin_x_->setEnabled(!frame.empty()); origin_y_->setEnabled(!frame.empty());
-    mapping_->clear(); mapping_->setEnabled(false);
     preview_state_->clear(); preview_state_->setEnabled(false);
-    add_to_appearance_->setEnabled(false); remove_from_appearance_->setEnabled(false);
     for (auto* spin : transform_) spin->setEnabled(false);
     for (auto* button : order_buttons_) button->setEnabled(false);
     if (character_) {
@@ -547,8 +676,6 @@ void ui::pane::artwork_browser::refresh_details() {
             preview_state_->setCurrentText(QString::fromStdString(canvases_.active_canvas().artwork().preview_state(*character_, slot)));
             preview_state_->setEnabled(true);
             auto* implementation = appearance_slot(app->second, slot);
-            add_to_appearance_->setEnabled(!implementation);
-            remove_from_appearance_->setEnabled(implementation);
             if (implementation) {
                 const auto& t = implementation->transform;
                 const std::array<double, 5> values{t.translation.x, t.translation.y, t.rotation * 180 / std::numbers::pi, t.scale.x, t.scale.y};
@@ -557,14 +684,6 @@ void ui::pane::artwork_browser::refresh_details() {
                 bool front = order.back().slot == slot, back = order.front().slot == slot;
                 order_buttons_[0]->setEnabled(!back); order_buttons_[1]->setEnabled(!back);
                 order_buttons_[2]->setEnabled(!front); order_buttons_[3]->setEnabled(!front);
-            }
-            if (implementation && !state.empty()) {
-                mapping_->addItem("Use default (unmapped)"); mapping_->addItem("Hidden (none)");
-                for (const auto& [name, _] : art.frames()) mapping_->addItem(QString::fromStdString(name), QString::fromStdString(name));
-                auto it = implementation->states.find(state);
-                int index = it == implementation->states.end() ? 0 : !it->second ? 1 : mapping_->findData(QString::fromStdString(*it->second));
-                mapping_->setCurrentIndex(index); mapping_->setEnabled(true);
-                if (state == "default") qobject_cast<QStandardItemModel*>(mapping_->model())->item(0)->setEnabled(false);
             }
         }
     }
