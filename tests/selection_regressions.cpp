@@ -23,6 +23,41 @@ void require(bool ok, const char* message) {
     if (!ok) throw std::runtime_error(message);
 }
 
+QTreeWidgetItem* appearance_state_item(QTreeWidget* tree, const std::string& slot, const std::string& state) {
+    for (int i = 0; i < tree->topLevelItemCount(); ++i) {
+        auto* top = tree->topLevelItem(i);
+        if (top->data(0, Qt::UserRole).toString().toStdString() != slot) continue;
+        for (int j = 0; j < top->childCount(); ++j) {
+            auto* child = top->child(j);
+            if (child->data(0, Qt::UserRole + 1).toString().toStdString() == state) return child;
+        }
+    }
+    return nullptr;
+}
+
+void choose_mapping(QTreeWidget* tree, QTreeWidgetItem* state_item, const QString& choice) {
+    QStyleOptionViewItem option;
+    auto* editor = qobject_cast<QComboBox*>(
+        tree->itemDelegate()->createEditor(tree->viewport(), option, tree->indexFromItem(state_item, 1)));
+    require(editor != nullptr, "appearance mapping editor missing");
+    auto index = editor->findText(choice);
+    require(index >= 0, "appearance mapping choice missing");
+    editor->setCurrentIndex(index);
+    QMetaObject::invokeMethod(editor, "activated", Qt::DirectConnection, Q_ARG(int, index));
+    delete editor;
+}
+
+void choose_preview_state(QTreeWidget* tree, QTreeWidgetItem* state_item) {
+    QStyleOptionViewItem option;
+    option.rect = QRect(0, 0, 200, 24);
+    option.widget = tree;
+    auto width = tree->style()->pixelMetric(QStyle::PM_ExclusiveIndicatorWidth, nullptr, tree);
+    QPointF pos(option.rect.left() + 2 + width / 2.0, option.rect.center().y());
+    QMouseEvent release(QEvent::MouseButtonRelease, pos, pos, Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    require(tree->itemDelegate()->editorEvent(&release, tree->model(), option, tree->indexFromItem(state_item, 0)),
+        "appearance preview radio did not handle click");
+}
+
 struct fixture {
     ui::stick_man window;
     ui::tool::select tool;
@@ -146,11 +181,18 @@ void artwork_canvas_test(fixture& f, bool visual) {
     auto* tree = browser->findChild<QTreeWidget*>("artwork_appearance_structure");
     require(tree->topLevelItem(0)->data(0,Qt::UserRole).toString() == "z_back", "browser uses name order instead of painter order");
     layer.set_selected_slot(id,"a_front");
+    auto* transform = browser->findChild<QToolButton*>("artwork_transform_toggle");
+    auto* transform_panel = browser->findChild<QFrame*>("artwork_transform_panel");
+    require(transform && transform_panel, "sprite transform popup missing");
+    transform->click();
+    require(transform->isChecked() && !transform_panel->isHidden(), "sprite transform popup did not open");
     auto* x = browser->findChild<QDoubleSpinBox*>("artwork_translation_x");
     require(x && x->isEnabled(), "sprite numeric controls disabled");
     x->setValue(44); QMetaObject::invokeMethod(x,"editingFinished",Qt::DirectConnection);
     require(current().translation.x == 44, "numeric transform not applied"); model.undo();
-    for (auto* button : browser->findChildren<QPushButton*>()) if (button->text() == "Send to Back") button->click();
+    auto* send_to_back = browser->findChild<QToolButton*>("artwork_send_to_back");
+    require(send_to_back && send_to_back->isEnabled(), "Send to Back tool button missing or disabled");
+    send_to_back->click();
     require(model.core().artwork(id).appearances().at("Default").appearance_slots.front().slot == "a_front", "painter order button failed");
     require(render().pixelColor(150,85) == QColor(Qt::blue), "reordering did not change rendered overlap"); model.undo();
     layer.set_show_artwork(false); require(!layer.hit_test({35,35}) && render().pixelColor(150,85) == QColor(Qt::white), "Show Artwork did not hide sprites"); layer.set_show_artwork(true);
@@ -211,11 +253,13 @@ void character_test(fixture& f, const std::string& mode) {
         auto& layer = f.canvas().artwork();
         layer.set_active_appearance(id,"Human"); layer.set_selected_slot(id,"eyes");
         auto* browser = f.window.findChild<ui::pane::artwork_browser*>();
-        auto* preview = browser->findChild<QComboBox*>("artwork_preview_state");
-        require(preview && preview->isEnabled(), "missing semantic state preview selector");
+        auto* tree = browser->findChild<QTreeWidget*>("artwork_appearance_structure");
+        require(tree, "missing appearance structure tree");
         auto choose = [&](const char* name) {
-            int index = preview->findText(name); require(index >= 0, "preview state missing");
-            preview->setCurrentIndex(index); QMetaObject::invokeMethod(preview,"activated",Qt::DirectConnection,Q_ARG(int,index));
+            auto* state_item = appearance_state_item(tree, "eyes", name);
+            require(state_item, "preview state missing");
+            choose_preview_state(tree, state_item);
+            require(layer.preview_state(id, "eyes") == name, "preview state radio did not update canvas state");
         };
         auto color = [&] {
             QImage image(8,8,QImage::Format_RGBA8888); image.fill(Qt::white);
@@ -225,27 +269,26 @@ void character_test(fixture& f, const std::string& mode) {
         choose("closed"); require(color() == QColor(Qt::blue), "explicit state did not render");
         require(layer.hit_test({0,0}).has_value(), "visible preview not selectable");
         layer.set_active_appearance(id,"Robot");
-        require(preview->currentText() == "closed" && color() == QColor(Qt::white), "appearance switch lost semantic state or hidden mapping");
+        require(layer.preview_state(id, "eyes") == "closed" && color() == QColor(Qt::white),
+            "appearance switch lost semantic state or hidden mapping");
         require(!layer.hit_test({0,0}), "hidden preview remained selectable");
-        auto* tree = browser->findChild<QTreeWidget*>("artwork_appearance_structure");
-        tree->setCurrentItem(tree->topLevelItem(0)->child(1));
-        auto* mapping = browser->findChild<QComboBox*>("artwork_mapping");
-        require(mapping->currentIndex() == 1, "hidden mapping not represented in browser");
-        mapping->setCurrentIndex(0); QMetaObject::invokeMethod(mapping,"activated",Qt::DirectConnection,Q_ARG(int,0));
+        auto* closed = appearance_state_item(tree, "eyes", "closed");
+        require(closed && closed->text(1) == "Hidden", "hidden mapping not represented in browser");
+        choose_mapping(tree, closed, "Use default (unmapped)");
         require(color() == QColor(Qt::blue), "editing unmapped fallback did not refresh preview");
         model.undo(); require(color() == QColor(Qt::white), "mapping undo lost preview state");
         choose("half"); require(color() == QColor(Qt::blue), "unmapped state did not fall back");
         layer.set_active_appearance(id,"Human"); require(color() == QColor(Qt::red), "fallback used other appearance");
-        for (auto* button : browser->findChildren<QPushButton*>()) if (button->text() == "Reset all preview states") button->click();
-        require(preview->currentText() == "default", "preview reset failed");
+        choose("default");
+        require(layer.preview_state(id, "eyes") == "default", "preview reset failed");
         choose("closed");
         model.edit_artwork(id, [](auto& a) { a.rename_state("eyes","closed","shut"); });
-        require(preview->currentText() == "default", "renamed preview state did not reset safely");
+        require(layer.preview_state(id, "eyes") == "default", "renamed preview state did not reset safely");
         require(model.core().artwork(id).resolve_frame("Human","eyes","shut") == "blue" &&
             !model.core().artwork(id).resolve_frame("Robot","eyes","shut"), "rename did not propagate across appearances");
         choose("shut"); model.edit_artwork(id, [](auto& a) { a.delete_state("eyes","shut"); });
-        require(preview->currentText() == "default" && color() == QColor(Qt::red), "deleted state left stale preview");
-        model.undo(); require(preview->findText("shut") >= 0, "undo did not restore vocabulary");
+        require(layer.preview_state(id, "eyes") == "default" && color() == QColor(Qt::red), "deleted state left stale preview");
+        model.undo(); require(appearance_state_item(tree, "eyes", "shut"), "undo did not restore vocabulary");
         choose("shut");
         if (mode.ends_with("visual")) {
             browser->findChild<QTabWidget*>()->setCurrentIndex(1);
@@ -295,8 +338,10 @@ void character_test(fixture& f, const std::string& mode) {
         try { model.edit_artwork(id, [](auto& a) { a.add_appearance("temporary"); a.add_appearance("Human"); }); }
         catch (const std::exception&) { rejected = true; }
         require(rejected && model.can_redo() && !model.core().artwork(id).appearances().contains("temporary"), "failed edit was not atomic");
-        auto* mapping = browser->findChild<QComboBox*>("artwork_mapping");
-        mapping->setCurrentIndex(1); QMetaObject::invokeMethod(mapping, "activated", Qt::DirectConnection, Q_ARG(int, 1));
+        auto* tree = browser->findChild<QTreeWidget*>("artwork_appearance_structure");
+        auto* default_state = appearance_state_item(tree, "head", "default");
+        require(default_state, "default appearance state missing");
+        choose_mapping(tree, default_state, "Hidden (none)");
         require(!model.core().artwork(id).resolve_frame("Human", "head"), "mapping UI did not hide frame");
         model.undo(); require(model.core().artwork(id).resolve_frame("Human", "head") == "head", "mapping UI undo failed");
         ui::clipboard::copy(f.window); ui::clipboard::paste(f.window, true);
