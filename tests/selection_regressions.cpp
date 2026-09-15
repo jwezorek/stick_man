@@ -1,8 +1,6 @@
 #include "ui/stick_man.hpp"
 #include "ui/panes/artwork_browser.hpp"
 #include "ui/canvas/artwork_layer.hpp"
-#include "ui/tools/sprite_transform_tool.hpp"
-#include <numbers>
 #include "ui/canvas/canvas_manager.hpp"
 #include "ui/canvas/skel_item.hpp"
 #include "ui/canvas/node_item.hpp"
@@ -13,6 +11,7 @@
 #include "ui/clipboard.hpp"
 #include "ui/character_actions.hpp"
 #include "ui/tools/add_bone_tool.hpp"
+#include <numbers>
 #include <iostream>
 #include <stdexcept>
 #ifdef _MSC_VER
@@ -165,7 +164,7 @@ void artwork_canvas_test(fixture& f, bool visual) {
     QMimeData mime; mime.setData(ui::canvas::frame_mime_type, QJsonDocument(QJsonObject{{"character",QString::fromStdString(id.to_string())},{"frame","stripe"}}).toJson());
     require(layer.can_drop(&mime,{30,0}) && !layer.can_drop(&mime,{200,0}), "frame drag character/bone validation failed");
     // Exercise real tool dispatch and Escape, with no topology edits.
-    f.window.tool_mgr().set_current_tool(f.window.canvases(),ui::tool::id::sprite_transform);
+    //f.window.tool_mgr().set_current_tool(f.window.canvases(),ui::tool::id::sprite_transform);
     QGraphicsSceneMouseEvent press(QEvent::GraphicsSceneMousePress); press.setButton(Qt::LeftButton); press.setScenePos({35,35});
     f.window.tool_mgr().mousePressEvent(f.canvas(),&press);
     QKeyEvent escape(QEvent::KeyPress,Qt::Key_Escape,Qt::NoModifier); f.window.tool_mgr().keyPressEvent(f.canvas(),&escape);

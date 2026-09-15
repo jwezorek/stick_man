@@ -101,6 +101,8 @@ namespace {
     constexpr int bone_ids_role = Qt::UserRole + 8;
     constexpr int anchor_role = Qt::UserRole + 9;
     constexpr int bone_pick_command_role = Qt::UserRole + 10;
+    constexpr int preview_visible_role = Qt::UserRole + 11;
+    constexpr int preview_checked_role = Qt::UserRole + 12;
     enum class mapping_choice { inherited, hidden, frame };
 
     QIcon appearance_membership_icon(bool included) {
@@ -252,9 +254,15 @@ namespace {
     };
 
     class appearance_item_delegate : public QStyledItemDelegate {
+        static QRect preview_radio_rect(const QStyle* style, const QStyleOptionViewItem& option) {
+            const int width = style->pixelMetric(QStyle::PM_ExclusiveIndicatorWidth, nullptr, option.widget);
+            const int height = style->pixelMetric(QStyle::PM_ExclusiveIndicatorHeight, nullptr, option.widget);
+            return {option.rect.left() + 2, option.rect.center().y() - height / 2, width, height};
+        }
     public:
         std::function<void(const std::string&, bool)> membership_changed;
         std::function<void(const std::string&, const std::string&, mapping_choice, const std::string&)> mapping_changed;
+        std::function<void(const std::string&, const std::string&)> preview_changed;
         using QStyledItemDelegate::QStyledItemDelegate;
 
         QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem&, const QModelIndex& index) const override {
@@ -306,7 +314,32 @@ namespace {
         }
         void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
             auto metadata = index.siblingAtColumn(0);
-            if (index.column() != 1 || metadata.data(state_role).toString().isEmpty()) {
+            const auto state = metadata.data(state_role).toString();
+            if (index.column() == 0 && !state.isEmpty() && metadata.data(preview_visible_role).toBool()) {
+                QStyleOptionViewItem background(option);
+                initStyleOption(&background, index);
+                const auto text = background.text;
+                background.text.clear();
+                background.icon = {};
+                auto* style = option.widget ? option.widget->style() : QApplication::style();
+                style->drawControl(QStyle::CE_ItemViewItem, &background, painter, option.widget);
+
+                QStyleOptionButton radio;
+                radio.rect = preview_radio_rect(style, option);
+                radio.palette = option.palette;
+                radio.state = QStyle::State_Active | QStyle::State_Enabled |
+                    (metadata.data(preview_checked_role).toBool() ? QStyle::State_On : QStyle::State_Off);
+                if (option.state & QStyle::State_MouseOver) radio.state |= QStyle::State_MouseOver;
+                style->drawPrimitive(QStyle::PE_IndicatorRadioButton, &radio, painter, option.widget);
+
+                auto text_rect = option.rect;
+                text_rect.setLeft(radio.rect.right() + 5);
+                const auto role = option.state & QStyle::State_Selected ? QPalette::HighlightedText : QPalette::Text;
+                style->drawItemText(painter, text_rect, Qt::AlignVCenter | Qt::AlignLeft, option.palette,
+                    option.state & QStyle::State_Enabled, text, role);
+                return;
+            }
+            if (index.column() != 1 || state.isEmpty()) {
                 QStyledItemDelegate::paint(painter, option, index);
                 return;
             }
@@ -327,17 +360,24 @@ namespace {
         bool editorEvent(QEvent* event, QAbstractItemModel* model, const QStyleOptionViewItem& option,
             const QModelIndex& index) override {
             auto slot = index.data(slot_role).toString();
-            if (index.column() == 0 && !slot.isEmpty() && index.data(state_role).toString().isEmpty() &&
-                event->type() == QEvent::MouseButtonRelease) {
+            if (index.column() == 0 && !slot.isEmpty() && event->type() == QEvent::MouseButtonRelease) {
                 auto* mouse = static_cast<QMouseEvent*>(event);
                 if (mouse->button() == Qt::LeftButton) {
-                    QStyleOptionViewItem item_option(option);
-                    initStyleOption(&item_option, index);
+                    const auto state = index.data(state_role).toString();
                     auto* style = option.widget ? option.widget->style() : QApplication::style();
-                    auto icon_rect = style->subElementRect(QStyle::SE_ItemViewItemDecoration, &item_option, option.widget);
-                    if (icon_rect.contains(mouse->position().toPoint())) {
-                        if (membership_changed) membership_changed(slot.toStdString(), index.data(included_role).toBool());
+                    if (!state.isEmpty() && index.data(preview_visible_role).toBool() &&
+                        preview_radio_rect(style, option).contains(mouse->position().toPoint())) {
+                        if (preview_changed) preview_changed(slot.toStdString(), state.toStdString());
                         return true;
+                    }
+                    if (state.isEmpty()) {
+                        QStyleOptionViewItem item_option(option);
+                        initStyleOption(&item_option, index);
+                        auto icon_rect = style->subElementRect(QStyle::SE_ItemViewItemDecoration, &item_option, option.widget);
+                        if (icon_rect.contains(mouse->position().toPoint())) {
+                            if (membership_changed) membership_changed(slot.toStdString(), index.data(included_role).toBool());
+                            return true;
+                        }
                     }
                 }
             }
@@ -483,6 +523,10 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
             }
             art.set_appearance(name, std::move(app));
         });
+    };
+    appearance_delegate->preview_changed = [this](const std::string& slot, const std::string& state) {
+        if (refreshing_ || !character_) return;
+        canvases_.active_canvas().artwork().set_preview_state(*character_, slot, state);
     };
     appearance_structure_->setItemDelegate(appearance_delegate);
     order_panel_layout->addWidget(appearance_structure_);
@@ -826,7 +870,6 @@ void ui::pane::artwork_browser::refresh() {
             auto* implementation = active ? appearance_slot(*active, name) : nullptr;
             auto label = QString::fromStdString(name);
             auto preview = canvases_.active_canvas().artwork().preview_state(*character_, name);
-            label += " [" + QString::fromStdString(preview) + "]";
             if (!project_.core().slot_resolved(*character_, name)) label += " — unresolved";
             auto* top = new QTreeWidgetItem(appearance_structure_, QStringList{label, QString{}});
             top->setIcon(0, implementation ? included_icon : excluded_icon);
@@ -845,6 +888,8 @@ void ui::pane::artwork_browser::refresh() {
                 child->setData(0, slot_role, QString::fromStdString(name));
                 child->setData(0, state_role, QString::fromStdString(semantic_state));
                 child->setData(0, included_role, implementation != nullptr);
+                child->setData(0, preview_visible_role, definition.states.size() > 1);
+                child->setData(0, preview_checked_role, semantic_state == preview);
                 child->setData(1, mapping_kind_role, int(kind));
                 child->setData(1, mapping_frame_role, mapped_frame);
                 child->setData(1, frame_names_role, frame_names);

@@ -35,7 +35,6 @@ file(WRITE "${MINIZ_GENERATED_DIR}/miniz_export.h"
 
 add_executable(stick_man
     src/ui/canvas/artwork_layer.cpp
-    src/ui/tools/sprite_transform_tool.cpp
     src/ui/tools/tool_manager.cpp
     src/ui/tools/zoom_tool.cpp
     src/ui/tools/pan_tool.cpp

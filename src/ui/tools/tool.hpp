@@ -45,8 +45,7 @@ namespace ui {
             pan,
             zoom,
             add_node,
-            add_bone,
-            sprite_transform
+            add_bone
         };
 
         struct fields {
