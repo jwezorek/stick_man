@@ -1,6 +1,5 @@
 #include "abstract_skeleton_pane.hpp"
 #include "../canvas/canvas_manager.hpp"
-#include "skeleton_pane.hpp"
 
 void ui::pane::abstract_skeleton_pane::connect_tree_sel_handler() {
     tree_sel_conn_ = connect(
@@ -52,11 +51,11 @@ ui::pane::tree_view& ui::pane::abstract_skeleton_pane::skel_tree() {
 }
 
 void ui::pane::abstract_skeleton_pane::populate() {
-    layout_->addWidget(create_content(parent_));
+    layout_->addWidget(create_content());
 }
 
-ui::pane::abstract_skeleton_pane::abstract_skeleton_pane(skeleton* parent) :
-    parent_(parent),
+ui::pane::abstract_skeleton_pane::abstract_skeleton_pane(QWidget* parent) :
+    QWidget(parent),
     canvases_(nullptr),
     project_(nullptr),
     layout_(new QStackedLayout(this)) {

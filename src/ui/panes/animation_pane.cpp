@@ -1,15 +1,16 @@
 #include "animation_pane.hpp"
+#include "animation_skeleton_pane.hpp"
 #include <QIcon>
 
 /*------------------------------------------------------------------------------------------------*/
 
-namespace {
-
+ui::pane::animation::animation(QWidget* wnd) :
+        QDockWidget(tr("Animation"), wnd),
+        content_(new animation_skeleton_pane(this)) {
+    setWindowIcon(QIcon(":/images/move_icon.png"));
+    setWidget(content_);
 }
 
-ui::pane::animation::animation(QMainWindow* wnd) :
-        QDockWidget(tr("Animation"), wnd) {
-    setWindowIcon(QIcon(":/images/move_icon.png"));
-
-    setWidget(new QWidget());
+void ui::pane::animation::init(canvas::manager& canvases, mdl::project& proj) {
+    content_->init(canvases, proj);
 }

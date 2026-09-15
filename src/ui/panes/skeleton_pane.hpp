@@ -20,14 +20,10 @@ namespace ui {
     namespace pane {
 
         class main_skeleton_pane;
-        class animation_skeleton_pane;
 
         class skeleton : public QDockWidget {
 
-            canvas::manager* canvases_;
-            mdl::project* project_;
             main_skeleton_pane* main_skel_pane_;
-            animation_skeleton_pane* anim_skel_pane_;
 
         public:
 

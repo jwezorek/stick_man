@@ -19,7 +19,6 @@ namespace ui {
 
         class abstract_skeleton_pane : public QWidget {
         protected:
-            skeleton* parent_;
             canvas::manager* canvases_;
             mdl::project* project_;
             QLayout* layout_;
@@ -45,7 +44,7 @@ namespace ui {
             void populate();
 
             virtual const tree_view& skel_tree() const = 0;
-            virtual QWidget* create_content(skeleton* parent) = 0;
+            virtual QWidget* create_content() = 0;
             virtual void handle_canv_sel_change() = 0;
             virtual void handle_tree_change(QStandardItem* item) = 0;
             virtual void handle_tree_selection_change(
@@ -55,7 +54,7 @@ namespace ui {
 
         public:
 
-            abstract_skeleton_pane(skeleton* parent);
+            abstract_skeleton_pane(QWidget* parent);
             void init(canvas::manager& canvases, mdl::project& proj);
 
         };

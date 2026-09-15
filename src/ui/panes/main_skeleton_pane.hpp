@@ -28,6 +28,7 @@ namespace ui {
 
             tree_view* skeleton_tree_;
             selection_properties* sel_properties_;
+            skeleton* skeleton_pane_;
             ui::stick_man* main_wnd_;
 
             void expand_selected_items();
@@ -39,7 +40,7 @@ namespace ui {
             void select_items(const std::vector<QStandardItem*>& items, bool emit_signal = true);
 
             const tree_view& skel_tree() const override;
-            QWidget* create_content(skeleton* parent) override;
+            QWidget* create_content() override;
             void handle_canv_sel_change() override;
             void handle_tree_change(QStandardItem* item) override;
             void handle_tree_selection_change( 

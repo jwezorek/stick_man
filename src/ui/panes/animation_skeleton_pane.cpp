@@ -18,7 +18,7 @@ const ui::pane::tree_view& ui::pane::animation_skeleton_pane::skel_tree() const
     return *skel_tree_;
 }
 
-QWidget* ui::pane::animation_skeleton_pane::create_content(skeleton* parent)
+QWidget* ui::pane::animation_skeleton_pane::create_content()
 {
     return skel_tree_ = new tree_view();
 }
@@ -58,7 +58,7 @@ void ui::pane::animation_skeleton_pane::init_aux(canvas::manager& canvases, mdl:
 {
 }
 
-ui::pane::animation_skeleton_pane::animation_skeleton_pane(skeleton* parent, ui::stick_man* mgr) :
+ui::pane::animation_skeleton_pane::animation_skeleton_pane(QWidget* parent) :
     abstract_skeleton_pane(parent),
     skel_tree_(nullptr)
 {

@@ -69,6 +69,7 @@ ui::stick_man::stick_man(QWidget* parent) :
     addDockWidget(Qt::LeftDockWidgetArea, new pane::artwork_browser(project_, *canvases_, this));
     createMainMenu();
     skel_pane_->init(*canvases_, project_);
+    anim_pane_->init(*canvases_, project_);
     tool_mgr_.init(*canvases_, project_);
     tool_pane_->init(tool_mgr_);
 }

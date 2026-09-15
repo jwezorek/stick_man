@@ -448,7 +448,7 @@ const ui::pane::tree_view& ui::pane::main_skeleton_pane::skel_tree() const {
 	return *skeleton_tree_;
 }
 
-QWidget* ui::pane::main_skeleton_pane::create_content(skeleton* parent) {
+QWidget* ui::pane::main_skeleton_pane::create_content() {
 	QSplitter* splitter = new QSplitter();
 	splitter->setOrientation(Qt::Vertical);
 	splitter->addWidget(
@@ -459,7 +459,7 @@ QWidget* ui::pane::main_skeleton_pane::create_content(skeleton* parent) {
 			[this]()->ui::canvas::scene& {
 				return main_wnd_->canvases().active_canvas();
 			},
-			parent_
+			skeleton_pane_
 		)
 	);
     // Leave enough initial space for character authoring controls below the tree.
@@ -469,6 +469,7 @@ QWidget* ui::pane::main_skeleton_pane::create_content(skeleton* parent) {
 
 ui::pane::main_skeleton_pane::main_skeleton_pane(ui::pane::skeleton* parent, ui::stick_man* mw) :
 	abstract_skeleton_pane(parent),
+	skeleton_pane_(parent),
 	main_wnd_(mw) {
 	
 }

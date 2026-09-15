@@ -698,6 +698,21 @@ void run(const std::string& mode) {
         f.canvas().set_selection(f.item(f.first), true);
         require(!name->isHidden() && name->value()->text().toStdString() == f.skeleton(f.first).name(),
             "returning to single selection must restore its name field");
+    } else if (mode == "pane_structure") {
+        QDockWidget* skeleton_dock = nullptr;
+        QDockWidget* animation_dock = nullptr;
+        for (auto* dock : f.window.findChildren<QDockWidget*>()) {
+            if (dock->windowTitle() == "Skeleton") skeleton_dock = dock;
+            if (dock->windowTitle() == "Animation") animation_dock = dock;
+        }
+        require(skeleton_dock != nullptr, "missing Skeleton dock");
+        require(animation_dock != nullptr, "missing Animation dock");
+        require(qobject_cast<QTabWidget*>(skeleton_dock->widget()) == nullptr,
+            "Skeleton dock must no longer be a tab control");
+        require(skeleton_dock->findChild<ui::pane::tree_view*>() != nullptr,
+            "Skeleton dock lost the skeleton tree");
+        require(animation_dock->findChild<ui::pane::tree_view*>() != nullptr,
+            "Animation dock must own the animation skeleton stub");
     } else if (mode == "clipboard") {
         f.select_both();
         ui::clipboard::copy(f.window);
