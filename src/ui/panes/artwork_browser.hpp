@@ -26,7 +26,7 @@ namespace ui::pane {
         QDoubleSpinBox* origin_x_;
         QDoubleSpinBox* origin_y_;
         std::array<QDoubleSpinBox*, 5> transform_;
-        std::vector<QPushButton*> order_buttons_;
+        std::vector<QToolButton*> order_buttons_;
         QPointer<QObject> connected_layer_;
         QMetaObject::Connection layer_selection_, layer_appearance_, layer_preview_;
         bool refreshing_ = false;

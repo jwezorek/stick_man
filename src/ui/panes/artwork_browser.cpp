@@ -5,6 +5,8 @@
 #include <type_traits>
 #include <algorithm>
 #include <numbers>
+#include <QPainter>
+#include <QPainterPath>
 
 namespace {
     class frame_list : public QListWidget {
@@ -71,6 +73,21 @@ namespace {
     }
     QDoubleSpinBox* coordinate(QWidget* parent) {
         auto* spin = new QDoubleSpinBox(parent); spin->setRange(-1e9, 1e9); spin->setDecimals(4); return spin;
+    }
+    QIcon appearance_membership_icon(bool included) {
+        QPixmap pixmap(12, 12);
+        pixmap.fill(Qt::transparent);
+        if (included) {
+            QPainter painter(&pixmap);
+            painter.setRenderHint(QPainter::Antialiasing);
+            painter.setPen(QPen(QColor(82, 190, 104), 2.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            QPainterPath path;
+            path.moveTo(1.5, 6.0);
+            path.lineTo(4.5, 9.0);
+            path.lineTo(10.5, 2.5);
+            painter.drawPath(path);
+        }
+        return QIcon(pixmap);
     }
     std::pair<std::string, std::string> selected_appearance_item(QTreeWidget* tree) {
         auto* current = tree->currentItem();
@@ -194,7 +211,13 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
     }}, {"Delete", [this] {
         auto name = active_appearance().toStdString(); if (!name.empty()) edit([&](auto& a) { a.delete_appearance(name); });
     }}});
-    auto* ordered_tree = new appearance_tree(appearance_tab);
+    auto* order_panel = new QFrame(appearance_tab);
+    order_panel->setFrameShape(QFrame::StyledPanel);
+    auto* order_panel_layout = new QVBoxLayout(order_panel);
+    order_panel_layout->setContentsMargins(0, 0, 0, 0);
+    order_panel_layout->setSpacing(0);
+
+    auto* ordered_tree = new appearance_tree(order_panel);
     appearance_structure_ = ordered_tree;
     ordered_tree->reorder = [this](const std::string& slot, int index) { reorder_slot(slot, index); };
     appearance_structure_->setDragDropMode(QAbstractItemView::InternalMove);
@@ -203,12 +226,37 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
     appearance_structure_->setObjectName("artwork_appearance_structure");
     appearance_structure_->setHeaderLabels({"Slot / state", "Image"});
     appearance_structure_->setRootIsDecorated(true);
-    appearance_layout->addWidget(appearance_structure_);
-    appearance_layout->addWidget(new QLabel("Painter order: back at top → front at bottom. Drag slot rows to reorder.", appearance_tab));
-    order_buttons_ = buttons(appearance_layout, {{"Bring Forward", [this] { move_selected_slot(1); }},
-        {"Send Backward", [this] { move_selected_slot(-1); }},
-        {"Bring to Front", [this] { move_selected_slot(2); }},
-        {"Send to Back", [this] { move_selected_slot(-2); }}});
+    appearance_structure_->setIconSize({12, 12});
+    appearance_structure_->setFrameShape(QFrame::NoFrame);
+    order_panel_layout->addWidget(appearance_structure_);
+
+    auto* order_toolbar = new QWidget(order_panel);
+    order_toolbar->setObjectName("artwork_order_toolbar");
+    auto* order_toolbar_layout = new QHBoxLayout(order_toolbar);
+    order_toolbar_layout->setContentsMargins(4, 2, 4, 2);
+    order_toolbar_layout->setSpacing(2);
+    order_toolbar_layout->addStretch();
+    auto order_button = [this, order_toolbar, order_toolbar_layout](const QString& text, const QString& tooltip, int direction) {
+        auto* button = new QToolButton(order_toolbar);
+        button->setText(text);
+        button->setToolTip(tooltip);
+        button->setAccessibleName(tooltip);
+        button->setAutoRaise(true);
+        button->setFixedSize(24, 22);
+        connect(button, &QToolButton::clicked, this, [this, direction] {
+            if (!character_) return;
+            try { move_selected_slot(direction); } catch (const std::exception& e) { QMessageBox::warning(this, "Artwork", e.what()); }
+        });
+        order_toolbar_layout->addWidget(button);
+        order_buttons_.push_back(button);
+        return button;
+    };
+    order_button(QStringLiteral("⇈"), QStringLiteral("Send to Back"), -2)->setObjectName("artwork_send_to_back");
+    order_button(QStringLiteral("↑"), QStringLiteral("Send Backward"), -1)->setObjectName("artwork_send_backward");
+    order_button(QStringLiteral("↓"), QStringLiteral("Bring Forward"), 1)->setObjectName("artwork_bring_forward");
+    order_button(QStringLiteral("⇊"), QStringLiteral("Bring to Front"), 2)->setObjectName("artwork_bring_to_front");
+    order_panel_layout->addWidget(order_toolbar);
+    appearance_layout->addWidget(order_panel);
     auto membership = buttons(appearance_layout, {{"Add to appearance", [this] {
         auto [slot, _] = selected_appearance_item(appearance_structure_);
         auto name = active_appearance().toStdString(); if (slot.empty() || name.empty()) return;
@@ -449,6 +497,8 @@ void ui::pane::artwork_browser::refresh() {
         if (active) for (const auto& implementation : active->appearance_slots) ordered_names.push_back(implementation.slot);
         for (const auto& [name, definition] : art.slot_definitions())
             if (!active || !appearance_slot(*active, name)) ordered_names.push_back(name);
+        const auto included_icon = appearance_membership_icon(true);
+        const auto empty_icon = appearance_membership_icon(false);
         for (const auto& name : ordered_names) {
             const auto& definition = art.slot_definitions().at(name);
             auto* implementation = active ? appearance_slot(*active, name) : nullptr;
@@ -456,9 +506,8 @@ void ui::pane::artwork_browser::refresh() {
             auto preview = canvases_.active_canvas().artwork().preview_state(*character_, name);
             label += " [" + QString::fromStdString(preview) + "]";
             if (!project_.core().slot_resolved(*character_, name)) label += " — unresolved";
-            auto* top = new QTreeWidgetItem(appearance_structure_, QStringList{
-                label, implementation ? QStringLiteral("Included") : QStringLiteral("Not in this appearance")
-            });
+            auto* top = new QTreeWidgetItem(appearance_structure_, QStringList{label, QString{}});
+            top->setIcon(0, implementation ? included_icon : empty_icon);
             top->setData(0, Qt::UserRole, QString::fromStdString(name));
             top->setData(0, Qt::UserRole + 1, QString{});
             top->setData(0, Qt::UserRole + 2, implementation != nullptr);
@@ -506,8 +555,8 @@ void ui::pane::artwork_browser::refresh_details() {
                 for (int i = 0; i < 5; ++i) { transform_[i]->setEnabled(true); transform_[i]->setValue(values[i]); }
                 const auto& order = app->second.appearance_slots;
                 bool front = order.back().slot == slot, back = order.front().slot == slot;
-                order_buttons_[0]->setEnabled(!front); order_buttons_[1]->setEnabled(!back);
-                order_buttons_[2]->setEnabled(!front); order_buttons_[3]->setEnabled(!back);
+                order_buttons_[0]->setEnabled(!back); order_buttons_[1]->setEnabled(!back);
+                order_buttons_[2]->setEnabled(!front); order_buttons_[3]->setEnabled(!front);
             }
             if (implementation && !state.empty()) {
                 mapping_->addItem("Use default (unmapped)"); mapping_->addItem("Hidden (none)");
