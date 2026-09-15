@@ -100,6 +100,10 @@ void ui::canvas::artwork_layer::set_selected_slot(const sm::object_id& id, const
     if (selected_ && *selected_ == value) return;
     cancel_transform(); selected_ = value; scene_.update(); emit selection_changed();
 }
+void ui::canvas::artwork_layer::clear_selected_slot() {
+    if (!selected_) return;
+    cancel_transform(); selected_.reset(); scene_.update(); emit selection_changed();
+}
 std::string ui::canvas::artwork_layer::preview_state(const sm::object_id& id, const std::string& slot) const {
     if (!project_.core().character(id)) return "default";
     const auto& definitions = project_.core().artwork(id).slot_definitions();

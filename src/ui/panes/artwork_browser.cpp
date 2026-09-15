@@ -74,12 +74,18 @@ namespace {
         }
     };
     std::string selected(QListWidget* list) { return list->currentItem() ? list->currentItem()->data(Qt::UserRole).toString().toStdString() : ""; }
+    std::string selected(QTreeWidget* tree) { return tree->currentItem() ? tree->currentItem()->data(0, Qt::UserRole).toString().toStdString() : ""; }
     void restore(QListWidget* list, const std::string& name) {
         for (int i = 0; i < list->count(); ++i) if (list->item(i)->data(Qt::UserRole).toString().toStdString() == name) { list->setCurrentRow(i); return; }
         if (list->count()) list->setCurrentRow(0);
     }
-    void item(QListWidget* list, const std::string& name, const QString& label) {
-        auto* row = new QListWidgetItem(label, list); row->setData(Qt::UserRole, QString::fromStdString(name));
+    void restore(QTreeWidget* tree, const std::string& name) {
+        for (int i = 0; i < tree->topLevelItemCount(); ++i)
+            if (tree->topLevelItem(i)->data(0, Qt::UserRole).toString().toStdString() == name) { tree->setCurrentItem(tree->topLevelItem(i)); return; }
+        if (tree->topLevelItemCount()) tree->setCurrentItem(tree->topLevelItem(0));
+    }
+    QListWidgetItem* item(QListWidget* list, const std::string& name, const QString& label) {
+        auto* row = new QListWidgetItem(label, list); row->setData(Qt::UserRole, QString::fromStdString(name)); return row;
     }
     QDoubleSpinBox* coordinate(QWidget* parent) {
         auto* spin = new QDoubleSpinBox(parent); spin->setRange(-1e9, 1e9); spin->setDecimals(4); return spin;
@@ -90,6 +96,10 @@ namespace {
     constexpr int mapping_kind_role = Qt::UserRole + 3;
     constexpr int mapping_frame_role = Qt::UserRole + 4;
     constexpr int frame_names_role = Qt::UserRole + 5;
+    constexpr int bone_id_role = Qt::UserRole + 6;
+    constexpr int bone_names_role = Qt::UserRole + 7;
+    constexpr int bone_ids_role = Qt::UserRole + 8;
+    constexpr int anchor_role = Qt::UserRole + 9;
     enum class mapping_choice { inherited, hidden, frame };
 
     QIcon appearance_membership_icon(bool included) {
@@ -155,6 +165,81 @@ namespace {
         if (!mapping->second) return {mapping_choice::hidden, {}};
         return {mapping_choice::frame, QString::fromStdString(*mapping->second)};
     }
+
+    class slot_item_delegate : public QStyledItemDelegate {
+    public:
+        std::function<void(const std::string&, sm::object_id, sm::bone_anchor)> binding_changed;
+        using QStyledItemDelegate::QStyledItemDelegate;
+
+        QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+            if (index.column() == 0) return QStyledItemDelegate::createEditor(parent, option, index);
+            if (index.column() != 1 && index.column() != 2) return nullptr;
+
+            auto* combo = new QComboBox(parent);
+            combo->setFrame(false);
+            if (index.column() == 1) {
+                const auto names = index.data(bone_names_role).toStringList();
+                const auto ids = index.data(bone_ids_role).toStringList();
+                for (int i = 0; i < std::min(names.size(), ids.size()); ++i) combo->addItem(names[i], ids[i]);
+                const auto current = index.data(bone_id_role).toString();
+                for (int i = 0; i < combo->count(); ++i)
+                    if (combo->itemData(i).toString() == current) { combo->setCurrentIndex(i); break; }
+                combo->setProperty("slot", index.siblingAtColumn(0).data(slot_role));
+                combo->setProperty("anchor", index.siblingAtColumn(2).data(anchor_role));
+            } else {
+                combo->addItem(QStringLiteral("Root"), int(sm::bone_anchor::root));
+                combo->addItem(QStringLiteral("Tip"), int(sm::bone_anchor::tip));
+                const auto current = index.data(anchor_role).toInt();
+                for (int i = 0; i < combo->count(); ++i)
+                    if (combo->itemData(i).toInt() == current) { combo->setCurrentIndex(i); break; }
+                combo->setProperty("slot", index.siblingAtColumn(0).data(slot_role));
+                combo->setProperty("bone", index.siblingAtColumn(1).data(bone_id_role));
+            }
+
+            auto* self = const_cast<slot_item_delegate*>(this);
+            connect(combo, &QComboBox::activated, self, [self, combo, column = index.column()](int choice) {
+                auto slot = combo->property("slot").toString().toStdString();
+                auto bone_text = column == 1 ? combo->itemData(choice).toString() : combo->property("bone").toString();
+                auto bone = sm::object_id::from_string(bone_text.toStdString());
+                if (!bone) return;
+                auto anchor = column == 1 ? sm::bone_anchor(combo->property("anchor").toInt())
+                                          : sm::bone_anchor(combo->itemData(choice).toInt());
+                emit self->closeEditor(combo, QAbstractItemDelegate::NoHint);
+                if (self->binding_changed) self->binding_changed(slot, *bone, anchor);
+            });
+            QTimer::singleShot(0, combo, &QComboBox::showPopup);
+            return combo;
+        }
+        void setEditorData(QWidget* editor, const QModelIndex& index) const override {
+            if (index.column() == 0) QStyledItemDelegate::setEditorData(editor, index);
+        }
+        void setModelData(QWidget* editor, QAbstractItemModel* model, const QModelIndex& index) const override {
+            if (index.column() == 0) QStyledItemDelegate::setModelData(editor, model, index);
+        }
+        void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex&) const override {
+            editor->setGeometry(option.rect.adjusted(1, 1, -1, -1));
+        }
+        QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+            auto result = QStyledItemDelegate::sizeHint(option, index);
+            if (index.column() == 1 || index.column() == 2) result.setHeight(std::max(result.height(), 24));
+            return result;
+        }
+        void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+            if (index.column() == 0) { QStyledItemDelegate::paint(painter, option, index); return; }
+            QStyleOptionViewItem background(option);
+            initStyleOption(&background, index);
+            auto* style = option.widget ? option.widget->style() : QApplication::style();
+            style->drawPrimitive(QStyle::PE_PanelItemViewItem, &background, painter, option.widget);
+
+            QStyleOptionComboBox combo;
+            combo.rect = option.rect.adjusted(2, 1, -2, -1);
+            combo.palette = option.palette;
+            combo.currentText = index.data(Qt::DisplayRole).toString();
+            combo.state = QStyle::State_Active | QStyle::State_Enabled;
+            style->drawComplexControl(QStyle::CC_ComboBox, &combo, painter, option.widget);
+            style->drawControl(QStyle::CE_ComboBoxLabel, &combo, painter, option.widget);
+        }
+    };
 
     class appearance_item_delegate : public QStyledItemDelegate {
     public:
@@ -295,26 +380,32 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
 
     // Character-wide artwork structure. Nothing on this page is scoped to an appearance.
     auto* structure_tab = new QWidget(tabs); auto* structure_layout = new QVBoxLayout(structure_tab); tabs->addTab(structure_tab, "Structure");
-    auto* structure_help = new QLabel("Slots and states define the artwork structure shared by every appearance.", structure_tab);
-    structure_help->setWordWrap(true); structure_layout->addWidget(structure_help);
     structure_layout->addWidget(new QLabel("Slots", structure_tab));
-    slots_ = new QListWidget(structure_tab); slots_->setObjectName("artwork_slots"); structure_layout->addWidget(slots_);
-    buttons(structure_layout, {{"New slot…", [this] { slot_dialog(false); }}, {"Rebind…", [this] { slot_dialog(true); }}, {"Rename", [this] {
-        auto old = selected(slots_); if (old.empty()) return;
-        auto name = ask_name("Rename slot", QString::fromStdString(old)); if (name.isEmpty()) return;
-        edit([&](auto& a) { a.rename_slot(old, name.toStdString()); }); restore(slots_, name.toStdString());
-    }}, {"Delete", [this] {
+    slots_ = new QTreeWidget(structure_tab);
+    slots_->setObjectName("artwork_slots");
+    slots_->setHeaderLabels({"Slot", "Bone", "Anchor"});
+    slots_->setRootIsDecorated(false);
+    slots_->setEditTriggers(QAbstractItemView::SelectedClicked | QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
+    slots_->header()->setSectionResizeMode(QHeaderView::Interactive);
+    slots_->setColumnWidth(2, 70);
+    auto* slot_delegate = new slot_item_delegate(slots_);
+    slot_delegate->binding_changed = [this](const std::string& slot, sm::object_id bone, sm::bone_anchor endpoint) {
+        if (refreshing_ || !character_) return;
+        if (edit([&](auto& art) { art.bind_slot(slot, bone, endpoint); })) restore(slots_, slot);
+    };
+    slots_->setItemDelegate(slot_delegate);
+    structure_layout->addWidget(slots_);
+    buttons(structure_layout, {{"New slot…", [this] { new_slot_dialog(); }}, {"Delete", [this] {
         auto name = selected(slots_); if (!name.empty()) edit([&](auto& a) { a.delete_slot(name); });
     }}});
     structure_layout->addWidget(new QLabel("States for selected slot", structure_tab));
-    states_ = new QListWidget(structure_tab); states_->setObjectName("artwork_states"); structure_layout->addWidget(states_);
+    states_ = new QListWidget(structure_tab);
+    states_->setObjectName("artwork_states");
+    states_->setEditTriggers(QAbstractItemView::SelectedClicked | QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
+    structure_layout->addWidget(states_);
     buttons(structure_layout, {{"New state", [this] {
         auto slot = selected(slots_); if (slot.empty()) return;
         auto name = ask_name("New state"); if (!name.isEmpty()) edit([&](auto& a) { a.add_state(slot, name.toStdString()); });
-    }}, {"Rename", [this] {
-        auto slot = selected(slots_), state = selected(states_); if (state.empty()) return;
-        auto name = ask_name("Rename state", QString::fromStdString(state)); if (name.isEmpty()) return;
-        edit([&](auto& a) { a.rename_state(slot, state, name.toStdString()); });
     }}, {"Delete", [this] {
         auto slot = selected(slots_), state = selected(states_); if (!state.empty()) edit([&](auto& a) { a.delete_state(slot, state); });
     }}});
@@ -532,7 +623,38 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
         }
     });
     connect(frames_, &QListWidget::currentRowChanged, this, [this] { if (!refreshing_) refresh_details(); });
-    connect(slots_, &QListWidget::currentRowChanged, this, [this] { if (!refreshing_) refresh(); });
+    connect(slots_, &QTreeWidget::currentItemChanged, this, [this] {
+        if (refreshing_) return;
+        QScopedValueRollback<bool> guard(refreshing_, true);
+        auto state = selected(states_);
+        states_->clear();
+        if (character_) {
+            auto slot = selected(slots_);
+            const auto& definitions = project_.core().artwork(*character_).slot_definitions();
+            if (auto found = definitions.find(slot); found != definitions.end()) for (const auto& name : found->second.states) {
+                auto* row = item(states_, name, QString::fromStdString(name));
+                if (name != "default") row->setFlags(row->flags() | Qt::ItemIsEditable);
+            }
+        }
+        restore(states_, state);
+    });
+    connect(slots_, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* row, int column) {
+        if (refreshing_ || !character_ || column != 0) return;
+        auto old = row->data(0, slot_role).toString().toStdString();
+        auto name = row->text(0).trimmed();
+        if (old == name.toStdString()) return;
+        if (name.isEmpty() || !edit([&](auto& a) { a.rename_slot(old, name.toStdString()); })) { refresh(); return; }
+        restore(slots_, name.toStdString());
+    });
+    connect(states_, &QListWidget::itemChanged, this, [this](QListWidgetItem* row) {
+        if (refreshing_ || !character_) return;
+        auto slot = selected(slots_);
+        auto old = row->data(Qt::UserRole).toString().toStdString();
+        auto name = row->text().trimmed();
+        if (slot.empty() || old == name.toStdString()) return;
+        if (name.isEmpty() || !edit([&](auto& a) { a.rename_state(slot, old, name.toStdString()); })) { refresh(); return; }
+        restore(states_, name.toStdString());
+    });
     connect(appearance_structure_, &QTreeWidget::currentItemChanged, this, [this] {
         if (!refreshing_) {
             if (character_) {
@@ -555,10 +677,10 @@ QString ui::pane::artwork_browser::ask_name(const QString& title, const QString&
     bool ok = false; auto name = QInputDialog::getText(this, title, "Name", QLineEdit::Normal, current, &ok);
     return ok ? name.trimmed() : QString{};
 }
-void ui::pane::artwork_browser::edit(const std::function<void(sm::artwork&)>& fn) {
-    if (!character_) return;
-    try { project_.edit_artwork(*character_, fn); }
-    catch (const std::exception& e) { QMessageBox::warning(this, "Artwork", e.what()); }
+bool ui::pane::artwork_browser::edit(const std::function<void(sm::artwork&)>& fn) {
+    if (!character_) return false;
+    try { project_.edit_artwork(*character_, fn); return true; }
+    catch (const std::exception& e) { QMessageBox::warning(this, "Artwork", e.what()); return false; }
 }
 void ui::pane::artwork_browser::connect_canvas() {
     auto* layer = &canvases_.active_canvas().artwork();
@@ -612,11 +734,15 @@ void ui::pane::artwork_browser::refresh() {
     refreshing_ = true;
     connect_canvas();
     auto context = artwork_character(canvases_.active_canvas().selected_objects());
+    auto& layer = canvases_.active_canvas().artwork();
+    if (const auto& selected_sprite = layer.selected_slot();
+        selected_sprite && (!context || selected_sprite->character != *context))
+        layer.clear_selected_slot();
     if (context != character_) thumbnails_.clear();
     character_ = context;
     auto frame = selected(frames_), slot = selected(slots_), state = selected(states_);
     auto [appearance_slot_name, appearance_state] = selected_appearance_item(appearance_structure_);
-    const auto& sprite = canvases_.active_canvas().artwork().selected_slot();
+    const auto& sprite = layer.selected_slot();
     if (sprite && character_ == sprite->character) {
         if (appearance_slot_name != sprite->slot) appearance_state.clear();
         appearance_slot_name = sprite->slot;
@@ -647,14 +773,31 @@ void ui::pane::artwork_browser::refresh() {
             item(frames_, name, QString::fromStdString(name) + QString(" (%1 × %2)").arg(f.image.width()).arg(f.image.height()));
             frames_->item(frames_->count() - 1)->setIcon(thumbnails_.at(name).second);
         }
+        QStringList bone_names, bone_ids;
+        for (auto skeleton : project_.core().character(*character_)->get().rig().skeletons()) for (auto bone : skeleton->bones()) {
+            bone_names.push_back(QString::fromStdString(skeleton->name() + "/" + bone->name()));
+            bone_ids.push_back(QString::fromStdString(bone->id().to_string()));
+        }
         for (const auto& [name, definition] : art.slot_definitions()) {
-            auto label = QString::fromStdString(name) + (definition.anchor == sm::bone_anchor::root ? " [root]" : " [tip]");
-            if (!project_.core().slot_resolved(*character_, name)) label += " — unresolved";
-            item(slots_, name, label);
+            auto bone_id = QString::fromStdString(definition.bone.to_string());
+            auto bone_index = bone_ids.indexOf(bone_id);
+            auto bone_name = bone_index >= 0 ? bone_names[bone_index] : QStringLiteral("Unresolved");
+            auto anchor = definition.anchor == sm::bone_anchor::root ? QStringLiteral("Root") : QStringLiteral("Tip");
+            auto* row = new QTreeWidgetItem(slots_, QStringList{QString::fromStdString(name), bone_name, anchor});
+            row->setData(0, slot_role, QString::fromStdString(name));
+            row->setData(1, bone_id_role, bone_id);
+            row->setData(1, bone_names_role, bone_names);
+            row->setData(1, bone_ids_role, bone_ids);
+            row->setData(2, anchor_role, int(definition.anchor));
+            row->setFlags(row->flags() | Qt::ItemIsEditable);
+            if (bone_index < 0) row->setToolTip(1, QStringLiteral("The bound bone is not present in this character."));
         }
         restore(frames_, frame); restore(slots_, slot);
         slot = selected(slots_);
-        if (!slot.empty()) for (const auto& name : art.slot_definitions().at(slot).states) item(states_, name, QString::fromStdString(name));
+        if (!slot.empty()) for (const auto& name : art.slot_definitions().at(slot).states) {
+            auto* row = item(states_, name, QString::fromStdString(name));
+            if (name != "default") row->setFlags(row->flags() | Qt::ItemIsEditable);
+        }
         restore(states_, state);
 
         const sm::appearance* active = nullptr;
@@ -757,21 +900,16 @@ void ui::pane::artwork_browser::import_frames() {
         }
     });
 }
-void ui::pane::artwork_browser::slot_dialog(bool rebind) {
-    auto old = selected(slots_); if (rebind && old.empty()) return;
-    QDialog dialog(this); dialog.setWindowTitle(rebind ? "Rebind slot" : "New slot"); QFormLayout layout(&dialog);
-    QLineEdit name; name.setText(QString::fromStdString(old)); if (!rebind) layout.addRow("Name", &name);
+void ui::pane::artwork_browser::new_slot_dialog() {
+    QDialog dialog(this); dialog.setWindowTitle("New slot"); QFormLayout layout(&dialog);
+    QLineEdit name; layout.addRow("Name", &name);
     QComboBox bones, anchor; std::vector<sm::object_id> ids;
     for (auto skeleton : project_.core().character(*character_)->get().rig().skeletons()) for (auto bone : skeleton->bones()) {
         ids.push_back(bone->id()); bones.addItem(QString::fromStdString(skeleton->name() + "/" + bone->name()));
     }
     if (ids.empty()) { QMessageBox::information(this, "Artwork", "Add a bone to this character before creating a slot."); return; }
     anchor.addItems({"Root", "Tip"});
-    if (rebind) {
-        const auto& definition = project_.core().artwork(*character_).slot_definitions().at(old);
-        for (std::size_t i = 0; i < ids.size(); ++i) if (ids[i] == definition.bone) bones.setCurrentIndex(int(i));
-        anchor.setCurrentIndex(definition.anchor == sm::bone_anchor::root ? 0 : 1);
-    } else for (const auto& object : canvases_.active_canvas().selected_objects()) if (auto bone = std::get_if<sm::const_bone_ref>(&object))
+    for (const auto& object : canvases_.active_canvas().selected_objects()) if (auto bone = std::get_if<sm::const_bone_ref>(&object))
         for (std::size_t i = 0; i < ids.size(); ++i) if (ids[i] == bone->get().id()) bones.setCurrentIndex(int(i));
     layout.addRow("Bone", &bones); layout.addRow("Anchor", &anchor);
     QDialogButtonBox buttons(QDialogButtonBox::Ok | QDialogButtonBox::Cancel); layout.addRow(&buttons);
@@ -779,6 +917,6 @@ void ui::pane::artwork_browser::slot_dialog(bool rebind) {
     if (dialog.exec() != QDialog::Accepted) return;
     edit([&](auto& art) {
         auto bone = ids.at(bones.currentIndex()); auto endpoint = anchor.currentIndex() == 0 ? sm::bone_anchor::root : sm::bone_anchor::tip;
-        if (rebind) art.bind_slot(old, bone, endpoint); else art.add_slot(name.text().trimmed().toStdString(), {bone, endpoint});
+        art.add_slot(name.text().trimmed().toStdString(), {bone, endpoint});
     });
 }

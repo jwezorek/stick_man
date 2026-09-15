@@ -49,6 +49,7 @@ namespace ui::canvas {
         void set_preview_state(const sm::object_id& character, const std::string& slot, const std::string& state);
         void reset_preview_states(const sm::object_id& character);
         void set_selected_slot(const sm::object_id& character, const std::string& slot);
+        void clear_selected_slot();
         const std::optional<sprite_selection>& selected_slot() const { return selected_; }
         std::optional<sm::sprite_transform> selected_transform() const;
         std::optional<sprite_selection> hit_test(QPointF position) const;

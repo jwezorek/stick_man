@@ -16,7 +16,7 @@ namespace ui::pane {
         QLabel* character_label_;
         QComboBox* appearances_;
         QListWidget* frames_;
-        QListWidget* slots_;
+        QTreeWidget* slots_;
         QListWidget* states_;
         QTreeWidget* appearance_structure_;
         QDoubleSpinBox* origin_x_;
@@ -33,10 +33,10 @@ namespace ui::pane {
         void move_selected_slot(int direction);
         void connect_canvas();
         void update_transform_editing();
-        void edit(const std::function<void(sm::artwork&)>& fn);
+        bool edit(const std::function<void(sm::artwork&)>& fn);
         void refresh_details();
         void import_frames();
-        void slot_dialog(bool rebind);
+        void new_slot_dialog();
         QString ask_name(const QString& title, const QString& current = {});
     public:
         artwork_browser(mdl::project& project, canvas::manager& canvases, QWidget* parent);
