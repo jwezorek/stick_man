@@ -412,14 +412,31 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
     order_button(QStringLiteral("⇊"), QStringLiteral("Bring to Front"), 2)->setObjectName("artwork_bring_to_front");
     order_panel_layout->addWidget(order_toolbar);
     appearance_layout->addWidget(order_panel);
+
+    transform_toggle_ = new QToolButton(appearance_tab);
+    transform_toggle_->setObjectName("artwork_transform_toggle");
+    transform_toggle_->setText(QStringLiteral("Transform ▸"));
+    transform_toggle_->setCheckable(true);
+    transform_toggle_->setAutoRaise(true);
+    transform_toggle_->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    transform_toggle_->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
+    appearance_layout->addWidget(transform_toggle_, 0, Qt::AlignLeft);
+
+    transform_panel_ = new QFrame(appearance_tab);
+    transform_panel_->setObjectName("artwork_transform_panel");
+    transform_panel_->setFrameShape(QFrame::StyledPanel);
+    auto* transform_layout = new QVBoxLayout(transform_panel_);
+    transform_layout->setContentsMargins(8, 6, 8, 8);
+    transform_layout->setSpacing(6);
     auto* transform_form = new QFormLayout;
     const QStringList transform_labels{"Translation X", "Translation Y (up)", "Rotation (degrees)", "Scale X", "Scale Y"};
     const QStringList transform_names{"artwork_translation_x", "artwork_translation_y", "artwork_rotation", "artwork_scale_x", "artwork_scale_y"};
     for (int i = 0; i < 5; ++i) {
-        transform_[i] = coordinate(appearance_tab);
+        transform_[i] = coordinate(transform_panel_);
+        transform_[i]->setKeyboardTracking(false);
         transform_[i]->setObjectName(transform_names[i]);
         transform_form->addRow(transform_labels[i], transform_[i]);
-        connect(transform_[i], &QDoubleSpinBox::editingFinished, this, [this, i] {
+        connect(transform_[i], &QDoubleSpinBox::valueChanged, this, [this, i](double value) {
             if (refreshing_ || !character_) return;
             auto [slot, state] = selected_appearance_item(appearance_structure_);
             auto name = active_appearance().toStdString();
@@ -428,7 +445,6 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
             if (app == art.appearances().end()) return;
             auto* current = appearance_slot(app->second, slot);
             if (!current) return;
-            auto value = transform_[i]->value();
             const auto& t = current->transform;
             const std::array<double, 5> values{t.translation.x, t.translation.y, t.rotation * 180 / std::numbers::pi, t.scale.x, t.scale.y};
             // Display rounding on another field must never rewrite the transform.
@@ -448,7 +464,36 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
             });
         });
     }
-    appearance_layout->addLayout(transform_form);
+    transform_layout->addLayout(transform_form);
+    transform_reset_ = new QPushButton(QStringLiteral("Reset transform"), transform_panel_);
+    transform_reset_->setObjectName("artwork_reset_transform");
+    transform_layout->addWidget(transform_reset_, 0, Qt::AlignLeft);
+    connect(transform_reset_, &QPushButton::clicked, this, [this] {
+        if (refreshing_ || !character_) return;
+        auto [slot, state] = selected_appearance_item(appearance_structure_);
+        auto name = active_appearance().toStdString();
+        const auto& art = project_.core().artwork(*character_);
+        auto app = art.appearances().find(name);
+        if (app == art.appearances().end()) return;
+        auto* current = appearance_slot(app->second, slot);
+        if (!current) return;
+        const sm::sprite_transform identity;
+        if (current->transform.translation == identity.translation && current->transform.rotation == identity.rotation &&
+            current->transform.scale == identity.scale) return;
+        edit([&](auto& a) {
+            auto changed = a.appearances().at(name);
+            for (auto& s : changed.appearance_slots) if (s.slot == slot) s.transform = identity;
+            a.set_appearance(name, std::move(changed));
+        });
+    });
+    transform_panel_->setVisible(false);
+    appearance_layout->addWidget(transform_panel_);
+    connect(transform_toggle_, &QToolButton::toggled, this, [this](bool enabled) {
+        transform_panel_->setVisible(enabled);
+        transform_toggle_->setText(enabled ? QStringLiteral("Transform ▾") : QStringLiteral("Transform ▸"));
+        update_transform_editing();
+        refresh_details();
+    });
 
     // Character-local image resources shared by all appearances.
     auto* image_tab = new QWidget(tabs); auto* image_layout = new QVBoxLayout(image_tab); tabs->addTab(image_tab, "Images");
@@ -498,6 +543,8 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
             refresh_details();
         }
     });
+    connect(tabs, &QTabWidget::currentChanged, this, [this] { update_transform_editing(); });
+    connect(this, &QDockWidget::visibilityChanged, this, [this] { update_transform_editing(); });
     connect(&canvases_, &canvas::manager::active_canvas_changed, this, [this] { refresh(); });
     connect(&canvases_, &canvas::manager::selection_changed, this, [this] { refresh(); });
     connect(&project_, &mdl::project::project_changed, this, [this] { refresh(); });
@@ -516,11 +563,22 @@ void ui::pane::artwork_browser::edit(const std::function<void(sm::artwork&)>& fn
 void ui::pane::artwork_browser::connect_canvas() {
     auto* layer = &canvases_.active_canvas().artwork();
     if (connected_layer_ == layer) return;
-    disconnect(layer_selection_); disconnect(layer_appearance_); disconnect(layer_preview_);
+    auto* previous = qobject_cast<canvas::artwork_layer*>(connected_layer_.data());
+    disconnect(layer_selection_); disconnect(layer_appearance_); disconnect(layer_preview_); disconnect(layer_transform_);
+    if (previous) previous->set_transform_editing(false);
     connected_layer_ = layer;
     layer_selection_ = connect(layer, &canvas::artwork_layer::selection_changed, this, [this] { refresh(); });
     layer_appearance_ = connect(layer, &canvas::artwork_layer::appearance_changed, this, [this] { refresh(); });
     layer_preview_ = connect(layer, &canvas::artwork_layer::preview_changed, this, [this] { refresh(); });
+    layer_transform_ = connect(layer, &canvas::artwork_layer::transform_changed, this, [this] { refresh_details(); });
+    update_transform_editing();
+}
+void ui::pane::artwork_browser::update_transform_editing() {
+    if (!connected_layer_) return;
+    auto* layer = qobject_cast<canvas::artwork_layer*>(connected_layer_.data());
+    if (!layer) return;
+    layer->set_transform_editing(character_.has_value() && transform_toggle_ && transform_toggle_->isChecked() &&
+        transform_panel_ && transform_panel_->isVisibleTo(this) && isVisible());
 }
 void ui::pane::artwork_browser::reorder_slot(const std::string& slot, int index) {
     if (refreshing_ || !character_) return;
@@ -643,13 +701,16 @@ void ui::pane::artwork_browser::refresh() {
         restore_appearance_item(appearance_structure_, appearance_slot_name, appearance_state);
         appearance_structure_->resizeColumnToContents(0);
     }
-    refreshing_ = false; refresh_details();
+    refreshing_ = false;
+    update_transform_editing();
+    refresh_details();
 }
 void ui::pane::artwork_browser::refresh_details() {
     refreshing_ = true;
     auto frame = selected(frames_);
     origin_x_->setEnabled(!frame.empty()); origin_y_->setEnabled(!frame.empty());
     for (auto* spin : transform_) spin->setEnabled(false);
+    transform_reset_->setEnabled(false);
     for (auto* button : order_buttons_) button->setEnabled(false);
     if (character_) {
         const auto& art = project_.core().artwork(*character_);
@@ -659,9 +720,15 @@ void ui::pane::artwork_browser::refresh_details() {
         if (app != art.appearances().end() && !slot.empty()) {
             auto* implementation = appearance_slot(app->second, slot);
             if (implementation) {
-                const auto& t = implementation->transform;
+                auto t = implementation->transform;
+                const auto& layer = canvases_.active_canvas().artwork();
+                const auto& selected_sprite = layer.selected_slot();
+                if (selected_sprite && selected_sprite->character == *character_ && selected_sprite->appearance == app->first &&
+                    selected_sprite->slot == slot)
+                    if (auto preview = layer.selected_transform()) t = *preview;
                 const std::array<double, 5> values{t.translation.x, t.translation.y, t.rotation * 180 / std::numbers::pi, t.scale.x, t.scale.y};
                 for (int i = 0; i < 5; ++i) { transform_[i]->setEnabled(true); transform_[i]->setValue(values[i]); }
+                transform_reset_->setEnabled(true);
                 const auto& order = app->second.appearance_slots;
                 bool front = order.back().slot == slot, back = order.front().slot == slot;
                 order_buttons_[0]->setEnabled(!back); order_buttons_[1]->setEnabled(!back);

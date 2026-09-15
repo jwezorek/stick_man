@@ -7,7 +7,6 @@
 #include "animate_tool.hpp"
 #include "add_node_tool.hpp"
 #include "add_bone_tool.hpp"
-#include "sprite_transform_tool.hpp"
 #include <ranges>
 
 namespace r = std::ranges;
@@ -23,7 +22,6 @@ ui::tool::manager::manager() :
     tool_registry_.emplace_back(std::make_unique<ui::tool::animate>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::add_node>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::add_bone>());
-    tool_registry_.emplace_back(std::make_unique<ui::tool::sprite_transform>());
 }
 
 void ui::tool::manager::init(canvas::manager& canvases, mdl::project& model) {

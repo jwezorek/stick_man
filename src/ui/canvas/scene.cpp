@@ -573,26 +573,54 @@ int ui::canvas::scene::closest_zoom_level() const
 }
 
 void ui::canvas::scene::keyPressEvent(QKeyEvent* event) {
+    if (artwork_ && artwork_->transform_editing()) {
+        if (event->key() == Qt::Key_Escape) artwork_->cancel_transform();
+        event->accept();
+        return;
+    }
     inp_handler_.keyPressEvent(*this, event);
 }
 
 void ui::canvas::scene::keyReleaseEvent(QKeyEvent* event) {
+    if (artwork_ && artwork_->transform_editing()) {
+        event->accept();
+        return;
+    }
     inp_handler_.keyReleaseEvent(*this, event);
 }
 
 void ui::canvas::scene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
+    if (artwork_ && artwork_->transform_editing()) {
+        if (event->button() == Qt::LeftButton) artwork_->begin_transform(event->scenePos());
+        event->accept();
+        return;
+    }
     inp_handler_.mousePressEvent(*this, event);
 }
 
 void ui::canvas::scene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
+    if (artwork_ && artwork_->transform_editing()) {
+        artwork_->update_transform(event->scenePos());
+        event->accept();
+        return;
+    }
     inp_handler_.mouseMoveEvent(*this, event);
 }
 
 void ui::canvas::scene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
+    if (artwork_ && artwork_->transform_editing()) {
+        if (event->button() == Qt::LeftButton) artwork_->end_transform(event->scenePos());
+        event->accept();
+        return;
+    }
     inp_handler_.mouseReleaseEvent(*this, event);
 }
 
 void ui::canvas::scene::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
+    if (artwork_ && artwork_->transform_editing()) {
+        event->accept();
+        return;
+    }
     inp_handler_.mouseDoubleClickEvent(*this, event);
 }
 

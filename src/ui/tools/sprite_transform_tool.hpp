@@ -4,7 +4,6 @@
 
 namespace ui::tool {
     class sprite_transform : public base {
-        canvas::sprite_drag mode_ = canvas::sprite_drag::translate;
         QWidget* settings_ = nullptr;
     public:
         sprite_transform();

@@ -19,6 +19,7 @@ namespace ui::canvas {
         std::unordered_map<sm::object_id, std::string> active_;
         std::unordered_map<sm::object_id, std::map<std::string, std::string>> preview_states_;
         std::optional<sprite_selection> selected_;
+        bool transform_editing_ = false;
         bool show_artwork_ = true, show_skeleton_ = true, wireframe_ = false;
         struct drag_state {
             sprite_selection selection;
@@ -33,8 +34,13 @@ namespace ui::canvas {
             sm::image_resource image;
             sm::matrix transform, bone_transform;
         };
+        struct transform_target {
+            sprite_selection selection;
+            sprite_drag mode;
+        };
         std::vector<drawable> drawables() const;
-        std::optional<sm::sprite_transform> selected_transform() const;
+        std::optional<transform_target> transform_target_at(QPointF position) const;
+        bool begin_transform(QPointF position, const transform_target& target);
     public:
         artwork_layer(scene& scene, mdl::project& project);
         std::string active_appearance(const sm::object_id& character) const;
@@ -44,6 +50,7 @@ namespace ui::canvas {
         void reset_preview_states(const sm::object_id& character);
         void set_selected_slot(const sm::object_id& character, const std::string& slot);
         const std::optional<sprite_selection>& selected_slot() const { return selected_; }
+        std::optional<sm::sprite_transform> selected_transform() const;
         std::optional<sprite_selection> hit_test(QPointF position) const;
         void paint(QPainter& painter) const;
         void paint_selection(QPainter& painter) const;
@@ -56,6 +63,9 @@ namespace ui::canvas {
         bool show_skeleton() const { return show_skeleton_; }
         bool wireframe() const { return wireframe_; }
         void refresh_guides();
+        void set_transform_editing(bool enabled);
+        bool transform_editing() const { return transform_editing_; }
+        bool begin_transform(QPointF position);
         bool begin_transform(QPointF position, sprite_drag mode);
         void update_transform(QPointF position);
         void end_transform(QPointF position);
@@ -70,5 +80,6 @@ namespace ui::canvas {
         void selection_changed();
         void appearance_changed();
         void preview_changed();
+        void transform_changed();
     };
 }

@@ -4,20 +4,60 @@
 #include "node_item.hpp"
 #include "skel_item.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <numbers>
 
 namespace {
+    constexpr double handle_radius_pixels = 5.0;
+    constexpr double handle_hit_radius_pixels = 8.0;
+    constexpr double rotation_handle_offset_pixels = 24.0;
+
     QTransform qt_matrix(const sm::matrix& m) {
         return {m(0,0), m(1,0), m(0,1), m(1,1), m(0,2), m(1,2)};
     }
     sm::point point(QPointF p) { return {p.x(), p.y()}; }
+    QPointF qpoint(sm::point p) { return {p.x, p.y}; }
     sm::matrix local_matrix(const sm::sprite_transform& t, sm::point origin) {
         return sm::translation_matrix(t.translation) * sm::rotation_matrix(t.rotation) *
             sm::scale_matrix(t.scale.x, t.scale.y) * sm::translation_matrix(-origin);
     }
     bool same(const sm::sprite_transform& a, const sm::sprite_transform& b) {
         return a.translation == b.translation && a.rotation == b.rotation && a.scale == b.scale;
+    }
+    double length(sm::point p) { return std::hypot(p.x, p.y); }
+    sm::point normalized(sm::point p, sm::point fallback = {0, 1}) {
+        auto len = length(p);
+        return len > 1e-9 ? sm::point{p.x / len, p.y / len} : fallback;
+    }
+    double squared_distance(QPointF a, QPointF b) {
+        auto dx = a.x() - b.x(), dy = a.y() - b.y();
+        return dx * dx + dy * dy;
+    }
+    struct transform_handle_geometry {
+        QPointF center, left, right, top, bottom, rotate;
+        std::array<QPointF, 4> corners;
+        double radius = 0, hit_radius = 0;
+    };
+    transform_handle_geometry handle_geometry(const sm::matrix& transform, double width, double height, double scene_scale) {
+        const auto half_width = width / 2.0, half_height = height / 2.0;
+        const auto to_scene = [&](sm::point p) { return qpoint(sm::transform(p, transform)); };
+        transform_handle_geometry result;
+        result.center = to_scene({0, 0});
+        result.left = to_scene({-half_width, 0});
+        result.right = to_scene({half_width, 0});
+        result.top = to_scene({0, half_height});
+        result.bottom = to_scene({0, -half_height});
+        result.corners = {
+            to_scene({-half_width, half_height}), to_scene({half_width, half_height}),
+            to_scene({half_width, -half_height}), to_scene({-half_width, -half_height})
+        };
+        auto up = normalized(point(result.top - result.center));
+        auto scale = std::max(std::abs(scene_scale), 1e-9);
+        result.rotate = result.top + QPointF(up.x, up.y) * (rotation_handle_offset_pixels / scale);
+        result.radius = handle_radius_pixels / scale;
+        result.hit_radius = handle_hit_radius_pixels / scale;
+        return result;
     }
     struct frame_drag { sm::object_id character; std::string frame; };
     std::optional<frame_drag> parse_drag(const QMimeData* mime) {
@@ -118,10 +158,30 @@ void ui::canvas::artwork_layer::paint(QPainter& painter) const {
 void ui::canvas::artwork_layer::paint_selection(QPainter& painter) const {
     if (!selected_ || !show_artwork_) return;
     for (const auto& sprite : drawables()) if (sprite.selection == *selected_) {
+        const auto half_width = sprite.image.width() / 2.0;
+        const auto half_height = sprite.image.height() / 2.0;
         painter.save(); painter.setWorldTransform(qt_matrix(sprite.transform), true);
         QPen pen(QColor(0, 160, 210), 1, Qt::DashLine); pen.setCosmetic(true);
         painter.setPen(pen); painter.setBrush(Qt::NoBrush);
-        painter.drawRect(QRectF(-sprite.image.width()/2.0, -sprite.image.height()/2.0, sprite.image.width(), sprite.image.height()));
+        painter.drawRect(QRectF(-half_width, -half_height, sprite.image.width(), sprite.image.height()));
+        painter.restore();
+
+        if (!transform_editing_) continue;
+
+        const auto handles = handle_geometry(sprite.transform, sprite.image.width(), sprite.image.height(), scene_.scale());
+
+        painter.save();
+        QPen handle_pen(QColor(0, 160, 210), 1); handle_pen.setCosmetic(true);
+        painter.setPen(handle_pen);
+        painter.setBrush(QColor(245, 245, 245));
+        painter.drawLine(handles.top, handles.rotate);
+        const auto square = [&](QPointF p) {
+            painter.drawRect(QRectF(p.x() - handles.radius, p.y() - handles.radius,
+                2 * handles.radius, 2 * handles.radius));
+        };
+        square(handles.left); square(handles.right); square(handles.top); square(handles.bottom);
+        for (auto corner : handles.corners) square(corner);
+        painter.drawEllipse(handles.rotate, handles.radius, handles.radius);
         painter.restore();
     }
 }
@@ -137,10 +197,37 @@ std::optional<ui::canvas::sprite_selection> ui::canvas::artwork_layer::hit_test(
     return {};
 }
 std::optional<sm::sprite_transform> ui::canvas::artwork_layer::selected_transform() const {
+    if (drag_ && selected_ && drag_->selection == *selected_) return drag_->preview;
     if (!selected_ || !project_.core().character(selected_->character)) return {};
     const auto& apps = project_.core().artwork(selected_->character).appearances();
     auto it = apps.find(selected_->appearance); if (it == apps.end()) return {};
     for (const auto& slot : it->second.appearance_slots) if (slot.slot == selected_->slot) return slot.transform;
+    return {};
+}
+
+std::optional<ui::canvas::artwork_layer::transform_target> ui::canvas::artwork_layer::transform_target_at(QPointF position) const {
+    if (selected_) {
+        for (const auto& sprite : drawables()) if (sprite.selection == *selected_) {
+            const auto half_width = sprite.image.width() / 2.0;
+            const auto half_height = sprite.image.height() / 2.0;
+            const auto handles = handle_geometry(sprite.transform, sprite.image.width(), sprite.image.height(), scene_.scale());
+            auto hit_radius_squared = handles.hit_radius * handles.hit_radius;
+            if (squared_distance(position, handles.rotate) <= hit_radius_squared) return transform_target{*selected_, sprite_drag::rotate};
+            for (auto corner : handles.corners)
+                if (squared_distance(position, corner) <= hit_radius_squared) return transform_target{*selected_, sprite_drag::scale_xy};
+            if (squared_distance(position, handles.left) <= hit_radius_squared || squared_distance(position, handles.right) <= hit_radius_squared)
+                return transform_target{*selected_, sprite_drag::scale_x};
+            if (squared_distance(position, handles.top) <= hit_radius_squared || squared_distance(position, handles.bottom) <= hit_radius_squared)
+                return transform_target{*selected_, sprite_drag::scale_y};
+
+            if (std::abs(sprite.transform.determinant()) >= 1e-12) {
+                auto local = sm::transform(point(position), sprite.transform.inverse());
+                if (local.x >= -half_width && local.x <= half_width && local.y >= -half_height && local.y <= half_height)
+                    return transform_target{*selected_, sprite_drag::translate};
+            }
+        }
+    }
+    if (auto hit = hit_test(position)) return transform_target{*hit, sprite_drag::translate};
     return {};
 }
 void ui::canvas::artwork_layer::refresh() {
@@ -152,7 +239,7 @@ void ui::canvas::artwork_layer::refresh() {
     refresh_guides(); scene_.update();
 }
 void ui::canvas::artwork_layer::reset() {
-    drag_.reset(); selected_.reset(); active_.clear(); preview_states_.clear(); refresh(); emit selection_changed(); emit appearance_changed(); emit preview_changed();
+    drag_.reset(); selected_.reset(); active_.clear(); preview_states_.clear(); refresh(); emit selection_changed(); emit appearance_changed(); emit preview_changed(); emit transform_changed();
 }
 void ui::canvas::artwork_layer::set_show_artwork(bool show) { cancel_transform(); show_artwork_ = show; scene_.update(); }
 void ui::canvas::artwork_layer::set_show_skeleton(bool show) { show_skeleton_ = show; refresh_guides(); scene_.update(); }
@@ -163,17 +250,34 @@ void ui::canvas::artwork_layer::refresh_guides() {
     for (auto* bone : scene_.bone_items()) bone->setBrush(wireframe_ ? QBrush(Qt::NoBrush) : QBrush(Qt::black));
     for (auto* node : scene_.node_items()) node->setBrush(wireframe_ ? QBrush(Qt::NoBrush) : QBrush(Qt::white));
 }
+void ui::canvas::artwork_layer::set_transform_editing(bool enabled) {
+    if (transform_editing_ == enabled) return;
+    cancel_transform();
+    transform_editing_ = enabled;
+    scene_.update();
+    emit transform_changed();
+}
+bool ui::canvas::artwork_layer::begin_transform(QPointF position) {
+    cancel_transform();
+    auto target = transform_target_at(position);
+    if (!target) return false;
+    return begin_transform(position, *target);
+}
 bool ui::canvas::artwork_layer::begin_transform(QPointF position, sprite_drag mode) {
     cancel_transform();
     auto hit = hit_test(position);
-    if (!hit) { selected_.reset(); scene_.update(); emit selection_changed(); return false; }
-    if (auto* character = scene_.character_item(hit->character)) scene_.set_selection(character, true);
-    set_active_appearance(hit->character, hit->appearance);
-    set_selected_slot(hit->character, hit->slot);
+    if (!hit) return false;
+    return begin_transform(position, transform_target{*hit, mode});
+}
+bool ui::canvas::artwork_layer::begin_transform(QPointF position, const transform_target& target) {
+    if (auto* character = scene_.character_item(target.selection.character)) scene_.set_selection(character, true);
+    set_active_appearance(target.selection.character, target.selection.appearance);
+    set_selected_slot(target.selection.character, target.selection.slot);
     auto transform = selected_transform(); if (!transform) return false;
-    for (const auto& sprite : drawables()) if (sprite.selection == *hit) {
+    for (const auto& sprite : drawables()) if (sprite.selection == target.selection) {
         sm::matrix inverse = sprite.bone_transform.inverse();
-        drag_ = drag_state{*hit, *transform, *transform, inverse, sm::transform(point(position), inverse), mode};
+        drag_ = drag_state{target.selection, *transform, *transform, inverse, sm::transform(point(position), inverse), target.mode};
+        emit transform_changed();
         return true;
     }
     return false;
@@ -195,11 +299,22 @@ void ui::canvas::artwork_layer::update_transform(QPointF position) {
             auto scale_axis = [](double original, double start, double now) {
                 return std::abs(start) > 1e-6 ? original * now / start : original + (now-start)/50.0;
             };
-            if (d.mode == sprite_drag::scale_x || d.mode == sprite_drag::scale_xy) d.preview.scale.x = scale_axis(d.before.scale.x,a.x,b.x);
-            if (d.mode == sprite_drag::scale_y || d.mode == sprite_drag::scale_xy) d.preview.scale.y = scale_axis(d.before.scale.y,a.y,b.y);
+            if (d.mode == sprite_drag::scale_xy) {
+                auto a_length = std::hypot(a.x, a.y);
+                auto b_length = std::hypot(b.x, b.y);
+                if (a_length > 1e-6) {
+                    auto factor = b_length / a_length;
+                    if (a.x * b.x + a.y * b.y < 0) factor = -factor;
+                    d.preview.scale.x = d.before.scale.x * factor;
+                    d.preview.scale.y = d.before.scale.y * factor;
+                }
+            } else {
+                if (d.mode == sprite_drag::scale_x) d.preview.scale.x = scale_axis(d.before.scale.x,a.x,b.x);
+                if (d.mode == sprite_drag::scale_y) d.preview.scale.y = scale_axis(d.before.scale.y,a.y,b.y);
+            }
         }
     }
-    scene_.update();
+    scene_.update(); emit transform_changed();
 }
 void ui::canvas::artwork_layer::end_transform(QPointF position) {
     if (!drag_) return;
@@ -210,9 +325,11 @@ void ui::canvas::artwork_layer::end_transform(QPointF position) {
         for (auto& slot : app.appearance_slots) if (slot.slot == d.selection.slot) slot.transform = d.preview;
         art.set_appearance(d.selection.appearance, std::move(app));
     });
-    scene_.update();
+    scene_.update(); emit transform_changed();
 }
-void ui::canvas::artwork_layer::cancel_transform() { if (drag_) { drag_.reset(); scene_.update(); } }
+void ui::canvas::artwork_layer::cancel_transform() {
+    if (drag_) { drag_.reset(); scene_.update(); emit transform_changed(); }
+}
 void ui::canvas::artwork_layer::assign_frame(const sm::object_id& character, const sm::object_id& bone,
         const std::string& frame, const std::optional<std::string>& slot) {
     const auto& art = project_.core().artwork(character);
