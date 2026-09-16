@@ -13,6 +13,7 @@
 #include "clipboard.hpp"
 #include <QtWidgets>
 #include <QFileInfo>
+#include <QSettings>
 #include <cstdint>
 #include <ranges>
 #include <span>
@@ -32,6 +33,11 @@
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
 namespace {
+    constexpr int layout_state_version = 1;
+    constexpr auto layout_settings_organization = "jwezorek";
+    constexpr auto layout_settings_application = "stick_man";
+    constexpr auto layout_settings_key = "main_window/state";
+
     void to_do(const std::string& msg) {
         QMessageBox msgBox;
         msgBox.setWindowTitle("TODO");
@@ -59,14 +65,36 @@ ui::stick_man::stick_man(QWidget* parent) :
         skel_pane_(new pane::skeleton(this)) {
     setDarkTitleBar(winId());
     setDockNestingEnabled(true);
+
+    tool_pal_->setObjectName("tools_toolbar");
+    tool_pane_->setObjectName("tool_settings_pane");
+    skel_pane_->setObjectName("skeleton_pane");
+    anim_pane_->setObjectName("animation_pane");
+
     addToolBar(Qt::LeftToolBarArea, tool_pal_);
     addDockWidget(Qt::RightDockWidgetArea, tool_pane_);
     addDockWidget(Qt::RightDockWidgetArea, skel_pane_);
-    addDockWidget(Qt::BottomDockWidgetArea, anim_pane_);
+    addDockWidget(Qt::RightDockWidgetArea, anim_pane_);
     setCentralWidget(canvases_ = new canvas::manager(tool_mgr_));
     setWindowTitle("stick_man - untitled");
     canvases_->init(project_);
-    addDockWidget(Qt::LeftDockWidgetArea, new pane::artwork_browser(project_, *canvases_, this));
+
+    auto* artwork_browser = new pane::artwork_browser(project_, *canvases_, this);
+    addDockWidget(Qt::RightDockWidgetArea, artwork_browser);
+    tabifyDockWidget(skel_pane_, artwork_browser);
+    tabifyDockWidget(skel_pane_, anim_pane_);
+
+    QSettings settings(layout_settings_organization, layout_settings_application);
+    const auto saved_layout = settings.value(layout_settings_key).toByteArray();
+    if (saved_layout.isEmpty() || !restoreState(saved_layout, layout_state_version)) {
+        skel_pane_->raise();
+    }
+
+    connect(qApp, &QCoreApplication::aboutToQuit, this, [this] {
+        QSettings settings(layout_settings_organization, layout_settings_application);
+        settings.setValue(layout_settings_key, saveState(layout_state_version));
+    });
+
     createMainMenu();
     skel_pane_->init(*canvases_, project_);
     anim_pane_->init(*canvases_, project_);
