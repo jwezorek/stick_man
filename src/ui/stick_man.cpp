@@ -75,7 +75,11 @@ ui::stick_man::stick_man(QWidget* parent) :
     addDockWidget(Qt::RightDockWidgetArea, tool_pane_);
     addDockWidget(Qt::RightDockWidgetArea, skel_pane_);
     addDockWidget(Qt::RightDockWidgetArea, anim_pane_);
-    setCentralWidget(canvases_ = new canvas::manager(tool_mgr_));
+    auto* center = new QWidget(this);
+    auto* center_layout = new QVBoxLayout(center);
+    center_layout->setContentsMargins(0, 0, 0, 0);
+    center_layout->addWidget(canvases_ = new canvas::manager(tool_mgr_));
+    setCentralWidget(center);
     setWindowTitle("stick_man - untitled");
     canvases_->init(project_);
 
@@ -151,6 +155,7 @@ void ui::stick_man::open()
     file.close();
     const auto* first = reinterpret_cast<const std::uint8_t*>(content.constData());
     const std::span<const std::uint8_t> buffer(first, static_cast<std::size_t>(content.size()));
+    anim_pane_->leave_animation();
     if (!project_.deserialize(buffer)) {
         QMessageBox::critical(this, "Error", "Error opening project file.");
         return;
@@ -204,11 +209,11 @@ void ui::stick_man::debug() {
 }
 
 void ui::stick_man::create_animation() {
-    to_do("create animation");
+    anim_pane_->create_animation();
 }
 void ui::stick_man::create_pose()
 {
-    to_do("create pose");
+    anim_pane_->create_pose();
 }
 
 ui::tool::manager& ui::stick_man::tool_mgr() {
@@ -375,3 +380,5 @@ void ui::stick_man::resizeEvent(QResizeEvent* event) {
         has_fully_layed_out_widgets_ = true;
     }
 }
+
+ui::stick_man::~stick_man() { anim_pane_->leave_animation(); }

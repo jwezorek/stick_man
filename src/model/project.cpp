@@ -34,6 +34,7 @@ namespace {
 /*------------------------------------------------------------------------------------------------*/
 void mdl::project::clear_redo_stack() { redo_stack_ = {}; }
 sm::result mdl::project::execute_command(const command& cmd) {
+    if (animation_mode_) return sm::result::invalid_membership;
     cmd.redo(*this);
     if (cmd.outcome && cmd.outcome() != sm::result::success) return cmd.outcome();
     clear_redo_stack();
@@ -48,6 +49,7 @@ mdl::project::project() {}
 const sm::project& mdl::project::core() const { return core_; }
 sm::project& mdl::project::core() { return core_; }
 void mdl::project::edit_artwork(const sm::object_id& id, const std::function<void(sm::artwork&)>& edit) {
+    if (animation_mode_) return;
     auto before = core_.artwork(id);
     auto after = before;
     edit(after);
@@ -113,6 +115,7 @@ sm::result mdl::project::redo() {
         return sm::result::success;
     }
     auto cmd = redo_stack_.top();
+    if (animation_mode_) return sm::result::invalid_membership;
     cmd.redo(*this);
     if (cmd.outcome && cmd.outcome() != sm::result::success) return cmd.outcome();
     redo_stack_.pop();
@@ -121,12 +124,13 @@ sm::result mdl::project::redo() {
     emit project_changed(*this);
     return sm::result::success;
 }
-bool mdl::project::can_undo() const { return !undo_stack_.empty(); }
-bool mdl::project::can_redo() const { return !redo_stack_.empty(); }
+bool mdl::project::can_undo() const { return !animation_mode_ && !undo_stack_.empty(); }
+bool mdl::project::can_redo() const { return !animation_mode_ && !redo_stack_.empty(); }
 std::expected<sm::project_buffer, sm::project_result> mdl::project::serialize() const {
     return core_.serialize();
 }
 bool mdl::project::deserialize(std::span<const std::uint8_t> buffer) {
+    if (animation_mode_) return false;
     auto result = core_.deserialize(buffer);
     if (result != sm::project_result::success) {
         return false;
@@ -178,6 +182,7 @@ sm::result mdl::project::adopt_skeletons(const sm::object_id& character_id,
     });
 }
 void mdl::project::add_new_skeleton_root(sm::point loc) {
+    if (animation_mode_) return;
     execute_command(commands::make_create_node_command(loc, next_default_node_name()));
 }
 std::expected<sm::object_id, sm::result> mdl::project::make_character(
@@ -345,4 +350,30 @@ sm::result mdl::project::replace_skeletons(
 
 bool mdl::identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2) {
     return mdl::to_handle(p1) == mdl::to_handle(p2);
+}
+
+void mdl::project::set_animation_mode(bool active) {
+    animation_mode_ = active;
+    emit refresh_undo_redo_state(can_redo(), can_undo());
+}
+void mdl::project::edit_animation_data(sm::object_id id, const std::function<void(sm::animation_assets&)>& edit) {
+    if (animation_mode_) return;
+    auto before = core_.animation_data(id), after = before;
+    edit(after);
+    after.validate();
+    execute_command({[id, after](project& p) { p.core_.animation_data(id) = after; },
+        [id, before](project& p) { p.core_.animation_data(id) = before; }});
+}
+void mdl::project::apply_pose(sm::object_id character, sm::object_id id) {
+    if (animation_mode_) return;
+    const auto& c = core_.character(character).value().get();
+    const auto* pose = c.animation_data().find_pose(id);
+    if (!pose || !sm::pose_compatible(*pose, topology(), c.rig().skeleton_ids()))
+        throw std::invalid_argument("Pose does not match the current rig. Update or recreate it first.");
+    node_locs before, after;
+    for (const auto& [nid, pt] : pose->node_positions) {
+        before.emplace_back(nid, topology().get<sm::node>(nid)->get().world_pos());
+        after.emplace_back(nid, pt);
+    }
+    transform_node_positions(before, after);
 }

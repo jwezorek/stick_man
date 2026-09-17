@@ -31,6 +31,7 @@ namespace sm {
         object_id id;
         std::string name;
         sm::artwork artwork;
+        animation_assets animation_data;
     };
     struct membership_state {
         std::unordered_map<object_id, std::optional<object_id>> parents;
@@ -105,11 +106,13 @@ namespace sm {
         result adopt_skeletons(const object_id& character_id, std::span<const const_skel_ref> skeletons);
         result remove_character(const object_id& id);
         expected_const_character character(const object_id& id) const;
+        animation_assets& animation_data(const object_id& character_id);
+        const animation_assets& animation_data(const object_id& character_id) const;
         sm::artwork& artwork(const object_id& character_id);
         const sm::artwork& artwork(const object_id& character_id) const;
         bool slot_resolved(const object_id& character_id, const std::string& slot) const;
         std::vector<resolved_sprite> resolve_artwork(const object_id& character_id,
-            const std::string& appearance, const std::map<std::string, std::string>& states = {}) const;
+            const std::string& appearance, const std::map<std::string, std::string>& states = {}, const sm::topology* geometry = nullptr) const;
         auto characters() const { return detail::to_range_view<const_character_ref>(characters_); }
 
         // Mutable lookup accepts nodes and bones only; use const lookup for aggregate objects.

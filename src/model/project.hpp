@@ -34,6 +34,7 @@ namespace mdl {
         Q_OBJECT
 
         sm::project core_;
+        bool animation_mode_ = false;
         std::stack<command> redo_stack_;
         std::stack<command> undo_stack_;
         std::size_t next_node_name_ = 1;
@@ -53,6 +54,10 @@ namespace mdl {
         void advance_default_name_counters_from_topology();
     public:
         project();
+        bool animation_mode() const { return animation_mode_; }
+        void set_animation_mode(bool active);
+        void edit_animation_data(sm::object_id character, const std::function<void(sm::animation_assets&)>& edit);
+        void apply_pose(sm::object_id character, sm::object_id pose);
         const sm::project& core() const;
         sm::project& core();
         // Validate on an independent semantic snapshot, then record one undoable edit.

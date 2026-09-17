@@ -64,3 +64,13 @@ add_test(NAME character_stage4 COMMAND $<TARGET_FILE:character_stage4>)
 add_executable(appearances appearances.cpp)
 target_link_libraries(appearances PRIVATE stick_man_core)
 add_test(NAME appearances COMMAND $<TARGET_FILE:appearances>)
+
+add_executable(animation_stage1 animation_stage1.cpp)
+target_link_libraries(animation_stage1 PRIVATE stick_man_core)
+add_test(NAME animation_stage1 COMMAND $<TARGET_FILE:animation_stage1>)
+add_executable(animation_ui animation_ui.cpp ${PROJECT_SOURCE_DIR}/src/ui/stick_man.qrc)
+target_link_libraries(animation_ui PRIVATE stick_man_ui)
+set_target_properties(animation_ui PROPERTIES AUTORCC ON)
+add_test(NAME animation_ui COMMAND "${CMAKE_COMMAND}" -E env
+    "QT_QPA_PLATFORM=offscreen" "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+    $<TARGET_FILE:animation_ui>)

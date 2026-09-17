@@ -16,6 +16,7 @@ namespace ui::canvas {
         Q_OBJECT
         scene& scene_;
         mdl::project& project_;
+        const sm::topology* preview_topology_ = nullptr;
         std::unordered_map<sm::object_id, std::string> active_;
         std::unordered_map<sm::object_id, std::map<std::string, std::string>> preview_states_;
         std::optional<sprite_selection> selected_;
@@ -43,6 +44,7 @@ namespace ui::canvas {
         bool begin_transform(QPointF position, const transform_target& target);
     public:
         artwork_layer(scene& scene, mdl::project& project);
+        void set_preview_topology(const sm::topology* topology) { cancel_transform(); preview_topology_ = topology; }
         std::string active_appearance(const sm::object_id& character) const;
         void set_active_appearance(const sm::object_id& character, const std::string& appearance);
         std::string preview_state(const sm::object_id& character, const std::string& slot) const;

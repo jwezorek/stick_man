@@ -29,6 +29,7 @@ namespace ui {
             void set_contents(mdl::project& model);
         public:
             manager(tool::input_handler& inp_handler);
+            void show_animation_preview(sm::topology* topology);
             void init(mdl::project& proj);
             void clear();
             void center_active_view();

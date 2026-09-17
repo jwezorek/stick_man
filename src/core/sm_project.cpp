@@ -158,6 +158,7 @@ sm::result sm::project::delete_skeleton(const object_id& id) {
         return deleted;
     }
     prune_empty_characters();
+    for (auto& [id, c] : characters_) initialize_animation_assets(c->animation_data_, topology_, c->rig().skeleton_ids());
     invalidate_object_index();
     if (!ensure_object_index()) {
         throw std::runtime_error("deleting skeleton left duplicate object IDs");
@@ -330,6 +331,7 @@ sm::topology_change sm::project::replace_skeletons(
         if (!characters_.contains(state.id)) characters_.emplace(state.id,
             sm::character::make_unique(*this, state.id, state.name, sm::rig(*this)));
         characters_.at(state.id)->artwork_ = state.artwork;
+        characters_.at(state.id)->animation_data_ = state.animation_data;
     }
     invalidate_object_index();
     for (const auto& id : change.added_skeleton_ids) {
@@ -342,6 +344,7 @@ sm::topology_change sm::project::replace_skeletons(
         }
     }
     prune_empty_characters();
+    for (auto& [id, c] : characters_) initialize_animation_assets(c->animation_data_, topology_, c->rig().skeleton_ids());
     assert(has_consistent_membership());
     return change;
 }
@@ -355,7 +358,7 @@ sm::membership_state sm::project::snapshot_membership(const std::vector<object_i
         auto parent = skel->get().parent_character();
         state.parents[id] = parent ? std::optional(parent->get().id()) : std::nullopt;
         if (parent && seen.insert(parent->get().id()).second)
-            state.characters.push_back({parent->get().id(), parent->get().name(), parent->get().artwork()});
+            state.characters.push_back({parent->get().id(), parent->get().name(), parent->get().artwork(), parent->get().animation_data()});
     }
     return state;
 }
@@ -370,6 +373,7 @@ sm::result sm::project::restore_membership(const membership_state& state) {
             if (objects_.contains(c.id)) return result::duplicate_id;
             prepared.emplace(c.id, sm::character::make_unique(*this, c.id, c.name, sm::rig(*this)));
             prepared.at(c.id)->artwork_ = c.artwork;
+            prepared.at(c.id)->animation_data_ = c.animation_data;
         }
     }
     for (const auto& [sid, parent] : state.parents) {
@@ -385,6 +389,7 @@ sm::result sm::project::restore_membership(const membership_state& state) {
         topology_.skeleton(sid)->get().set_parent_character(c);
     }
     prune_empty_characters();
+    for (auto& [id, c] : characters_) initialize_animation_assets(c->animation_data_, topology_, c->rig().skeleton_ids());
     assert(has_consistent_membership());
     return result::success;
 }
@@ -551,6 +556,7 @@ sm::expected_const_character sm::project::create_character(std::span<const const
     for (auto skel : validated) {
         skel->set_parent_character(*created_ptr);
     }
+    initialize_animation_assets(created_ptr->animation_data_, topology_, created_ptr->rig().skeleton_ids());
     ++next_character_name_;
 
     invalidate_object_index();
@@ -670,7 +676,7 @@ std::expected<sm::project_buffer, sm::project_result> sm::project::serialize() c
             auto art = detail::write_artwork(character->artwork(),
                 "characters/" + character->id().to_string() + "/artwork/", package);
             characters.push_back({{"id", character->id().to_string()}, {"name", character->name()},
-                {"skeletons", std::move(skeletons)}, {"artwork", std::move(art)}});
+                {"skeletons", std::move(skeletons)}, {"artwork", std::move(art)}, {"animation_data", animation_assets_to_json(character->animation_data())}});
         }
         json semantic_project{{"version", project_json_version}, {"topology", topology_.to_json()}, {"characters", std::move(characters)}};
         auto text = semantic_project.dump(4);
@@ -758,6 +764,8 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
                     "characters/" + character_id.to_string() + "/artwork/", *package); }
                 catch (...) { return project_result::invalid_artwork; }
             }
+            if (entry.contains("animation_data")) character->animation_data_ = animation_assets_from_json(entry.at("animation_data"));
+            else initialize_animation_assets(character->animation_data_, new_topology, character->rig().skeleton_ids());
             auto* character_ptr = character.get();
             new_characters.emplace(character_id, std::move(character));
             for (const auto& skeleton_id : character_ptr->rig().skeleton_ids()) {
@@ -812,7 +820,7 @@ bool sm::project::slot_resolved(const object_id& id, const std::string& slot) co
 }
 
 std::vector<sm::resolved_sprite> sm::project::resolve_artwork(const object_id& id,
-    const std::string& appearance_name, const std::map<std::string, std::string>& states) const {
+    const std::string& appearance_name, const std::map<std::string, std::string>& states, const sm::topology* geometry) const {
     const auto& art = artwork(id);
     const auto& appearance = art.appearances().at(appearance_name);
     std::vector<resolved_sprite> sprites;
@@ -825,7 +833,9 @@ std::vector<sm::resolved_sprite> sm::project::resolve_artwork(const object_id& i
         if (!target) continue;
 
         const auto& definition = art.slot_definitions().at(slot.slot);
-        const auto& bone = std::get<bone_ref>(objects_.at(definition.bone)).get();
+        auto resolved_bone = (geometry ? *geometry : topology_).get<sm::bone>(definition.bone);
+        if (!resolved_bone) continue;
+        const auto& bone = resolved_bone->get();
         const auto anchor = definition.anchor == bone_anchor::root
             ? bone.parent_node().world_pos() : bone.child_node().world_pos();
         const matrix bone_transform = translation_matrix(anchor) * rotation_matrix(bone.world_rotation());
@@ -840,3 +850,6 @@ std::vector<sm::resolved_sprite> sm::project::resolve_artwork(const object_id& i
     }
     return sprites;
 }
+
+sm::animation_assets& sm::project::animation_data(const object_id& id) { return characters_.at(id)->animation_data_; }
+const sm::animation_assets& sm::project::animation_data(const object_id& id) const { return characters_.at(id)->animation_data_; }

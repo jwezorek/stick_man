@@ -1,3 +1,4 @@
+#include "artwork_layer.hpp"
 #include "canvas_manager.hpp"
 #include "canvas_item.hpp"
 #include "skel_item.hpp"
@@ -133,4 +134,18 @@ void ui::canvas::manager::set_drag_mode(drag_mode dm) {
 }
 void ui::canvas::manager::set_active_canvas(const scene&) {
     // There is only one canvas.
+}
+
+void ui::canvas::manager::show_animation_preview(sm::topology* topology) {
+    auto& scene = active_canvas();
+    scene.clear();
+    scene.artwork().set_preview_topology(topology);
+    if (topology) {
+        for (auto skel : topology->skeletons()) {
+            scene.insert_item(skel.get());
+            for (auto node : skel->nodes()) scene.insert_item(node.get());
+            for (auto bone : skel->bones()) scene.insert_item(bone.get());
+        }
+        scene.sync_to_model();
+    } else set_contents(*project_);
 }

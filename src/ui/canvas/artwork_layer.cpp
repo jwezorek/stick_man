@@ -138,7 +138,7 @@ std::vector<ui::canvas::artwork_layer::drawable> ui::canvas::artwork_layer::draw
         std::map<std::string, std::string> states;
         for (const auto& [slot, _] : project_.core().artwork(id).slot_definitions())
             states.emplace(slot, preview_state(id, slot));
-        for (auto sprite : project_.core().resolve_artwork(id, name, states)) {
+        for (auto sprite : project_.core().resolve_artwork(id, name, states, preview_topology_)) {
             sprite_selection selection{id, name, sprite.slot};
             if (drag_ && drag_->selection == selection)
                 sprite.transform = sprite.bone_transform * local_matrix(drag_->preview, sprite.registration_origin);

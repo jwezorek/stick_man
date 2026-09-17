@@ -20,6 +20,7 @@ namespace ui {
 
     public:
         stick_man(QWidget* parent = Q_NULLPTR);
+        ~stick_man() override;
         void open();
         void save();
         void save_as();

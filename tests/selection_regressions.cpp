@@ -711,8 +711,8 @@ void run(const std::string& mode) {
             "Skeleton dock must no longer be a tab control");
         require(skeleton_dock->findChild<ui::pane::tree_view*>() != nullptr,
             "Skeleton dock lost the skeleton tree");
-        require(animation_dock->findChild<ui::pane::tree_view*>() != nullptr,
-            "Animation dock must own the animation skeleton stub");
+        require(animation_dock->findChild<QTreeWidget*>("animation_asset_tree") != nullptr,
+            "Animation dock must own the character animation asset browser");
     } else if (mode == "clipboard") {
         f.select_both();
         ui::clipboard::copy(f.window);
