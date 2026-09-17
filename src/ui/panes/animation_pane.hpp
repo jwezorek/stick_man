@@ -7,16 +7,16 @@
 namespace mdl { class project; }
 namespace ui { namespace canvas { class manager; } class timeline; }
 namespace ui::pane {
+    class animation_timeline;
     class animation : public QDockWidget {
         Q_OBJECT
         mdl::project* project_ = nullptr;
         canvas::manager* canvases_ = nullptr;
         QTreeWidget* tree_;
         QPushButton *pose_button_, *animation_button_, *delete_button_;
-        QDockWidget* timeline_pane_ = nullptr;
+        animation_timeline* timeline_pane_ = nullptr;
         QWidget* banner_ = nullptr;
         QLabel* banner_label_ = nullptr;
-        ui::timeline* timeline_ = nullptr;
         std::unique_ptr<sm::topology> working_;
         sm::object_id active_character_, active_animation_;
         std::vector<std::pair<QPointer<QWidget>, bool>> enabled_before_;

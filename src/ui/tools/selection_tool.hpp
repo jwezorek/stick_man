@@ -66,6 +66,12 @@ namespace ui {
             void pin_selection();
 
         public:
+            struct animation_input {
+                std::function<void(QPointF)> press, move, release;
+                std::function<void()> cancel;
+            };
+            void set_animation_input(std::optional<animation_input> input);
+            void keyPressEvent(canvas::scene& c, QKeyEvent* event) override;
 
             select();
             void activate(canvas::manager& c) override;
@@ -77,6 +83,8 @@ namespace ui {
             void deactivate(canvas::manager& c) override;
             QWidget* settings_widget() override;
             void init(canvas::manager& canvases, mdl::project& model) override;
+        private:
+            std::optional<animation_input> animation_input_;
         };
     }
 

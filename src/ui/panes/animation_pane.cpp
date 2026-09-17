@@ -1,4 +1,5 @@
 #include "animation_pane.hpp"
+#include "animation_timeline.hpp"
 #include "../widgets/timeline.hpp"
 #include "../canvas/canvas_manager.hpp"
 #include "../canvas/skel_item.hpp"
@@ -58,16 +59,9 @@ void ui::pane::animation::init(canvas::manager& canvases, mdl::project& project)
     connect(&project,&mdl::project::new_project_opened,this,[this] { leave_animation(); refresh(); });
     connect(&canvases,&canvas::manager::selection_changed,this,&animation::update_buttons);
     auto* window = qobject_cast<QMainWindow*>(parentWidget());
-    timeline_pane_ = new QDockWidget("Animation Timeline",window); timeline_pane_->setObjectName("animation_timeline_pane");
-    timeline_pane_->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-    auto* content = new QWidget; auto* layout = new QVBoxLayout(content);
-    auto* controls = new QWidget; auto* bar = new QHBoxLayout(controls); bar->setContentsMargins(0,0,0,0);
-    for (const auto& label : {"Start", "Play", "Stop", "Record"}) bar->addWidget(new QPushButton(label));
-    auto* speed = new QComboBox; speed->addItems({"0.25x", "0.5x", "1x", "2x"}); speed->setCurrentIndex(2);
-    bar->addWidget(new QLabel("Recording speed")); bar->addWidget(speed); bar->addStretch(); controls->setEnabled(false);
-    layout->addWidget(controls); timeline_ = new ui::timeline; timeline_->setEnabled(false); timeline_->set_rows(0); layout->addWidget(timeline_);
-    layout->addWidget(new QLabel("Empty animation — action editing and playback will be added in a later stage."));
-    timeline_pane_->setWidget(content); window->addDockWidget(Qt::BottomDockWidgetArea,timeline_pane_); timeline_pane_->hide();
+    auto* editor_window = qobject_cast<ui::stick_man*>(parentWidget());
+    timeline_pane_ = new animation_timeline(project, canvases, editor_window->tool_mgr(), window);
+    window->addDockWidget(Qt::BottomDockWidgetArea,timeline_pane_); timeline_pane_->hide();
     banner_ = new QWidget(window->centralWidget()); banner_->setObjectName("animation_mode_banner");
     banner_->setStyleSheet("#animation_mode_banner { background: #504465; border-radius: 4px; } QLabel { color: white; }");
     auto* banner_layout = new QHBoxLayout(banner_); banner_label_ = new QLabel; banner_layout->addWidget(banner_label_); banner_layout->addStretch();
@@ -225,9 +219,6 @@ bool ui::pane::animation::open_animation(sm::object_id cid, sm::object_id aid) {
     if (!base || !sm::pose_compatible(*base,project_->topology(),c->get().rig().skeleton_ids())) {
         QMessageBox::warning(this,"Cannot open animation","The base pose no longer matches the rig. Update the pose before opening this animation."); return false;
     }
-    if (a->duration() != 0) {
-        QMessageBox::information(this,"Animation preview","This stage supports opening empty animations only."); return false;
-    }
     auto working = std::make_unique<sm::topology>();
     for (auto s : c->get().rig().skeletons()) if (!s->copy_to(*working)) return false;
     for (auto s : working->skeletons()) {
@@ -243,17 +234,18 @@ bool ui::pane::animation::open_animation(sm::object_id cid, sm::object_id aid) {
     project_->set_animation_mode(true);
     auto lock = [this](QWidget* w) { enabled_before_.emplace_back(w,w->isEnabled()); w->setEnabled(false); };
     auto* main = qobject_cast<QMainWindow*>(parentWidget());
-    lock(canvases_); lock(main->menuBar());
+    lock(main->menuBar());
     for (auto* dock : main->findChildren<QDockWidget*>()) if (dock != timeline_pane_) lock(dock);
     for (auto* toolbar : main->findChildren<QToolBar*>()) lock(toolbar);
     banner_label_->setText(QString("Animation Mode — %1 / %2").arg(QString::fromStdString(c->get().name()),QString::fromStdString(a->name)));
-    banner_->show(); timeline_->set_head_time(0); timeline_->set_visible_range(0,5000); timeline_pane_->show();
+    banner_->show(); timeline_pane_->begin(cid,aid,*working_);
     refresh();
     if (auto* item = find_asset(aid)) { tree_->setCurrentItem(item); tree_->scrollToItem(item); }
     return true;
 }
 void ui::pane::animation::leave_animation() {
     if (!working_) return;
+    timeline_pane_->end();
     // Rebuild project-backed items before destroying their preview counterparts.
     canvases_->show_animation_preview(nullptr);
     working_.reset(); active_character_ = {}; active_animation_ = {};

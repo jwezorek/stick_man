@@ -26,6 +26,7 @@ namespace mdl {
         std::function<void(project&)> undo;
         // Only commands with ordinary user failures need to report an outcome.
         std::function<sm::result()> outcome;
+        bool animation_edit = false;
     };
     class project : public QObject {
 
@@ -35,6 +36,8 @@ namespace mdl {
 
         sm::project core_;
         bool animation_mode_ = false;
+        std::size_t animation_undo_depth_ = 0;
+        std::size_t animation_redo_count_ = 0;
         std::stack<command> redo_stack_;
         std::stack<command> undo_stack_;
         std::size_t next_node_name_ = 1;

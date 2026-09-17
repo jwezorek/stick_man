@@ -34,10 +34,11 @@ namespace {
 /*------------------------------------------------------------------------------------------------*/
 void mdl::project::clear_redo_stack() { redo_stack_ = {}; }
 sm::result mdl::project::execute_command(const command& cmd) {
-    if (animation_mode_) return sm::result::invalid_membership;
+    if (animation_mode_ && !cmd.animation_edit) return sm::result::invalid_membership;
     cmd.redo(*this);
     if (cmd.outcome && cmd.outcome() != sm::result::success) return cmd.outcome();
     clear_redo_stack();
+    animation_redo_count_ = 0;
     undo_stack_.push(cmd);
     emit refresh_undo_redo_state(can_redo(), can_undo());
     emit project_changed(*this);
@@ -107,6 +108,7 @@ void mdl::project::undo() {
     undo_stack_.pop();
     cmd.undo(*this);
     redo_stack_.push(cmd);
+    if (animation_mode_) ++animation_redo_count_;
     emit refresh_undo_redo_state(can_redo(), can_undo());
     emit project_changed(*this);
 }
@@ -115,17 +117,23 @@ sm::result mdl::project::redo() {
         return sm::result::success;
     }
     auto cmd = redo_stack_.top();
-    if (animation_mode_) return sm::result::invalid_membership;
+    if (animation_mode_ && !cmd.animation_edit) return sm::result::invalid_membership;
     cmd.redo(*this);
     if (cmd.outcome && cmd.outcome() != sm::result::success) return cmd.outcome();
     redo_stack_.pop();
+    if (animation_mode_) --animation_redo_count_;
     undo_stack_.push(cmd);
     emit refresh_undo_redo_state(can_redo(), can_undo());
     emit project_changed(*this);
     return sm::result::success;
 }
-bool mdl::project::can_undo() const { return !animation_mode_ && !undo_stack_.empty(); }
-bool mdl::project::can_redo() const { return !animation_mode_ && !redo_stack_.empty(); }
+bool mdl::project::can_undo() const {
+    return !undo_stack_.empty() && (!animation_mode_ ||
+        (undo_stack_.size() > animation_undo_depth_ && undo_stack_.top().animation_edit));
+}
+bool mdl::project::can_redo() const {
+    return !redo_stack_.empty() && (!animation_mode_ || (animation_redo_count_ > 0 && redo_stack_.top().animation_edit));
+}
 std::expected<sm::project_buffer, sm::project_result> mdl::project::serialize() const {
     return core_.serialize();
 }
@@ -353,16 +361,17 @@ bool mdl::identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2) {
 }
 
 void mdl::project::set_animation_mode(bool active) {
+    if (active && !animation_mode_) animation_undo_depth_ = undo_stack_.size();
+    if (active && !animation_mode_) animation_redo_count_ = 0;
     animation_mode_ = active;
     emit refresh_undo_redo_state(can_redo(), can_undo());
 }
 void mdl::project::edit_animation_data(sm::object_id id, const std::function<void(sm::animation_assets&)>& edit) {
-    if (animation_mode_) return;
     auto before = core_.animation_data(id), after = before;
     edit(after);
     after.validate();
     execute_command({[id, after](project& p) { p.core_.animation_data(id) = after; },
-        [id, before](project& p) { p.core_.animation_data(id) = before; }});
+        [id, before](project& p) { p.core_.animation_data(id) = before; }, {}, true});
 }
 void mdl::project::apply_pose(sm::object_id character, sm::object_id id) {
     if (animation_mode_) return;

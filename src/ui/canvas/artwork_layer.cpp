@@ -274,6 +274,7 @@ bool ui::canvas::artwork_layer::begin_transform(QPointF position, sprite_drag mo
     return begin_transform(position, transform_target{*hit, mode});
 }
 bool ui::canvas::artwork_layer::begin_transform(QPointF position, const transform_target& target) {
+    if (project_.animation_mode()) return false;
     if (auto* character = scene_.character_item(target.selection.character)) scene_.set_selection(character, true);
     set_active_appearance(target.selection.character, target.selection.appearance);
     set_selected_slot(target.selection.character, target.selection.slot);
@@ -360,6 +361,7 @@ void ui::canvas::artwork_layer::assign_frame(const sm::object_id& character, con
     set_active_appearance(character,name); set_selected_slot(character,channel);
 }
 bool ui::canvas::artwork_layer::can_drop(const QMimeData* mime, QPointF position) const {
+    if (project_.animation_mode()) return false;
     auto data = parse_drag(mime); auto* bone = bone_at(scene_,position);
     if (!data || !bone || !project_.core().character(data->character)) return false;
     auto parent = bone->model().owner().parent_character();

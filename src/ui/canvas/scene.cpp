@@ -203,6 +203,10 @@ void ui::canvas::scene::drawForeground(QPainter* painter, const QRectF& rect) {
 }
 
 void ui::canvas::scene::focusOutEvent(QFocusEvent* focusEvent) {
+    if (manager().preview_active()) {
+        QKeyEvent cancel(QEvent::KeyPress,Qt::Key_Escape,Qt::NoModifier);
+        inp_handler_.keyPressEvent(*this,&cancel);
+    }
     if (bone_pick_active()) cancel_bone_pick();
     if (artwork_) artwork_->cancel_transform();
     if (is_status_line_visible()) {
@@ -442,7 +446,7 @@ void ui::canvas::scene::sync_selection() {
         itm->set_selected(selected);
     }
     if (artwork_) artwork_->refresh_guides();
-    emit manager().selection_changed(*this);
+    if (!manager().preview_active()) emit manager().selection_changed(*this);
 }
 
 QGraphicsView& ui::canvas::scene::view() {
@@ -702,7 +706,7 @@ void ui::canvas::scene::keyPressEvent(QKeyEvent* event) {
         event->accept();
         return;
     }
-    if (artwork_ && artwork_->transform_editing()) {
+    if (artwork_ && artwork_->transform_editing() && !manager().preview_active()) {
         if (event->key() == Qt::Key_Escape) artwork_->cancel_transform();
         event->accept();
         return;
@@ -715,7 +719,7 @@ void ui::canvas::scene::keyReleaseEvent(QKeyEvent* event) {
         event->accept();
         return;
     }
-    if (artwork_ && artwork_->transform_editing()) {
+    if (artwork_ && artwork_->transform_editing() && !manager().preview_active()) {
         event->accept();
         return;
     }
@@ -733,7 +737,7 @@ void ui::canvas::scene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
         event->accept();
         return;
     }
-    if (artwork_ && artwork_->transform_editing()) {
+    if (artwork_ && artwork_->transform_editing() && !manager().preview_active()) {
         if (event->button() == Qt::LeftButton) artwork_->begin_transform(event->scenePos());
         event->accept();
         return;
@@ -747,7 +751,7 @@ void ui::canvas::scene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
         event->accept();
         return;
     }
-    if (artwork_ && artwork_->transform_editing()) {
+    if (artwork_ && artwork_->transform_editing() && !manager().preview_active()) {
         artwork_->update_transform(event->scenePos());
         event->accept();
         return;
@@ -760,7 +764,7 @@ void ui::canvas::scene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
         event->accept();
         return;
     }
-    if (artwork_ && artwork_->transform_editing()) {
+    if (artwork_ && artwork_->transform_editing() && !manager().preview_active()) {
         if (event->button() == Qt::LeftButton) artwork_->end_transform(event->scenePos());
         event->accept();
         return;
@@ -773,7 +777,7 @@ void ui::canvas::scene::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
         event->accept();
         return;
     }
-    if (artwork_ && artwork_->transform_editing()) {
+    if (artwork_ && artwork_->transform_editing() && !manager().preview_active()) {
         event->accept();
         return;
     }

@@ -25,6 +25,7 @@ ui::tool::manager::manager() :
 }
 
 void ui::tool::manager::init(canvas::manager& canvases, mdl::project& model) {
+    project_ = &model;
     for (auto& tool : tool_registry_) {
         tool->init(canvases, model);
     }
@@ -105,6 +106,7 @@ const ui::tool::base& ui::tool::manager::tool_from_id(id id) const {
 }
 
 void ui::tool::manager::set_current_tool(canvas::manager& canvases, id id) {
+    if (project_ && project_->animation_mode() && id != id::selection && id != id::pan && id != id::zoom) return;
     int new_tool_index = index_from_id(id);
     if (new_tool_index == curr_item_index_) {
         return;
@@ -122,4 +124,8 @@ void ui::tool::manager::set_current_tool(canvas::manager& canvases, id id) {
 int ui::tool::manager::index_from_id(id id) const {
     auto iter = r::find_if(tool_registry_, [id](const auto& t) {return id == t->id(); });
     return std::distance(tool_registry_.begin(), iter);
+}
+
+ui::tool::base& ui::tool::manager::tool_from_id(id id) {
+    return const_cast<base&>(std::as_const(*this).tool_from_id(id));
 }

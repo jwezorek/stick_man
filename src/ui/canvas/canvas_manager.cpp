@@ -44,6 +44,7 @@ void ui::canvas::manager::init(mdl::project& proj) {
     project_ = &proj;
     connect(&proj, &mdl::project::project_changed, this, [this](mdl::project& model) {
         active_canvas().sync_to_model();
+        if (preview_active_) return;
         emit canvas_refresh(model.core());
         active_canvas().sync_selection();
     });
@@ -137,6 +138,7 @@ void ui::canvas::manager::set_active_canvas(const scene&) {
 }
 
 void ui::canvas::manager::show_animation_preview(sm::topology* topology) {
+    preview_active_ = topology != nullptr;
     auto& scene = active_canvas();
     scene.clear();
     scene.artwork().set_preview_topology(topology);

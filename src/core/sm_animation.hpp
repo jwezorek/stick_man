@@ -62,6 +62,14 @@ namespace sm {
     void initialize_animation_assets(animation_assets& assets, const topology& topology, const std::vector<object_id>& skeletons);
     void apply_pose(const pose& pose, const topology& topology);
     bool pose_compatible(const pose& pose, const topology& topology, const std::vector<object_id>& skeletons);
+    struct animation_evaluation {
+        std::vector<object_id> invalid_actions;
+        std::vector<object_id> unsupported_actions;
+    };
+    // Linear rigid rotations only in this phase. Always resets detached working geometry
+    // to the base pose; never integrate from the previously displayed frame.
+    animation_evaluation evaluate_animation(const animation& animation, const pose& base,
+        topology& working, animation_time time);
     nlohmann::json animation_assets_to_json(const animation_assets& assets);
     animation_assets animation_assets_from_json(const nlohmann::json& json);
 }

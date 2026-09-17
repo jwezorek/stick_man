@@ -473,6 +473,7 @@ void ui::tool::select::activate(canvas::manager& canv_mgr) {
 void ui::tool::select::keyReleaseEvent(canvas::scene& c, QKeyEvent* event) {}
 
 void ui::tool::select::mousePressEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
+    if (animation_input_) { if (event->button() == Qt::LeftButton) animation_input_->press(event->scenePos()); return; }
     click_pt_ = event->scenePos();
 }
 
@@ -673,6 +674,7 @@ void ui::tool::select::pin_selection() {
     }
 }
 void ui::tool::select::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
+    if (animation_input_) { animation_input_->move(event->scenePos()); return; }
     QPointF pt = event->scenePos();
     if (is_dragging()) {
         do_dragging(canv, pt);
@@ -684,6 +686,7 @@ void ui::tool::select::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEv
     }
 }
 void ui::tool::select::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
+    if (animation_input_) { if (event->button() == Qt::LeftButton) animation_input_->release(event->scenePos()); return; }
     // A fast gesture may deliver few (or no) move events. Finish at the actual release point.
     if (click_pt_ && (is_dragging() || distance(*click_pt_, event->scenePos()) > 3.0)) {
         do_dragging(canv, event->scenePos());
@@ -812,6 +815,7 @@ void ui::tool::select::handle_select_drag(canvas::scene& canv, QRectF rect, bool
     select_topology(canv, clicked_items, shift_down, ctrl_down);
 }
 void ui::tool::select::deactivate(canvas::manager& canv_mgr) {
+    if (animation_input_) animation_input_->cancel();
     canv_mgr.set_drag_mode(ui::canvas::drag_mode::none);
 }
 
@@ -825,4 +829,28 @@ QWidget* ui::tool::select::settings_widget() {
         );
     }
     return settings_panel_;
+}
+
+void ui::tool::select::set_animation_input(std::optional<animation_input> input) {
+    if (animation_input_) animation_input_->cancel();
+    if (drag_) {
+        const node_locs* old = nullptr;
+        if (auto* rotation = std::get_if<rotation_state>(&drag_->extra)) old = &rotation->old_node_locs();
+        if (auto* translation = std::get_if<translation_state>(&drag_->extra)) old = &translation->old_locs;
+        if (old) for (const auto& [id, pt] : *old)
+            if (auto node = project_->topology().get<sm::node>(id)) node->get().set_world_pos(pt);
+        destroy_rubber_band(canvases_->active_canvas(), drag_->rubber_band);
+        drag_.reset();
+    }
+    click_pt_.reset();
+    animation_input_ = std::move(input);
+}
+void ui::tool::select::keyPressEvent(canvas::scene& c, QKeyEvent* event) {
+    if (animation_input_) {
+        if (event->key() == Qt::Key_Escape) animation_input_->cancel();
+        if (event->matches(QKeySequence::Undo)) { animation_input_->cancel(); project_->undo(); }
+        if (event->matches(QKeySequence::Redo)) { animation_input_->cancel(); project_->redo(); }
+        return;
+    }
+    base::keyPressEvent(c, event);
 }
