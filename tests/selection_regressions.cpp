@@ -461,7 +461,7 @@ void character_test(fixture& f, const std::string& mode) {
         require(frame->pen().color() == QColor(133, 77, 181), "character frame must be purple");
         for (auto* button : f.tool.settings_widget()->findChildren<QAbstractButton*>())
             if (button->text() == "drag behaviors on" || button->text() == "rag doll mode") button->setChecked(true);
-        ui::canvas::item_from_model<ui::canvas::item::node>(f.skeleton(f.second).root_node()).set_pinned(true);
+        f.canvas().set_node_pinned(f.skeleton(f.second).root_node().id(), true);
         f.drag({0, 0}, {30, 30});
         require(sm::distance(f.skeleton(f.first).root_node().world_pos(), {30, 30}) < .001 &&
             sm::distance(f.skeleton(f.second).root_node().world_pos(), {230, 30}) < .001,
@@ -731,6 +731,21 @@ void run(const std::string& mode) {
         require(f.window.project().topology().empty(), "cut must remove both skeletons");
         ui::clipboard::paste(f.window, true);
         require(std::ranges::distance(f.window.project().topology().skeletons()) == 2, "cut clipboard must contain both skeletons");
+    } else if (mode == "pin_state") {
+        auto id = f.skeleton(f.first).root_node().id();
+        f.canvas().set_node_pinned(id, true);
+        require(f.canvas().is_node_pinned(id), "scene must own semantic pin state by node id");
+        require(ui::canvas::item_from_model<ui::canvas::item::node>(f.skeleton(f.first).root_node()).pin_visible(),
+            "pinning through the scene must update the node indicator");
+
+        emit f.window.project().refresh_canvas(f.window.project(), true);
+        require(f.canvas().is_node_pinned(id), "canvas rebuild must preserve pin state for the same node id");
+        require(ui::canvas::item_from_model<ui::canvas::item::node>(f.skeleton(f.first).root_node()).pin_visible(),
+            "recreated node item must initialize its pin indicator from scene state");
+
+        f.canvas().set_selection(f.item(f.first), true);
+        ui::clipboard::del(f.window);
+        require(!f.canvas().is_node_pinned(id), "deleted nodes must be pruned from scene pin state");
     } else if (mode == "drag") {
         f.select_both();
         auto* panel = f.tool.settings_widget();

@@ -6,7 +6,7 @@ target_link_libraries(selection_regressions PRIVATE stick_man_ui)
 set_target_properties(selection_regressions PROPERTIES AUTORCC ON)
 
 foreach(case IN ITEMS
-    rectangle partial modifiers tree clipboard drag rubber_band_directions fast_release release_endpoint pane_structure
+    rectangle partial modifiers tree clipboard drag pin_state rubber_band_directions fast_release release_endpoint pane_structure
     character_hierarchy character_commands character_pane character_inference character_drag
     character_artwork character_artwork_phase2 character_artwork_phase3 character_clipboard
     character_delete character_actions character_error

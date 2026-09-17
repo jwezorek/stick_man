@@ -72,6 +72,7 @@ namespace ui {
             constexpr static auto k_grid_line_spacing = 10;
             QString status_line_;
             selection_set selection_;
+            std::unordered_set<sm::object_id> pinned_node_ids_;
             tool::input_handler& inp_handler_;
             item::rubber_band* rubber_band_;
             std::optional<int> zoom_level_;
@@ -148,6 +149,11 @@ namespace ui {
             std::vector<sm::const_skel_ref> loose_selection() const;
             std::vector<item::bone*> selected_bones() const;
             std::vector<item::node*> selected_nodes() const;
+
+            const std::unordered_set<sm::object_id>& pinned_node_ids() const;
+            bool is_node_pinned(const sm::object_id& id) const;
+            void set_node_pinned(const sm::object_id& id, bool pinned);
+            void toggle_node_pinned(const sm::object_id& id);
 
             bool is_status_line_visible() const;
 

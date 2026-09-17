@@ -31,7 +31,7 @@ namespace {
 
 ui::canvas::item::node::node(sm::node& node, double scale) :
     has_stick_man_model<ui::canvas::item::node, sm::node&>(node),
-    is_pinned_(false),
+    pin_visible_(false),
     pin_(nullptr) {
     auto inv_scale = 1.0 / scale;
     setBrush(Qt::white);
@@ -40,24 +40,23 @@ ui::canvas::item::node::node(sm::node& node, double scale) :
     setZValue(k_node_zorder);
 }
 
-void ui::canvas::item::node::set_pinned(bool pinned) {
-    if (!pin_) {
+void ui::canvas::item::node::set_pin_visible(bool visible) {
+    if (!pin_ && visible) {
         pin_ = new QGraphicsEllipseItem();
         set_circle(pin_, { 0,0 }, k_pin_radius, 1.0 / canvas()->scale());
         pin_->setPen(Qt::NoPen);
         pin_->setBrush(Qt::black);
         pin_->setParentItem(this);
     }
-    if (pinned) {
-        pin_->show();
-    } else {
-        pin_->hide();
+    if (pin_) {
+        if (visible) pin_->show();
+        else pin_->hide();
     }
-    is_pinned_ = pinned;
+    pin_visible_ = visible;
 }
 
-bool ui::canvas::item::node::is_pinned() const {
-    return is_pinned_;
+bool ui::canvas::item::node::pin_visible() const {
+    return pin_visible_;
 }
 
 void ui::canvas::item::node::sync_item_to_model() {

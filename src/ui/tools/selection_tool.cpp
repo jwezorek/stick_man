@@ -80,13 +80,12 @@ namespace {
         }
         return -1;
     }
-    std::unordered_set<sm::node*> all_pinned_nodes(sm::node& start) {
-        using namespace ui::canvas;
+    std::unordered_set<sm::node*> all_pinned_nodes(sm::node& start, const ui::canvas::scene& canv) {
         std::unordered_set<sm::node*> pinned;
         sm::visit_nodes_and_bones(
             start,
-            [&pinned](sm::node& n)->sm::visit_result {
-                if (item_from_model<item::node>(n).is_pinned()) {
+            [&pinned, &canv](sm::node& n)->sm::visit_result {
+                if (canv.is_node_pinned(n.id())) {
                     pinned.insert(&n);
                 }
                 return sm::visit_result::continue_traversal;
@@ -97,7 +96,7 @@ namespace {
         );
         return pinned;
     }
-    bool has_pinned_nodes(mdl::skel_piece piece) {
+    bool has_pinned_nodes(mdl::skel_piece piece, const ui::canvas::scene& canv) {
         sm::node_ref start = std::visit(
             overload{
                 [](sm::node_ref node)->sm::node_ref {return node; },
@@ -109,7 +108,7 @@ namespace {
         bool found = false;
         sm::visit_nodes(start.get(),
             [&](sm::node& node)->sm::visit_result {
-                if (ui::canvas::item_from_model<ui::canvas::item::node>(node).is_pinned()) {
+                if (canv.is_node_pinned(node.id())) {
                     found = true;
                     return sm::visit_result::terminate_traversal;
                 }
@@ -119,8 +118,9 @@ namespace {
         );
         return found;
     }
-    std::tuple<sm::maybe_node_ref, int> find_closest_pinned_node(sm::node_ref start) {
-        auto pinned_nodes = all_pinned_nodes(start.get());
+    std::tuple<sm::maybe_node_ref, int> find_closest_pinned_node(
+        sm::node_ref start, const ui::canvas::scene& canv) {
+        auto pinned_nodes = all_pinned_nodes(start.get(), canv);
         std::unordered_map<sm::node*, int> visited;
         std::unordered_set<sm::node*> candidates;
         sm::visit_nodes_and_bones(
@@ -158,11 +158,12 @@ namespace {
         };
     }
     using node_pair = std::tuple<sm::node_ref, sm::node_ref>;
-    std::optional<node_pair> rot_info_for_rotate_on_pin(const mdl::skel_piece& model) {
+    std::optional<node_pair> rot_info_for_rotate_on_pin(
+        const mdl::skel_piece& model, const ui::canvas::scene& canv) {
         return std::visit(
             overload{
-                [](sm::node_ref node)->std::optional<node_pair> {
-                    auto [closest, dist] = find_closest_pinned_node(node);
+                [&canv](sm::node_ref node)->std::optional<node_pair> {
+                    auto [closest, dist] = find_closest_pinned_node(node, canv);
                     if (!closest) {
                         return {};
                     }
@@ -171,17 +172,14 @@ namespace {
                         node
                     }};
                 },
-                [](sm::bone_ref bone)->std::optional<node_pair> {
-                    using namespace ui::canvas;
+                [&canv](sm::bone_ref bone)->std::optional<node_pair> {
                     auto& u = bone->parent_node();
                     auto& v = bone->child_node();
-                    auto& item_u = item_from_model<item::node>(u);
-                    auto& item_v = item_from_model<item::node>(v);
-                    if (item_u.is_pinned() && item_v.is_pinned()) {
+                    if (canv.is_node_pinned(u.id()) && canv.is_node_pinned(v.id())) {
                         return { {u, v} };
                     }
-                    auto [closest_to_u, u_dist] = find_closest_pinned_node(u);
-                    auto [closest_to_v, v_dist] = find_closest_pinned_node(v);
+                    auto [closest_to_u, u_dist] = find_closest_pinned_node(u, canv);
+                    auto [closest_to_v, v_dist] = find_closest_pinned_node(v, canv);
                     if (!closest_to_u && !closest_to_v) {
                         return {};
                     }
@@ -452,7 +450,7 @@ namespace {
     }
     std::vector<sm::node_ref> pinned_nodes_for_translation(ui::canvas::scene& canv) {
         return canv.node_items() | rv::filter(
-            [](auto* node) { return node->is_pinned(); }
+            [&canv](auto* node) { return canv.is_node_pinned(node->model().id()); }
         ) | rv::transform(
             [](auto* node)->sm::node_ref { return node->model();  }
         ) | r::to<std::vector>();
@@ -587,7 +585,7 @@ std::optional<ui::tool::rotation_state> ui::tool::select::create_rotation_state(
 
     if (dynamic_cast<canvas::item::character*>(item)) return {};
     auto model = item->to_skeleton_piece();
-    if (!settings.rotate_on_pinned_ || !has_pinned_nodes(model)) {
+    if (!settings.rotate_on_pinned_ || !has_pinned_nodes(model, canv)) {
         auto parent_bone = std::visit(
             overload{
                 [](sm::node_ref node)->sm::maybe_bone_ref {
@@ -613,7 +611,7 @@ std::optional<ui::tool::rotation_state> ui::tool::select::create_rotation_state(
         );
     }
     else {
-        auto nodes = rot_info_for_rotate_on_pin(model);
+        auto nodes = rot_info_for_rotate_on_pin(model, canv);
         if (!nodes) {
             return {};
         }
@@ -671,8 +669,7 @@ void ui::tool::select::pin_selection() {
         return;
     }
     for (auto* selected_node_item : nodes) {
-        auto pinned = selected_node_item->is_pinned();
-        selected_node_item->set_pinned(!pinned);
+        canvas.toggle_node_pinned(selected_node_item->model().id());
     }
 }
 void ui::tool::select::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
@@ -749,7 +746,7 @@ void ui::tool::select::handle_translation(canvas::scene& c, QPointF pt, translat
                 skel,
                 delta,
                 state.moving,
-                all_pinned_nodes(skel->root_node())
+                all_pinned_nodes(skel->root_node(), c)
             );
         }
         break;
@@ -770,12 +767,7 @@ void ui::tool::select::handle_click(
         if (!clicked_node) {
             return;
         }
-        if (!clicked_node->is_pinned()) {
-            clicked_node->set_pinned(true);
-        }
-        else {
-            clicked_node->set_pinned(false);
-        }
+        canv.toggle_node_pinned(clicked_node->model().id());
         return;
     }
     select_topology(canv, {&clicked_item, 1}, shift_down, ctrl_down);

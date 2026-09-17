@@ -245,6 +245,12 @@ void ui::canvas::scene::sync_to_model() {
 
 void ui::canvas::scene::set_contents(mdl::project& model) {
 
+    std::unordered_set<sm::object_id> current_node_ids;
+    for (auto skel : model.topology().skeletons()) {
+        for (auto node : skel->nodes()) current_node_ids.insert(node->id());
+    }
+    std::erase_if(pinned_node_ids_, [&](const auto& id) { return !current_node_ids.contains(id); });
+
     clear();
     for (auto character : model.core().characters()) addItem(new item::character(character.get()));
     for (auto skel_ref : model.topology().skeletons()) {
@@ -316,6 +322,30 @@ std::vector<ui::canvas::item::node*> ui::canvas::scene::selected_nodes() const {
     return to_vector_of_type<ui::canvas::item::node>(selection_);
 }
 
+const std::unordered_set<sm::object_id>& ui::canvas::scene::pinned_node_ids() const {
+    return pinned_node_ids_;
+}
+
+bool ui::canvas::scene::is_node_pinned(const sm::object_id& id) const {
+    return pinned_node_ids_.contains(id);
+}
+
+void ui::canvas::scene::set_node_pinned(const sm::object_id& id, bool pinned) {
+    if (pinned) pinned_node_ids_.insert(id);
+    else pinned_node_ids_.erase(id);
+
+    for (auto* node : node_items()) {
+        if (node->model().id() == id) {
+            node->set_pin_visible(pinned);
+            break;
+        }
+    }
+}
+
+void ui::canvas::scene::toggle_node_pinned(const sm::object_id& id) {
+    set_node_pinned(id, !is_node_pinned(id));
+}
+
 bool ui::canvas::scene::is_status_line_visible() const {
     return !status_line_.isEmpty();
 }
@@ -323,6 +353,7 @@ bool ui::canvas::scene::is_status_line_visible() const {
 ui::canvas::item::node* ui::canvas::scene::insert_item(sm::node& node) {
 	ui::canvas::item::node* ni;
 	addItem(ni = new item::node(node, scale()));
+    ni->set_pin_visible(is_node_pinned(node.id()));
 	return ni;
 }
 

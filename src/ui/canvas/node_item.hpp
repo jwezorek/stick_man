@@ -17,13 +17,13 @@ namespace ui {
                 QGraphicsItem* item_body() override;
                 mdl::const_skel_piece to_skeleton_piece() const override;
 
-                bool is_pinned_;
+                bool pin_visible_;
             public:
                 using model_type = sm::node;
 
                 node(sm::node& node, double scale);
-                void set_pinned(bool pinned);
-                bool is_pinned() const;
+                void set_pin_visible(bool visible);
+                bool pin_visible() const;
             };
         }
     }
