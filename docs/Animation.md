@@ -15,12 +15,13 @@ An animation consists of ordered animation layers containing timed actions. Each
 - has type-specific parameters;
 - has an easing function.
 
-Examples of actions include:
+The initial implementation deliberately defines only three action types:
 
-- rigidly rotating a bone around its root or tip;
-- rigidly rotating a node or portion of a skeleton around another node;
-- performing an IK rotation;
-- moving an IK target along a path.
+- **Rigid Rotation** — rigidly rotate a bone around its root or tip;
+- **Rigid Translation** — rigidly translate one or more complete skeletons;
+- **IK Translation** — move an effector target along an authored path while solving IK with action-local pins.
+
+Additional action types are expected later, for example IK rotation and other useful Selection-tool manipulation modes. The initial action vocabulary is intentionally small rather than an attempt to enumerate every eventual animation operation.
 
 Actions correspond closely to manipulations that can already be performed interactively with the editor's selection/manipulation tools.
 
@@ -95,7 +96,7 @@ struct pose
 {
     object_id id;
     std::string name;
-    // pose state keyed by persistent rig object IDs
+    std::unordered_map<object_id, point> node_positions;
 };
 
 struct animation
@@ -120,7 +121,7 @@ struct animation_action
 };
 ```
 
-The exact C++ representation is not decided by this document.
+The exact C++ representation may follow existing Core conventions, but the initial pose representation is resolved: a pose stores the position of each character-rig node keyed by persistent node ID.
 
 Action-specific data will likely be represented by a variant or equivalent value-semantic type.
 
@@ -147,6 +148,10 @@ Ready
 ```
 
 A pose is not an animation of zero duration and should not be represented as one.
+
+For the initial implementation, a pose is simply a snapshot of the positions of the character's rig nodes, keyed by persistent node ID. It does not duplicate the topology or attempt to encode a more abstract rotation hierarchy. Applying a pose restores those stored node positions to the corresponding nodes.
+
+This representation intentionally does not promise sophisticated survival across later topology edits. Persistent IDs make straightforward preservation possible where nodes survive, but editing a rig after authoring poses may make old poses incomplete or invalid. The system should surface obvious incompatibility rather than attempting elaborate automatic semantic migration.
 
 Conceptually:
 
@@ -382,72 +387,127 @@ final pose
 
 This makes evaluation deterministic while preserving meaningful ordering between interacting operations.
 
+### 6.2 Action intervals and animation duration
+
+An action occupies the half-open active interval:
+
+```text
+[start, end)
+end = start + duration
+```
+
+Initial actions must have a strictly positive duration. Zero-duration/step actions are not part of the initial model.
+
+At `time == end`, the action is no longer active; it is a completed action and contributes its full `u = 1` result. Completed actions continue contributing their final result at later times according to the layer-evaluation rules above. The half-open interval therefore defines the period during which the action is transitioning, not the lifetime of its resulting effect.
+
+The half-open convention also makes adjacent actions unambiguous: one action may end at exactly the time the next action in the same layer begins without the two being considered overlapping.
+
+Animation duration is not stored independently. `animation` exposes a member function that computes it from its actions:
+
+```cpp
+duration animation::duration() const;
+```
+
+Conceptually, the result is the maximum `action.start + action.duration` over every action in every layer, or zero for an animation with no actions. This avoids redundant duration state becoming stale.
+
 ---
 
 ## 7. Action Types
 
-The initial action vocabulary should reflect the kinds of skeleton manipulation already supported by the editor.
-
-The exact taxonomy may change as the current Selection-tool operations are factored into reusable manipulation primitives.
-
-### 7.1 Rigid Bone Rotation
-
-Rigidly rotate a bone and the appropriate affected structure around one of the bone's endpoints.
-
-Parameters include at least:
+The initial evaluator and editor support three fully defined action types:
 
 ```text
-bone
+Rigid Rotation
+Rigid Translation
+IK Translation
+```
+
+This is the minimum useful vocabulary, not a comprehensive taxonomy. Additional types such as IK rotation can be added later once their exact semantics and authoring workflow are needed.
+
+All actions are evaluated as operations on the pose entering their layer at the requested absolute animation time. They are not incrementally integrated from the previous playback frame.
+
+### 7.1 Rigid Rotation
+
+Rigid Rotation applies the same semantic operation as the Selection tool's ordinary rigid rotation mode.
+
+The action stores at least:
+
+```text
+target bone ID
 pivot = root | tip
-rotation amount
+total rotation angle
+```
+
+The pivot is one endpoint of the target bone. `root` and `tip` are semantic endpoint choices rather than an arbitrary world-space pivot.
+
+At normalized progress `u`:
+
+```text
+p = easing(u)
+applied rotation = total rotation angle * p
+```
+
+Evaluation resolves the target bone and selected endpoint in the working topology and applies the rigid bone-rotation operation to the incoming pose. Conceptually this is the same behavior as the current Selection-tool rigid call to `bone::rotate_by(..., pivot, false)`, including the existing constraint handling and propagation through the affected structure.
+
+The rotation is evaluated from the pose entering the action; it is not accumulated from previously rendered frames. At `u = 1`, the complete authored rotation is applied.
+
+If the target bone or required endpoint can no longer be resolved, the action is invalid and contributes nothing until repaired.
+
+---
+
+## 8. Rigid Translation
+
+Rigid Translation moves one or more complete skeletons by the same translation vector. It corresponds to the Selection tool's rigid translation behavior rather than rubber-band or ragdoll translation.
+
+The action stores at least:
+
+```text
+target skeleton ID(s)
+translation vector
 ```
 
 At normalized progress `u`:
 
 ```text
-applied rotation =
-    final rotation * eased(u)
+p = easing(u)
+applied translation = translation vector * p
 ```
 
-The affected geometry should match the corresponding interactive manipulation behavior.
+Each targeted skeleton is translated rigidly from its position in the pose entering the action. Relative geometry inside each skeleton is unchanged. Multiple targeted skeletons receive the same translation vector.
+
+Targeting every skeleton owned by a character provides ordinary whole-character translation. Targeting only one disconnected skeleton permits intentional independent rigid motion of that component.
+
+The translation vector is a displacement in the character/editor coordinate axes; it does not need the target-reference-frame machinery used by IK target paths.
+
+If a referenced skeleton no longer exists, the action is invalid rather than silently retargeted.
 
 ---
 
-## 8. Rigid Node Rotation
+## 9. Future Action Types
 
-Rotate selected skeleton geometry around another node.
+The initial action set is intentionally incomplete. Likely future action types include:
 
-Conceptually:
+- IK rotation;
+- other useful FK/Selection-tool rotation variants;
+- additional IK or multi-effector operations;
+- other manipulation semantics that prove useful in actual animation authoring.
 
-```text
-subject
-pivot node
-rotation amount
-```
-
-This should use the same operation available through direct manipulation rather than introducing an animation-specific version.
-
-The exact target representation remains to be determined.
-
----
-
-## 9. IK Rotation
-
-An IK rotation action applies the appropriate inverse-kinematics operation over time.
-
-Its exact parameterization has not yet been settled.
-
-The important requirement is:
-
-> Animation IK uses the same underlying solver and manipulation semantics as interactive IK editing.
-
-There should not be a second animation-only implementation of IK.
+Future actions should follow the same architectural rule: interactive editing and animation evaluation must share the underlying Core manipulation semantics rather than implementing animation-only geometry algorithms.
 
 ---
 
 ## 10. IK Translation
 
-IK translation moves an effector toward a target while solving the skeleton according to the existing IK rules, including pinned nodes where applicable.
+IK translation moves one effector toward a target while solving the skeleton according to the existing IK rules. Pins are explicit persistent parameters of the action rather than implicit canvas state.
+
+The action stores at least:
+
+```text
+effector node ID
+pinned node ID(s)
+target reference frame
+target path
+```
 
 The action describes the **target motion**, not interpolated joint angles.
 
@@ -603,6 +663,18 @@ Spline:
 The target-reference mode and, for `node`, the reference node are editable action properties.
 
 Exact numeric coordinates and path parameters may also be available through the action editor.
+
+### 10.6 Action-local pins
+
+Pins are explicit parameters of an IK Translation action. The action stores the persistent IDs of the nodes that are pinned for that solve.
+
+When an IK Translation action is created from an interactive gesture, the applicable pins are captured from the editor's current transient pin state and copied into the action. After creation, changing the editor's current pins does not silently change existing actions. Editing an action's pins is an explicit animation edit.
+
+During evaluation, each pinned node ID is resolved against the detached working topology. The pin's target position is the position that node has in the pose entering the action. The IK solve then holds those nodes at those positions while moving the effector toward the resolved target path position. Thus lower animation layers may move a node before the IK action is applied; the action pins that node where it arrives from those lower layers.
+
+Core FABRIK already accepts an explicit set of pinned nodes. Animation evaluation should use that API rather than depending on editor canvas items.
+
+The Selection tool's own pin state is transient editor interaction state and should likewise be represented by stable node IDs rather than being semantically owned by `node_item`. A node canvas item may render whether a node is pinned, but it should not be the authoritative source queried by manipulation algorithms. This allows the same pin IDs to resolve against either project topology or Animation Mode working topology.
 
 ## 11. Easing
 
@@ -1306,9 +1378,9 @@ The exact enum names can be finalized when the palette is chosen.
 The animation system can consistently map action types to palette entries:
 
 ```text
-Rigid Rotation -> one palette color
-IK Translation -> another palette color
-IK Rotation    -> another palette color
+Rigid Rotation   -> one palette color
+Rigid Translation -> another palette color
+IK Translation    -> another palette color
 ```
 
 The widget then owns the actual rendering values.
@@ -1834,9 +1906,9 @@ The Animation Timeline maps action types to generic timeline palette colors.
 For example:
 
 ```text
-Rigid Rotation -> timeline_color::blue
-IK Translation -> timeline_color::orange
-IK Rotation    -> timeline_color::green
+Rigid Rotation    -> timeline_color::blue
+Rigid Translation -> timeline_color::green
+IK Translation    -> timeline_color::orange
 ```
 
 The exact mapping will be selected with the final palette.
@@ -1845,6 +1917,7 @@ Action labels should be short and useful, for example:
 
 ```text
 Rotate Forearm
+Translate Character
 IK Hand
 IK Foot
 ```
@@ -1883,8 +1956,15 @@ The canvas should display editing geometry appropriate to the action.
 Display:
 
 - pivot;
-- affected element;
+- affected bone/structure;
 - rotation arc or equivalent guide.
+
+### Rigid translation
+
+Display:
+
+- affected skeleton(s);
+- translation handle/vector or equivalent guide.
 
 ### IK translation
 
@@ -1920,11 +2000,20 @@ Below these are action-specific controls.
 Example:
 
 ```text
-Rigid Bone Rotation
+Rigid Rotation
 
 Bone
 Pivot: Root / Tip
 Rotation
+```
+
+or:
+
+```text
+Rigid Translation
+
+Skeleton(s)
+Translation X / Y
 ```
 
 or:
@@ -1962,19 +2051,17 @@ Topology information such as:
 
 belongs to the character's rig.
 
-Pose information is stored against persistent object IDs.
-
-The exact pose-state representation remains an implementation detail, but the design should preserve this separation:
+Pose information is concrete and minimal: a pose stores node positions keyed by persistent node ID.
 
 ```text
 character rig
     defines what exists and its structural rules
 
 pose
-    defines how that rig is posed
+    stores positions for the rig nodes that existed when it was captured
 ```
 
-This distinction lets many rig edits propagate naturally to existing poses.
+This separation avoids duplicating topology inside poses. It does not imply that arbitrary later topology edits must preserve the meaning of previously captured poses.
 
 ---
 
@@ -1995,23 +2082,13 @@ Because poses and actions refer to stable object IDs, display-name changes requi
 
 ## 41. Adding Rig Elements
 
-A character may gain new nodes or bones after poses and animations already exist.
+A character may gain new nodes or bones after poses and animations already exist. Existing pose data has no historical position for a newly created node.
 
-Existing pose data has no historical state for a newly created object.
+The initial implementation does not need to synthesize that history or automatically migrate every saved pose. Older poses may therefore become incomplete and require the user to update/recapture them after structural rig edits.
 
-The recommended policy is:
-
-> When a new rig element is added, its current authored state is seeded into every existing pose of that character.
-
-For example, if a tail is added while the character is currently standing, each existing pose initially receives the tail in the configuration in which it was created.
-
-The animator can subsequently update individual poses as desired.
+The built-in Default pose should remain usable, so newly added nodes can be seeded into Default from their current authored positions as part of the structural edit. Other named poses need not be modified automatically.
 
 Existing animations contain no actions for the new element unless the user creates them.
-
-The new element therefore follows ordinary rig behavior until explicitly animated.
-
-This is preferable to making every existing pose immediately "broken" whenever a character gains detail.
 
 ---
 
@@ -2021,11 +2098,11 @@ Deleting a node or bone is more consequential.
 
 ### 42.1 Poses
 
-Pose state belonging only to deleted object IDs can be removed as part of the same project edit.
+Pose state is stored as node positions keyed by persistent node ID. Pose entries for deleted nodes can be removed as part of the same project edit, while positions for surviving node IDs remain associated with those nodes.
 
-Surviving pose data remains associated with surviving IDs.
+The initial design does not attempt sophisticated pose migration across topology edits. Adding, deleting, reconnecting, or substantially restructuring a rig after poses have been authored may make those poses incomplete or invalid. This is an accepted consequence of editing the rig after authoring dependent animation data.
 
-Undoing the topology deletion should restore both the rig object and its pose data as part of the same undoable operation.
+Undoing the topology deletion should restore both the rig object and any pose entries removed by that edit as part of the same undoable operation.
 
 ### 42.2 Actions
 
@@ -2083,22 +2160,13 @@ should be surfaced as an invalid action rather than producing undefined behavior
 
 ## 44. Bone Length and Constraint Changes
 
-Bone lengths and constraints belong to the rig rather than to individual poses.
+Bone lengths and constraints belong to the rig rather than to individual poses. A stored pose, however, is deliberately concrete: it stores node positions.
 
-Changing them therefore changes the structural context in which old poses and animations are interpreted.
+Changing bone lengths, constraints, or topology after poses/animations have been authored may therefore make older pose positions incompatible with the current rig. The initial system does not need an elaborate semantic migration algorithm that tries to preserve inferred historical rotations or intentions.
 
-The system should prefer preserving semantic pose information where possible rather than storing obsolete copies of old rig geometry.
+Core/editor validation should detect obvious incompatibility where practical. The normal repair workflow may simply be to edit the rig/pose and explicitly recapture or replace the affected pose.
 
-For example:
-
-- changing a bone length should allow poses to retain their intended orientation while world-space endpoints move according to the new length;
-- changing a constraint may make an old pose or action impossible to reproduce exactly.
-
-After a structural/constraint edit, Core should be able to validate affected poses and animations.
-
-If a stored pose cannot be represented legally under the new rig constraints, it should be marked as needing attention rather than silently discarded.
-
-The exact pose-repair mechanism can be determined once the concrete pose representation is finalized.
+This keeps pose persistence simple and makes the cost of structural edits after animation authoring explicit rather than hiding it behind unpredictable automatic retargeting.
 
 ---
 
@@ -2125,11 +2193,11 @@ surface compatibility problems
 Validation should detect at least:
 
 - missing target IDs;
-- missing pivot IDs;
-- missing IK effectors;
+- missing target bone or skeleton IDs;
+- missing IK effectors or reference nodes;
 - missing pinned nodes;
 - impossible/disconnected IK chains;
-- pose data incompatible with current rig constraints.
+- pose node IDs or stored positions that are incompatible with the current rig.
 
 This should be centralized rather than having individual UI components discover corruption opportunistically.
 
@@ -2169,22 +2237,33 @@ Because every animation has a valid base pose and the built-in Default cannot be
 
 The animation system should not duplicate skeleton-manipulation algorithms already used by the Selection tool.
 
-Operations such as:
+The initial shared manipulation surface must cover at least:
 
-- rigid rotation;
-- rotation about an endpoint;
-- rigid translation;
-- IK rotation;
-- IK translation;
-- pinned-node handling;
+- rigid rotation about a bone root or tip;
+- rigid translation of complete skeletons;
+- IK translation with an explicit effector and explicit pinned nodes.
 
-should ultimately be expressed through reusable manipulation primitives.
+Additional primitives can be added as future action types such as IK rotation are introduced.
 
-The Selection tool can invoke these operations immediately during ordinary editing.
-
-Animation evaluation can invoke the same operations at an action's current normalized time.
+The Selection tool can invoke these operations immediately during ordinary editing. Animation evaluation can invoke the same operations at an action's current normalized time.
 
 This ensures interactive posing and animation have the same geometric behavior.
+
+### 48.1 Selection pin-state ownership
+
+The existing editor implementation should be refactored so that pin membership is not semantically owned by `ui::canvas::item::node`. Pin state is transient editor interaction state keyed by persistent node ID.
+
+A canvas node item may continue to draw the visual pin indicator, but Selection/IK logic should query an ID-based pin set rather than discovering pins by traversing model nodes and asking their canvas items whether they are pinned.
+
+This refactor is specifically intended to make pin semantics independent of which topology instance is being manipulated:
+
+```text
+normal editing       -> resolve pin IDs in project topology
+Animation Mode       -> resolve the same pin IDs in working topology
+IK action evaluation -> resolve the action's stored pin IDs in working topology
+```
+
+Creating an IK Translation action snapshots the relevant current editor pin IDs into that action. Existing actions do not inherit later changes to transient editor pin state.
 
 ---
 
@@ -2228,7 +2307,7 @@ Poses and animations belong to character/project data and must be serialized as 
 
 Serialized character semantic data includes the designated character-root node ID.
 
-Serialized pose data needs to contain enough pose state, keyed through stable IDs, to reproduce the pose against the character rig.
+Serialized pose data contains node positions keyed by persistent node ID.
 
 Serialized animation data includes at least:
 
@@ -2273,10 +2352,11 @@ Core should own:
 - Default and named pose semantic data;
 - animation semantic data;
 - animation layers and ordering;
-- action types and parameters;
+- the initial Rigid Rotation, Rigid Translation, and IK Translation action types and parameters;
 - easing definitions;
 - deterministic animation evaluation against detached working topology;
 - target-reference resolution using character root/current node positions;
+- IK evaluation using action-local pinned node IDs;
 - pose/action reference validation;
 - rig-change compatibility rules that affect semantic data;
 - manipulation algorithms needed by evaluation;
@@ -2385,37 +2465,7 @@ These can be reconsidered as actual use cases arise.
 
 ## 55. Open Design Questions
 
-The following details remain unresolved.
-
-### Pose state representation
-
-What exact minimal rig state does a pose store so that:
-
-- bone-length changes remain meaningful;
-- root translations are preserved;
-- constraints can be validated;
-- topology is not duplicated?
-
-### Invalid pose repair
-
-When changed rig constraints make an old pose illegal, what exact UI and Core operation repairs it?
-
-### IK rotation
-
-What is the exact stored representation and evaluation rule for an IK rotation action?
-
-### Action taxonomy
-
-Which current Selection-tool manipulation modes deserve distinct action types, and which should instead be parameters of a smaller set of action types?
-
-### Pins
-
-For IK actions, are pinned nodes:
-
-- explicitly stored with each action;
-- inherited from the base pose;
-- captured from editor state when the action is created;
-- some combination of these?
+The following details remain unresolved. The initial pose representation, initial three action types, IK pin ownership, action interval convention, and computed animation duration are resolved by this document.
 
 ### Active-gesture detection
 
