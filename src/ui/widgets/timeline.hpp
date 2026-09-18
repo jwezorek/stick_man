@@ -45,6 +45,8 @@ namespace ui {
         static constexpr int gutter = 76, ruler = 30;
         void update_scrollbars();
         QRectF item_rect(const timeline_item& item) const;
+        QRectF row_head_hit_rect() const;
+        bool hit_row_head(QPointF point) const;
         const timeline_item* hit_item(QPoint point) const;
         row_head_position row_at(int y) const;
         qint64 snapped(qint64 time) const;

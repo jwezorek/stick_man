@@ -88,6 +88,18 @@ QRectF ui::timeline::item_rect(const timeline_item& i) const {
     return {x_at(i.start), double(ruler+i.row*row_height_-verticalScrollBar()->value()+5),
         qMax(1.0, double(i.duration)*pixels_per_ms_), double(row_height_-10)};
 }
+QRectF ui::timeline::row_head_hit_rect() const {
+    const double x = x_at(head_);
+    double y = ruler + row_head_.index*row_height_ - verticalScrollBar()->value();
+    if (row_head_.kind == row_head_position::placement::on_row) y += row_height_/2.0;
+    // The painted triangle is only 10x10. Give it a slightly larger target so
+    // it remains easy to grab when it overlaps an action rectangle.
+    return {x-14, y-9, 20, 18};
+}
+bool ui::timeline::hit_row_head(QPointF p) const {
+    const double x = x_at(head_);
+    return x >= gutter && x <= viewport()->width() && p.y() >= ruler && row_head_hit_rect().contains(p);
+}
 const ui::timeline_item* ui::timeline::hit_item(QPoint p) const {
     if (p.x() < gutter || p.y() < ruler) return nullptr;
     for (auto i = items_.rbegin(); i != items_.rend(); ++i) {
@@ -158,6 +170,11 @@ void ui::timeline::mousePressEvent(QMouseEvent* e) {
     if (e->button() != Qt::LeftButton) return;
     setFocus(); pointer_ = e->position();
     if (pointer_.y() < ruler) gesture_ = gesture::head;
+    else if (hit_row_head(pointer_)) {
+        selected_.clear(); emit itemSelected({});
+        gesture_ = gesture::row_head;
+        viewport()->setCursor(Qt::SizeVerCursor);
+    }
     else if (auto i = hit_item(pointer_.toPoint())) {
         const auto clicked = *i;
         const auto revision = revision_;
@@ -173,6 +190,7 @@ void ui::timeline::mousePressEvent(QMouseEvent* e) {
 }
 void ui::timeline::mouseDoubleClickEvent(QMouseEvent* e) {
     if (e->button() != Qt::LeftButton) return;
+    if (hit_row_head(e->position())) { e->accept(); return; }
     if (auto* i = hit_item(e->position().toPoint())) {
         selected_ = i->id;
         emit itemSelected(selected_);
@@ -200,7 +218,14 @@ void ui::timeline::update_drag(QPointF pos) {
 void ui::timeline::mouseMoveEvent(QMouseEvent* e) {
     pointer_ = e->position();
     if (gesture_ != gesture::none) update_drag(pointer_);
-    else { auto* i = hit_item(pointer_.toPoint()); hovered_ = i ? i->id : QString{}; viewport()->update(); }
+    else if (hit_row_head(pointer_)) {
+        hovered_.clear();
+        viewport()->setCursor(Qt::SizeVerCursor);
+        viewport()->update();
+    } else {
+        viewport()->unsetCursor();
+        auto* i = hit_item(pointer_.toPoint()); hovered_ = i ? i->id : QString{}; viewport()->update();
+    }
 }
 void ui::timeline::mouseReleaseEvent(QMouseEvent* e) {
     if (e->button() != Qt::LeftButton) return;
