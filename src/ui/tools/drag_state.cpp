@@ -42,6 +42,7 @@ ui::tool::rotation_state::rotation_state(
                     sm::angle_from_u_to_v(axis->world_pos(), rotating->world_pos())
                 )
             ),
+            previous_pointer_theta_(initial_theta_),
             mode_(mode),
             old_locs_(std::make_unique<node_locs>(node_locations(axis))),
             radius_(sm::distance(axis_->world_pos(), rotating_->world_pos())) {
@@ -72,6 +73,15 @@ sm::bone& ui::tool::rotation_state::bone() {
 
 double ui::tool::rotation_state::initial_theta() const {
     return initial_theta_;
+}
+
+void ui::tool::rotation_state::update_pointer_theta(double theta) {
+    gesture_angle_ += sm::angular_distance(previous_pointer_theta_, theta);
+    previous_pointer_theta_ = theta;
+}
+
+double ui::tool::rotation_state::gesture_angle() const {
+    return gesture_angle_;
 }
 
 const ui::tool::node_locs& ui::tool::rotation_state::old_node_locs() const {

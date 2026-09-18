@@ -171,6 +171,18 @@ void ui::timeline::mousePressEvent(QMouseEvent* e) {
     }
     update_drag(pointer_); auto_scroll_.start();
 }
+void ui::timeline::mouseDoubleClickEvent(QMouseEvent* e) {
+    if (e->button() != Qt::LeftButton) return;
+    if (auto* i = hit_item(e->position().toPoint())) {
+        selected_ = i->id;
+        emit itemSelected(selected_);
+        emit itemDoubleClicked(selected_);
+        viewport()->update();
+        e->accept();
+        return;
+    }
+    QAbstractScrollArea::mouseDoubleClickEvent(e);
+}
 void ui::timeline::update_drag(QPointF pos) {
     if (gesture_ == gesture::head) { set_head_time(snapped(time_at(pos.x()))); emit headMoved(head_); }
     else if (gesture_ == gesture::row_head) { set_row_head(row_at(pos.y())); emit rowHeadMoved(row_head_); }

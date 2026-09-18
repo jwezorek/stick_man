@@ -14,7 +14,18 @@ namespace sm {
     enum class easing { linear, ease_in, ease_out, ease_in_out, smoothstep };
     double ease(easing curve, double progress);
     enum class rotation_pivot { root, tip };
-    struct rigid_rotation { object_id bone; rotation_pivot pivot = rotation_pivot::root; double angle = 0; };
+    enum class rotation_propagation { hierarchy, bone_only };
+    struct rigid_rotation {
+        object_id bone;
+        rotation_pivot pivot = rotation_pivot::root;
+        double angle = 0;
+        rotation_propagation propagation = rotation_propagation::hierarchy;
+    };
+    struct ik_rotation {
+        object_id effector;
+        object_id pivot_node;
+        double angle = 0;
+    };
     struct rigid_translation { std::vector<object_id> skeletons; point offset{}; };
     enum class target_reference { character_start, character_root, node };
     struct line_path { point start{}, end{}; };
@@ -28,7 +39,7 @@ namespace sm {
         object_id reference_node;
         target_path path = line_path{};
     };
-    using action_data = std::variant<rigid_rotation, rigid_translation, ik_translation>;
+    using action_data = std::variant<rigid_rotation, ik_rotation, rigid_translation, ik_translation>;
     struct animation_action {
         object_id id = object_id::generate();
         animation_time start = 0;
@@ -66,8 +77,8 @@ namespace sm {
         std::vector<object_id> invalid_actions;
         std::vector<object_id> unsupported_actions;
     };
-    // Linear rigid rotations only in this phase. Always resets detached working geometry
-    // to the base pose; never integrate from the previously displayed frame.
+    // Evaluation always resets detached working geometry to the base pose; it never
+    // integrates from the previously displayed frame.
     animation_evaluation evaluate_animation(const animation& animation, const pose& base,
         topology& working, animation_time time);
     nlohmann::json animation_assets_to_json(const animation_assets& assets);

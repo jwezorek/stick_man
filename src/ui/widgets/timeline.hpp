@@ -54,6 +54,7 @@ namespace ui {
         void paintEvent(QPaintEvent*) override;
         void resizeEvent(QResizeEvent*) override;
         void mousePressEvent(QMouseEvent*) override;
+        void mouseDoubleClickEvent(QMouseEvent*) override;
         void mouseMoveEvent(QMouseEvent*) override;
         void mouseReleaseEvent(QMouseEvent*) override;
         void wheelEvent(QWheelEvent*) override;
@@ -81,6 +82,7 @@ namespace ui {
         void headMoved(qint64 time);
         void rowHeadMoved(ui::row_head_position position);
         void itemSelected(QString id);
+        void itemDoubleClicked(QString id);
         void itemMoveRequested(QString id, qint64 start, ui::row_head_position row);
         void itemResizeRequested(QString id, qint64 start, qint64 end);
         void itemContextMenuRequested(QString id, QPoint globalPosition);

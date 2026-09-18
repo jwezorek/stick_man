@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <type_traits>
 #include <unordered_set>
 
 double sm::ease(easing curve, double u) {
@@ -48,7 +49,22 @@ void sm::animation_assets::validate() const {
         a.duration();
         for (const auto& layer : a.layers) {
             std::vector<const animation_action*> sorted;
-            for (const auto& action : layer.actions) { add(action.id); sorted.push_back(&action); }
+            for (const auto& action : layer.actions) {
+                add(action.id);
+                std::visit([](const auto& data) {
+                    using T = std::decay_t<decltype(data)>;
+                    if constexpr (std::is_same_v<T, rigid_rotation>) {
+                        if (data.bone.is_nil() || !std::isfinite(data.angle) ||
+                            (data.pivot != rotation_pivot::root && data.pivot != rotation_pivot::tip) ||
+                            (data.propagation != rotation_propagation::hierarchy && data.propagation != rotation_propagation::bone_only))
+                            throw std::invalid_argument("Invalid bone rotation action");
+                    } else if constexpr (std::is_same_v<T, ik_rotation>) {
+                        if (data.effector.is_nil() || data.pivot_node.is_nil() || data.effector == data.pivot_node || !std::isfinite(data.angle))
+                            throw std::invalid_argument("Invalid IK rotation action");
+                    }
+                }, action.data);
+                sorted.push_back(&action);
+            }
             std::ranges::sort(sorted, {}, [](auto a) { return a->start; });
             for (std::size_t i = 1; i < sorted.size(); ++i)
                 if (sorted[i-1]->start + sorted[i-1]->duration > sorted[i]->start)

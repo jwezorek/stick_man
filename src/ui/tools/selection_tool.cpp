@@ -473,7 +473,6 @@ void ui::tool::select::activate(canvas::manager& canv_mgr) {
 void ui::tool::select::keyReleaseEvent(canvas::scene& c, QKeyEvent* event) {}
 
 void ui::tool::select::mousePressEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
-    if (animation_input_) { if (event->button() == Qt::LeftButton) animation_input_->press(event->scenePos()); return; }
     click_pt_ = event->scenePos();
 }
 
@@ -549,10 +548,12 @@ std::optional<ui::tool::drag_state> ui::tool::select::create_drag_state(
     return tbl.at(typ)();
 }
 void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
+    bool started = false;
     if (!is_dragging()) {
         auto rb_type = kind_of_rubber_band(canv, *click_pt_);
         if (!rb_type) return;
         drag_ = create_drag_state(*rb_type, canv, *click_pt_);
+        started = drag_.has_value();
     }
     if (is_dragging()) {
         drag_->pt = from_qt_pt(pt);
@@ -564,7 +565,11 @@ void  ui::tool::select::do_dragging(canvas::scene& canv, QPointF pt) {
                 [](std::monostate) {
                 },
                 [&](rotation_state& ri) {
+                    if (started && animation_authoring_ && animation_authoring_->begin)
+                        animation_authoring_->begin(authored_rotation_for(ri));
                     handle_rotation(canv, pt, ri);
+                    if (animation_authoring_ && animation_authoring_->update)
+                        animation_authoring_->update(authored_rotation_for(ri));
                 },
                 [&](translation_state& ti) {
                     handle_translation(canv, pt, ti);
@@ -674,7 +679,6 @@ void ui::tool::select::pin_selection() {
     }
 }
 void ui::tool::select::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
-    if (animation_input_) { animation_input_->move(event->scenePos()); return; }
     QPointF pt = event->scenePos();
     if (is_dragging()) {
         do_dragging(canv, pt);
@@ -686,7 +690,6 @@ void ui::tool::select::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEv
     }
 }
 void ui::tool::select::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
-    if (animation_input_) { if (event->button() == Qt::LeftButton) animation_input_->release(event->scenePos()); return; }
     // A fast gesture may deliver few (or no) move events. Finish at the actual release point.
     if (click_pt_ && (is_dragging() || distance(*click_pt_, event->scenePos()) > 3.0)) {
         do_dragging(canv, event->scenePos());
@@ -710,6 +713,7 @@ void ui::tool::select::handle_rotation(canvas::scene& c, QPointF pt, rotation_st
     auto theta = sm::normalize_angle(
         sm::angle_from_u_to_v(ri.axis().world_pos(), from_qt_pt(pt))
     );
+    ri.update_pointer_theta(theta);
     auto theta_diff = theta -
         sm::angle_from_u_to_v(ri.axis().world_pos(), ri.rotating().world_pos());
     switch (ri.mode()) {
@@ -776,6 +780,11 @@ void ui::tool::select::handle_click(
     select_topology(canv, {&clicked_item, 1}, shift_down, ctrl_down);
 }
 void ui::tool::select::do_rotation_complete(canvas::scene& canv, const rotation_state& ri) {
+    if (animation_authoring_) {
+        if (animation_authoring_->complete) animation_authoring_->complete(authored_rotation_for(ri));
+        canv.sync_selection();
+        return;
+    }
     const auto& new_locs = ri.current_node_locs();
     project_->transform_node_positions(
         ri.old_node_locs(),
@@ -785,6 +794,13 @@ void ui::tool::select::do_rotation_complete(canvas::scene& canv, const rotation_
 }
 
 void ui::tool::select::do_translation_complete(canvas::scene& canv, const translation_state& ri) {
+    if (animation_authoring_) {
+        for (const auto& [id, old_pos] : ri.old_locs)
+            for (auto* node : canv.node_items()) if (node->model().id() == id) { node->model().set_world_pos(old_pos); break; }
+        canv.sync_to_model();
+        if (animation_authoring_->reject) animation_authoring_->reject("Translation action authoring is not enabled in this pass; use Rotate in the Selection settings.");
+        return;
+    }
     node_locs new_locs;
     bool changed = false;
     for (const auto& [id, old_pos] : ri.old_locs) {
@@ -815,7 +831,7 @@ void ui::tool::select::handle_select_drag(canvas::scene& canv, QRectF rect, bool
     select_topology(canv, clicked_items, shift_down, ctrl_down);
 }
 void ui::tool::select::deactivate(canvas::manager& canv_mgr) {
-    if (animation_input_) animation_input_->cancel();
+    if (animation_authoring_) cancel_animation_drag(canv_mgr.active_canvas());
     canv_mgr.set_drag_mode(ui::canvas::drag_mode::none);
 }
 
@@ -831,26 +847,42 @@ QWidget* ui::tool::select::settings_widget() {
     return settings_panel_;
 }
 
-void ui::tool::select::set_animation_input(std::optional<animation_input> input) {
-    if (animation_input_) animation_input_->cancel();
+ui::tool::select::authored_rotation ui::tool::select::authored_rotation_for(const rotation_state& state) const {
+    if (state.mode() == sel_drag_mode::rag_doll) {
+        return sm::ik_rotation{state.rotating().id(), state.axis().id(), state.gesture_angle()};
+    }
+    const auto pivot = &state.axis() == &state.bone().parent_node() ?
+        sm::rotation_pivot::root : sm::rotation_pivot::tip;
+    const auto propagation = state.mode() == sel_drag_mode::unique ?
+        sm::rotation_propagation::bone_only : sm::rotation_propagation::hierarchy;
+    return sm::rigid_rotation{state.bone().id(), pivot, state.gesture_angle(), propagation};
+}
+
+void ui::tool::select::cancel_animation_drag(canvas::scene& canv) {
     if (drag_) {
         const node_locs* old = nullptr;
         if (auto* rotation = std::get_if<rotation_state>(&drag_->extra)) old = &rotation->old_node_locs();
         if (auto* translation = std::get_if<translation_state>(&drag_->extra)) old = &translation->old_locs;
         if (old) for (const auto& [id, pt] : *old)
-            if (auto node = project_->topology().get<sm::node>(id)) node->get().set_world_pos(pt);
-        destroy_rubber_band(canvases_->active_canvas(), drag_->rubber_band);
+            for (auto* node : canv.node_items()) if (node->model().id() == id) { node->model().set_world_pos(pt); break; }
+        destroy_rubber_band(canv, drag_->rubber_band);
         drag_.reset();
+        canv.sync_to_model();
     }
     click_pt_.reset();
-    animation_input_ = std::move(input);
+    if (animation_authoring_ && animation_authoring_->cancel) animation_authoring_->cancel();
 }
+
+void ui::tool::select::set_animation_authoring(std::optional<animation_authoring> authoring) {
+    if (animation_authoring_ && canvases_) cancel_animation_drag(canvases_->active_canvas());
+    animation_authoring_ = std::move(authoring);
+}
+
 void ui::tool::select::keyPressEvent(canvas::scene& c, QKeyEvent* event) {
-    if (animation_input_) {
-        if (event->key() == Qt::Key_Escape) animation_input_->cancel();
-        if (event->matches(QKeySequence::Undo)) { animation_input_->cancel(); project_->undo(); }
-        if (event->matches(QKeySequence::Redo)) { animation_input_->cancel(); project_->redo(); }
-        return;
+    if (animation_authoring_) {
+        if (event->key() == Qt::Key_Escape) { cancel_animation_drag(c); return; }
+        if (event->matches(QKeySequence::Undo)) { cancel_animation_drag(c); project_->undo(); return; }
+        if (event->matches(QKeySequence::Redo)) { cancel_animation_drag(c); project_->redo(); return; }
     }
     base::keyPressEvent(c, event);
 }

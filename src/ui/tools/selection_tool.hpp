@@ -9,6 +9,7 @@
 #include <memory>
 #include "select_tool_panel.hpp"
 #include "drag_state.hpp"
+#include "../../core/sm_animation.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -66,11 +67,15 @@ namespace ui {
             void pin_selection();
 
         public:
-            struct animation_input {
-                std::function<void(QPointF)> press, move, release;
+            using authored_rotation = std::variant<sm::rigid_rotation, sm::ik_rotation>;
+            struct animation_authoring {
+                std::function<void(const authored_rotation&)> begin;
+                std::function<void(const authored_rotation&)> update;
+                std::function<void(const authored_rotation&)> complete;
                 std::function<void()> cancel;
+                std::function<void(QString)> reject;
             };
-            void set_animation_input(std::optional<animation_input> input);
+            void set_animation_authoring(std::optional<animation_authoring> authoring);
             void keyPressEvent(canvas::scene& c, QKeyEvent* event) override;
 
             select();
@@ -84,7 +89,9 @@ namespace ui {
             QWidget* settings_widget() override;
             void init(canvas::manager& canvases, mdl::project& model) override;
         private:
-            std::optional<animation_input> animation_input_;
+            std::optional<animation_authoring> animation_authoring_;
+            authored_rotation authored_rotation_for(const rotation_state& state) const;
+            void cancel_animation_drag(canvas::scene& canv);
         };
     }
 

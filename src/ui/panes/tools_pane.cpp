@@ -32,6 +32,10 @@ namespace ui {
 			setStyleSheet("background-color: " + k_accent_color.name());
         }
 
+        void set_tool_icon(const QString& icon_rsrc) {
+            setIcon(QIcon(QString(":/images/") + icon_rsrc));
+        }
+
         tool::id id() const {
             return id_;
         }
@@ -56,6 +60,10 @@ ui::pane::tools::tools(QMainWindow* wnd) :
         );
         tool->setToolTip(name);
     }
+    connect(&tools_, &tool::manager::current_tool_changed, this, [this](tool::base& current) {
+        for (auto* button : findChildren<tool_btn*>()) button->deactivate();
+        if (auto* button = tool_from_id(current.id())) button->activate();
+    });
 }
 
 ui::tool_btn* ui::pane::tools::tool_from_id(tool::id id)
@@ -84,4 +92,11 @@ void ui::pane::tools::handle_tool_click(canvas::manager& canvases, tool_btn* btn
     btn->activate();
     tools_.set_current_tool(canvases, btn->id() );
 }
+void ui::pane::tools::set_animation_mode(bool active) {
+    if (auto* selection = tool_from_id(tool::id::selection))
+        selection->set_tool_icon(active ? "move_icon.png" : "arrow_icon.png");
+    if (auto* node = tool_from_id(tool::id::add_node)) node->setEnabled(!active);
+    if (auto* bone = tool_from_id(tool::id::add_bone)) bone->setEnabled(!active);
+}
+
 #include "tools_pane.moc"

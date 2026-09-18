@@ -42,7 +42,10 @@ target_path read_path(const json& j) {
 json data_json(const action_data& data) {
     return std::visit([](const auto& d) -> json {
         using T = std::decay_t<decltype(d)>;
-        if constexpr (std::is_same_v<T, rigid_rotation>) return {{"type", "rotation"}, {"bone", d.bone.to_string()}, {"pivot", int(d.pivot)}, {"angle", d.angle}};
+        if constexpr (std::is_same_v<T, rigid_rotation>) return {{"type", "rotation"}, {"bone", d.bone.to_string()},
+            {"pivot", int(d.pivot)}, {"propagation", int(d.propagation)}, {"angle", d.angle}};
+        else if constexpr (std::is_same_v<T, ik_rotation>) return {{"type", "ik_rotation"},
+            {"effector", d.effector.to_string()}, {"pivot_node", d.pivot_node.to_string()}, {"angle", d.angle}};
         else if constexpr (std::is_same_v<T, rigid_translation>) return {{"type", "translation"}, {"skeletons", ids(d.skeletons)}, {"offset", pt(d.offset)}};
         else return {{"type", "ik_translation"}, {"effector", d.effector.to_string()}, {"pins", ids(d.pins)},
             {"reference", int(d.reference)}, {"reference_node", d.reference_node.to_string()}, {"path", path_json(d.path)}};
@@ -50,7 +53,12 @@ json data_json(const action_data& data) {
 }
 action_data read_data(const json& j) {
     auto type = j.at("type").get<std::string>();
-    if (type == "rotation") return rigid_rotation{id(j.at("bone")), enumeration<rotation_pivot>(j.at("pivot"), 1), j.at("angle").get<double>()};
+    if (type == "rotation") {
+        const auto propagation = j.contains("propagation") ?
+            enumeration<rotation_propagation>(j.at("propagation"), 1) : rotation_propagation::hierarchy;
+        return rigid_rotation{id(j.at("bone")), enumeration<rotation_pivot>(j.at("pivot"), 1), j.at("angle").get<double>(), propagation};
+    }
+    if (type == "ik_rotation") return ik_rotation{id(j.at("effector")), id(j.at("pivot_node")), j.at("angle").get<double>()};
     if (type == "translation") return rigid_translation{ids(j.at("skeletons")), pt(j.at("offset"))};
     if (type == "ik_translation") return ik_translation{id(j.at("effector")), ids(j.at("pins")),
         enumeration<target_reference>(j.at("reference"), 2), id(j.at("reference_node")), read_path(j.at("path"))};

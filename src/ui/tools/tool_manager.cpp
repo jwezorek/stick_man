@@ -4,7 +4,6 @@
 #include "selection_tool.hpp"
 #include "pan_tool.hpp"
 #include "zoom_tool.hpp"
-#include "animate_tool.hpp"
 #include "add_node_tool.hpp"
 #include "add_bone_tool.hpp"
 #include <ranges>
@@ -19,7 +18,6 @@ ui::tool::manager::manager() :
     tool_registry_.emplace_back(std::make_unique<ui::tool::pan>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::zoom>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::select>());
-    tool_registry_.emplace_back(std::make_unique<ui::tool::animate>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::add_node>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::add_bone>());
 }

@@ -6,6 +6,8 @@
 #include "../canvas/artwork_layer.hpp"
 #include "../stick_man.hpp"
 #include "../tools/tool_manager.hpp"
+#include "tools_pane.hpp"
+#include "tool_settings_pane.hpp"
 #include <algorithm>
 
 namespace {
@@ -234,9 +236,13 @@ bool ui::pane::animation::open_animation(sm::object_id cid, sm::object_id aid) {
     project_->set_animation_mode(true);
     auto lock = [this](QWidget* w) { enabled_before_.emplace_back(w,w->isEnabled()); w->setEnabled(false); };
     auto* main = qobject_cast<QMainWindow*>(parentWidget());
+    auto* tools_toolbar = main->findChild<ui::pane::tools*>("tools_toolbar");
+    auto* tool_settings = window ? &window->tool_pane() : nullptr;
+    if (tools_toolbar) tools_toolbar->set_animation_mode(true);
     lock(main->menuBar());
-    for (auto* dock : main->findChildren<QDockWidget*>()) if (dock != timeline_pane_) lock(dock);
-    for (auto* toolbar : main->findChildren<QToolBar*>()) lock(toolbar);
+    for (auto* dock : main->findChildren<QDockWidget*>())
+        if (dock != timeline_pane_ && dock != tool_settings) lock(dock);
+    for (auto* toolbar : main->findChildren<QToolBar*>()) if (toolbar != tools_toolbar) lock(toolbar);
     banner_label_->setText(QString("Animation Mode — %1 / %2").arg(QString::fromStdString(c->get().name()),QString::fromStdString(a->name)));
     banner_->show(); timeline_pane_->begin(cid,aid,*working_);
     refresh();
@@ -250,6 +256,8 @@ void ui::pane::animation::leave_animation() {
     canvases_->show_animation_preview(nullptr);
     working_.reset(); active_character_ = {}; active_animation_ = {};
     project_->set_animation_mode(false);
+    if (auto* main = qobject_cast<QMainWindow*>(parentWidget()))
+        if (auto* tools_toolbar = main->findChild<ui::pane::tools*>("tools_toolbar")) tools_toolbar->set_animation_mode(false);
     for (auto& [widget, enabled] : enabled_before_) if (widget) widget->setEnabled(enabled);
     enabled_before_.clear(); banner_->hide(); timeline_pane_->hide();
     if (auto* window = qobject_cast<ui::stick_man*>(parentWidget())) window->tool_mgr().set_current_tool(*canvases_,tool::id::selection);

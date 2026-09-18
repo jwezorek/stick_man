@@ -26,6 +26,7 @@ namespace ui {
         public:
 
             tools(QMainWindow* wnd);
+            void set_animation_mode(bool active);
         };
     }
 }

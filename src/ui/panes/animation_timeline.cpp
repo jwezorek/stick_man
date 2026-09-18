@@ -34,38 +34,44 @@ ui::pane::animation_timeline::animation_timeline(mdl::project& project, canvas::
     undo_ = button("Undo",[this]{cancel_gesture();pause();project_.undo();});
     redo_ = button("Redo",[this]{cancel_gesture();pause();project_.redo();});
     transport->addSpacing(12);
-    button("Select / Rotate",[this]{tools_.set_current_tool(canvases_,tool::id::selection);});
-    button("Pan",[this]{tools_.set_current_tool(canvases_,tool::id::pan);});
-    button("Zoom",[this]{tools_.set_current_tool(canvases_,tool::id::zoom);});
     time_label_ = new QLabel; transport->addWidget(time_label_); transport->addStretch();
     timeline_ = new timeline; timeline_->setObjectName("animation_timeline");
     timeline_->set_snap_interval(10); timeline_->set_snap_enabled(true); layout->addWidget(timeline_);
-    parameters_ = new QWidget; auto* form = new QGridLayout(parameters_); form->setContentsMargins(0,0,0,0); layout->addWidget(parameters_);
+    parameters_ = new QWidget; auto* parameters_layout = new QVBoxLayout(parameters_); parameters_layout->setContentsMargins(0,0,0,0); layout->addWidget(parameters_);
+    auto* common = new QGridLayout; parameters_layout->addLayout(common);
+    start_ = milliseconds("action_start",0,parameters_);
+    duration_ = milliseconds("action_duration",1,parameters_); duration_->setValue(1000);
+    easing_ = new QComboBox; easing_->setObjectName("action_easing"); easing_->addItems({"Linear","Ease in","Ease out","Ease in/out","Smoothstep"});
+    layer_ = new QComboBox; layer_->setObjectName("action_layer");
+    const QStringList common_labels{"Start","Duration","Easing","Layer"};
+    QList<QWidget*> common_fields{start_,duration_,easing_,layer_};
+    for(int col=0;col<common_fields.size();++col) {common->addWidget(new QLabel(common_labels[col]),0,col);common->addWidget(common_fields[col],1,col);}
+
+    auto* specific = new QGridLayout; parameters_layout->addLayout(specific);
     bone_ = new QComboBox; bone_->setObjectName("rotation_bone"); bone_->setMinimumContentsLength(12);
     pivot_ = new QComboBox; pivot_->setObjectName("rotation_pivot"); pivot_->addItems({"Root","Tip"});
-    start_ = milliseconds("rotation_start",0,parameters_);
-    duration_ = milliseconds("rotation_duration",1,parameters_); duration_->setValue(1000);
+    propagation_ = new QComboBox; propagation_->setObjectName("rotation_propagation"); propagation_->addItems({"Hierarchy","Bone only"});
+    effector_ = new QComboBox; effector_->setObjectName("ik_rotation_effector"); effector_->setMinimumContentsLength(12);
+    pivot_node_ = new QComboBox; pivot_node_->setObjectName("ik_rotation_pivot_node"); pivot_node_->setMinimumContentsLength(12);
     angle_ = new QDoubleSpinBox; angle_->setObjectName("rotation_angle"); angle_->setRange(-360000,360000);
     angle_->setDecimals(3); angle_->setSuffix("°"); angle_->setValue(90); angle_->setKeyboardTracking(false);
-    layer_ = new QComboBox; layer_->setObjectName("rotation_layer");
-    const QStringList labels{"Bone","Pivot","Start","Duration","Angle","Layer"};
-    QList<QWidget*> fields{bone_,pivot_,start_,duration_,angle_,layer_};
-    for(int col=0;col<fields.size();++col) {form->addWidget(new QLabel(labels[col]),0,col);form->addWidget(fields[col],1,col);}
+    bone_label_ = new QLabel("Bone"); pivot_label_ = new QLabel("Pivot"); propagation_label_ = new QLabel("Propagation");
+    effector_label_ = new QLabel("Effector"); pivot_node_label_ = new QLabel("Pivot node"); angle_label_ = new QLabel("Angle");
+    QList<QLabel*> specific_labels{bone_label_,pivot_label_,propagation_label_,effector_label_,pivot_node_label_,angle_label_};
+    QList<QWidget*> specific_fields{bone_,pivot_,propagation_,effector_,pivot_node_,angle_};
+    for(int col=0;col<specific_fields.size();++col) {specific->addWidget(specific_labels[col],0,col);specific->addWidget(specific_fields[col],1,col);}
     auto* edits = new QHBoxLayout; layout->addLayout(edits);
-    auto* fresh = new QPushButton("New rotation"); edits->addWidget(fresh);
-    connect(fresh,&QPushButton::clicked,this,[this]{selected_={}; timeline_->set_selected_item({}); refresh_parameters();});
-    auto* add = new QPushButton("Add rotation"); add->setObjectName("add_rotation"); edits->addWidget(add);
-    connect(add,&QPushButton::clicked,this,&animation_timeline::add_rotation);
     apply_ = new QPushButton("Apply changes"); apply_->setObjectName("apply_rotation"); edits->addWidget(apply_);
     connect(apply_,&QPushButton::clicked,this,&animation_timeline::apply_changes);
     remove_ = new QPushButton("Delete action"); remove_->setObjectName("delete_rotation"); edits->addWidget(remove_);
     connect(remove_,&QPushButton::clicked,this,&animation_timeline::delete_action);
     edits->addStretch();
-    status_ = new QLabel("Drag a bone or its tip with Select / Rotate to create a rotation. Timing is linear.");
+    status_ = new QLabel("Use the Selection/Animate tool and its existing Rigid, Unique Bone, or Ragdoll rotation settings to create actions.");
     status_->setWordWrap(true); layout->addWidget(status_);
     connect(timeline_,&timeline::headMoved,this,&animation_timeline::seek);
     connect(timeline_,&timeline::rowHeadMoved,this,[this](row_head_position row){insertion_=row;refresh_parameters();});
     connect(timeline_,&timeline::itemSelected,this,&animation_timeline::select_action);
+    connect(timeline_,&timeline::itemDoubleClicked,this,&animation_timeline::focus_action_editor);
     connect(timeline_,&timeline::itemMoveRequested,this,&animation_timeline::move_action);
     connect(timeline_,&timeline::itemResizeRequested,this,&animation_timeline::resize_action);
     connect(timeline_,&timeline::itemContextMenuRequested,this,[this](QString item,QPoint point){
@@ -106,18 +112,27 @@ const sm::animation_action* ui::pane::animation_timeline::selected_action() cons
 }
 void ui::pane::animation_timeline::begin(sm::object_id character,sm::object_id animation,sm::topology& working) {
     character_=character;animation_=animation;working_=&working;selected_={};time_=0;insertion_={};
-    bone_->clear();
-    for(auto s:working.skeletons()) for(auto b:s->bones()) bone_->addItem(QString::fromStdString(b->name()),text(b->id()));
+    bone_->clear(); effector_->clear(); pivot_node_->clear();
+    for(auto s:working.skeletons()) {
+        for(auto b:s->bones()) bone_->addItem(QString::fromStdString(b->name()),text(b->id()));
+        for(auto n:s->nodes()) {
+            const auto name=QString::fromStdString(n->name());
+            effector_->addItem(name,text(n->id())); pivot_node_->addItem(name,text(n->id()));
+        }
+    }
     auto& selection=static_cast<tool::select&>(tools_.tool_from_id(tool::id::selection));
-    selection.set_animation_input(tool::select::animation_input{
-        [this](QPointF p){gesture_press(p);},[this](QPointF p){gesture_move(p);},
-        [this](QPointF p){gesture_release(p);},[this]{cancel_gesture();}});
+    selection.set_animation_authoring(tool::select::animation_authoring{
+        [this](const auto& r){rotation_begin(r);},
+        [this](const auto& r){rotation_update(r);},
+        [this](const auto& r){rotation_complete(r);},
+        [this]{cancel_gesture();},
+        [this](QString why){cancel_gesture();message(std::move(why));}});
     tools_.set_current_tool(canvases_,tool::id::selection);
     show(); refresh(); timeline_->set_visible_range(0,std::max<qint64>(5000,current()->duration()));
 }
 void ui::pane::animation_timeline::end() {
     pause(); cancel_gesture();
-    static_cast<tool::select&>(tools_.tool_from_id(tool::id::selection)).set_animation_input({});
+    static_cast<tool::select&>(tools_.tool_from_id(tool::id::selection)).set_animation_authoring({});
     working_=nullptr; selected_={}; hide();
 }
 void ui::pane::animation_timeline::message(QString text) {status_->setText(std::move(text));}
@@ -125,8 +140,8 @@ void ui::pane::animation_timeline::evaluate(const sm::animation& a,sm::animation
     const auto& data=project_.core().animation_data(character_);
     const auto* base=data.find_pose(a.base_pose); if(!base) return;
     auto report=sm::evaluate_animation(a,*base,*working_,time);
-    if(!report.invalid_actions.empty()) message("Some actions have missing or invalid bone targets and are skipped.");
-    else if(!report.unsupported_actions.empty()) message("Only rigid rotation actions are previewed in this phase.");
+    if(!report.invalid_actions.empty()) message("Some actions have missing or invalid targets and are skipped.");
+    else if(!report.unsupported_actions.empty()) message("Some action types are not previewed in this phase.");
     canvases_.active_canvas().sync_to_model();
     canvases_.active_canvas().update();
 }
@@ -134,11 +149,21 @@ void ui::pane::animation_timeline::present(const sm::animation& a,sm::animation_
     const int rows=int(a.layers.size()); timeline_->set_rows(rows);
     std::vector<timeline_item> items;
     for(int layer=0;layer<rows;++layer) for(const auto& action:a.layers[layer].actions) {
-        auto* rotation=std::get_if<sm::rigid_rotation>(&action.data);
-        auto b=rotation ? working_->get<sm::bone>(rotation->bone) : std::optional<sm::bone_ref>{};
-        const auto label=rotation ? QString("Rotate %1 (%2°)").arg(b?QString::fromStdString(b->get().name()):"missing bone").arg(rotation->angle*degrees,0,'f',1) : "Unsupported action";
-        items.push_back({text(action.id),action.start,action.duration,rows-1-layer,label,timeline_color::blue,
-            provisional==action.id,!rotation,rotation && !b});
+        QString label="Unsupported action"; timeline_color color=timeline_color::blue; bool supported=false, invalid=false;
+        if(const auto* rotation=std::get_if<sm::rigid_rotation>(&action.data)) {
+            supported=true; auto b=working_->get<sm::bone>(rotation->bone); invalid=!b;
+            const auto propagation=rotation->propagation==sm::rotation_propagation::bone_only ? "bone only" : "hierarchy";
+            label=QString("Rotate %1 (%2°, %3)").arg(b?QString::fromStdString(b->get().name()):"missing bone")
+                .arg(rotation->angle*degrees,0,'f',1).arg(propagation);
+        } else if(const auto* rotation=std::get_if<sm::ik_rotation>(&action.data)) {
+            supported=true;color=timeline_color::purple;
+            auto effector=working_->get<sm::node>(rotation->effector);auto pivot=working_->get<sm::node>(rotation->pivot_node);
+            invalid=!effector || !pivot;
+            label=QString("IK rotate %1 (%2°)").arg(effector?QString::fromStdString(effector->get().name()):"missing effector")
+                .arg(rotation->angle*degrees,0,'f',1);
+        }
+        items.push_back({text(action.id),action.start,action.duration,rows-1-layer,label,color,
+            provisional==action.id,!supported,invalid});
     }
     timeline_->set_items(std::move(items));timeline_->set_selected_item(text(selected_));timeline_->set_head_time(time);timeline_->set_row_head(insertion_);
     time_label_->setText(QString("%1 / %2 ms").arg(time).arg(a.duration()));
@@ -152,6 +177,17 @@ void ui::pane::animation_timeline::refresh() {
     evaluate(*a,time_);present(*a,time_);refresh_parameters();
     undo_->setEnabled(project_.can_undo());redo_->setEnabled(project_.can_redo());
 }
+void ui::pane::animation_timeline::update_action_field_visibility() {
+    const auto* action = selected_action();
+    const bool bone_rotation = action && std::holds_alternative<sm::rigid_rotation>(action->data);
+    const bool ik_rotation = action && std::holds_alternative<sm::ik_rotation>(action->data);
+    bone_label_->setVisible(bone_rotation); bone_->setVisible(bone_rotation);
+    pivot_label_->setVisible(bone_rotation); pivot_->setVisible(bone_rotation);
+    propagation_label_->setVisible(bone_rotation); propagation_->setVisible(bone_rotation);
+    effector_label_->setVisible(ik_rotation); effector_->setVisible(ik_rotation);
+    pivot_node_label_->setVisible(ik_rotation); pivot_node_->setVisible(ik_rotation);
+    angle_label_->setVisible(bone_rotation || ik_rotation); angle_->setVisible(bone_rotation || ik_rotation);
+}
 void ui::pane::animation_timeline::refresh_parameters() {
     auto* a=current(); if(!a) return;
     updating_=true;
@@ -160,17 +196,32 @@ void ui::pane::animation_timeline::refresh_parameters() {
         layer_->addItem(row==0?"New top layer":row==int(a->layers.size())?"New bottom layer":"New layer between");
         if(row<int(a->layers.size())) layer_->addItem(QString("Layer %1").arg(a->layers.size()-row));
     }
-    auto* action=selected_action(); auto* rotation=action ? std::get_if<sm::rigid_rotation>(&action->data):nullptr;
-    apply_->setEnabled(rotation);remove_->setEnabled(action);
+    auto* action=selected_action();
+    const auto* rotation=action ? std::get_if<sm::rigid_rotation>(&action->data):nullptr;
+    const auto* ik=action ? std::get_if<sm::ik_rotation>(&action->data):nullptr;
+    apply_->setEnabled(rotation || ik);remove_->setEnabled(action);start_->setEnabled(action);
+    if(action) {
+        start_->setValue(int(std::min<qint64>(INT_MAX,action->start)));
+        duration_->setValue(int(std::min<qint64>(INT_MAX,action->duration)));
+        easing_->setCurrentIndex(int(action->easing));
+    } else {
+        start_->setValue(int(std::min<qint64>(INT_MAX,time_)));
+        easing_->setCurrentIndex(int(sm::easing::linear));
+    }
     if(rotation) {
-        bone_->setCurrentIndex(bone_->findData(text(rotation->bone)));pivot_->setCurrentIndex(int(rotation->pivot));
-        start_->setValue(int(std::min<qint64>(INT_MAX,action->start)));duration_->setValue(int(std::min<qint64>(INT_MAX,action->duration)));
+        bone_->setCurrentIndex(bone_->findData(text(rotation->bone)));
+        pivot_->setCurrentIndex(int(rotation->pivot));
+        propagation_->setCurrentIndex(int(rotation->propagation));
         angle_->setValue(rotation->angle*degrees);
-    } else {start_->setValue(int(std::min<qint64>(INT_MAX,time_)));}
+    } else if(ik) {
+        effector_->setCurrentIndex(effector_->findData(text(ik->effector)));
+        pivot_node_->setCurrentIndex(pivot_node_->findData(text(ik->pivot_node)));
+        angle_->setValue(ik->angle*degrees);
+    }
     insertion_.index=std::clamp(insertion_.index,0,insertion_.kind==row_head_position::placement::between_rows?int(a->layers.size()):std::max(0,int(a->layers.size())-1));
     if(a->layers.empty()) insertion_={};
     layer_->setCurrentIndex(2*insertion_.index+(insertion_.kind==row_head_position::placement::on_row?1:0));
-    timeline_->set_row_head(insertion_);updating_=false;
+    timeline_->set_row_head(insertion_); update_action_field_visibility(); updating_=false;
 }
 std::optional<sm::animation> ui::pane::animation_timeline::place(sm::animation_action action,row_head_position row,bool replace,bool explain) {
     auto* a=current();if(!a) return {};
@@ -204,17 +255,17 @@ void ui::pane::animation_timeline::select_action(QString item) {
     refresh_parameters();
 }
 void ui::pane::animation_timeline::apply_changes() {
-    auto* action=selected_action();if(!action || !std::holds_alternative<sm::rigid_rotation>(action->data)) return;
-    if(bone_->currentIndex()<0) {message("Select a bone first.");return;}
-    auto edited=*action;edited.start=start_->value();edited.duration=duration_->value();
-    edited.data=sm::rigid_rotation{id(bone_->currentData().toString()),sm::rotation_pivot(pivot_->currentIndex()),angle_->value()/degrees};
+    auto* action=selected_action();if(!action) return;
+    auto edited=*action;edited.start=start_->value();edited.duration=duration_->value();edited.easing=sm::easing(easing_->currentIndex());
+    if(std::holds_alternative<sm::rigid_rotation>(action->data)) {
+        if(bone_->currentIndex()<0) {message("Select a bone first.");return;}
+        edited.data=sm::rigid_rotation{id(bone_->currentData().toString()),sm::rotation_pivot(pivot_->currentIndex()),
+            angle_->value()/degrees,sm::rotation_propagation(propagation_->currentIndex())};
+    } else if(std::holds_alternative<sm::ik_rotation>(action->data)) {
+        if(effector_->currentIndex()<0 || pivot_node_->currentIndex()<0) {message("Select an effector and pivot node.");return;}
+        edited.data=sm::ik_rotation{id(effector_->currentData().toString()),id(pivot_node_->currentData().toString()),angle_->value()/degrees};
+    } else return;
     if(auto candidate=place(edited,insertion_,true,true)) {pause();commit(*candidate);}
-}
-void ui::pane::animation_timeline::add_rotation() {
-    if(!current() || bone_->currentIndex()<0) {message("Select a bone first.");return;}
-    cancel_gesture();pause();sm::animation_action action;action.start=start_->value();action.duration=duration_->value();
-    action.data=sm::rigid_rotation{id(bone_->currentData().toString()),sm::rotation_pivot(pivot_->currentIndex()),angle_->value()/degrees};
-    if(auto candidate=place(action,insertion_,false,true)) {selected_=action.id;commit(*candidate);}
 }
 void ui::pane::animation_timeline::delete_action() {
     if(!selected_action()) return;
@@ -255,45 +306,42 @@ void ui::pane::animation_timeline::tick() {
     time_label_->setText(QString("%1 / %2 ms").arg(time_).arg(a->duration()));
     if(time_>=a->duration()) pause();
 }
-void ui::pane::animation_timeline::gesture_press(QPointF position) {
+void ui::pane::animation_timeline::rotation_begin(const authored_rotation& rotation) {
     if(!current()) return;
-    pause();cancel_gesture();
-    auto& scene=canvases_.active_canvas();auto* item=scene.top_item(position);
-    sm::maybe_bone_ref bone;
-    if(auto* b=dynamic_cast<canvas::item::bone*>(item)) bone=b->model();
-    else if(auto* n=dynamic_cast<canvas::item::node*>(item)) bone=n->model().parent_bone();
-    if(!bone) {scene.clear_selection();return;}
-    if(!working_->get<sm::bone>(bone->get().id())) return;
-    scene.set_selection(item,true);
-    auto pivot=sm::rotation_pivot(pivot_->currentIndex());
-    auto origin=pivot==sm::rotation_pivot::root?bone->get().parent_node().world_pos():bone->get().child_node().world_pos();
-    if(std::hypot(position.x()-origin.x,position.y()-origin.y)<1e-6) {message("Drag the bone away from its pivot.");return;}
-    gesture g;g.action.start=time_;g.action.duration=duration_->value();
-    g.action.data=sm::rigid_rotation{bone->get().id(),pivot,0};g.row=insertion_;g.pivot=origin;g.press=position;
-    g.previous_angle=std::atan2(position.y()-origin.y,position.x()-origin.x);gesture_=g;
-    message("Drag to rotate; release to create the action. Escape cancels.");
+    pause(); cancel_gesture();
+    gesture g; g.action.start=time_; g.action.duration=duration_->value(); g.action.easing=sm::easing(easing_->currentIndex()); g.row=insertion_;
+    std::visit([&](const auto& value){g.action.data=value;},rotation);
+    gesture_=std::move(g);
+    message("Drag to author the rotation; release to create the action. Escape cancels.");
 }
-void ui::pane::animation_timeline::gesture_move(QPointF position) {
+void ui::pane::animation_timeline::rotation_update(const authored_rotation& rotation) {
     if(!gesture_) return;
     auto& g=*gesture_;
-    if(!g.moved && QLineF(g.press,position).length()<3) return;
-    if(std::hypot(position.x()-g.pivot.x,position.y()-g.pivot.y)<1e-6) return;
-    g.moved=true;
-    double angle=std::atan2(position.y()-g.pivot.y,position.x()-g.pivot.x);
-    g.total_angle+=std::remainder(angle-g.previous_angle,2*std::numbers::pi);g.previous_angle=angle;
-    std::get<sm::rigid_rotation>(g.action.data).angle=g.total_angle;
+    std::visit([&](const auto& value){g.action.data=value;},rotation);
+    const double angle=std::visit([](const auto& value){return value.angle;},rotation);
+    g.moved=std::abs(angle)>1e-8;
     if(auto candidate=place(g.action,g.row,false,true)) {
-        evaluate(*candidate,g.action.start+g.action.duration);present(*candidate,g.action.start+g.action.duration,g.action.id);
-        message(QString("Rotation preview: %1° over %2 ms. Release to create; Escape cancels.").arg(g.total_angle*degrees,0,'f',1).arg(g.action.duration));
+        time_=g.action.start+g.action.duration;
+        present(*candidate,time_,g.action.id);
+        message(QString("Rotation preview: %1° over %2 ms. Release to create; Escape cancels.").arg(angle*degrees,0,'f',1).arg(g.action.duration));
     }
 }
-void ui::pane::animation_timeline::gesture_release(QPointF position) {
+void ui::pane::animation_timeline::rotation_complete(const authored_rotation& rotation) {
     if(!gesture_) return;
-    gesture_move(position);auto g=*gesture_;gesture_.reset();
-    if(g.moved && std::abs(g.total_angle)>1e-8) if(auto candidate=place(g.action,g.row,false,true)) {
+    rotation_update(rotation); auto g=*gesture_; gesture_.reset();
+    const double angle=std::visit([](const auto& value){return value.angle;},rotation);
+    if(g.moved && std::abs(angle)>1e-8) if(auto candidate=place(g.action,g.row,false,true)) {
         selected_=g.action.id;time_=g.action.start+g.action.duration;commit(*candidate);return;
     }
     refresh();
+}
+void ui::pane::animation_timeline::focus_action_editor(QString item) {
+    select_action(std::move(item));
+    const auto* action=selected_action();
+    if(action && (std::holds_alternative<sm::rigid_rotation>(action->data) ||
+       std::holds_alternative<sm::ik_rotation>(action->data))) {
+        angle_->setFocus(Qt::MouseFocusReason); angle_->selectAll();
+    }
 }
 void ui::pane::animation_timeline::cancel_gesture() {
     if(!gesture_) return;
