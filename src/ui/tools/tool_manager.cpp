@@ -19,9 +19,9 @@ ui::tool::manager::manager() :
     tool_registry_.emplace_back(std::make_unique<ui::tool::pan>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::zoom>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::select>());
+    tool_registry_.emplace_back(std::make_unique<ui::tool::constraint>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::add_node>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::add_bone>());
-    tool_registry_.emplace_back(std::make_unique<ui::tool::constraint>());
 }
 
 void ui::tool::manager::init(canvas::manager& canvases, mdl::project& model) {

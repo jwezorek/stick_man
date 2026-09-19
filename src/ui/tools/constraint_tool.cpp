@@ -1,6 +1,7 @@
 #include "constraint_tool.hpp"
 #include "../canvas/bone_item.hpp"
 #include "../canvas/node_item.hpp"
+#include "../canvas/canvas_manager.hpp"
 #include "../../model/handle.hpp"
 #include "../../model/project.hpp"
 #include <numbers>
@@ -17,6 +18,18 @@ ui::tool::constraint::constraint() :
     absolute_constraint_(nullptr),
     model_(nullptr),
     base("constraint", "push_pin_icon.png", ui::tool::id::constraint) {
+}
+
+void ui::tool::constraint::activate(canvas::manager& canvases) {
+    for (auto* canv : canvases.canvases()) {
+        canv->set_rotation_constraints_visible(true);
+    }
+}
+
+void ui::tool::constraint::deactivate(canvas::manager& canvases) {
+    for (auto* canv : canvases.canvases()) {
+        canv->set_rotation_constraints_visible(false);
+    }
 }
 
 void ui::tool::constraint::init(canvas::manager&, mdl::project& model) {

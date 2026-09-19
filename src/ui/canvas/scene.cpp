@@ -350,6 +350,20 @@ void ui::canvas::scene::toggle_node_pinned(const sm::object_id& id) {
     set_node_pinned(id, !is_node_pinned(id));
 }
 
+bool ui::canvas::scene::rotation_constraints_visible() const {
+    return show_rotation_constraints_;
+}
+
+void ui::canvas::scene::set_rotation_constraints_visible(bool visible) {
+    if (show_rotation_constraints_ == visible) {
+        return;
+    }
+    show_rotation_constraints_ = visible;
+    for (auto* bone : bone_items()) {
+        bone->sync_to_model();
+    }
+}
+
 bool ui::canvas::scene::is_status_line_visible() const {
     return !status_line_.isEmpty();
 }

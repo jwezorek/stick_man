@@ -15,6 +15,8 @@ namespace ui {
         public:
             constraint();
             void init(canvas::manager& canvases, mdl::project& model) override;
+            void activate(canvas::manager& canvases) override;
+            void deactivate(canvas::manager& canvases) override;
             void mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
             QWidget* settings_widget() override;
         };

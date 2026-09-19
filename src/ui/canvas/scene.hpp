@@ -73,6 +73,7 @@ namespace ui {
             QString status_line_;
             selection_set selection_;
             std::unordered_set<sm::object_id> pinned_node_ids_;
+            bool show_rotation_constraints_ = false;
             tool::input_handler& inp_handler_;
             item::rubber_band* rubber_band_;
             std::optional<int> zoom_level_;
@@ -154,6 +155,9 @@ namespace ui {
             bool is_node_pinned(const sm::object_id& id) const;
             void set_node_pinned(const sm::object_id& id, bool pinned);
             void toggle_node_pinned(const sm::object_id& id);
+
+            bool rotation_constraints_visible() const;
+            void set_rotation_constraints_visible(bool visible);
 
             bool is_status_line_visible() const;
 
