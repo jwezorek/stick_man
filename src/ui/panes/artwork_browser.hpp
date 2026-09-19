@@ -34,6 +34,7 @@ namespace ui::pane {
         void connect_canvas();
         void update_transform_editing();
         bool edit(const std::function<void(sm::artwork&)>& fn);
+        void update_slot_binding_row(const std::string& slot, sm::object_id bone, sm::bone_anchor anchor);
         void refresh_details();
         void import_frames();
         void new_slot_dialog();

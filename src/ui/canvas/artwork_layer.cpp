@@ -76,6 +76,7 @@ namespace {
 }
 ui::canvas::artwork_layer::artwork_layer(scene& scene, mdl::project& project) : QObject(&scene), scene_(scene), project_(project) {
     connect(&project, &mdl::project::project_changed, this, [this] { cancel_transform(); refresh(); });
+    connect(&project, &mdl::project::artwork_changed, this, [this](mdl::project&, sm::object_id) { cancel_transform(); refresh(); });
     connect(&project, &mdl::project::new_project_opened, this, [this] { reset(); });
     connect(&project, &mdl::project::refresh_canvas, this, [this] { cancel_transform(); refresh(); });
 }

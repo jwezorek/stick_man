@@ -33,6 +33,12 @@ namespace {
 }
 /*------------------------------------------------------------------------------------------------*/
 void mdl::project::clear_redo_stack() { redo_stack_ = {}; }
+void mdl::project::notify_command_change(const command& cmd) {
+    if (cmd.artwork_character)
+        emit artwork_changed(*this, *cmd.artwork_character);
+    else
+        emit project_changed(*this);
+}
 sm::result mdl::project::execute_command(const command& cmd) {
     if (animation_mode_ && !cmd.animation_edit) return sm::result::invalid_membership;
     cmd.redo(*this);
@@ -41,7 +47,7 @@ sm::result mdl::project::execute_command(const command& cmd) {
     animation_redo_count_ = 0;
     undo_stack_.push(cmd);
     emit refresh_undo_redo_state(can_redo(), can_undo());
-    emit project_changed(*this);
+    notify_command_change(cmd);
     return sm::result::success;
 }
 
@@ -54,10 +60,12 @@ void mdl::project::edit_artwork(const sm::object_id& id, const std::function<voi
     auto before = core_.artwork(id);
     auto after = before;
     edit(after);
-    execute_command({
+    command cmd{
         [id, after](project& p) { p.core_.artwork(id) = after; },
         [id, before](project& p) { p.core_.artwork(id) = before; }
-    });
+    };
+    cmd.artwork_character = id;
+    execute_command(cmd);
 }
 const sm::topology& mdl::project::topology() const { return core_.topology(); }
 
@@ -110,7 +118,7 @@ void mdl::project::undo() {
     redo_stack_.push(cmd);
     if (animation_mode_) ++animation_redo_count_;
     emit refresh_undo_redo_state(can_redo(), can_undo());
-    emit project_changed(*this);
+    notify_command_change(cmd);
 }
 sm::result mdl::project::redo() {
     if (!can_redo()) {
@@ -124,7 +132,7 @@ sm::result mdl::project::redo() {
     if (animation_mode_) --animation_redo_count_;
     undo_stack_.push(cmd);
     emit refresh_undo_redo_state(can_redo(), can_undo());
-    emit project_changed(*this);
+    notify_command_change(cmd);
     return sm::result::success;
 }
 bool mdl::project::can_undo() const {

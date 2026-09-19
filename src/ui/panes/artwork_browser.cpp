@@ -435,16 +435,29 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
     slots_->setObjectName("artwork_slots");
     slots_->setHeaderLabels({"Slot", "Bone", "Anchor"});
     slots_->setRootIsDecorated(false);
-    slots_->setEditTriggers(QAbstractItemView::SelectedClicked | QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
+    slots_->setEditTriggers(QAbstractItemView::EditKeyPressed);
     slots_->header()->setSectionResizeMode(QHeaderView::Interactive);
     slots_->setColumnWidth(2, 70);
     auto* slot_delegate = new slot_item_delegate(slots_);
     slot_delegate->binding_changed = [this](const std::string& slot, sm::object_id bone, sm::bone_anchor endpoint) {
         if (refreshing_ || !character_) return;
-        if (edit([&](auto& art) { art.bind_slot(slot, bone, endpoint); })) restore(slots_, slot);
+        // Binding edits only affect this Structure row and the rendered artwork.
+        // Suppress our generic artwork_changed rebuild and update the row in place.
+        QScopedValueRollback<bool> guard(refreshing_, true);
+        if (edit([&](auto& art) { art.bind_slot(slot, bone, endpoint); }))
+            update_slot_binding_row(slot, bone, endpoint);
     };
     slot_delegate->bone_pick_requested = [this](const std::string& slot) { begin_bone_pick(slot); };
     slots_->setItemDelegate(slot_delegate);
+    // The Bone and Anchor cells are painted to look like combo boxes, but their
+    // real editor is delegate-created. Start that editor on the initial press so
+    // the first click opens the popup instead of merely selecting the cell.
+    connect(slots_, &QTreeWidget::itemPressed, this, [this](QTreeWidgetItem* item, int column) {
+        if (column == 1 || column == 2) slots_->editItem(item, column);
+    });
+    connect(slots_, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem* item, int column) {
+        if (column == 0) slots_->editItem(item, column);
+    });
     structure_layout->addWidget(slots_);
     buttons(structure_layout, {{"New slot…", [this] { new_slot_dialog(); }}, {"Delete", [this] {
         auto name = selected(slots_); if (!name.empty()) edit([&](auto& a) { a.delete_slot(name); });
@@ -725,6 +738,7 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
     connect(&canvases_, &canvas::manager::active_canvas_changed, this, [this] { refresh(); });
     connect(&canvases_, &canvas::manager::selection_changed, this, [this] { refresh(); });
     connect(&project_, &mdl::project::project_changed, this, [this] { refresh(); });
+    connect(&project_, &mdl::project::artwork_changed, this, [this](mdl::project&, sm::object_id) { refresh(); });
     connect(&project_, &mdl::project::new_project_opened, this, [this] { refresh(); });
     refresh();
 }
@@ -736,6 +750,26 @@ bool ui::pane::artwork_browser::edit(const std::function<void(sm::artwork&)>& fn
     if (!character_) return false;
     try { project_.edit_artwork(*character_, fn); return true; }
     catch (const std::exception& e) { QMessageBox::warning(this, "Artwork", e.what()); return false; }
+}
+void ui::pane::artwork_browser::update_slot_binding_row(
+        const std::string& slot, sm::object_id bone, sm::bone_anchor anchor) {
+    for (int i = 0; i < slots_->topLevelItemCount(); ++i) {
+        auto* row = slots_->topLevelItem(i);
+        if (row->data(0, slot_role).toString().toStdString() != slot) continue;
+
+        const auto bone_id = QString::fromStdString(bone.to_string());
+        const auto bone_ids = row->data(1, bone_ids_role).toStringList();
+        const auto bone_names = row->data(1, bone_names_role).toStringList();
+        const auto bone_index = bone_ids.indexOf(bone_id);
+        row->setText(1, bone_index >= 0 && bone_index < bone_names.size()
+            ? bone_names[bone_index] : QStringLiteral("Unresolved"));
+        row->setData(1, bone_id_role, bone_id);
+        row->setToolTip(1, bone_index < 0
+            ? QStringLiteral("The bound bone is not present in this character.") : QString{});
+        row->setText(2, anchor == sm::bone_anchor::root ? QStringLiteral("Root") : QStringLiteral("Tip"));
+        row->setData(2, anchor_role, int(anchor));
+        return;
+    }
 }
 void ui::pane::artwork_browser::connect_canvas() {
     auto* layer = &canvases_.active_canvas().artwork();
@@ -989,6 +1023,8 @@ void ui::pane::artwork_browser::begin_bone_pick(const std::string& slot) {
     canvases_.active_canvas().begin_bone_pick(character, QString::fromStdString(slot),
         [this, character, slot, anchor](sm::object_id bone) {
             if (refreshing_ || character_ != character) return;
-            if (edit([&](auto& art) { art.bind_slot(slot, bone, anchor); })) restore(slots_, slot);
+            QScopedValueRollback<bool> guard(refreshing_, true);
+            if (edit([&](auto& art) { art.bind_slot(slot, bone, anchor); }))
+                update_slot_binding_row(slot, bone, anchor);
         });
 }
