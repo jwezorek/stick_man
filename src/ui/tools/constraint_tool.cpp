@@ -60,6 +60,12 @@ void ui::tool::constraint::mouseReleaseEvent(
         return;
     }
 
+    if (model_->animation_mode()) {
+        // TODO: In Animation Mode, bone constraints should be authored as constraints
+        // local to the selected animation action rather than modifying project topology.
+        return;
+    }
+
     auto* bone = dynamic_cast<canvas::item::bone*>(item);
     if (!bone || bone->model().rotation_constraint()) {
         return;

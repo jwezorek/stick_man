@@ -106,7 +106,10 @@ const ui::tool::base& ui::tool::manager::tool_from_id(id id) const {
 }
 
 void ui::tool::manager::set_current_tool(canvas::manager& canvases, id id) {
-    if (project_ && project_->animation_mode() && id != id::selection && id != id::pan && id != id::zoom) return;
+    if (project_ && project_->animation_mode() &&
+        id != id::selection && id != id::pan && id != id::zoom && id != id::constraint) {
+        return;
+    }
     int new_tool_index = index_from_id(id);
     if (new_tool_index == curr_item_index_) {
         return;
