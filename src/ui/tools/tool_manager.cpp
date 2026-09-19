@@ -6,6 +6,7 @@
 #include "zoom_tool.hpp"
 #include "add_node_tool.hpp"
 #include "add_bone_tool.hpp"
+#include "constraint_tool.hpp"
 #include <ranges>
 
 namespace r = std::ranges;
@@ -20,6 +21,7 @@ ui::tool::manager::manager() :
     tool_registry_.emplace_back(std::make_unique<ui::tool::select>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::add_node>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::add_bone>());
+    tool_registry_.emplace_back(std::make_unique<ui::tool::constraint>());
 }
 
 void ui::tool::manager::init(canvas::manager& canvases, mdl::project& model) {

@@ -123,6 +123,10 @@ void ui::pane::tools::set_animation_mode(bool active) {
         bone->set_tool_icon("add_bone_icon.png", active ? 0.25 : 1.0);
         bone->setEnabled(!active);
     }
+    if (auto* constraint = tool_from_id(tool::id::constraint)) {
+        constraint->set_tool_icon("push_pin_icon.png", active ? 0.25 : 1.0);
+        constraint->setEnabled(!active);
+    }
 }
 
 #include "tools_pane.moc"
