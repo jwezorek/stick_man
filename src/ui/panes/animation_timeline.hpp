@@ -15,11 +15,11 @@ namespace ui::pane {
         sm::topology* working_ = nullptr;
         sm::object_id character_, animation_, selected_;
         timeline* timeline_;
-        QPushButton *play_, *undo_, *redo_, *apply_, *remove_;
+        QPushButton *play_, *undo_, *redo_, *remove_;
         QComboBox *bone_, *pivot_, *propagation_, *effector_, *pivot_node_, *easing_, *layer_;
         QSpinBox *start_, *duration_;
         QDoubleSpinBox* angle_;
-        QLabel *time_label_, *status_;
+        QLabel *time_label_, *status_, *selection_label_;
         QLabel *bone_label_, *pivot_label_, *propagation_label_, *effector_label_, *pivot_node_label_, *angle_label_;
         QWidget* parameters_;
         QTimer timer_;
@@ -45,7 +45,11 @@ namespace ui::pane {
             bool replace, bool explain = false);
         bool commit(const sm::animation& animation);
         void select_action(QString id);
-        void apply_changes();
+        void edit_selected_action(const std::function<void(sm::animation_action&)>& edit,
+            std::optional<row_head_position> row = {});
+        void preview_selected_angle(double angle);
+        void commit_selected_angle(double angle);
+        void refresh_action_adornment();
         void delete_action();
         void move_action(QString id, qint64 start, row_head_position row);
         void resize_action(QString id, qint64 start, qint64 end);

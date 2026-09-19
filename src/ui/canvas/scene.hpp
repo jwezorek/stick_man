@@ -14,6 +14,7 @@
 #include <variant>
 #include <optional>
 #include <ranges>
+#include <memory>
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -55,6 +56,19 @@ namespace ui {
         using node_transform = std::function<void(item::node*)>;
         using bone_transform = std::function<void(item::bone*)>;
 
+        // Canvas-space editing UI that temporarily gets first chance at input before the
+        // active tool. Animation action handles use this now; path/control-point editors
+        // can use the same mechanism later.
+        class interactive_adornment {
+        public:
+            virtual bool keyPressEvent(QKeyEvent*) { return false; }
+            virtual bool mousePressEvent(QGraphicsSceneMouseEvent*) { return false; }
+            virtual bool mouseMoveEvent(QGraphicsSceneMouseEvent*) { return false; }
+            virtual bool mouseReleaseEvent(QGraphicsSceneMouseEvent*) { return false; }
+            virtual void cancel() {}
+            virtual ~interactive_adornment() = default;
+        };
+
         enum class drag_mode {
             none,
             pan,
@@ -78,6 +92,7 @@ namespace ui {
             item::rubber_band* rubber_band_;
             std::optional<int> zoom_level_;
             artwork_layer* artwork_ = nullptr; // QObject child, lives with the scene.
+            std::shared_ptr<interactive_adornment> interactive_adornment_;
 
             struct bone_pick_state {
                 sm::object_id character;
@@ -177,6 +192,8 @@ namespace ui {
             void sync_selection();
             void clear_selection();
             void clear();
+            void set_interactive_adornment(std::shared_ptr<interactive_adornment> adornment);
+            void clear_interactive_adornment();
             void show_status_line(const QString& txt);
             void hide_status_line();
             void begin_bone_pick(const sm::object_id& character, const QString& slot,

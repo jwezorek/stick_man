@@ -128,14 +128,19 @@ void ui::timeline::paintEvent(QPaintEvent*) {
     }
     p.save(); p.setClipRect(QRect(gutter, ruler, viewport()->width()-gutter, viewport()->height()-ruler));
     auto draw = [&](const timeline_item& i, bool preview) {
-        auto r = item_rect(i); QColor c = color(i.color);
+        auto r = item_rect(i); QColor c = color(i.color); const bool selected = i.id == selected_;
         if (i.disabled) c = palette().mid().color();
-        QLinearGradient gradient(r.topLeft(), r.topRight()); gradient.setColorAt(0, c.lighter(115)); gradient.setColorAt(1, c.darker(108));
+        if (selected) c = c.lighter(125);
+        QLinearGradient gradient(r.topLeft(), r.topRight()); gradient.setColorAt(0, c.lighter(selected ? 125 : 115)); gradient.setColorAt(1, c.darker(selected ? 102 : 108));
         p.setBrush(gradient);
         p.setPen(QPen(i.invalid || (preview && !valid_drop_) ? QColor("#e45a64") :
-            i.id == selected_ ? palette().highlight().color() : c.darker(140), i.id == selected_ || preview ? 2 : 1,
+            selected ? palette().highlight().color().lighter(135) : c.darker(140), selected ? 3 : preview ? 2 : 1,
             i.provisional || preview ? Qt::DashLine : Qt::SolidLine));
         p.drawRoundedRect(r, 3, 3);
+        if (selected && r.width() > 8 && r.height() > 8) {
+            p.setBrush(Qt::NoBrush); p.setPen(QPen(QColor(255,255,255,150),1));
+            p.drawRoundedRect(r.adjusted(2,2,-2,-2),2,2);
+        }
         if (i.id == hovered_) p.fillRect(r, QColor(255,255,255,35));
         if (r.width() < 8) { p.setPen(QPen(c.lighter(140), 2)); p.drawLine(r.topLeft(), r.bottomLeft()); }
         p.setPen(Qt::white); p.drawText(r.adjusted(5,0,-4,0), Qt::AlignVCenter,
