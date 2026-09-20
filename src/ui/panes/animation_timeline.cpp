@@ -22,51 +22,6 @@ QSpinBox* milliseconds(const QString& name, int minimum, QWidget* parent) {
     box->setSuffix(" ms"); box->setKeyboardTracking(false); return box;
 }
 
-sm::point rotate_vector(sm::point p,double angle) {
-    const double c=std::cos(angle),v=std::sin(angle); return {c*p.x-v*p.y,v*p.x+c*p.y};
-}
-struct translation_frame { sm::point origin{}; double angle=0.0; };
-std::optional<translation_frame> current_bone_frame(sm::object_id bone_id,sm::topology& working) {
-    auto bone=working.get<sm::bone>(bone_id); if(!bone) return {};
-    const auto origin=bone->get().parent_node().world_pos();
-    return translation_frame{origin,sm::angle_from_u_to_v(origin,bone->get().child_node().world_pos())};
-}
-std::optional<translation_frame> base_bone_frame(sm::object_id bone_id,const sm::pose& base,sm::topology& working) {
-    auto bone=working.get<sm::bone>(bone_id); if(!bone) return {};
-    const auto u=base.node_positions.find(bone->get().parent_node().id());
-    const auto v=base.node_positions.find(bone->get().child_node().id());
-    if(u==base.node_positions.end() || v==base.node_positions.end()) return {};
-    return translation_frame{u->second,sm::angle_from_u_to_v(u->second,v->second)};
-}
-std::optional<translation_frame> reference_frame(sm::translation_reference reference,sm::object_id reference_bone,
-        sm::object_id character_root_bone,const sm::pose& base,sm::topology& working) {
-    if(reference==sm::translation_reference::animation_root)
-        return base_bone_frame(character_root_bone,base,working);
-    if(reference==sm::translation_reference::character_root)
-        return current_bone_frame(character_root_bone,working);
-    if(reference==sm::translation_reference::bone)
-        return current_bone_frame(reference_bone,working);
-    return {};
-}
-
-sm::animation actions_before(const sm::animation& animation, const sm::animation_action& selected) {
-    sm::animation before = animation;
-    before.layers.clear();
-    for (const auto& layer : animation.layers) {
-        auto found = std::ranges::find_if(layer.actions, [&](const auto& action) { return action.id == selected.id; });
-        if (found == layer.actions.end()) {
-            before.layers.push_back(layer);
-            continue;
-        }
-        sm::animation_layer prefix;
-        for (const auto& action : layer.actions)
-            if (action.id != selected.id && action.start < selected.start) prefix.actions.push_back(action);
-        before.layers.push_back(std::move(prefix));
-        break;
-    }
-    return before;
-}
-
 class rotation_action_adornment final : public ui::canvas::interactive_adornment {
     ui::canvas::scene& scene_;
     QPointF pivot_;
@@ -175,8 +130,8 @@ class translation_action_adornment final : public ui::canvas::interactive_adornm
     struct handle { std::size_t segment=0; role kind=role::endpoint; QGraphicsEllipseItem* item=nullptr; };
     ui::canvas::scene& scene_;
     sm::motion_path path_;
-    QPointF origin_;
-    double angle_=0.0;
+    sm::reference_frame frame_;
+    sm::point local_offset_{};
     QGraphicsPathItem* curve_=nullptr;
     QGraphicsEllipseItem* origin_handle_=nullptr;
     std::vector<QGraphicsLineItem*> guides_;
@@ -186,8 +141,9 @@ class translation_action_adornment final : public ui::canvas::interactive_adornm
     std::function<void(const sm::motion_path&)> commit_;
     std::function<void()> cancel_;
 
-    QPointF world(sm::point p) const { return origin_+ui::to_qt_pt(rotate_vector(p,angle_)); }
-    sm::point local(QPointF p) const { return rotate_vector(ui::from_qt_pt(p-origin_),-angle_); }
+    QPointF origin() const { return ui::to_qt_pt(frame_.local_to_world(local_offset_)); }
+    QPointF world(sm::point p) const { return ui::to_qt_pt(frame_.local_to_world(local_offset_+p)); }
+    sm::point local(QPointF p) const { return frame_.world_to_local(ui::from_qt_pt(p))-local_offset_; }
     double hit_tolerance() const { return 9.0/std::max(0.001,std::abs(scene_.scale())); }
     void set_cursor(Qt::CursorShape c){if(!scene_.views().isEmpty())scene_.views().first()->viewport()->setCursor(c);}
     void clear_cursor(){if(!scene_.views().isEmpty())scene_.views().first()->viewport()->unsetCursor();}
@@ -207,12 +163,12 @@ class translation_action_adornment final : public ui::canvas::interactive_adornm
         },path_.geometry());
     }
     void update_graphics() {
-        QPainterPath qp(origin_);
+        QPainterPath qp(origin());
         std::visit([&](const auto& g){using T=std::decay_t<decltype(g)>;
             if constexpr(std::is_same_v<T,sm::line_path>) qp.lineTo(world(g.end));
             else if constexpr(std::is_same_v<T,sm::cubic_bezier_path>) qp.cubicTo(world(g.control1),world(g.control2),world(g.end));
             else for(const auto& c:g.segments) qp.cubicTo(world(c.control1),world(c.control2),world(c.end));
-        },path_.geometry());curve_->setPath(qp);rebuild_handles();origin_handle_->setPos(origin_);
+        },path_.geometry());curve_->setPath(qp);rebuild_handles();origin_handle_->setPos(origin());
     }
     void set_handle(std::size_t index,sm::point p) {
         auto geometry=path_.geometry();const auto h=handles_[index];
@@ -239,9 +195,9 @@ class translation_action_adornment final : public ui::canvas::interactive_adornm
         return result;
     }
 public:
-    translation_action_adornment(ui::canvas::scene& scene,sm::motion_path path,QPointF origin,double angle,
+    translation_action_adornment(ui::canvas::scene& scene,sm::motion_path path,sm::reference_frame frame,sm::point local_offset,
         std::function<void(const sm::motion_path&)> preview,std::function<void(const sm::motion_path&)> commit,std::function<void()> cancel)
-        :scene_(scene),path_(std::move(path)),origin_(origin),angle_(angle),preview_(std::move(preview)),commit_(std::move(commit)),cancel_(std::move(cancel)){
+        :scene_(scene),path_(std::move(path)),frame_(frame),local_offset_(local_offset),preview_(std::move(preview)),commit_(std::move(commit)),cancel_(std::move(cancel)){
         curve_=new QGraphicsPathItem;QPen pen(QColor("#35d0c5"),2.5,Qt::DotLine,Qt::RoundCap,Qt::RoundJoin);pen.setCosmetic(true);curve_->setPen(pen);curve_->setBrush(Qt::NoBrush);curve_->setZValue(20000);scene_.addItem(curve_);
         origin_handle_=make_handle(8,false);update_graphics();
     }
@@ -414,7 +370,7 @@ void ui::pane::animation_timeline::begin(sm::object_id character,sm::object_id a
     sm::point animation_root_origin{};
     double animation_root_angle=0.0;
     const auto root_bone=character_root_bone();
-    if(base) if(auto frame=base_bone_frame(root_bone,*base,working)) {
+    if(base) if(auto frame=sm::translation_reference_frame(sm::translation_reference::animation_root,{},root_bone,*base,working)) {
         animation_root_origin=frame->origin;
         animation_root_angle=frame->angle;
     }
@@ -448,15 +404,16 @@ void ui::pane::animation_timeline::end() {
     panel.set_animation_property_changed({});
     panel.set_capture_pins_requested({});
     panel.set_animation_mode(false);
-    working_=nullptr; selected_={}; hide();
+    working_=nullptr; selected_={}; last_evaluation_.reset(); hide();
 }
 void ui::pane::animation_timeline::message(QString text) {status_->setText(std::move(text));}
 void ui::pane::animation_timeline::evaluate(const sm::animation& a,sm::animation_time time) {
     const auto& data=project_.core().animation_data(character_);
+    last_evaluation_.reset();
     const auto* base=data.find_pose(a.base_pose); if(!base || !working_) return;
-    auto report=sm::evaluate_animation(a,*base,character_root_bone(),*working_,time);
-    if(!report.invalid_actions.empty()) message("Some actions have missing or invalid targets and are skipped.");
-    else if(!report.unsupported_actions.empty()) message("Some action types are not previewed in this phase.");
+    last_evaluation_=sm::evaluate_animation(a,*base,character_root_bone(),*working_,time);
+    if(!last_evaluation_->invalid_actions.empty()) message("Some actions have missing or invalid targets and are skipped.");
+    else if(!last_evaluation_->unsupported_actions.empty()) message("Some action types are not previewed in this phase.");
     canvases_.active_canvas().sync_to_model();
     canvases_.active_canvas().update();
 }
@@ -684,35 +641,21 @@ void ui::pane::animation_timeline::refresh_action_adornment() {
     auto& scene=canvases_.active_canvas();
     scene.clear_interactive_adornment();
     auto* a=current(); auto* action=selected_action();
-    if(!a || !action || !working_) return;
-    const auto& data=project_.core().animation_data(character_);
-    const auto* base=data.find_pose(a->base_pose); if(!base) return;
+    if(!a || !action || !working_ || !last_evaluation_) return;
     const auto* rigid_rotation=std::get_if<sm::rigid_rotation>(&action->data);
     const auto* ik_rotation=std::get_if<sm::ik_rotation>(&action->data);
     const auto* rigid_translation=std::get_if<sm::rigid_translation>(&action->data);
     const auto* ik_translation=std::get_if<sm::ik_translation>(&action->data);
     if(!rigid_rotation&&!ik_rotation&&!rigid_translation&&!ik_translation)return;
-    const auto root_bone=character_root_bone();
-
+    const auto found=last_evaluation_->contexts.find(action->id);
+    if(found==last_evaluation_->contexts.end())return;
+    const auto& context=found->second;
     try {
-        // Reference frames and adornment anchors use the state supplied to this action,
-        // before the selected action itself contributes. This avoids bone-relative self-reference.
-        auto before=actions_before(*a,*action);
-        sm::evaluate_animation(before,*base,root_bone,*working_,time_);
         if(rigid_rotation || ik_rotation) {
-            QPointF pivot_point,rotating_point;double angle=rigid_rotation?rigid_rotation->angle:ik_rotation->angle;bool valid=false;
-            if(rigid_rotation) {
-                if(auto bone=working_->get<sm::bone>(rigid_rotation->bone)) {
-                    auto& pivot=rigid_rotation->pivot==sm::rotation_pivot::root?bone->get().parent_node():bone->get().child_node();
-                    auto& rotating=rigid_rotation->pivot==sm::rotation_pivot::root?bone->get().child_node():bone->get().parent_node();
-                    pivot_point=ui::to_qt_pt(pivot.world_pos());rotating_point=ui::to_qt_pt(rotating.world_pos());valid=true;
-                }
-            } else {
-                auto pivot=working_->get<sm::node>(ik_rotation->pivot_node);auto effector=working_->get<sm::node>(ik_rotation->effector);
-                if(pivot&&effector&&pivot->get().id()!=effector->get().id()) {pivot_point=ui::to_qt_pt(pivot->get().world_pos());rotating_point=ui::to_qt_pt(effector->get().world_pos());valid=true;}
-            }
-            sm::evaluate_animation(*a,*base,root_bone,*working_,time_);
-            if(!valid)return;
+            if(!context.rotation)return;
+            const QPointF pivot_point=ui::to_qt_pt(context.rotation->pivot);
+            const QPointF rotating_point=ui::to_qt_pt(context.rotation->rotating);
+            const double angle=rigid_rotation?rigid_rotation->angle:ik_rotation->angle;
             const auto radius=ui::distance(pivot_point,rotating_point);if(!(radius>0.0)||!std::isfinite(radius))return;
             const auto start_theta=ui::angle_through_points(pivot_point,rotating_point);
             scene.set_interactive_adornment(std::make_shared<rotation_action_adornment>(scene,pivot_point,radius,start_theta,angle,
@@ -721,29 +664,13 @@ void ui::pane::animation_timeline::refresh_action_adornment() {
             return;
         }
 
-        const auto reference=rigid_translation?rigid_translation->reference:ik_translation->reference;
-        const auto reference_bone=rigid_translation?rigid_translation->reference_bone:ik_translation->reference_bone;
-        const auto frame=reference_frame(reference,reference_bone,root_bone,*base,*working_);if(!frame){sm::evaluate_animation(*a,*base,root_bone,*working_,time_);return;}
-        QPointF origin;
-        const sm::motion_path* path=nullptr;
-        if(ik_translation) {
-            origin=ui::to_qt_pt(frame->origin+rotate_vector(ik_translation->effector_start,frame->angle));
-            path=&ik_translation->path;
-        } else {
-            sm::maybe_node_ref anchor;
-            if(auto root=working_->get<sm::bone>(root_bone);root && std::ranges::find(rigid_translation->skeletons,root->get().owner().id())!=rigid_translation->skeletons.end())
-                anchor=sm::node_ref(root->get().parent_node());
-            if(!anchor) for(auto sid:rigid_translation->skeletons) if(auto skel=working_->skeleton(sid);skel){anchor=skel->get().root_node();break;}
-            if(!anchor){sm::evaluate_animation(*a,*base,root_bone,*working_,time_);return;}
-            origin=ui::to_qt_pt(anchor->get().world_pos());path=&rigid_translation->path;
-        }
-        sm::evaluate_animation(*a,*base,root_bone,*working_,time_);
-        scene.set_interactive_adornment(std::make_shared<translation_action_adornment>(scene,*path,origin,frame->angle,
+        if(!context.translation_reference_frame)return;
+        const sm::motion_path* path=rigid_translation?&rigid_translation->path:&ik_translation->path;
+        const sm::point local_offset=ik_translation?ik_translation->effector_start:sm::point{};
+        scene.set_interactive_adornment(std::make_shared<translation_action_adornment>(scene,*path,*context.translation_reference_frame,local_offset,
             [this](const sm::motion_path& p){preview_selected_path(p);},[this](const sm::motion_path& p){commit_selected_path(p);},
             [this]{refresh();message("Action edit cancelled.");}));
-    } catch(...) {
-        try{sm::evaluate_animation(*a,*base,root_bone,*working_,time_);}catch(...){}
-    }
+    } catch(...) {}
 }
 void ui::pane::animation_timeline::translation_properties_changed() {
     if(updating_ || !working_) return;
@@ -768,11 +695,15 @@ void ui::pane::animation_timeline::translation_properties_changed() {
         const auto& data=project_.core().animation_data(character_);const auto* base=data.find_pose(a->base_pose);if(!base)return;
         const auto root_bone=character_root_bone();
         try {
-            auto before=actions_before(*a,*action);sm::evaluate_animation(before,*base,root_bone,*working_,action->start);
-            auto effector=working_->get<sm::node>(it->effector);
-            auto frame=reference_frame(settings.reference,settings.reference_bone,root_bone,*base,*working_);
-            if(!effector||!frame){refresh();message("The selected translation reference or effector is missing.");return;}
-            new_effector_start=rotate_vector(effector->get().world_pos()-frame->origin,-frame->angle);
+            auto probe=*a;
+            for(auto& layer:probe.layers)for(auto& candidate:layer.actions)if(candidate.id==action->id)
+                if(auto* t=std::get_if<sm::ik_translation>(&candidate.data)) {t->reference=settings.reference;t->reference_bone=settings.reference_bone;}
+            const auto report=sm::evaluate_animation(probe,*base,root_bone,*working_,action->start);
+            const auto context=report.contexts.find(action->id);
+            if(context==report.contexts.end() || !context->second.translation_reference_frame || !context->second.translation_anchor_world) {
+                refresh();message("The selected translation reference or effector is missing.");return;
+            }
+            new_effector_start=context->second.translation_reference_frame->world_to_local(*context->second.translation_anchor_world);
         } catch(const std::exception& error){refresh();message(error.what());return;}
     }
     edit_selected_action([&](auto& candidate){
@@ -860,7 +791,11 @@ void ui::pane::animation_timeline::action_update(const authored_action& authored
 }
 void ui::pane::animation_timeline::action_complete(const authored_action& authored) {
     if(!gesture_)return;action_update(authored);auto g=*gesture_;gesture_.reset();
-    if(g.moved)if(auto candidate=place(g.action,g.row,false,true)){selected_=g.action.id;time_=g.action.start+g.action.duration;commit(*candidate);return;}
+    if(g.moved)if(auto candidate=place(g.action,g.row,false,true)){
+        selected_=g.action.id;time_=g.action.start+g.action.duration;
+        if(commit(*candidate))return;
+        selected_={};refresh();return;
+    }
     refresh();
 }
 void ui::pane::animation_timeline::focus_action_editor(QString item) {

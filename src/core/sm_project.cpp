@@ -725,6 +725,13 @@ std::expected<sm::project_buffer, sm::project_result> sm::project::serialize() c
     }
 
     try {
+        for (auto character : this->characters())
+            character->animation_data().validate(topology_, character->character_root_bone());
+    } catch (const std::invalid_argument&) {
+        return std::unexpected(project_result::invalid_project_json);
+    }
+
+    try {
         detail::package_writer package;
         json characters = json::array();
         for (auto character : this->characters()) {
@@ -855,6 +862,9 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
                 }
             }
         }
+
+        for (const auto& [id, character] : new_characters)
+            character->animation_data().validate(new_topology, character->character_root_bone());
     }
     catch (...) {
         return project_result::invalid_project_json;

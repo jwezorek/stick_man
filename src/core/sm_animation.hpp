@@ -8,6 +8,7 @@
 #include <vector>
 #include <unordered_map>
 #include <utility>
+#include <optional>
 
 namespace sm {
     // Authored times are integer milliseconds; layers are ordered bottom to top.
@@ -62,6 +63,20 @@ namespace sm {
     };
 
     enum class translation_reference { animation_root, character_root, bone };
+
+    // A renderer-independent 2D reference frame used by translation actions.
+    // Motion paths are stored in this local coordinate system and converted to
+    // world space only when they are evaluated or presented by a client.
+    struct reference_frame {
+        point origin{};
+        double angle = 0.0;
+
+        point vector_to_world(point local) const;
+        point vector_to_local(point world) const;
+        point local_to_world(point local) const;
+        point world_to_local(point world) const;
+    };
+
     struct rigid_translation {
         std::vector<object_id> skeletons;
         motion_path path;
@@ -106,15 +121,43 @@ namespace sm {
         const pose* find_pose(object_id id) const;
         const animation* find_animation(object_id id) const;
         void validate() const;
+        void validate(const topology& topology, object_id character_root_bone) const;
     };
     pose capture_pose(const topology& topology, const std::vector<object_id>& skeletons, std::string name);
     void initialize_animation_assets(animation_assets& assets, const topology& topology, const std::vector<object_id>& skeletons);
     void apply_pose(const pose& pose, const topology& topology);
     bool pose_compatible(const pose& pose, const topology& topology, const std::vector<object_id>& skeletons);
+    struct rotation_evaluation_context {
+        point pivot{};
+        point rotating{};
+    };
+    struct action_evaluation_context {
+        std::optional<reference_frame> translation_reference_frame;
+        // For IK translations this is the effector position immediately before
+        // the action contributes, in the same deterministic working topology.
+        std::optional<point> translation_anchor_world;
+        std::optional<rotation_evaluation_context> rotation;
+    };
     struct animation_evaluation {
         std::vector<object_id> invalid_actions;
         std::vector<object_id> unsupported_actions;
+        std::vector<object_id> evaluation_order;
+        std::unordered_map<object_id, action_evaluation_context> contexts;
     };
+
+    // Resolve translation reference spaces without introducing any UI types.
+    // Animation Root is always taken from the base pose; Character Root and Bone
+    // are taken from the currently evaluated topology.
+    std::optional<reference_frame> bone_reference_frame(object_id bone_id, const topology& topology);
+    std::optional<reference_frame> translation_reference_frame(translation_reference reference,
+        object_id reference_bone, object_id character_root_bone, const pose& base, const topology& working);
+
+    // Returns the stable dependency order used by the evaluator. The ordinary
+    // layer/action order is retained unless a reference dependency requires a
+    // different ordering. Throws if explicit reference dependencies are cyclic.
+    std::vector<object_id> animation_evaluation_order(const animation& animation,
+        object_id character_root_bone, const topology& topology);
+
     // Evaluation always resets detached working geometry to the base pose; it never
     // integrates from the previously displayed frame.
     animation_evaluation evaluate_animation(const animation& animation, const pose& base,

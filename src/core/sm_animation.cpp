@@ -201,6 +201,11 @@ void sm::animation_assets::validate() const {
         }
     }
 }
+void sm::animation_assets::validate(const topology& topology, object_id character_root_bone) const {
+    validate();
+    for (const auto& animation : animations)
+        (void)animation_evaluation_order(animation, character_root_bone, topology);
+}
 sm::pose sm::capture_pose(const topology& topology, const std::vector<object_id>& skeletons, std::string name) {
     pose p; p.name = std::move(name);
     for (const auto& id : skeletons) if (auto s = topology.skeleton(id))

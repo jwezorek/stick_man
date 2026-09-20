@@ -400,7 +400,9 @@ void mdl::project::set_animation_mode(bool active) {
 void mdl::project::edit_animation_data(sm::object_id id, const std::function<void(sm::animation_assets&)>& edit) {
     auto before = core_.animation_data(id), after = before;
     edit(after);
-    after.validate();
+    const auto character = core_.character(id);
+    if (!character) throw std::invalid_argument("Missing character");
+    after.validate(core_.topology(), character->get().character_root_bone());
     execute_command({[id, after](project& p) { p.core_.animation_data(id) = after; },
         [id, before](project& p) { p.core_.animation_data(id) = before; }, {}, true});
 }

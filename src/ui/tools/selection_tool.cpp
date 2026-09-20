@@ -32,10 +32,6 @@ namespace rv = std::ranges::views;
 namespace {
 
     template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
-    sm::point rotate_vector(sm::point p, double angle) {
-        const double c=std::cos(angle), s=std::sin(angle);
-        return {c*p.x-s*p.y,s*p.x+c*p.y};
-    }
     bool is_bone_from_u_to_v(sm::bone_ref src_bone, sm::node_ref u, sm::node_ref v) {
         bool found = false;
         sm::visit_bones(
@@ -677,27 +673,22 @@ std::optional<ui::tool::translation_state> ui::tool::select::create_translation_
     if(animation_authoring_ && settings_panel_) {
         const auto authored=settings_panel_->animation_translation();
         state.path_kind=authored.path; state.reference=authored.reference; state.reference_bone=authored.reference_bone;
+        std::optional<sm::reference_frame> frame;
         if(state.reference==sm::translation_reference::animation_root) {
-            state.reference_origin=animation_authoring_->animation_root_origin;
-            state.reference_angle=animation_authoring_->animation_root_angle;
-        }
-        else if(state.reference==sm::translation_reference::character_root) {
-            auto bones=canv.bone_items();
-            auto found=r::find_if(bones,[&](auto* b){return b->model().id()==animation_authoring_->character_root_bone;});
-            if(found==bones.end()) return {};
-            auto& bone=(*found)->model();
-            state.reference_origin=bone.parent_node().world_pos();
-            state.reference_angle=sm::angle_from_u_to_v(state.reference_origin,bone.child_node().world_pos());
+            frame=sm::reference_frame{animation_authoring_->animation_root_origin,animation_authoring_->animation_root_angle};
         } else {
+            const auto bone_id=state.reference==sm::translation_reference::character_root
+                ? animation_authoring_->character_root_bone : state.reference_bone;
             auto bones=canv.bone_items();
-            auto found=r::find_if(bones,[&](auto* b){return b->model().id()==state.reference_bone;});
+            auto found=r::find_if(bones,[&](auto* b){return b->model().id()==bone_id;});
             if(found==bones.end()) return {};
-            auto& bone=(*found)->model();
-            state.reference_origin=bone.parent_node().world_pos();
-            state.reference_angle=sm::angle_from_u_to_v(state.reference_origin,bone.child_node().world_pos());
+            frame=sm::bone_reference_frame(bone_id,(*found)->model().owner().owner());
         }
+        if(!frame) return {};
+        state.reference_origin=frame->origin;
+        state.reference_angle=frame->angle;
         if(state.mode==sel_drag_mode::rag_doll && state.moving.size()==1) {
-            state.effector_start=rotate_vector(state.moving.front()->world_pos()-state.reference_origin,-state.reference_angle);
+            state.effector_start=frame->world_to_local(state.moving.front()->world_pos());
         }
     }
     return state;
@@ -903,8 +894,9 @@ ui::tool::select::authored_action ui::tool::select::authored_rotation_for(const 
 std::optional<ui::tool::select::authored_action> ui::tool::select::authored_translation_for(const translation_state& state) const {
     if(state.mode==sel_drag_mode::rubber_band || state.gesture_samples.size()<2) return {};
     std::vector<sm::point> local_samples; local_samples.reserve(state.gesture_samples.size());
-    const auto origin=state.gesture_samples.front();
-    for(auto p:state.gesture_samples) local_samples.push_back(rotate_vector(p-origin,-state.reference_angle));
+    const sm::reference_frame frame{state.reference_origin,state.reference_angle};
+    const auto origin=frame.world_to_local(state.gesture_samples.front());
+    for(auto p:state.gesture_samples) local_samples.push_back(frame.world_to_local(p)-origin);
     auto path=fit_motion_path(local_samples,state.path_kind);
     if(state.mode==sel_drag_mode::rigid) {
         std::vector<sm::object_id> skeletons;
