@@ -3,6 +3,8 @@
 #include "../canvas/bone_item.hpp"
 #include "../canvas/node_item.hpp"
 #include "../tools/selection_tool.hpp"
+#include "../tools/select_tool_panel.hpp"
+#include "../tools/motion_path_fit.hpp"
 #include "../tools/tool_manager.hpp"
 #include "../util.hpp"
 #include <numbers>
@@ -18,6 +20,28 @@ constexpr double degrees = 180.0/std::numbers::pi;
 QSpinBox* milliseconds(const QString& name, int minimum, QWidget* parent) {
     auto* box = new QSpinBox(parent); box->setObjectName(name); box->setRange(minimum, INT_MAX);
     box->setSuffix(" ms"); box->setKeyboardTracking(false); return box;
+}
+
+sm::point rotate_vector(sm::point p,double angle) {
+    const double c=std::cos(angle),v=std::sin(angle); return {c*p.x-v*p.y,v*p.x+c*p.y};
+}
+struct translation_frame { sm::point origin{}; double angle=0.0; };
+std::optional<translation_frame> reference_frame(sm::translation_reference reference,sm::object_id reference_bone,
+        sm::object_id character_root,const sm::pose& base,sm::topology& working) {
+    if(reference==sm::translation_reference::animation_root) {
+        auto i=base.node_positions.find(character_root); if(i==base.node_positions.end()) return {};
+        return translation_frame{i->second,0.0};
+    }
+    if(reference==sm::translation_reference::character_root) {
+        auto root=working.get<sm::node>(character_root); if(!root) return {};
+        return translation_frame{root->get().world_pos(),0.0};
+    }
+    if(reference==sm::translation_reference::bone) {
+        auto bone=working.get<sm::bone>(reference_bone); if(!bone) return {};
+        auto origin=bone->get().parent_node().world_pos();
+        return translation_frame{origin,sm::angle_from_u_to_v(origin,bone->get().child_node().world_pos())};
+    }
+    return {};
 }
 
 sm::animation actions_before(const sm::animation& animation, const sm::animation_action& selected) {
@@ -140,6 +164,93 @@ public:
         dragging_ = false; clear_cursor(); if (cancel_) cancel_();
     }
 };
+
+class translation_action_adornment final : public ui::canvas::interactive_adornment {
+    enum class role { control1, control2, endpoint };
+    struct handle { std::size_t segment=0; role kind=role::endpoint; QGraphicsEllipseItem* item=nullptr; };
+    ui::canvas::scene& scene_;
+    sm::motion_path path_;
+    QPointF origin_;
+    double angle_=0.0;
+    QGraphicsPathItem* curve_=nullptr;
+    QGraphicsEllipseItem* origin_handle_=nullptr;
+    std::vector<QGraphicsLineItem*> guides_;
+    std::vector<handle> handles_;
+    std::optional<std::size_t> dragging_;
+    std::function<void(const sm::motion_path&)> preview_;
+    std::function<void(const sm::motion_path&)> commit_;
+    std::function<void()> cancel_;
+
+    QPointF world(sm::point p) const { return origin_+ui::to_qt_pt(rotate_vector(p,angle_)); }
+    sm::point local(QPointF p) const { return rotate_vector(ui::from_qt_pt(p-origin_),-angle_); }
+    double hit_tolerance() const { return 9.0/std::max(0.001,std::abs(scene_.scale())); }
+    void set_cursor(Qt::CursorShape c){if(!scene_.views().isEmpty())scene_.views().first()->viewport()->setCursor(c);}
+    void clear_cursor(){if(!scene_.views().isEmpty())scene_.views().first()->viewport()->unsetCursor();}
+    static sm::point direction(sm::point p){double d=std::sqrt(p.x*p.x+p.y*p.y);return d>1e-9?(1.0/d)*p:sm::point{1,0};}
+    QGraphicsEllipseItem* make_handle(double diameter,bool filled) {
+        auto* h=new QGraphicsEllipseItem(-diameter/2,-diameter/2,diameter,diameter);h->setFlag(QGraphicsItem::ItemIgnoresTransformations);
+        QPen pen(QColor("#35d0c5"),2.0);pen.setCosmetic(true);h->setPen(pen);h->setBrush(filled?QBrush(QColor("#35d0c5")):QBrush(Qt::NoBrush));h->setZValue(20002);scene_.addItem(h);return h;
+    }
+    void rebuild_handles() {
+        for(auto& h:handles_)delete h.item;handles_.clear();for(auto* g:guides_)delete g;guides_.clear();
+        auto add=[&](std::size_t segment,role kind,sm::point p,bool filled){auto* item=make_handle(filled?11:9,filled);item->setPos(world(p));handles_.push_back({segment,kind,item});};
+        auto guide=[&](sm::point a,sm::point b){auto* line=new QGraphicsLineItem(QLineF(world(a),world(b)));QPen pen(QColor(53,208,197,150),1,Qt::DashLine);pen.setCosmetic(true);line->setPen(pen);line->setZValue(19999);scene_.addItem(line);guides_.push_back(line);};
+        std::visit([&](const auto& g){using T=std::decay_t<decltype(g)>;
+            if constexpr(std::is_same_v<T,sm::line_path>) add(0,role::endpoint,g.end,true);
+            else if constexpr(std::is_same_v<T,sm::cubic_bezier_path>){guide(g.start,g.control1);guide(g.control2,g.end);add(0,role::control1,g.control1,false);add(0,role::control2,g.control2,false);add(0,role::endpoint,g.end,true);}
+            else for(std::size_t i=0;i<g.segments.size();++i){const auto& c=g.segments[i];guide(c.start,c.control1);guide(c.control2,c.end);add(i,role::control1,c.control1,false);add(i,role::control2,c.control2,false);add(i,role::endpoint,c.end,true);}
+        },path_.geometry());
+    }
+    void update_graphics() {
+        QPainterPath qp(origin_);
+        std::visit([&](const auto& g){using T=std::decay_t<decltype(g)>;
+            if constexpr(std::is_same_v<T,sm::line_path>) qp.lineTo(world(g.end));
+            else if constexpr(std::is_same_v<T,sm::cubic_bezier_path>) qp.cubicTo(world(g.control1),world(g.control2),world(g.end));
+            else for(const auto& c:g.segments) qp.cubicTo(world(c.control1),world(c.control2),world(c.end));
+        },path_.geometry());curve_->setPath(qp);rebuild_handles();origin_handle_->setPos(origin_);
+    }
+    void set_handle(std::size_t index,sm::point p) {
+        auto geometry=path_.geometry();const auto h=handles_[index];
+        std::visit([&](auto& g){using T=std::decay_t<decltype(g)>;
+            if constexpr(std::is_same_v<T,sm::line_path>) g.end=p;
+            else if constexpr(std::is_same_v<T,sm::cubic_bezier_path>){
+                if(h.kind==role::control1)g.control1=p;else if(h.kind==role::control2)g.control2=p;else {auto d=p-g.end;g.end=p;g.control2+=d;}
+            } else {
+                auto& c=g.segments[h.segment];
+                if(h.kind==role::control1){
+                    c.control1=p;if(h.segment>0){auto& prev=g.segments[h.segment-1];double l=sm::distance(prev.control2,c.start);prev.control2=c.start-l*direction(p-c.start);}
+                } else if(h.kind==role::control2){
+                    c.control2=p;if(h.segment+1<g.segments.size()){auto& next=g.segments[h.segment+1];double l=sm::distance(next.control1,c.end);next.control1=c.end-l*direction(p-c.end);}
+                } else {
+                    auto old=c.end,d=p-old;c.end=p;c.control2+=d;
+                    if(h.segment+1<g.segments.size()){auto& next=g.segments[h.segment+1];next.start=p;next.control1+=d;}
+                }
+            }
+        },geometry);path_.set_geometry(std::move(geometry));update_graphics();
+    }
+    std::optional<std::size_t> hit(QPointF p) const {
+        double best=hit_tolerance();std::optional<std::size_t> result;
+        for(std::size_t i=0;i<handles_.size();++i){double d=ui::distance(p,handles_[i].item->pos());if(d<=best){best=d;result=i;}}
+        return result;
+    }
+public:
+    translation_action_adornment(ui::canvas::scene& scene,sm::motion_path path,QPointF origin,double angle,
+        std::function<void(const sm::motion_path&)> preview,std::function<void(const sm::motion_path&)> commit,std::function<void()> cancel)
+        :scene_(scene),path_(std::move(path)),origin_(origin),angle_(angle),preview_(std::move(preview)),commit_(std::move(commit)),cancel_(std::move(cancel)){
+        curve_=new QGraphicsPathItem;QPen pen(QColor("#35d0c5"),2.5,Qt::DotLine,Qt::RoundCap,Qt::RoundJoin);pen.setCosmetic(true);curve_->setPen(pen);curve_->setBrush(Qt::NoBrush);curve_->setZValue(20000);scene_.addItem(curve_);
+        origin_handle_=make_handle(8,false);update_graphics();
+    }
+    ~translation_action_adornment() override {clear_cursor();for(auto& h:handles_)delete h.item;for(auto* g:guides_)delete g;delete curve_;delete origin_handle_;}
+    bool keyPressEvent(QKeyEvent* event) override {if(!dragging_||event->key()!=Qt::Key_Escape)return false;dragging_.reset();clear_cursor();if(cancel_)cancel_();return true;}
+    bool mousePressEvent(QGraphicsSceneMouseEvent* event) override {if(event->button()!=Qt::LeftButton)return false;auto h=hit(event->scenePos());if(!h)return false;dragging_=h;set_cursor(Qt::ClosedHandCursor);return true;}
+    bool mouseMoveEvent(QGraphicsSceneMouseEvent* event) override {
+        if(!dragging_){if(hit(event->scenePos())){set_cursor(Qt::OpenHandCursor);return true;}clear_cursor();return false;}
+        auto index=*dragging_; // update_graphics rebuilds handles, but preserves descriptor ordering.
+        set_handle(index,local(event->scenePos()));if(preview_)preview_(path_);return true;
+    }
+    bool mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override {if(!dragging_||event->button()!=Qt::LeftButton)return false;mouseMoveEvent(event);dragging_.reset();clear_cursor();if(commit_)commit_(path_);return true;}
+    void cancel() override {if(!dragging_)return;dragging_.reset();clear_cursor();if(cancel_)cancel_();}
+};
 }
 ui::pane::animation_timeline::animation_timeline(mdl::project& project, canvas::manager& canvases,
         tool::manager& tools, QWidget* parent) : QDockWidget("Animation Timeline",parent),
@@ -191,7 +302,7 @@ ui::pane::animation_timeline::animation_timeline(mdl::project& project, canvas::
     remove_ = new QPushButton("Delete action"); remove_->setObjectName("delete_rotation"); edits->addWidget(remove_);
     connect(remove_,&QPushButton::clicked,this,&animation_timeline::delete_action);
     edits->addStretch();
-    status_ = new QLabel("Use the Selection/Animate tool and its existing Rigid, Unique Bone, or Ragdoll rotation settings to create actions.");
+    status_ = new QLabel("Use the Selection/Animate tool to author rotation or translation actions. Translation path/reference options are in Tool Properties.");
     status_->setWordWrap(true); layout->addWidget(status_);
     connect(timeline_,&timeline::headMoved,this,&animation_timeline::seek);
     connect(timeline_,&timeline::rowHeadMoved,this,[this](row_head_position row){insertion_=row;refresh_parameters();});
@@ -270,37 +381,65 @@ const sm::animation_action* ui::pane::animation_timeline::selected_action() cons
     if(auto* a=current()) for(const auto& l:a->layers) for(const auto& action:l.actions) if(action.id==selected_) return &action;
     return nullptr;
 }
+ui::tool::select_tool_panel& ui::pane::animation_timeline::selection_panel() const {
+    auto& selection=static_cast<tool::select&>(tools_.tool_from_id(tool::id::selection));
+    return *static_cast<tool::select_tool_panel*>(selection.settings_widget());
+}
 void ui::pane::animation_timeline::begin(sm::object_id character,sm::object_id animation,sm::topology& working) {
     character_=character;animation_=animation;working_=&working;selected_={};time_=0;insertion_={};
     bone_->clear(); effector_->clear(); pivot_node_->clear();
+    std::vector<std::pair<sm::object_id,std::string>> reference_bones;
     for(auto s:working.skeletons()) {
-        for(auto b:s->bones()) bone_->addItem(QString::fromStdString(b->name()),text(b->id()));
+        for(auto b:s->bones()) {
+            bone_->addItem(QString::fromStdString(b->name()),text(b->id()));
+            reference_bones.emplace_back(b->id(),b->name());
+        }
         for(auto n:s->nodes()) {
             const auto name=QString::fromStdString(n->name());
             effector_->addItem(name,text(n->id())); pivot_node_->addItem(name,text(n->id()));
         }
     }
+    const auto& data=project_.core().animation_data(character_);
+    const auto* a=data.find_animation(animation_);
+    const auto* base=a ? data.find_pose(a->base_pose) : nullptr;
+    sm::point animation_root_origin{};
+    if(base) if(auto i=base->node_positions.find(data.character_root);i!=base->node_positions.end()) animation_root_origin=i->second;
+
+    auto& panel=selection_panel();
+    panel.set_reference_bones(reference_bones);
+    panel.set_animation_mode(true);
+    panel.set_animation_property_changed([this]{translation_properties_changed();});
+    panel.set_capture_pins_requested([this]{capture_selected_pins();});
+
     auto& selection=static_cast<tool::select&>(tools_.tool_from_id(tool::id::selection));
     selection.set_animation_authoring(tool::select::animation_authoring{
-        [this](const auto& r){rotation_begin(r);},
-        [this](const auto& r){rotation_update(r);},
-        [this](const auto& r){rotation_complete(r);},
+        data.character_root,
+        animation_root_origin,
+        [this](const authored_action& action){action_begin(action);},
+        [this](const authored_action& action){action_update(action);},
+        [this](const authored_action& action){action_complete(action);},
         [this]{cancel_gesture();},
         [this](QString why){cancel_gesture();message(std::move(why));}});
     tools_.set_current_tool(canvases_,tool::id::selection);
-    show(); refresh(); timeline_->set_visible_range(0,std::max<qint64>(5000,current()->duration()));
+    show(); refresh();
+    if(current()) timeline_->set_visible_range(0,std::max<qint64>(5000,current()->duration()));
 }
 void ui::pane::animation_timeline::end() {
     pause(); cancel_gesture();
     canvases_.active_canvas().clear_interactive_adornment();
-    static_cast<tool::select&>(tools_.tool_from_id(tool::id::selection)).set_animation_authoring({});
+    auto& selection=static_cast<tool::select&>(tools_.tool_from_id(tool::id::selection));
+    selection.set_animation_authoring({});
+    auto& panel=selection_panel();
+    panel.set_animation_property_changed({});
+    panel.set_capture_pins_requested({});
+    panel.set_animation_mode(false);
     working_=nullptr; selected_={}; hide();
 }
 void ui::pane::animation_timeline::message(QString text) {status_->setText(std::move(text));}
 void ui::pane::animation_timeline::evaluate(const sm::animation& a,sm::animation_time time) {
     const auto& data=project_.core().animation_data(character_);
-    const auto* base=data.find_pose(a.base_pose); if(!base) return;
-    auto report=sm::evaluate_animation(a,*base,*working_,time);
+    const auto* base=data.find_pose(a.base_pose); if(!base || !working_) return;
+    auto report=sm::evaluate_animation(a,*base,data.character_root,*working_,time);
     if(!report.invalid_actions.empty()) message("Some actions have missing or invalid targets and are skipped.");
     else if(!report.unsupported_actions.empty()) message("Some action types are not previewed in this phase.");
     canvases_.active_canvas().sync_to_model();
@@ -309,6 +448,10 @@ void ui::pane::animation_timeline::evaluate(const sm::animation& a,sm::animation
 void ui::pane::animation_timeline::present(const sm::animation& a,sm::animation_time time,std::optional<sm::object_id> provisional) {
     const int rows=int(a.layers.size()); timeline_->set_rows(rows);
     std::vector<timeline_item> items;
+    auto path_name=[](sm::motion_path_kind kind)->QString {
+        switch(kind){case sm::motion_path_kind::straight:return "Straight";case sm::motion_path_kind::curve:return "Curve";case sm::motion_path_kind::spline:return "Spline";}
+        return "Path";
+    };
     for(int layer=0;layer<rows;++layer) for(const auto& action:a.layers[layer].actions) {
         QString label="Unsupported action"; timeline_color color=timeline_color::blue; bool supported=false, invalid=false;
         if(const auto* rotation=std::get_if<sm::rigid_rotation>(&action.data)) {
@@ -322,6 +465,18 @@ void ui::pane::animation_timeline::present(const sm::animation& a,sm::animation_
             invalid=!effector || !pivot;
             label=QString("IK rotate %1 (%2°)").arg(effector?QString::fromStdString(effector->get().name()):"missing effector")
                 .arg(rotation->angle*degrees,0,'f',1);
+        } else if(const auto* translation=std::get_if<sm::rigid_translation>(&action.data)) {
+            supported=true;color=timeline_color::green;
+            invalid=translation->skeletons.empty();
+            for(auto sid:translation->skeletons) invalid=invalid || !working_->contains_skeleton(sid);
+            if(translation->reference==sm::translation_reference::bone) invalid=invalid || !working_->get<sm::bone>(translation->reference_bone);
+            label=QString("Translate %1 skeleton%2 (%3)").arg(translation->skeletons.size()).arg(translation->skeletons.size()==1?"":"s").arg(path_name(translation->path.kind()));
+        } else if(const auto* translation=std::get_if<sm::ik_translation>(&action.data)) {
+            supported=true;color=timeline_color::orange;
+            auto effector=working_->get<sm::node>(translation->effector);invalid=!effector;
+            for(auto pin:translation->pins) invalid=invalid || !working_->get<sm::node>(pin);
+            if(translation->reference==sm::translation_reference::bone) invalid=invalid || !working_->get<sm::bone>(translation->reference_bone);
+            label=QString("IK translate %1 (%2)").arg(effector?QString::fromStdString(effector->get().name()):"missing effector").arg(path_name(translation->path.kind()));
         }
         items.push_back({text(action.id),action.start,action.duration,rows-1-layer,label,color,
             provisional==action.id,!supported,invalid});
@@ -342,12 +497,26 @@ void ui::pane::animation_timeline::update_action_field_visibility() {
     const auto* action = selected_action();
     const bool bone_rotation = action && std::holds_alternative<sm::rigid_rotation>(action->data);
     const bool ik_rotation = action && std::holds_alternative<sm::ik_rotation>(action->data);
+    const bool translation = action && (std::holds_alternative<sm::rigid_translation>(action->data) || std::holds_alternative<sm::ik_translation>(action->data));
     bone_label_->setVisible(bone_rotation); bone_->setVisible(bone_rotation);
     pivot_label_->setVisible(bone_rotation); pivot_->setVisible(bone_rotation);
     propagation_label_->setVisible(bone_rotation); propagation_->setVisible(bone_rotation);
     effector_label_->setVisible(ik_rotation); effector_->setVisible(ik_rotation);
     pivot_node_label_->setVisible(ik_rotation); pivot_node_->setVisible(ik_rotation);
     angle_label_->setVisible(bone_rotation || ik_rotation); angle_->setVisible(bone_rotation || ik_rotation);
+    easing_->setEnabled(!translation);
+}
+void ui::pane::animation_timeline::sync_selection_tool_properties() {
+    auto& panel=selection_panel();
+    if(const auto* action=selected_action()) {
+        if(const auto* t=std::get_if<sm::rigid_translation>(&action->data)) {
+            panel.set_animation_translation({t->path.kind(),t->reference,t->reference_bone},false);return;
+        }
+        if(const auto* t=std::get_if<sm::ik_translation>(&action->data)) {
+            panel.set_animation_translation({t->path.kind(),t->reference,t->reference_bone},true);return;
+        }
+    }
+    panel.set_animation_translation(panel.animation_translation(),false);
 }
 void ui::pane::animation_timeline::refresh_parameters() {
     auto* a=current(); if(!a) return;
@@ -360,6 +529,8 @@ void ui::pane::animation_timeline::refresh_parameters() {
     auto* action=selected_action();
     const auto* rotation=action ? std::get_if<sm::rigid_rotation>(&action->data):nullptr;
     const auto* ik=action ? std::get_if<sm::ik_rotation>(&action->data):nullptr;
+    const auto* rigid_translation=action ? std::get_if<sm::rigid_translation>(&action->data):nullptr;
+    const auto* ik_translation=action ? std::get_if<sm::ik_translation>(&action->data):nullptr;
     remove_->setEnabled(action);start_->setEnabled(action);
     if(rotation) {
         auto bone=working_ ? working_->get<sm::bone>(rotation->bone) : sm::maybe_bone_ref{};
@@ -367,11 +538,16 @@ void ui::pane::animation_timeline::refresh_parameters() {
     } else if(ik) {
         auto effector=working_ ? working_->get<sm::node>(ik->effector) : sm::maybe_node_ref{};
         selection_label_->setText(QString("Selected action — IK rotate %1").arg(effector?QString::fromStdString(effector->get().name()):"missing effector"));
+    } else if(rigid_translation) {
+        selection_label_->setText(QString("Selected action — Translate %1 skeleton%2").arg(rigid_translation->skeletons.size()).arg(rigid_translation->skeletons.size()==1?"":"s"));
+    } else if(ik_translation) {
+        auto effector=working_ ? working_->get<sm::node>(ik_translation->effector) : sm::maybe_node_ref{};
+        selection_label_->setText(QString("Selected action — IK translate %1").arg(effector?QString::fromStdString(effector->get().name()):"missing effector"));
     } else selection_label_->setText(action ? "Selected action" : "No action selected");
     if(action) {
         start_->setValue(int(std::min<qint64>(INT_MAX,action->start)));
         duration_->setValue(int(std::min<qint64>(INT_MAX,action->duration)));
-        easing_->setCurrentIndex(int(action->easing));
+        easing_->setCurrentIndex((rigid_translation||ik_translation)?int(sm::easing::linear):int(action->easing));
     } else {
         start_->setValue(int(std::min<qint64>(INT_MAX,time_)));
         easing_->setCurrentIndex(int(sm::easing::linear));
@@ -390,6 +566,7 @@ void ui::pane::animation_timeline::refresh_parameters() {
     if(a->layers.empty()) insertion_={};
     layer_->setCurrentIndex(2*insertion_.index+(insertion_.kind==row_head_position::placement::on_row?1:0));
     timeline_->set_row_head(insertion_); update_action_field_visibility(); updating_=false;
+    sync_selection_tool_properties();
 }
 std::optional<sm::animation> ui::pane::animation_timeline::place(sm::animation_action action,row_head_position row,bool replace,bool explain) {
     auto* a=current();if(!a) return {};
@@ -469,48 +646,134 @@ void ui::pane::animation_timeline::commit_selected_angle(double angle) {
         else if(auto* r=std::get_if<sm::ik_rotation>(&action.data)) r->angle=angle;
     });
 }
+void ui::pane::animation_timeline::preview_selected_path(const sm::motion_path& path) {
+    auto* a=current();auto* action=selected_action();if(!a||!action)return;
+    auto preview=*a;
+    for(auto& layer:preview.layers) for(auto& candidate:layer.actions) if(candidate.id==selected_) {
+        if(auto* t=std::get_if<sm::rigid_translation>(&candidate.data))t->path=path;
+        else if(auto* t=std::get_if<sm::ik_translation>(&candidate.data))t->path=path;
+    }
+    pause();evaluate(preview,time_);present(preview,time_);
+    message(QString("Motion path length: %1 — release to commit; Escape cancels.").arg(path.length(),0,'f',1));
+}
+void ui::pane::animation_timeline::commit_selected_path(const sm::motion_path& path) {
+    edit_selected_action([&](auto& action){
+        if(auto* t=std::get_if<sm::rigid_translation>(&action.data))t->path=path;
+        else if(auto* t=std::get_if<sm::ik_translation>(&action.data))t->path=path;
+    });
+}
 void ui::pane::animation_timeline::refresh_action_adornment() {
     auto& scene=canvases_.active_canvas();
     scene.clear_interactive_adornment();
     auto* a=current(); auto* action=selected_action();
     if(!a || !action || !working_) return;
-    const auto* rigid=std::get_if<sm::rigid_rotation>(&action->data);
-    const auto* ik=std::get_if<sm::ik_rotation>(&action->data);
-    if(!rigid && !ik) return;
     const auto& data=project_.core().animation_data(character_);
     const auto* base=data.find_pose(a->base_pose); if(!base) return;
+    const auto* rigid_rotation=std::get_if<sm::rigid_rotation>(&action->data);
+    const auto* ik_rotation=std::get_if<sm::ik_rotation>(&action->data);
+    const auto* rigid_translation=std::get_if<sm::rigid_translation>(&action->data);
+    const auto* ik_translation=std::get_if<sm::ik_translation>(&action->data);
+    if(!rigid_rotation&&!ik_rotation&&!rigid_translation&&!ik_translation)return;
 
-    QPointF pivot_point, rotating_point; double angle=rigid ? rigid->angle : ik->angle; bool valid=false;
     try {
-        // Draw/edit the action in the pose it receives as input, not in the pose
-        // after this action (or higher layers) have already transformed it.
+        // Reference frames and adornment anchors use the state supplied to this action,
+        // before the selected action itself contributes. This avoids bone-relative self-reference.
         auto before=actions_before(*a,*action);
-        sm::evaluate_animation(before,*base,*working_,time_);
-        if(rigid) {
-            if(auto bone=working_->get<sm::bone>(rigid->bone)) {
-                auto& pivot=rigid->pivot==sm::rotation_pivot::root ? bone->get().parent_node() : bone->get().child_node();
-                auto& rotating=rigid->pivot==sm::rotation_pivot::root ? bone->get().child_node() : bone->get().parent_node();
-                pivot_point=ui::to_qt_pt(pivot.world_pos()); rotating_point=ui::to_qt_pt(rotating.world_pos()); valid=true;
+        sm::evaluate_animation(before,*base,data.character_root,*working_,time_);
+        if(rigid_rotation || ik_rotation) {
+            QPointF pivot_point,rotating_point;double angle=rigid_rotation?rigid_rotation->angle:ik_rotation->angle;bool valid=false;
+            if(rigid_rotation) {
+                if(auto bone=working_->get<sm::bone>(rigid_rotation->bone)) {
+                    auto& pivot=rigid_rotation->pivot==sm::rotation_pivot::root?bone->get().parent_node():bone->get().child_node();
+                    auto& rotating=rigid_rotation->pivot==sm::rotation_pivot::root?bone->get().child_node():bone->get().parent_node();
+                    pivot_point=ui::to_qt_pt(pivot.world_pos());rotating_point=ui::to_qt_pt(rotating.world_pos());valid=true;
+                }
+            } else {
+                auto pivot=working_->get<sm::node>(ik_rotation->pivot_node);auto effector=working_->get<sm::node>(ik_rotation->effector);
+                if(pivot&&effector&&pivot->get().id()!=effector->get().id()) {pivot_point=ui::to_qt_pt(pivot->get().world_pos());rotating_point=ui::to_qt_pt(effector->get().world_pos());valid=true;}
             }
-        } else {
-            auto pivot=working_->get<sm::node>(ik->pivot_node); auto effector=working_->get<sm::node>(ik->effector);
-            if(pivot && effector && pivot->get().id()!=effector->get().id()) {
-                pivot_point=ui::to_qt_pt(pivot->get().world_pos()); rotating_point=ui::to_qt_pt(effector->get().world_pos()); valid=true;
-            }
+            sm::evaluate_animation(*a,*base,data.character_root,*working_,time_);
+            if(!valid)return;
+            const auto radius=ui::distance(pivot_point,rotating_point);if(!(radius>0.0)||!std::isfinite(radius))return;
+            const auto start_theta=ui::angle_through_points(pivot_point,rotating_point);
+            scene.set_interactive_adornment(std::make_shared<rotation_action_adornment>(scene,pivot_point,radius,start_theta,angle,
+                [this](double value){preview_selected_angle(value);},[this](double value){commit_selected_angle(value);},
+                [this]{refresh();message("Action edit cancelled.");}));
+            return;
         }
-        sm::evaluate_animation(*a,*base,*working_,time_);
+
+        const auto reference=rigid_translation?rigid_translation->reference:ik_translation->reference;
+        const auto reference_bone=rigid_translation?rigid_translation->reference_bone:ik_translation->reference_bone;
+        const auto frame=reference_frame(reference,reference_bone,data.character_root,*base,*working_);if(!frame){sm::evaluate_animation(*a,*base,data.character_root,*working_,time_);return;}
+        QPointF origin;
+        const sm::motion_path* path=nullptr;
+        if(ik_translation) {
+            origin=ui::to_qt_pt(frame->origin+rotate_vector(ik_translation->effector_start,frame->angle));
+            path=&ik_translation->path;
+        } else {
+            sm::maybe_node_ref anchor;
+            if(auto root=working_->get<sm::node>(data.character_root);root && std::ranges::find(rigid_translation->skeletons,root->get().owner().id())!=rigid_translation->skeletons.end()) anchor=root;
+            if(!anchor) for(auto sid:rigid_translation->skeletons) if(auto skel=working_->skeleton(sid);skel){anchor=skel->get().root_node();break;}
+            if(!anchor){sm::evaluate_animation(*a,*base,data.character_root,*working_,time_);return;}
+            origin=ui::to_qt_pt(anchor->get().world_pos());path=&rigid_translation->path;
+        }
+        sm::evaluate_animation(*a,*base,data.character_root,*working_,time_);
+        scene.set_interactive_adornment(std::make_shared<translation_action_adornment>(scene,*path,origin,frame->angle,
+            [this](const sm::motion_path& p){preview_selected_path(p);},[this](const sm::motion_path& p){commit_selected_path(p);},
+            [this]{refresh();message("Action edit cancelled.");}));
     } catch(...) {
-        try { sm::evaluate_animation(*a,*base,*working_,time_); } catch(...) {}
-        return;
+        try{sm::evaluate_animation(*a,*base,data.character_root,*working_,time_);}catch(...){}
     }
-    if(!valid) return;
-    const auto radius=ui::distance(pivot_point,rotating_point);
-    if(!(radius>0.0) || !std::isfinite(radius)) return;
-    const auto start_theta=ui::angle_through_points(pivot_point,rotating_point);
-    scene.set_interactive_adornment(std::make_shared<rotation_action_adornment>(scene,pivot_point,radius,start_theta,angle,
-        [this](double value){preview_selected_angle(value);},
-        [this](double value){commit_selected_angle(value);},
-        [this]{refresh();message("Action edit cancelled.");}));
+}
+void ui::pane::animation_timeline::translation_properties_changed() {
+    if(updating_ || !working_) return;
+    auto* action=selected_action();auto* a=current();if(!action||!a)return;
+    const auto* rt=std::get_if<sm::rigid_translation>(&action->data);
+    const auto* it=std::get_if<sm::ik_translation>(&action->data);
+    if(!rt&&!it)return;
+
+    auto settings=selection_panel().animation_translation();
+    const auto old_reference=rt?rt->reference:it->reference;
+    const auto old_bone=rt?rt->reference_bone:it->reference_bone;
+    // A missing reference is displayed as a blank combo rather than another bone.
+    // Preserve that missing ID for unrelated edits so Path changes do not silently
+    // retarget (or become impossible) before the user repairs the reference.
+    if(settings.reference==sm::translation_reference::bone && settings.reference_bone.is_nil() &&
+       old_reference==sm::translation_reference::bone) settings.reference_bone=old_bone;
+    const bool reference_changed=settings.reference!=old_reference ||
+        (settings.reference==sm::translation_reference::bone && settings.reference_bone!=old_bone);
+
+    std::optional<sm::point> new_effector_start;
+    if(it && reference_changed) {
+        const auto& data=project_.core().animation_data(character_);const auto* base=data.find_pose(a->base_pose);if(!base)return;
+        try {
+            auto before=actions_before(*a,*action);sm::evaluate_animation(before,*base,data.character_root,*working_,action->start);
+            auto effector=working_->get<sm::node>(it->effector);
+            auto frame=reference_frame(settings.reference,settings.reference_bone,data.character_root,*base,*working_);
+            if(!effector||!frame){refresh();message("The selected translation reference or effector is missing.");return;}
+            new_effector_start=rotate_vector(effector->get().world_pos()-frame->origin,-frame->angle);
+        } catch(const std::exception& error){refresh();message(error.what());return;}
+    }
+    edit_selected_action([&](auto& candidate){
+        if(auto* t=std::get_if<sm::rigid_translation>(&candidate.data)) {
+            if(t->path.kind()!=settings.path)t->path=tool::convert_motion_path(t->path,settings.path);
+            t->reference=settings.reference;t->reference_bone=settings.reference_bone;
+        } else if(auto* t=std::get_if<sm::ik_translation>(&candidate.data)) {
+            if(t->path.kind()!=settings.path)t->path=tool::convert_motion_path(t->path,settings.path);
+            t->reference=settings.reference;t->reference_bone=settings.reference_bone;
+            if(new_effector_start)t->effector_start=*new_effector_start;
+        }
+    });
+}
+void ui::pane::animation_timeline::capture_selected_pins() {
+    auto* action=selected_action();if(!action||!working_)return;
+    const auto* translation=std::get_if<sm::ik_translation>(&action->data);if(!translation)return;
+    auto effector=working_->get<sm::node>(translation->effector);if(!effector){message("The IK effector is missing.");return;}
+    std::vector<sm::object_id> pins;
+    const auto owner=effector->get().owner().id();
+    for(auto pin:canvases_.active_canvas().pinned_node_ids()) if(auto node=working_->get<sm::node>(pin);node&&pin!=translation->effector&&node->get().owner().id()==owner)pins.push_back(pin);
+    std::ranges::sort(pins);pins.erase(std::unique(pins.begin(),pins.end()),pins.end());
+    edit_selected_action([pins=std::move(pins)](auto& candidate) mutable {if(auto* t=std::get_if<sm::ik_translation>(&candidate.data))t->pins=std::move(pins);});
 }
 void ui::pane::animation_timeline::delete_action() {
     if(!selected_action()) return;
@@ -551,44 +814,42 @@ void ui::pane::animation_timeline::tick() {
     time_label_->setText(QString("%1 / %2 ms").arg(time_).arg(a->duration()));
     if(time_>=a->duration()) pause();
 }
-void ui::pane::animation_timeline::rotation_begin(const authored_rotation& rotation) {
-    if(!current()) return;
-    pause(); cancel_gesture(); canvases_.active_canvas().clear_interactive_adornment();
-    gesture g; g.action.start=time_; g.action.duration=duration_->value(); g.action.easing=sm::easing(easing_->currentIndex()); g.row=insertion_;
-    std::visit([&](const auto& value){g.action.data=value;},rotation);
-    gesture_=std::move(g);
-    message("Drag to author the rotation; release to create the action. Escape cancels.");
+void ui::pane::animation_timeline::action_begin(const authored_action& authored) {
+    if(!current())return;
+    pause();cancel_gesture();canvases_.active_canvas().clear_interactive_adornment();
+    gesture g;g.action.start=time_;g.action.duration=duration_->value();g.row=insertion_;g.action.data=authored;
+    const bool translation=std::holds_alternative<sm::rigid_translation>(authored)||std::holds_alternative<sm::ik_translation>(authored);
+    g.action.easing=translation?sm::easing::linear:sm::easing(easing_->currentIndex());gesture_=std::move(g);
+    message(translation?"Drag to author the translation path; release to create the action. Escape cancels.":"Drag to author the rotation; release to create the action. Escape cancels.");
 }
-void ui::pane::animation_timeline::rotation_update(const authored_rotation& rotation) {
-    if(!gesture_) return;
-    auto& g=*gesture_;
-    std::visit([&](const auto& value){g.action.data=value;},rotation);
-    const double angle=std::visit([](const auto& value){return value.angle;},rotation);
-    g.moved=std::abs(angle)>1e-8;
+void ui::pane::animation_timeline::action_update(const authored_action& authored) {
+    if(!gesture_)return;auto& g=*gesture_;g.action.data=authored;
+    QString preview_text;
+    if(const auto* r=std::get_if<sm::rigid_rotation>(&authored)){g.moved=std::abs(r->angle)>1e-8;preview_text=QString("Rotation preview: %1°").arg(r->angle*degrees,0,'f',1);}
+    else if(const auto* r=std::get_if<sm::ik_rotation>(&authored)){g.moved=std::abs(r->angle)>1e-8;preview_text=QString("Rotation preview: %1°").arg(r->angle*degrees,0,'f',1);}
+    else if(const auto* t=std::get_if<sm::rigid_translation>(&authored)){g.moved=t->path.length()>1e-6;preview_text=QString("Translation preview: %1 units (%2)").arg(t->path.length(),0,'f',1).arg(t->path.kind()==sm::motion_path_kind::straight?"Straight":t->path.kind()==sm::motion_path_kind::curve?"Curve":"Spline");}
+    else if(const auto* t=std::get_if<sm::ik_translation>(&authored)){g.moved=t->path.length()>1e-6;preview_text=QString("IK translation preview: %1 units (%2)").arg(t->path.length(),0,'f',1).arg(t->path.kind()==sm::motion_path_kind::straight?"Straight":t->path.kind()==sm::motion_path_kind::curve?"Curve":"Spline");}
     if(auto candidate=place(g.action,g.row,false,true)) {
-        time_=g.action.start+g.action.duration;
-        present(*candidate,time_,g.action.id);
-        message(QString("Rotation preview: %1° over %2 ms. Release to create; Escape cancels.").arg(angle*degrees,0,'f',1).arg(g.action.duration));
+        // The Selection tool itself owns the live manipulation during the gesture.
+        // Do not reset/re-evaluate the detached topology here; doing so would move
+        // the drag anchor out from under the next mouse-move event.
+        time_=g.action.start+g.action.duration;present(*candidate,time_,g.action.id);
+        message(QString("%1 over %2 ms. Release to create; Escape cancels.").arg(preview_text).arg(g.action.duration));
     }
 }
-void ui::pane::animation_timeline::rotation_complete(const authored_rotation& rotation) {
-    if(!gesture_) return;
-    rotation_update(rotation); auto g=*gesture_; gesture_.reset();
-    const double angle=std::visit([](const auto& value){return value.angle;},rotation);
-    if(g.moved && std::abs(angle)>1e-8) if(auto candidate=place(g.action,g.row,false,true)) {
-        selected_=g.action.id;time_=g.action.start+g.action.duration;commit(*candidate);return;
-    }
+void ui::pane::animation_timeline::action_complete(const authored_action& authored) {
+    if(!gesture_)return;action_update(authored);auto g=*gesture_;gesture_.reset();
+    if(g.moved)if(auto candidate=place(g.action,g.row,false,true)){selected_=g.action.id;time_=g.action.start+g.action.duration;commit(*candidate);return;}
     refresh();
 }
 void ui::pane::animation_timeline::focus_action_editor(QString item) {
     select_action(std::move(item));
     const auto* action=selected_action();
-    if(action && (std::holds_alternative<sm::rigid_rotation>(action->data) ||
-       std::holds_alternative<sm::ik_rotation>(action->data))) {
+    if(action && (std::holds_alternative<sm::rigid_rotation>(action->data) || std::holds_alternative<sm::ik_rotation>(action->data))) {
         angle_->setFocus(Qt::MouseFocusReason); angle_->selectAll();
     }
 }
 void ui::pane::animation_timeline::cancel_gesture() {
     if(!gesture_) return;
-    gesture_.reset();refresh();message("Rotation cancelled.");
+    gesture_.reset();refresh();message("Action cancelled.");
 }

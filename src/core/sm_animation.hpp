@@ -7,6 +7,7 @@
 #include <variant>
 #include <vector>
 #include <unordered_map>
+#include <utility>
 
 namespace sm {
     // Authored times are integer milliseconds; layers are ordered bottom to top.
@@ -26,18 +27,56 @@ namespace sm {
         object_id pivot_node;
         double angle = 0;
     };
-    struct rigid_translation { std::vector<object_id> skeletons; point offset{}; };
-    enum class target_reference { character_start, character_root, node };
+
+    enum class motion_path_kind { straight, curve, spline };
     struct line_path { point start{}, end{}; };
     struct cubic_bezier_path { point start{}, control1{}, control2{}, end{}; };
     struct spline_path { std::vector<cubic_bezier_path> segments; };
-    using target_path = std::variant<line_path, cubic_bezier_path, spline_path>;
+    using motion_path_geometry = std::variant<line_path, cubic_bezier_path, spline_path>;
+
+    // A motion path is a displacement path: its first point is always {0,0}.
+    // Arc-length data is derived/cached and is intentionally not persisted.
+    class motion_path {
+        struct arc_sample {
+            std::size_t segment = 0;
+            double parameter = 0.0;
+            double cumulative = 0.0;
+        };
+        motion_path_geometry geometry_ = line_path{};
+        mutable std::vector<arc_sample> arc_cache_;
+        mutable double total_length_ = 0.0;
+        void rebuild_arc_cache() const;
+    public:
+        motion_path() = default;
+        motion_path(line_path path) : geometry_(std::move(path)) {}
+        motion_path(cubic_bezier_path path) : geometry_(std::move(path)) {}
+        motion_path(spline_path path) : geometry_(std::move(path)) {}
+        explicit motion_path(motion_path_geometry path) : geometry_(std::move(path)) {}
+
+        const motion_path_geometry& geometry() const noexcept { return geometry_; }
+        void set_geometry(motion_path_geometry path);
+        motion_path_kind kind() const noexcept;
+        point final_displacement() const;
+        double length() const;
+        point evaluate_by_arc_length(double distance) const;
+    };
+
+    enum class translation_reference { animation_root, character_root, bone };
+    struct rigid_translation {
+        std::vector<object_id> skeletons;
+        motion_path path;
+        translation_reference reference = translation_reference::character_root;
+        object_id reference_bone;
+    };
     struct ik_translation {
         object_id effector;
         std::vector<object_id> pins;
-        target_reference reference = target_reference::character_start;
-        object_id reference_node;
-        target_path path = line_path{};
+        motion_path path;
+        translation_reference reference = translation_reference::character_root;
+        object_id reference_bone;
+        // Effector position at action start, expressed in the selected reference frame.
+        // Storing this makes direct-time evaluation independent of transient editor state.
+        point effector_start{};
     };
     using action_data = std::variant<rigid_rotation, ik_rotation, rigid_translation, ik_translation>;
     struct animation_action {
@@ -80,7 +119,7 @@ namespace sm {
     // Evaluation always resets detached working geometry to the base pose; it never
     // integrates from the previously displayed frame.
     animation_evaluation evaluate_animation(const animation& animation, const pose& base,
-        topology& working, animation_time time);
+        object_id character_root, topology& working, animation_time time);
     nlohmann::json animation_assets_to_json(const animation_assets& assets);
     animation_assets animation_assets_from_json(const nlohmann::json& json);
 }

@@ -60,18 +60,20 @@ namespace ui {
                 ui::canvas::scene& canv, QPointF clicked_pt,
                 const ui::tool::sel_drag_settings& settings);
 
-            static std::optional<translation_state> create_translation_state(
+            std::optional<translation_state> create_translation_state(
                 ui::canvas::scene& canv, QPointF clicked_pt,
-                const ui::tool::sel_drag_settings& settings);
+                const ui::tool::sel_drag_settings& settings) const;
 
             void pin_selection();
 
         public:
-            using authored_rotation = std::variant<sm::rigid_rotation, sm::ik_rotation>;
+            using authored_action = sm::action_data;
             struct animation_authoring {
-                std::function<void(const authored_rotation&)> begin;
-                std::function<void(const authored_rotation&)> update;
-                std::function<void(const authored_rotation&)> complete;
+                sm::object_id character_root;
+                sm::point animation_root_origin{};
+                std::function<void(const authored_action&)> begin;
+                std::function<void(const authored_action&)> update;
+                std::function<void(const authored_action&)> complete;
                 std::function<void()> cancel;
                 std::function<void(QString)> reject;
             };
@@ -90,7 +92,8 @@ namespace ui {
             void init(canvas::manager& canvases, mdl::project& model) override;
         private:
             std::optional<animation_authoring> animation_authoring_;
-            authored_rotation authored_rotation_for(const rotation_state& state) const;
+            authored_action authored_rotation_for(const rotation_state& state) const;
+            std::optional<authored_action> authored_translation_for(const translation_state& state) const;
             void cancel_animation_drag(canvas::scene& canv);
         };
     }

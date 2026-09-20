@@ -24,20 +24,46 @@ template<class T> T enumeration(const json& j, int max) {
 }
 json cubic(const cubic_bezier_path& p) { return json::array({pt(p.start), pt(p.control1), pt(p.control2), pt(p.end)}); }
 cubic_bezier_path cubic(const json& j) { return {pt(j.at(0)), pt(j.at(1)), pt(j.at(2)), pt(j.at(3))}; }
-json path_json(const target_path& path) {
+json path_json(const motion_path& path) {
     return std::visit([](const auto& p) -> json {
         using T = std::decay_t<decltype(p)>;
         if constexpr (std::is_same_v<T, line_path>) return {{"type", "line"}, {"points", {pt(p.start), pt(p.end)}}};
         else if constexpr (std::is_same_v<T, cubic_bezier_path>) return {{"type", "cubic"}, {"points", cubic(p)}};
         else { json segments = json::array(); for (const auto& s : p.segments) segments.push_back(cubic(s)); return {{"type", "spline"}, {"segments", segments}}; }
-    }, path);
+    }, path.geometry());
 }
-target_path read_path(const json& j) {
+motion_path read_path(const json& j) {
     auto type = j.at("type").get<std::string>();
-    if (type == "line") return line_path{pt(j.at("points").at(0)), pt(j.at("points").at(1))};
-    if (type == "cubic") return cubic(j.at("points"));
-    if (type == "spline") { spline_path p; for (const auto& s : j.at("segments")) p.segments.push_back(cubic(s)); return p; }
+    if (type == "line") return motion_path(line_path{pt(j.at("points").at(0)), pt(j.at("points").at(1))});
+    if (type == "cubic") return motion_path(cubic(j.at("points")));
+    if (type == "spline") { spline_path p; for (const auto& s : j.at("segments")) p.segments.push_back(cubic(s)); return motion_path(std::move(p)); }
     throw std::invalid_argument("Unknown path type");
+}
+std::string reference_name(translation_reference reference) {
+    switch(reference) {
+    case translation_reference::animation_root:return "animation_root";
+    case translation_reference::character_root:return "character_root";
+    case translation_reference::bone:return "bone";
+    }
+    throw std::invalid_argument("Invalid translation reference");
+}
+translation_reference read_reference(const json& j) {
+    if(j.is_number_integer()) { // Compatibility with the pre-translation-authoring draft format.
+        int v=j.get<int>();
+        if(v==0) return translation_reference::animation_root;
+        if(v==1) return translation_reference::character_root;
+        throw std::invalid_argument("Legacy node-relative translation paths cannot be converted to bone-relative paths");
+    }
+    auto value=j.get<std::string>();
+    if(value=="animation_root") return translation_reference::animation_root;
+    if(value=="character_root") return translation_reference::character_root;
+    if(value=="bone") return translation_reference::bone;
+    throw std::invalid_argument("Unknown translation reference");
+}
+json translation_common(const motion_path& path,translation_reference reference,object_id reference_bone) {
+    json j={{"path",path_json(path)},{"reference",reference_name(reference)}};
+    if(reference==translation_reference::bone) j["reference_bone"]=reference_bone.to_string();
+    return j;
 }
 json data_json(const action_data& data) {
     return std::visit([](const auto& d) -> json {
@@ -46,9 +72,12 @@ json data_json(const action_data& data) {
             {"pivot", int(d.pivot)}, {"propagation", int(d.propagation)}, {"angle", d.angle}};
         else if constexpr (std::is_same_v<T, ik_rotation>) return {{"type", "ik_rotation"},
             {"effector", d.effector.to_string()}, {"pivot_node", d.pivot_node.to_string()}, {"angle", d.angle}};
-        else if constexpr (std::is_same_v<T, rigid_translation>) return {{"type", "translation"}, {"skeletons", ids(d.skeletons)}, {"offset", pt(d.offset)}};
-        else return {{"type", "ik_translation"}, {"effector", d.effector.to_string()}, {"pins", ids(d.pins)},
-            {"reference", int(d.reference)}, {"reference_node", d.reference_node.to_string()}, {"path", path_json(d.path)}};
+        else if constexpr (std::is_same_v<T, rigid_translation>) {
+            auto j=translation_common(d.path,d.reference,d.reference_bone); j["type"]="translation"; j["skeletons"]=ids(d.skeletons); return j;
+        } else {
+            auto j=translation_common(d.path,d.reference,d.reference_bone); j["type"]="ik_translation";
+            j["effector"]=d.effector.to_string(); j["pins"]=ids(d.pins); j["effector_start"]=pt(d.effector_start); return j;
+        }
     }, data);
 }
 action_data read_data(const json& j) {
@@ -59,9 +88,18 @@ action_data read_data(const json& j) {
         return rigid_rotation{id(j.at("bone")), enumeration<rotation_pivot>(j.at("pivot"), 1), j.at("angle").get<double>(), propagation};
     }
     if (type == "ik_rotation") return ik_rotation{id(j.at("effector")), id(j.at("pivot_node")), j.at("angle").get<double>()};
-    if (type == "translation") return rigid_translation{ids(j.at("skeletons")), pt(j.at("offset"))};
-    if (type == "ik_translation") return ik_translation{id(j.at("effector")), ids(j.at("pins")),
-        enumeration<target_reference>(j.at("reference"), 2), id(j.at("reference_node")), read_path(j.at("path"))};
+    if (type == "translation") {
+        if(j.contains("offset")) return rigid_translation{ids(j.at("skeletons")),motion_path(line_path{{0,0},pt(j.at("offset"))}),translation_reference::animation_root,{}};
+        auto reference=read_reference(j.at("reference"));
+        object_id bone{}; if(reference==translation_reference::bone) bone=id(j.at("reference_bone"));
+        return rigid_translation{ids(j.at("skeletons")),read_path(j.at("path")),reference,bone};
+    }
+    if (type == "ik_translation") {
+        auto reference=read_reference(j.at("reference"));
+        object_id bone{}; if(reference==translation_reference::bone) bone=id(j.at("reference_bone"));
+        return ik_translation{id(j.at("effector")),ids(j.at("pins")),read_path(j.at("path")),reference,bone,
+            j.contains("effector_start")?pt(j.at("effector_start")):point{}};
+    }
     throw std::invalid_argument("Unknown action type");
 }
 animation_time time(const json& j) {

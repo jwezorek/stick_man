@@ -4,7 +4,7 @@
 #include "../widgets/timeline.hpp"
 
 namespace ui::canvas { class manager; }
-namespace ui::tool { class manager; }
+namespace ui::tool { class manager; class select_tool_panel; }
 namespace ui::pane {
     // Owns playback time and translates generic timeline intentions to animation commands.
     class animation_timeline : public QDockWidget {
@@ -27,7 +27,7 @@ namespace ui::pane {
         sm::animation_time time_ = 0, playback_start_ = 0;
         row_head_position insertion_;
         bool updating_ = false;
-        using authored_rotation = std::variant<sm::rigid_rotation, sm::ik_rotation>;
+        using authored_action = sm::action_data;
         struct gesture {
             sm::animation_action action;
             row_head_position row;
@@ -36,6 +36,7 @@ namespace ui::pane {
         std::optional<gesture> gesture_;
         const sm::animation* current() const;
         const sm::animation_action* selected_action() const;
+        tool::select_tool_panel& selection_panel() const;
         void refresh();
         void refresh_parameters();
         void present(const sm::animation& animation, sm::animation_time time,
@@ -49,13 +50,18 @@ namespace ui::pane {
             std::optional<row_head_position> row = {});
         void preview_selected_angle(double angle);
         void commit_selected_angle(double angle);
+        void preview_selected_path(const sm::motion_path& path);
+        void commit_selected_path(const sm::motion_path& path);
         void refresh_action_adornment();
         void delete_action();
         void move_action(QString id, qint64 start, row_head_position row);
         void resize_action(QString id, qint64 start, qint64 end);
-        void rotation_begin(const authored_rotation& rotation);
-        void rotation_update(const authored_rotation& rotation);
-        void rotation_complete(const authored_rotation& rotation);
+        void action_begin(const authored_action& action);
+        void action_update(const authored_action& action);
+        void action_complete(const authored_action& action);
+        void translation_properties_changed();
+        void capture_selected_pins();
+        void sync_selection_tool_properties();
         void focus_action_editor(QString id);
         void update_action_field_visibility();
         void tick();
