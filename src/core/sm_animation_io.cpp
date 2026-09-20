@@ -126,11 +126,13 @@ nlohmann::json sm::animation_assets_to_json(const animation_assets& assets) {
         }
         animations.push_back({{"id", a.id.to_string()}, {"name", a.name}, {"base_pose", a.base_pose.to_string()}, {"layers", layers}});
     }
-    return {{"root", assets.character_root.to_string()}, {"default_pose", assets.default_pose.to_string()}, {"poses", poses}, {"animations", animations}};
+    return {{"default_pose", assets.default_pose.to_string()}, {"poses", poses}, {"animations", animations}};
 }
 sm::animation_assets sm::animation_assets_from_json(const nlohmann::json& j) {
     animation_assets assets;
-    assets.character_root = id(j.at("root")); assets.default_pose = id(j.at("default_pose"));
+    // v5 and earlier stored a character-root node here. Character root is now a
+    // character-level bone property, so the legacy field is intentionally ignored.
+    assets.default_pose = id(j.at("default_pose"));
     for (const auto& v : j.at("poses")) {
         pose p; p.id = id(v.at("id")); p.name = v.at("name").get<std::string>();
         for (const auto& [key, value] : v.at("nodes").items()) p.node_positions.emplace(id(json(key)), pt(value));

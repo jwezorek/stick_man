@@ -69,8 +69,9 @@ namespace ui {
         public:
             using authored_action = sm::action_data;
             struct animation_authoring {
-                sm::object_id character_root;
+                sm::object_id character_root_bone;
                 sm::point animation_root_origin{};
+                double animation_root_angle = 0.0;
                 std::function<void(const authored_action&)> begin;
                 std::function<void(const authored_action&)> update;
                 std::function<void(const authored_action&)> complete;

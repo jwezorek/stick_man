@@ -26,21 +26,26 @@ sm::point rotate_vector(sm::point p,double angle) {
     const double c=std::cos(angle),v=std::sin(angle); return {c*p.x-v*p.y,v*p.x+c*p.y};
 }
 struct translation_frame { sm::point origin{}; double angle=0.0; };
+std::optional<translation_frame> current_bone_frame(sm::object_id bone_id,sm::topology& working) {
+    auto bone=working.get<sm::bone>(bone_id); if(!bone) return {};
+    const auto origin=bone->get().parent_node().world_pos();
+    return translation_frame{origin,sm::angle_from_u_to_v(origin,bone->get().child_node().world_pos())};
+}
+std::optional<translation_frame> base_bone_frame(sm::object_id bone_id,const sm::pose& base,sm::topology& working) {
+    auto bone=working.get<sm::bone>(bone_id); if(!bone) return {};
+    const auto u=base.node_positions.find(bone->get().parent_node().id());
+    const auto v=base.node_positions.find(bone->get().child_node().id());
+    if(u==base.node_positions.end() || v==base.node_positions.end()) return {};
+    return translation_frame{u->second,sm::angle_from_u_to_v(u->second,v->second)};
+}
 std::optional<translation_frame> reference_frame(sm::translation_reference reference,sm::object_id reference_bone,
-        sm::object_id character_root,const sm::pose& base,sm::topology& working) {
-    if(reference==sm::translation_reference::animation_root) {
-        auto i=base.node_positions.find(character_root); if(i==base.node_positions.end()) return {};
-        return translation_frame{i->second,0.0};
-    }
-    if(reference==sm::translation_reference::character_root) {
-        auto root=working.get<sm::node>(character_root); if(!root) return {};
-        return translation_frame{root->get().world_pos(),0.0};
-    }
-    if(reference==sm::translation_reference::bone) {
-        auto bone=working.get<sm::bone>(reference_bone); if(!bone) return {};
-        auto origin=bone->get().parent_node().world_pos();
-        return translation_frame{origin,sm::angle_from_u_to_v(origin,bone->get().child_node().world_pos())};
-    }
+        sm::object_id character_root_bone,const sm::pose& base,sm::topology& working) {
+    if(reference==sm::translation_reference::animation_root)
+        return base_bone_frame(character_root_bone,base,working);
+    if(reference==sm::translation_reference::character_root)
+        return current_bone_frame(character_root_bone,working);
+    if(reference==sm::translation_reference::bone)
+        return current_bone_frame(reference_bone,working);
     return {};
 }
 
@@ -381,6 +386,10 @@ const sm::animation_action* ui::pane::animation_timeline::selected_action() cons
     if(auto* a=current()) for(const auto& l:a->layers) for(const auto& action:l.actions) if(action.id==selected_) return &action;
     return nullptr;
 }
+sm::object_id ui::pane::animation_timeline::character_root_bone() const {
+    auto c=project_.core().character(character_);
+    return c ? c->get().character_root_bone() : sm::object_id{};
+}
 ui::tool::select_tool_panel& ui::pane::animation_timeline::selection_panel() const {
     auto& selection=static_cast<tool::select&>(tools_.tool_from_id(tool::id::selection));
     return *static_cast<tool::select_tool_panel*>(selection.settings_widget());
@@ -403,7 +412,12 @@ void ui::pane::animation_timeline::begin(sm::object_id character,sm::object_id a
     const auto* a=data.find_animation(animation_);
     const auto* base=a ? data.find_pose(a->base_pose) : nullptr;
     sm::point animation_root_origin{};
-    if(base) if(auto i=base->node_positions.find(data.character_root);i!=base->node_positions.end()) animation_root_origin=i->second;
+    double animation_root_angle=0.0;
+    const auto root_bone=character_root_bone();
+    if(base) if(auto frame=base_bone_frame(root_bone,*base,working)) {
+        animation_root_origin=frame->origin;
+        animation_root_angle=frame->angle;
+    }
 
     auto& panel=selection_panel();
     panel.set_reference_bones(reference_bones);
@@ -413,8 +427,9 @@ void ui::pane::animation_timeline::begin(sm::object_id character,sm::object_id a
 
     auto& selection=static_cast<tool::select&>(tools_.tool_from_id(tool::id::selection));
     selection.set_animation_authoring(tool::select::animation_authoring{
-        data.character_root,
+        root_bone,
         animation_root_origin,
+        animation_root_angle,
         [this](const authored_action& action){action_begin(action);},
         [this](const authored_action& action){action_update(action);},
         [this](const authored_action& action){action_complete(action);},
@@ -439,7 +454,7 @@ void ui::pane::animation_timeline::message(QString text) {status_->setText(std::
 void ui::pane::animation_timeline::evaluate(const sm::animation& a,sm::animation_time time) {
     const auto& data=project_.core().animation_data(character_);
     const auto* base=data.find_pose(a.base_pose); if(!base || !working_) return;
-    auto report=sm::evaluate_animation(a,*base,data.character_root,*working_,time);
+    auto report=sm::evaluate_animation(a,*base,character_root_bone(),*working_,time);
     if(!report.invalid_actions.empty()) message("Some actions have missing or invalid targets and are skipped.");
     else if(!report.unsupported_actions.empty()) message("Some action types are not previewed in this phase.");
     canvases_.active_canvas().sync_to_model();
@@ -447,6 +462,7 @@ void ui::pane::animation_timeline::evaluate(const sm::animation& a,sm::animation
 }
 void ui::pane::animation_timeline::present(const sm::animation& a,sm::animation_time time,std::optional<sm::object_id> provisional) {
     const int rows=int(a.layers.size()); timeline_->set_rows(rows);
+    const auto root_bone=character_root_bone();
     std::vector<timeline_item> items;
     auto path_name=[](sm::motion_path_kind kind)->QString {
         switch(kind){case sm::motion_path_kind::straight:return "Straight";case sm::motion_path_kind::curve:return "Curve";case sm::motion_path_kind::spline:return "Spline";}
@@ -470,12 +486,14 @@ void ui::pane::animation_timeline::present(const sm::animation& a,sm::animation_
             invalid=translation->skeletons.empty();
             for(auto sid:translation->skeletons) invalid=invalid || !working_->contains_skeleton(sid);
             if(translation->reference==sm::translation_reference::bone) invalid=invalid || !working_->get<sm::bone>(translation->reference_bone);
+            else invalid=invalid || !working_->get<sm::bone>(root_bone);
             label=QString("Translate %1 skeleton%2 (%3)").arg(translation->skeletons.size()).arg(translation->skeletons.size()==1?"":"s").arg(path_name(translation->path.kind()));
         } else if(const auto* translation=std::get_if<sm::ik_translation>(&action.data)) {
             supported=true;color=timeline_color::orange;
             auto effector=working_->get<sm::node>(translation->effector);invalid=!effector;
             for(auto pin:translation->pins) invalid=invalid || !working_->get<sm::node>(pin);
             if(translation->reference==sm::translation_reference::bone) invalid=invalid || !working_->get<sm::bone>(translation->reference_bone);
+            else invalid=invalid || !working_->get<sm::bone>(root_bone);
             label=QString("IK translate %1 (%2)").arg(effector?QString::fromStdString(effector->get().name()):"missing effector").arg(path_name(translation->path.kind()));
         }
         items.push_back({text(action.id),action.start,action.duration,rows-1-layer,label,color,
@@ -674,12 +692,13 @@ void ui::pane::animation_timeline::refresh_action_adornment() {
     const auto* rigid_translation=std::get_if<sm::rigid_translation>(&action->data);
     const auto* ik_translation=std::get_if<sm::ik_translation>(&action->data);
     if(!rigid_rotation&&!ik_rotation&&!rigid_translation&&!ik_translation)return;
+    const auto root_bone=character_root_bone();
 
     try {
         // Reference frames and adornment anchors use the state supplied to this action,
         // before the selected action itself contributes. This avoids bone-relative self-reference.
         auto before=actions_before(*a,*action);
-        sm::evaluate_animation(before,*base,data.character_root,*working_,time_);
+        sm::evaluate_animation(before,*base,root_bone,*working_,time_);
         if(rigid_rotation || ik_rotation) {
             QPointF pivot_point,rotating_point;double angle=rigid_rotation?rigid_rotation->angle:ik_rotation->angle;bool valid=false;
             if(rigid_rotation) {
@@ -692,7 +711,7 @@ void ui::pane::animation_timeline::refresh_action_adornment() {
                 auto pivot=working_->get<sm::node>(ik_rotation->pivot_node);auto effector=working_->get<sm::node>(ik_rotation->effector);
                 if(pivot&&effector&&pivot->get().id()!=effector->get().id()) {pivot_point=ui::to_qt_pt(pivot->get().world_pos());rotating_point=ui::to_qt_pt(effector->get().world_pos());valid=true;}
             }
-            sm::evaluate_animation(*a,*base,data.character_root,*working_,time_);
+            sm::evaluate_animation(*a,*base,root_bone,*working_,time_);
             if(!valid)return;
             const auto radius=ui::distance(pivot_point,rotating_point);if(!(radius>0.0)||!std::isfinite(radius))return;
             const auto start_theta=ui::angle_through_points(pivot_point,rotating_point);
@@ -704,7 +723,7 @@ void ui::pane::animation_timeline::refresh_action_adornment() {
 
         const auto reference=rigid_translation?rigid_translation->reference:ik_translation->reference;
         const auto reference_bone=rigid_translation?rigid_translation->reference_bone:ik_translation->reference_bone;
-        const auto frame=reference_frame(reference,reference_bone,data.character_root,*base,*working_);if(!frame){sm::evaluate_animation(*a,*base,data.character_root,*working_,time_);return;}
+        const auto frame=reference_frame(reference,reference_bone,root_bone,*base,*working_);if(!frame){sm::evaluate_animation(*a,*base,root_bone,*working_,time_);return;}
         QPointF origin;
         const sm::motion_path* path=nullptr;
         if(ik_translation) {
@@ -712,17 +731,18 @@ void ui::pane::animation_timeline::refresh_action_adornment() {
             path=&ik_translation->path;
         } else {
             sm::maybe_node_ref anchor;
-            if(auto root=working_->get<sm::node>(data.character_root);root && std::ranges::find(rigid_translation->skeletons,root->get().owner().id())!=rigid_translation->skeletons.end()) anchor=root;
+            if(auto root=working_->get<sm::bone>(root_bone);root && std::ranges::find(rigid_translation->skeletons,root->get().owner().id())!=rigid_translation->skeletons.end())
+                anchor=sm::node_ref(root->get().parent_node());
             if(!anchor) for(auto sid:rigid_translation->skeletons) if(auto skel=working_->skeleton(sid);skel){anchor=skel->get().root_node();break;}
-            if(!anchor){sm::evaluate_animation(*a,*base,data.character_root,*working_,time_);return;}
+            if(!anchor){sm::evaluate_animation(*a,*base,root_bone,*working_,time_);return;}
             origin=ui::to_qt_pt(anchor->get().world_pos());path=&rigid_translation->path;
         }
-        sm::evaluate_animation(*a,*base,data.character_root,*working_,time_);
+        sm::evaluate_animation(*a,*base,root_bone,*working_,time_);
         scene.set_interactive_adornment(std::make_shared<translation_action_adornment>(scene,*path,origin,frame->angle,
             [this](const sm::motion_path& p){preview_selected_path(p);},[this](const sm::motion_path& p){commit_selected_path(p);},
             [this]{refresh();message("Action edit cancelled.");}));
     } catch(...) {
-        try{sm::evaluate_animation(*a,*base,data.character_root,*working_,time_);}catch(...){}
+        try{sm::evaluate_animation(*a,*base,root_bone,*working_,time_);}catch(...){}
     }
 }
 void ui::pane::animation_timeline::translation_properties_changed() {
@@ -746,10 +766,11 @@ void ui::pane::animation_timeline::translation_properties_changed() {
     std::optional<sm::point> new_effector_start;
     if(it && reference_changed) {
         const auto& data=project_.core().animation_data(character_);const auto* base=data.find_pose(a->base_pose);if(!base)return;
+        const auto root_bone=character_root_bone();
         try {
-            auto before=actions_before(*a,*action);sm::evaluate_animation(before,*base,data.character_root,*working_,action->start);
+            auto before=actions_before(*a,*action);sm::evaluate_animation(before,*base,root_bone,*working_,action->start);
             auto effector=working_->get<sm::node>(it->effector);
-            auto frame=reference_frame(settings.reference,settings.reference_bone,data.character_root,*base,*working_);
+            auto frame=reference_frame(settings.reference,settings.reference_bone,root_bone,*base,*working_);
             if(!effector||!frame){refresh();message("The selected translation reference or effector is missing.");return;}
             new_effector_start=rotate_vector(effector->get().world_pos()-frame->origin,-frame->angle);
         } catch(const std::exception& error){refresh();message(error.what());return;}

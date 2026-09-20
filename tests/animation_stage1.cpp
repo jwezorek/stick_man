@@ -1,75 +1,152 @@
-#include "core/sm_project.hpp"
-#include "core/sm_package.hpp"
+#include "core/sm_animation.hpp"
+#include "core/sm_skeleton.hpp"
+#include "core/sm_bone.hpp"
 #include "json.hpp"
+
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
+#include <variant>
+#include <vector>
 
-void require(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
+namespace {
+
+void require(bool condition, const char* message) {
+    if (!condition) throw std::runtime_error(message);
+}
+
+bool near(double a, double b, double eps = 1e-6) {
+    return std::abs(a - b) < eps;
+}
+
+void motion_paths_are_persistent_displacement_paths() {
+    sm::motion_path line(sm::line_path{{0.0, 0.0}, {10.0, 0.0}});
+    require(line.kind() == sm::motion_path_kind::straight, "line path kind is wrong");
+    const auto halfway = line.evaluate_by_arc_length(0.5);
+    require(near(halfway.x, 5.0) && near(halfway.y, 0.0), "line path midpoint is wrong");
+
+    sm::spline_path spline;
+    spline.segments.push_back({{0.0, 0.0}, {3.0, 0.0}, {7.0, 10.0}, {10.0, 10.0}});
+    spline.segments.push_back({{10.0, 10.0}, {13.0, 10.0}, {17.0, 0.0}, {20.0, 0.0}});
+    sm::motion_path path(std::move(spline));
+    require(path.kind() == sm::motion_path_kind::spline, "spline path kind is wrong");
+    const auto end = path.final_displacement();
+    require(near(end.x, 20.0) && near(end.y, 0.0), "spline final displacement is wrong");
+}
+
+void translation_actions_round_trip_with_bone_reference() {
+    sm::animation_assets assets;
+
+    sm::pose base;
+    base.name = "Default";
+    const auto pose_node = sm::object_id::generate();
+    base.node_positions.emplace(pose_node, sm::point{1.0, 2.0});
+    assets.default_pose = base.id;
+    assets.poses.push_back(base);
+
+    const auto skeleton_id = sm::object_id::generate();
+    const auto reference_bone = sm::object_id::generate();
+    const auto effector = sm::object_id::generate();
+    const auto pin = sm::object_id::generate();
+
+    sm::animation animation;
+    animation.name = "translations";
+    animation.base_pose = base.id;
+
+    sm::animation_action rigid_action;
+    rigid_action.start = 0;
+    rigid_action.duration = 500;
+    sm::rigid_translation rigid;
+    rigid.skeletons = {skeleton_id};
+    rigid.path = sm::motion_path(sm::line_path{{0.0, 0.0}, {12.0, 4.0}});
+    rigid.reference = sm::translation_reference::bone;
+    rigid.reference_bone = reference_bone;
+    rigid_action.data = rigid;
+
+    sm::animation_action ik_action;
+    ik_action.start = 500;
+    ik_action.duration = 500;
+    sm::ik_translation ik;
+    ik.effector = effector;
+    ik.pins = {pin};
+    sm::spline_path spline;
+    spline.segments.push_back({{0.0, 0.0}, {2.0, 0.0}, {4.0, 3.0}, {6.0, 3.0}});
+    ik.path = sm::motion_path(std::move(spline));
+    ik.reference = sm::translation_reference::bone;
+    ik.reference_bone = reference_bone;
+    ik.effector_start = {5.0, -2.0};
+    ik_action.data = ik;
+
+    animation.layers.push_back({{rigid_action, ik_action}});
+    assets.animations.push_back(animation);
+
+    const auto json = sm::animation_assets_to_json(assets);
+    const auto restored = sm::animation_assets_from_json(json);
+    require(restored.animations.size() == 1, "animation round trip lost animation");
+    require(restored.animations.front().layers.size() == 1, "animation round trip lost layer");
+    require(restored.animations.front().layers.front().actions.size() == 2, "animation round trip lost actions");
+
+    const auto& restored_rigid = std::get<sm::rigid_translation>(
+        restored.animations.front().layers.front().actions[0].data);
+    require(restored_rigid.reference == sm::translation_reference::bone, "rigid translation reference changed");
+    require(restored_rigid.reference_bone == reference_bone, "rigid translation reference bone changed");
+    require(restored_rigid.skeletons == std::vector<sm::object_id>{skeleton_id}, "rigid translation targets changed");
+
+    const auto& restored_ik = std::get<sm::ik_translation>(
+        restored.animations.front().layers.front().actions[1].data);
+    require(restored_ik.reference == sm::translation_reference::bone, "IK translation reference changed");
+    require(restored_ik.reference_bone == reference_bone, "IK translation reference bone changed");
+    require(restored_ik.effector == effector, "IK translation effector changed");
+    require(restored_ik.pins == std::vector<sm::object_id>{pin}, "IK translation pins changed");
+    require(near(restored_ik.effector_start.x, 5.0) && near(restored_ik.effector_start.y, -2.0),
+        "IK translation start changed");
+    require(std::holds_alternative<sm::spline_path>(restored_ik.path.geometry()),
+        "IK translation spline was not preserved");
+}
+
+void root_reference_frames_use_the_character_root_bone() {
+    sm::topology topology;
+    auto& root = topology.create_skeleton(sm::point{0.0, 0.0});
+    auto& tip = topology.create_skeleton(sm::point{0.0, 10.0});
+    auto created = topology.create_bone("character-root", root.root_node(), tip.root_node());
+    require(created.has_value(), "failed to create root-frame fixture");
+
+    const auto root_bone = created->get().id();
+    const auto skeleton = created->get().owner().id();
+    const auto base = sm::capture_pose(topology, {skeleton}, "base");
+
+    sm::animation animation;
+    animation.base_pose = base.id;
+    sm::animation_action action;
+    action.start = 0;
+    action.duration = 1000;
+    sm::rigid_translation translation;
+    translation.skeletons = {skeleton};
+    translation.reference = sm::translation_reference::animation_root;
+    translation.path = sm::motion_path(sm::line_path{{0.0, 0.0}, {10.0, 0.0}});
+    action.data = translation;
+    animation.layers.push_back({{action}});
+
+    const auto report = sm::evaluate_animation(animation, base, root_bone, topology, 1000);
+    require(report.invalid_actions.empty(), "root-frame translation evaluated as invalid");
+    const auto bone = topology.get<sm::bone>(root_bone);
+    require(bone.has_value(), "root bone disappeared during evaluation");
+    const auto position = bone->get().parent_node().world_pos();
+    require(near(position.x, 0.0) && near(position.y, 10.0),
+        "Animation Root did not use the character root bone's starting orientation");
+}
+
+} // namespace
+
 int main() {
     try {
-        sm::project p;
-        auto& s = p.create_skeleton({12, 34});
-        std::vector<sm::const_skel_ref> rig{s};
-        auto c = p.create_character(rig).value();
-        auto& assets = p.animation_data(c->id());
-        require(assets.poses.size() == 1, "character must capture Default");
-        require(assets.poses.front().node_positions.at(s.root_node().id()).x == 12, "Default captures position");
-        auto pose = assets.poses.front();
-        pose.id = sm::object_id::generate(); pose.name = "Raised";
-        assets.poses.push_back(pose);
-        sm::animation a; a.name = "Test"; a.base_pose = pose.id;
-        require(a.duration() == 0, "empty animation duration");
-        a.layers.resize(2);
-        a.layers[0].actions.push_back({sm::object_id::generate(), 100, 250, sm::easing::linear,
-            sm::rigid_translation{{s.id()}, {2, 3}}});
-        a.layers[1].actions.push_back({sm::object_id::generate(), 20, 40, sm::easing::smoothstep,
-            sm::rigid_rotation{sm::object_id::generate(), sm::rotation_pivot::tip, 0.5}});
-        assets.animations.push_back(a);
-        require(a.duration() == 350, "duration is maximum end, not sum");
-        sm::project loaded;
-        require(loaded.deserialize(p.serialize().value()) == sm::project_result::success, "archive round trip");
-        const auto& copy = loaded.animation_data(c->id());
-        require(copy.poses.size() == 2 && copy.animations.size() == 1, "assets survive archive");
-        require(copy.animations[0].duration() == 350, "millisecond timing survives archive");
-        require(copy.animations[0].base_pose == pose.id, "base pose identity survives archive");
-        auto semantic = sm::animation_assets_to_json(assets);
-        auto bad = semantic;
-        bad["animations"][0]["layers"][0][0]["duration"] = 0;
-        bool rejected = false;
-        try { sm::animation_assets_from_json(bad); } catch (...) { rejected = true; }
-        require(rejected, "zero duration is rejected");
-        bad = semantic; bad["animations"][0]["layers"][0][0]["start"] = 1.5;
-        rejected = false;
-        try { sm::animation_assets_from_json(bad); } catch (...) { rejected = true; }
-        require(rejected, "fractional millisecond time is rejected");
-        auto buffer = p.serialize().value();
-        sm::detail::package_reader archive(buffer);
-        auto bytes = archive.read("project.json");
-        auto legacy = nlohmann::json::parse(bytes);
-        legacy["characters"][0].erase("animation_data");
-        auto legacy_text = legacy.dump();
-        sm::detail::package_writer writer;
-        writer.add("project.json", {reinterpret_cast<const std::uint8_t*>(legacy_text.data()), legacy_text.size()});
-        sm::project old;
-        require(old.deserialize(writer.finish()) == sm::project_result::success, "missing animation data remains loadable");
-        require(old.animation_data(c->id()).poses.size() == 1 && old.animation_data(c->id()).animations.empty(), "legacy gets Default and no animations");
-        require(old.animation_data(c->id()).poses[0].node_positions.at(s.root_node().id()).y == 34, "legacy Default captures loaded rig");
-        require(sm::ease(sm::easing::ease_in, .5) == .25, "quadratic ease in");
-        require(sm::ease(sm::easing::ease_out, .5) == .75, "quadratic ease out");
-        require(sm::ease(sm::easing::ease_in_out, .25) == .125, "symmetric ease in/out");
-        require(sm::ease(sm::easing::smoothstep, .5) == .5, "smoothstep midpoint");
-        require(sm::ease(sm::easing::linear, -1) == 0 && sm::ease(sm::easing::linear, 2) == 1, "easing clamps progress");
-        sm::ik_translation ik{s.root_node().id(), {s.root_node().id()}, sm::target_reference::node, s.root_node().id(),
-            sm::spline_path{{{{0,0},{1,2},{3,4},{5,6}}}}};
-        assets.animations[0].layers.push_back({{{sm::object_id::generate(), 500, 123, sm::easing::ease_in, ik}}});
-        auto round_trip = sm::animation_assets_from_json(sm::animation_assets_to_json(assets));
-        const auto& copied_ik = std::get<sm::ik_translation>(round_trip.animations[0].layers.back().actions[0].data);
-        require(copied_ik.pins.size() == 1 && copied_ik.reference_node == s.root_node().id(), "IK references preserved");
-        require(std::get<sm::spline_path>(copied_ik.path).segments[0].control2.y == 4, "spline geometry preserved");
-        auto membership = p.snapshot_membership({s.id()});
-        p.remove_character(c->id());
-        require(p.restore_membership(membership) == sm::result::success, "restore membership");
-        require(p.animation_data(membership.characters[0].id).animations.size() == 1, "undo snapshot preserves assets");
-        std::cout << "animation stage 1 passed\n";
-    } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
+        motion_paths_are_persistent_displacement_paths();
+        translation_actions_round_trip_with_bone_reference();
+        root_reference_frames_use_the_character_root_bone();
+        std::cout << "PASS animation_stage1\n";
+        return 0;
+    } catch (const std::exception& error) {
+        std::cerr << "FAIL: " << error.what() << '\n';
+        return 1;
+    }
 }

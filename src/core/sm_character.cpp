@@ -39,10 +39,13 @@ std::vector<sm::const_skel_ref> sm::rig::skeletons() const {
 
 /*------------------------------------------------------------------------------------------------*/
 
-sm::character::character(project& owner, object_id id, std::string name, sm::rig&& rig) :
-    id_(id), name_(std::move(name)), owner_(owner), rig_(std::move(rig)) {}
+sm::character::character(project& owner, object_id id, std::string name, sm::rig&& rig,
+        object_id character_root_bone) :
+    id_(id), name_(std::move(name)), owner_(owner), rig_(std::move(rig)),
+    character_root_bone_(character_root_bone) {}
 
 void sm::character::set_name(const std::string& name) { name_ = name; }
+void sm::character::set_character_root_bone(object_id id) noexcept { character_root_bone_ = id; }
 
 const sm::object_id& sm::character::id() const noexcept { return id_; }
 std::string sm::character::name() const { return name_; }

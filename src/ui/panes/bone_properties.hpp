@@ -18,6 +18,7 @@ namespace ui {
                 rotation_tab* rotation_;
                 rot_constraint_box* constraint_box_;
                 QPushButton* constraint_btn_;
+                QPushButton* character_root_btn_;
 
                 void add_or_delete_constraint(mdl::project& proj, ui::canvas::scene& canv);
 

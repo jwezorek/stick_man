@@ -30,6 +30,7 @@ namespace sm {
     struct character_state {
         object_id id;
         std::string name;
+        object_id character_root_bone;
         sm::artwork artwork;
         animation_assets animation_data;
     };
@@ -70,6 +71,7 @@ namespace sm {
         const mutable_object& get_mutable(const object_id& id) const;
         void detach_skeleton(skeleton& skel);
         void prune_empty_characters();
+        void repair_character_root_bone(character& character);
 
     public:
         project() = default;
@@ -106,6 +108,7 @@ namespace sm {
         result adopt_skeletons(const object_id& character_id, std::span<const const_skel_ref> skeletons);
         result remove_character(const object_id& id);
         expected_const_character character(const object_id& id) const;
+        result set_character_root_bone(const object_id& character_id, const object_id& bone_id);
         animation_assets& animation_data(const object_id& character_id);
         const animation_assets& animation_data(const object_id& character_id) const;
         sm::artwork& artwork(const object_id& character_id);

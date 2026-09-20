@@ -242,7 +242,8 @@ std::expected<sm::object_id, sm::result> mdl::project::make_character(
 }
 
 std::expected<sm::object_id, sm::result> mdl::project::paste_character(
-        const sm::topology& rig, const std::string& name, const sm::artwork& artwork) {
+        const sm::topology& rig, const std::string& name, const sm::artwork& artwork,
+        sm::object_id character_root_bone) {
     if (rig.empty()) return std::unexpected(sm::result::empty_character);
     struct state_type {
         sm::topology topology;
@@ -265,7 +266,10 @@ std::expected<sm::object_id, sm::result> mdl::project::paste_character(
     }
     auto copied_artwork = artwork;
     copied_artwork.remap_bones(remap);
-    state->membership.characters.push_back({state->character, copied_name, std::move(copied_artwork)});
+    if(auto it=remap.find(character_root_bone);it!=remap.end()) character_root_bone=it->second;
+    else character_root_bone={};
+    state->membership.characters.push_back({state->character, copied_name, character_root_bone,
+        std::move(copied_artwork), {}});
     for (auto skel : rig.skeletons()) {
         auto copy = skel->copy_to(state->topology, remap);
         if (!copy) return std::unexpected(copy.error());
@@ -302,6 +306,25 @@ sm::result mdl::project::delete_character(const sm::object_id& id) {
     // Stage 2 replacement is the semantic structural deletion operation: it prunes
     // the empty character and snapshots both identity and membership for undo.
     return replace_skeletons(character->get().rig().skeleton_ids(), {});
+}
+
+sm::result mdl::project::set_character_root_bone(const sm::object_id& character_id,const sm::object_id& bone_id) {
+    auto character=core_.character(character_id);
+    if(!character) return character.error();
+    const auto before=character->get().character_root_bone();
+    if(before==bone_id) return sm::result::success;
+    struct state_type { sm::result status=sm::result::success; };
+    auto state=std::make_shared<state_type>();
+    return execute_command({
+        [state,character_id,bone_id](project& proj) {
+            state->status=proj.core_.set_character_root_bone(character_id,bone_id);
+        },
+        [before,character_id](project& proj) {
+            if(proj.core_.set_character_root_bone(character_id,before)!=sm::result::success)
+                throw std::runtime_error("unable to restore character root bone");
+        },
+        [state] { return state->status; }
+    });
 }
 
 bool mdl::project::rename(const sm::object_id& id, const std::string& new_name) {

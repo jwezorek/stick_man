@@ -100,7 +100,6 @@ namespace sm {
         std::unordered_map<object_id, point> node_positions;
     };
     struct animation_assets {
-        object_id character_root;
         object_id default_pose;
         std::vector<pose> poses;
         std::vector<animation> animations;
@@ -119,7 +118,7 @@ namespace sm {
     // Evaluation always resets detached working geometry to the base pose; it never
     // integrates from the previously displayed frame.
     animation_evaluation evaluate_animation(const animation& animation, const pose& base,
-        object_id character_root, topology& working, animation_time time);
+        object_id character_root_bone, topology& working, animation_time time);
     nlohmann::json animation_assets_to_json(const animation_assets& assets);
     animation_assets animation_assets_from_json(const nlohmann::json& json);
 }

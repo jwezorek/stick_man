@@ -36,6 +36,7 @@ namespace ui::pane {
         std::optional<gesture> gesture_;
         const sm::animation* current() const;
         const sm::animation_action* selected_action() const;
+        sm::object_id character_root_bone() const;
         tool::select_tool_panel& selection_panel() const;
         void refresh();
         void refresh_parameters();

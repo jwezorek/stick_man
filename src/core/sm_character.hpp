@@ -43,12 +43,15 @@ namespace sm {
         std::string name_;
         std::reference_wrapper<project> owner_;
         sm::rig rig_;
+        object_id character_root_bone_;
         sm::artwork artwork_;
         animation_assets animation_data_;
 
     protected:
-        character(project& owner, object_id id, std::string name, sm::rig&& rig);
+        character(project& owner, object_id id, std::string name, sm::rig&& rig,
+            object_id character_root_bone = {});
         void set_name(const std::string& name);
+        void set_character_root_bone(object_id id) noexcept;
 
     public:
         character(const character&) = delete;
@@ -60,6 +63,7 @@ namespace sm {
         std::string name() const;
         const project& owner() const noexcept;
         const sm::rig& rig() const noexcept;
+        const object_id& character_root_bone() const noexcept { return character_root_bone_; }
         const animation_assets& animation_data() const noexcept { return animation_data_; }
         const sm::artwork& artwork() const noexcept { return artwork_; }
     };

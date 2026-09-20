@@ -151,7 +151,6 @@ const sm::animation* sm::animation_assets::find_animation(object_id id) const {
 }
 void sm::animation_assets::validate() const {
     if (!find_pose(default_pose)) throw std::invalid_argument("Missing Default pose");
-    if(character_root.is_nil()) throw std::invalid_argument("Missing character root");
     std::unordered_set<object_id> ids;
     auto add = [&](object_id id) { if (id.is_nil() || !ids.insert(id).second) throw std::invalid_argument("Duplicate animation asset ID"); };
     for (const auto& p : poses) {
@@ -213,7 +212,6 @@ void sm::initialize_animation_assets(animation_assets& assets, const topology& t
     auto p = capture_pose(topology, skeletons, "Default");
     assets.default_pose = p.id;
     assets.poses.push_back(std::move(p));
-    assets.character_root = topology.skeleton(skeletons.front())->get().root_node().id();
 }
 void sm::apply_pose(const pose& pose, const topology& topology) {
     for (const auto& [id, pt] : pose.node_positions) if (auto node = topology.get<sm::node>(id)) node->get().set_world_pos(pt);

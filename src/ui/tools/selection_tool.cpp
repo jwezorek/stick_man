@@ -677,12 +677,17 @@ std::optional<ui::tool::translation_state> ui::tool::select::create_translation_
     if(animation_authoring_ && settings_panel_) {
         const auto authored=settings_panel_->animation_translation();
         state.path_kind=authored.path; state.reference=authored.reference; state.reference_bone=authored.reference_bone;
-        if(state.reference==sm::translation_reference::animation_root) state.reference_origin=animation_authoring_->animation_root_origin;
+        if(state.reference==sm::translation_reference::animation_root) {
+            state.reference_origin=animation_authoring_->animation_root_origin;
+            state.reference_angle=animation_authoring_->animation_root_angle;
+        }
         else if(state.reference==sm::translation_reference::character_root) {
-            auto nodes=canv.node_items();
-            auto found=r::find_if(nodes,[&](auto* n){return n->model().id()==animation_authoring_->character_root;});
-            if(found==nodes.end()) return {};
-            state.reference_origin=(*found)->model().world_pos();
+            auto bones=canv.bone_items();
+            auto found=r::find_if(bones,[&](auto* b){return b->model().id()==animation_authoring_->character_root_bone;});
+            if(found==bones.end()) return {};
+            auto& bone=(*found)->model();
+            state.reference_origin=bone.parent_node().world_pos();
+            state.reference_angle=sm::angle_from_u_to_v(state.reference_origin,bone.child_node().world_pos());
         } else {
             auto bones=canv.bone_items();
             auto found=r::find_if(bones,[&](auto* b){return b->model().id()==state.reference_bone;});

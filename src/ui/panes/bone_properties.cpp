@@ -279,6 +279,7 @@ ui::pane::props::bones::bones(const current_canvas_fn& fn, selection_properties*
     rotation_(nullptr),
     constraint_box_(nullptr),
     constraint_btn_(nullptr),
+    character_root_btn_(nullptr),
     u_(nullptr),
     v_(nullptr),
     nodes_(nullptr) {
@@ -318,11 +319,23 @@ void ui::pane::props::bones::populate(mdl::project& proj) {
     );
     layout_->addWidget(constraint_btn_);
 
+    character_root_btn_ = new QPushButton("Set as Character Root Bone");
+    layout_->addWidget(character_root_btn_);
+
     connect(constraint_btn_, &QPushButton::clicked,
         [&]() {
             add_or_delete_constraint(proj, get_current_canv_());
         }
     );
+    connect(character_root_btn_, &QPushButton::clicked, this, [this, &proj] {
+        auto bones=get_current_canv_().selected_bones();
+        if(bones.size()!=1) return;
+        auto& bone=bones.front()->model();
+        auto parent=bone.owner().parent_character();
+        if(!parent) return;
+        if(proj.set_character_root_bone(parent->get().id(),bone.id())==sm::result::success)
+            set_selection_single(get_current_canv_());
+    });
 
     connect(&proj, &mdl::project::name_changed,
         [this](mdl::const_skel_piece piece, const std::string& new_name) {
@@ -380,6 +393,7 @@ void ui::pane::props::bones::set_selection_multi(const ui::canvas::scene& canv) 
     nodes_->hide();
     constraint_box_->hide();
     constraint_btn_->hide();
+    character_root_btn_->hide();
     rotation_->lock_to_primary_tab();
 }
 
@@ -387,8 +401,13 @@ void ui::pane::props::bones::set_selection_single(const ui::canvas::scene& canv)
     name_->show();
     nodes_->show();
     constraint_btn_->show();
+    character_root_btn_->show();
     rotation_->unlock();
     auto& bone = canv.selected_bones().front()->model();
+    auto parent=bone.owner().parent_character();
+    character_root_btn_->setEnabled(parent.has_value());
+    character_root_btn_->setText(parent && parent->get().character_root_bone()==bone.id()
+        ? "Character Root Bone (current)" : "Set as Character Root Bone");
     name_->set_value(bone.name().c_str());
     auto rot_constraint = bone.rotation_constraint();
     if (rot_constraint) {
