@@ -13,6 +13,8 @@ namespace sm {
 		fabrik_options();
 	};
 
+	// Pins delimit independent effector regions. Geometry beyond a pin is
+	// untouched; pinned positions are preserved even when a target is unreachable.
 	result perform_fabrik(
 		const std::vector<std::tuple<node_ref, point>>& effectors,
 		const std::vector<sm::node_ref>& pinned_nodes,

@@ -341,6 +341,8 @@ namespace {
 
 		auto perform_fabrik_on_bone = 
 			[&](sm::maybe_bone_ref prev, sm::bone& current_bone)->sm::visit_result {
+			// The table contains only this effector region, including its boundary bones.
+			if (!bone_tbl.contains(&current_bone)) return sm::visit_result::terminate_branch;
 
 			fabrik_neighborhood neighborhood{ start_node, prev, current_bone };
 			auto& leader_node = current_node(neighborhood);
@@ -479,19 +481,25 @@ sm::fabrik_options::fabrik_options() :
 	max_ang_delta{ 0.0 }
 {}
 
-sm::result sm::perform_fabrik(
-	const std::vector<std::tuple<node_ref, point>>& effectors,
+static sm::result solve_fabrik_region(
+	const std::vector<std::tuple<sm::node_ref, sm::point>>& effectors,
 	const std::vector<sm::node_ref>& pins,
-	const fabrik_options& opts) {
-
-	auto validation_result = validate_fabrik_inputs(effectors, pins);
-	if (validation_result != result::success) {
-		return validation_result;
-	}
+	const sm::fabrik_options& opts,
+	const std::unordered_set<sm::bone*>& bones) {
+	using sm::result;
 
 	auto bone_tbl = build_bone_table(std::get<0>(effectors.front()));
+	std::erase_if(bone_tbl, [&](const auto& entry) { return !bones.contains(entry.first); });
 	auto targeted_nodes = pinned_nodes(pins);
 	auto num_pinned_nodes = targeted_nodes.size();
+	// FABRIK temporarily moves boundary targets during its forward/backward
+	// passes. Never expose those temporary positions, including on failure.
+	struct restore_pins {
+		std::vector<targeted_node> saved;
+		~restore_pins() {
+			for (auto& pin : saved) pin.node->set_world_pos(pin.target_pos);
+		}
+	} restore{targeted_nodes};
 
 	r::copy(
 		effectors |
@@ -538,6 +546,61 @@ sm::result sm::perform_fabrik(
 	} while (!all_targets_settled(targeted_nodes, opts.tolerance));
 
 	return fabrik_result(targeted_nodes, opts.tolerance);
+}
+
+sm::result sm::perform_fabrik(
+	const std::vector<std::tuple<node_ref, point>>& effectors,
+	const std::vector<node_ref>& pins,
+	const fabrik_options& opts) {
+	const auto validation = validate_fabrik_inputs(effectors, pins);
+	if (validation != result::success) return validation;
+	std::unordered_set<node*> boundaries;
+	for (auto pin : pins) boundaries.insert(pin.ptr());
+	// A pinned effector cannot be moved to a different target.
+	for (auto [effector, target] : effectors) {
+		if (boundaries.contains(effector.ptr()) && distance(effector->world_pos(), target) > opts.tolerance)
+			return result::fabrik_no_solution_found;
+	}
+
+	struct region {
+		std::unordered_set<node*> nodes;
+		std::unordered_set<bone*> bones;
+		std::vector<node_ref> pins;
+		std::vector<std::tuple<node_ref, point>> effectors;
+	};
+	std::vector<region> regions;
+	std::unordered_set<node*> assigned;
+	// Discover all regions before changing geometry. Pins belong to the
+	// boundary of each adjacent region, but do not connect those regions.
+	for (auto [effector, target] : effectors) {
+		if (boundaries.contains(effector.ptr()) || assigned.contains(effector.ptr())) continue;
+		auto& component = regions.emplace_back();
+		visit_nodes_and_bones(effector.get(), [&](node& n) {
+			if (boundaries.contains(&n)) {
+				component.pins.push_back(n);
+				return visit_result::terminate_branch;
+			}
+			component.nodes.insert(&n);
+			assigned.insert(&n);
+			return visit_result::continue_traversal;
+		}, [&](bone& b) {
+			component.bones.insert(&b);
+			return visit_result::continue_traversal;
+		});
+		for (auto entry : effectors)
+			if (component.nodes.contains(std::get<0>(entry).ptr())) component.effectors.push_back(entry);
+	}
+
+	bool reached = false, converged = false, failed = false;
+	for (const auto& component : regions) {
+		const auto outcome = solve_fabrik_region(component.effectors, component.pins, opts, component.bones);
+		reached |= outcome == result::fabrik_target_reached || outcome == result::fabrik_mixed;
+		converged |= outcome == result::fabrik_converged || outcome == result::fabrik_mixed;
+		failed |= outcome == result::fabrik_no_solution_found;
+	}
+	if (failed) return result::fabrik_no_solution_found;
+	if (reached && converged) return result::fabrik_mixed;
+	return converged ? result::fabrik_converged : result::fabrik_target_reached;
 }
 
 sm::result sm::perform_fabrik(
