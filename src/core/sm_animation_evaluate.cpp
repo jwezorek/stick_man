@@ -4,8 +4,6 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
-#include <type_traits>
-#include <unordered_set>
 
 namespace {
     bool valid_pivot(sm::rotation_pivot pivot) {
@@ -31,85 +29,6 @@ namespace {
             ordered.insert(ordered.end(), actions.begin(), actions.end());
         }
         return ordered;
-    }
-
-    std::unordered_set<sm::object_id> affected_skeletons(
-            const sm::animation_action& action, const sm::topology& topology) {
-        std::unordered_set<sm::object_id> affected;
-        std::visit([&](const auto& data) {
-            using T = std::decay_t<decltype(data)>;
-            if constexpr (std::is_same_v<T, sm::rigid_translation>) {
-                affected.insert(data.skeletons.begin(), data.skeletons.end());
-            } else if constexpr (std::is_same_v<T, sm::rigid_rotation>) {
-                if (auto bone = topology.get<sm::bone>(data.bone)) affected.insert(bone->get().owner().id());
-            } else if constexpr (std::is_same_v<T, sm::ik_rotation>) {
-                if (auto node = topology.get<sm::node>(data.effector)) affected.insert(node->get().owner().id());
-            } else if constexpr (std::is_same_v<T, sm::ik_translation>) {
-                // Conservative by design: FABRIK may move any part of the owning skeleton.
-                if (auto node = topology.get<sm::node>(data.effector)) affected.insert(node->get().owner().id());
-            }
-        }, action.data);
-        return affected;
-    }
-
-    std::optional<sm::object_id> referenced_skeleton(const sm::animation_action& action,
-            sm::object_id character_root_bone, const sm::topology& topology) {
-        const auto* rigid = std::get_if<sm::rigid_translation>(&action.data);
-        const auto* ik = std::get_if<sm::ik_translation>(&action.data);
-        if (!rigid && !ik) return {};
-        const auto reference = rigid ? rigid->reference : ik->reference;
-        if (reference == sm::translation_reference::animation_root) return {};
-        const auto bone_id = reference == sm::translation_reference::character_root
-            ? character_root_bone : (rigid ? rigid->reference_bone : ik->reference_bone);
-        auto bone = topology.get<sm::bone>(bone_id);
-        if (!bone) return {};
-        return bone->get().owner().id();
-    }
-
-    std::vector<const sm::animation_action*> dependency_order(const sm::animation& animation,
-            sm::object_id character_root_bone, const sm::topology& topology) {
-        auto ordinary = ordinary_action_order(animation);
-        const auto count = ordinary.size();
-        std::vector<std::vector<std::size_t>> dependencies(count);
-        std::vector<std::unordered_set<sm::object_id>> effects;
-        effects.reserve(count);
-        for (const auto* action : ordinary) effects.push_back(affected_skeletons(*action, topology));
-
-        for (std::size_t consumer = 0; consumer < count; ++consumer) {
-            const auto reference_owner = referenced_skeleton(*ordinary[consumer], character_root_bone, topology);
-            if (!reference_owner) continue;
-            for (std::size_t producer = 0; producer < count; ++producer) {
-                if (producer == consumer) continue; // Reference frames are resolved immediately before self contribution.
-                if (!effects[producer].contains(*reference_owner)) continue;
-                dependencies[consumer].push_back(producer);
-            }
-        }
-
-        // Stable Kahn topological sort: whenever several actions are eligible,
-        // choose the earliest one in the ordinary layer/action order.
-        std::vector<std::vector<std::size_t>> dependents(count);
-        std::vector<std::size_t> indegree(count, 0);
-        for (std::size_t consumer = 0; consumer < count; ++consumer) {
-            indegree[consumer] = dependencies[consumer].size();
-            for (const auto producer : dependencies[consumer])
-                dependents[producer].push_back(consumer);
-        }
-
-        std::vector<const sm::animation_action*> result;
-        result.reserve(count);
-        std::vector<bool> emitted(count, false);
-        while (result.size() != count) {
-            std::size_t next = count;
-            for (std::size_t i = 0; i < count; ++i) {
-                if (!emitted[i] && indegree[i] == 0) { next = i; break; }
-            }
-            if (next == count)
-                throw std::invalid_argument("This reference would create a circular animation dependency.");
-            emitted[next] = true;
-            result.push_back(ordinary[next]);
-            for (const auto dependent : dependents[next]) --indegree[dependent];
-        }
-        return result;
     }
 
     double absolute_progress(const sm::animation_action& action, sm::animation_time time) {
@@ -157,10 +76,9 @@ std::optional<sm::reference_frame> sm::translation_reference_frame(translation_r
     return bone_reference_frame(reference==translation_reference::character_root ? character_root_bone : reference_bone,working);
 }
 
-std::vector<sm::object_id> sm::animation_evaluation_order(const animation& animation,
-        object_id character_root_bone, const topology& topology) {
+std::vector<sm::object_id> sm::animation_evaluation_order(const animation& animation) {
     animation.duration();
-    auto ordered = dependency_order(animation, character_root_bone, topology);
+    auto ordered = ordinary_action_order(animation);
     std::vector<object_id> ids;
     ids.reserve(ordered.size());
     for (const auto* action : ordered) ids.push_back(action->id);
@@ -173,7 +91,7 @@ sm::animation_evaluation sm::evaluate_animation(const animation& animation, cons
     for (auto s : working.skeletons()) for (auto n : s->nodes())
         if (!base.node_positions.contains(n->id())) throw std::invalid_argument("Incomplete animation base pose");
 
-    const auto ordered = dependency_order(animation, character_root_bone, working);
+    const auto ordered = ordinary_action_order(animation);
     apply_pose(base, working);
     animation_evaluation report;
     report.evaluation_order.reserve(ordered.size());

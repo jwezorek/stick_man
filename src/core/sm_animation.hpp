@@ -152,10 +152,13 @@ namespace sm {
     std::optional<reference_frame> translation_reference_frame(translation_reference reference,
         object_id reference_bone, object_id character_root_bone, const pose& base, const topology& working);
 
-    // Returns the stable dependency order used by the evaluator. The ordinary
-    // layer/action order is retained unless a reference dependency requires a
-    // different ordering. Throws if explicit reference dependencies are cyclic.
-    std::vector<object_id> animation_evaluation_order(const animation& animation,
+    // Visible composition order: bottom-to-top layers, chronological within each layer.
+    std::vector<object_id> animation_evaluation_order(const animation& animation);
+    std::vector<object_id> animation_action_write_scope(const animation_action& action, const topology& topology);
+    void validate_animation_order(const animation& animation, object_id character_root_bone, const topology& topology);
+    // The action already occupies its requested position. Return a valid copy,
+    // moving only this action upward if necessary; throw when no placement exists.
+    animation place_animation_action(const animation& requested, object_id action,
         object_id character_root_bone, const topology& topology);
 
     // Evaluation always resets detached working geometry to the base pose; it never

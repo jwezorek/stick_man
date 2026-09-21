@@ -262,6 +262,24 @@ The convention is:
 
 Operations on higher layers are therefore applied to the pose produced by lower layers.
 
+The editor keeps this visible order valid. An action using Character Root or Bone
+coordinates must follow every other action that can move either endpoint of its
+reference bone. When creating, editing, or moving an action, the editor preserves
+the requested placement when valid; otherwise it moves that action to the nearest
+valid higher placement, creating a layer when necessary. Other actions retain
+their relative order. If no such placement exists, the edit is rejected without
+changing the animation. Same-layer actions execute chronologically and may not
+overlap. Completed contributions persist, so disjoint clip times do not exempt
+an action from this rule.
+
+IK write scope stops at pins: pinned nodes and geometry beyond them stay fixed.
+Rigid translations affect their target skeletons. Rigid rotations conservatively
+affect all nodes except their pivot because the implementation reapplies constraints
+throughout the skeleton. Self contribution is exempt, and Animation Root is frozen
+in the base pose. The evaluator never infers or sorts a dependency graph: it resets
+to the base pose and evaluates the visible stack at absolute time. Adornments use
+the reference frame captured immediately before their action.
+
 Changing an action's layer can change the resulting animation.
 
 For example:

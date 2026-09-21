@@ -242,6 +242,7 @@ ui::pane::animation_timeline::animation_timeline(mdl::project& project, canvas::
     duration_ = milliseconds("action_duration",1,parameters_); duration_->setValue(1000);
     easing_ = new QComboBox; easing_->setObjectName("action_easing"); easing_->addItems({"Linear","Ease in","Ease out","Ease in/out","Smoothstep"});
     layer_ = new QComboBox; layer_->setObjectName("action_layer");
+    layer_->setToolTip("Layers run bottom to top. Reference-relative actions move upward when needed to follow actions that move their reference frame.");
     const QStringList common_labels{"Start","Duration","Easing","Layer"};
     QList<QWidget*> common_fields{start_,duration_,easing_,layer_};
     for(int col=0;col<common_fields.size();++col) {common->addWidget(new QLabel(common_labels[col]),0,col);common->addWidget(common_fields[col],1,col);}
@@ -557,10 +558,11 @@ std::optional<sm::animation> ui::pane::animation_timeline::place(sm::animation_a
         if(row.index<0 || row.index>=int(copy.layers.size())) return fail("Choose a layer.");
         index=int(copy.layers.size())-1-row.index;
     }
-    for(const auto& other:copy.layers[index].actions)
-        if(action.start<other.start+other.duration && other.start<action.start+action.duration)
-            return fail("Actions on the same layer cannot overlap. Choose a new layer or another time.");
-    copy.layers[index].actions.push_back(std::move(action));return copy;
+    const auto action_id=action.id;
+    copy.layers[index].actions.push_back(std::move(action));
+    try {
+        return sm::place_animation_action(copy,action_id,character_root_bone(),project_.core().topology());
+    } catch(const std::exception& error) {return fail(error.what());}
 }
 bool ui::pane::animation_timeline::commit(const sm::animation& animation) {
     try {
@@ -698,6 +700,7 @@ void ui::pane::animation_timeline::translation_properties_changed() {
             auto probe=*a;
             for(auto& layer:probe.layers)for(auto& candidate:layer.actions)if(candidate.id==action->id)
                 if(auto* t=std::get_if<sm::ik_translation>(&candidate.data)) {t->reference=settings.reference;t->reference_bone=settings.reference_bone;}
+            probe=sm::place_animation_action(probe,action->id,root_bone,project_.core().topology());
             const auto report=sm::evaluate_animation(probe,*base,root_bone,*working_,action->start);
             const auto context=report.contexts.find(action->id);
             if(context==report.contexts.end() || !context->second.translation_reference_frame || !context->second.translation_anchor_world) {

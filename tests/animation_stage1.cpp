@@ -256,7 +256,7 @@ void reference_frame_round_trips_points_and_vectors() {
         "reference-frame vector local/world round trip failed");
 }
 
-struct dependency_fixture {
+struct composition_fixture {
     sm::topology topology;
     sm::object_id reference_skeleton;
     sm::object_id payload_skeleton;
@@ -265,14 +265,18 @@ struct dependency_fixture {
     sm::object_id payload_node;
     sm::pose base;
 
-    dependency_fixture() {
+    composition_fixture() {
         auto& root = topology.create_skeleton(sm::point{0.0,0.0});
         auto& middle = topology.create_skeleton(sm::point{10.0,0.0});
         auto& tip = topology.create_skeleton(sm::point{20.0,0.0});
-        auto first = topology.create_bone("root",root.root_node(),middle.root_node());
-        require(first.has_value(),"failed to create dependency root bone");
-        auto second = topology.create_bone("child",middle.root_node(),tip.root_node());
-        require(second.has_value(),"failed to create dependency child bone");
+        // Joining skeletons destroys the absorbed skeleton wrapper; node refs survive.
+        auto& root_node = root.root_node();
+        auto& middle_node = middle.root_node();
+        auto& tip_node = tip.root_node();
+        auto first = topology.create_bone("root",root_node,middle_node);
+        require(first.has_value(),"failed to create composition root bone");
+        auto second = topology.create_bone("child",middle_node,tip_node);
+        require(second.has_value(),"failed to create composition child bone");
         reference_skeleton=first->get().owner().id();
         root_bone=first->get().id();
         child_bone=second->get().id();
@@ -291,34 +295,36 @@ sm::animation_action relative_translation(sm::object_id target, sm::translation_
     return action;
 }
 
-void character_root_dependency_overrides_later_layer_translation() {
-    dependency_fixture f;
+void character_root_placement_follows_later_layer_translation() {
+    composition_fixture f;
     auto follow=relative_translation(f.payload_skeleton,sm::translation_reference::character_root);
     auto move_root=translate_action(f.reference_skeleton,{20.0,10.0});
     sm::animation animation;animation.base_pose=f.base.id;
     animation.layers.push_back({{follow}});     // ordinary order: follow first
-    animation.layers.push_back({{move_root}}); // dependency must move this first
+    animation.layers.push_back({{move_root}}); // placement must put follow above this
 
+    animation=sm::place_animation_action(animation,follow.id,f.root_bone,f.topology);
     const auto report=sm::evaluate_animation(animation,f.base,f.root_bone,f.topology,500);
     require(report.evaluation_order.size()==2 && report.evaluation_order[0]==move_root.id && report.evaluation_order[1]==follow.id,
-        "Character Root dependency did not override ordinary layer order");
+        "Character Root placement did not put the consumer above the producer");
     const auto context=report.contexts.at(follow.id).translation_reference_frame;
     require(context.has_value(),"Character Root translation did not record its evaluation frame");
     require(near(context->origin.x,10.0)&&near(context->origin.y,5.0),
         "Character Root translation saw the base frame instead of the animated frame");
     const auto payload=f.topology.get<sm::node>(f.payload_node)->get().world_pos();
     require(near(payload.x,105.0)&&near(payload.y,100.0),
-        "Character Root-relative translation did not use the dependency-ordered frame");
+        "Character Root-relative translation did not use the placed frame");
 }
 
-void character_root_dependency_follows_rotation() {
-    dependency_fixture f;
+void character_root_placement_follows_rotation() {
+    composition_fixture f;
     auto follow=relative_translation(f.payload_skeleton,sm::translation_reference::character_root);
     auto rotate=rotate_action(f.root_bone);
     sm::animation animation;animation.base_pose=f.base.id;
     animation.layers.push_back({{follow}});
     animation.layers.push_back({{rotate}});
 
+    animation=sm::place_animation_action(animation,follow.id,f.root_bone,f.topology);
     const auto report=sm::evaluate_animation(animation,f.base,f.root_bone,f.topology,1000);
     const auto context=report.contexts.at(follow.id).translation_reference_frame;
     require(context.has_value(),"rotated Character Root frame was not recorded");
@@ -329,8 +335,8 @@ void character_root_dependency_follows_rotation() {
         "Character Root-relative local X did not rotate into world Y");
 }
 
-void bone_dependency_follows_later_translation_and_rotation() {
-    dependency_fixture f;
+void bone_placement_follows_later_translation_and_rotation() {
+    composition_fixture f;
     auto follow=relative_translation(f.payload_skeleton,sm::translation_reference::bone,f.child_bone);
     auto move=translate_action(f.reference_skeleton,{4.0,5.0});
     auto rotate=rotate_action(f.root_bone);
@@ -339,19 +345,20 @@ void bone_dependency_follows_later_translation_and_rotation() {
     animation.layers.push_back({{move}});
     animation.layers.push_back({{rotate}});
 
+    animation=sm::place_animation_action(animation,follow.id,f.root_bone,f.topology);
     const auto report=sm::evaluate_animation(animation,f.base,f.root_bone,f.topology,1000);
     require(report.evaluation_order.size()==3 && report.evaluation_order.back()==follow.id,
-        "Bone reference dependencies did not move the consumer after its producers");
+        "Bone reference placement did not move the consumer after its producers");
     const auto context=report.contexts.at(follow.id).translation_reference_frame;
     require(context.has_value(),"Bone-relative translation did not record its frame");
     require(near(context->origin.x,4.0)&&near(context->origin.y,15.0),
-        "Bone-relative frame origin did not follow dependency translation/rotation");
+        "Bone-relative frame origin did not follow preceding translation/rotation");
     require(near(sm::angular_distance(context->angle,std::acos(-1.0)/2.0),0.0),
-        "Bone-relative frame orientation did not follow dependency rotation");
+        "Bone-relative frame orientation did not follow preceding rotation");
 }
 
 void animation_root_has_no_animation_dependencies() {
-    dependency_fixture f;
+    composition_fixture f;
     auto fixed=relative_translation(f.payload_skeleton,sm::translation_reference::animation_root);
     auto move=translate_action(f.reference_skeleton,{20.0,10.0});
     auto rotate=rotate_action(f.root_bone);
@@ -369,7 +376,7 @@ void animation_root_has_no_animation_dependencies() {
 }
 
 void direct_time_evaluation_is_history_independent() {
-    dependency_fixture f;
+    composition_fixture f;
     auto follow=relative_translation(f.payload_skeleton,sm::translation_reference::character_root,{}, {18.0,6.0});
     auto move=translate_action(f.reference_skeleton,{20.0,10.0});
     auto rotate=rotate_action(f.root_bone);
@@ -387,13 +394,13 @@ void direct_time_evaluation_is_history_independent() {
 }
 
 void unrelated_actions_keep_ordinary_order() {
-    dependency_fixture f;
+    composition_fixture f;
     auto first=relative_translation(f.payload_skeleton,sm::translation_reference::animation_root,{}, {1.0,0.0});
     auto second=relative_translation(f.payload_skeleton,sm::translation_reference::animation_root,{}, {0.0,2.0});
     auto third=relative_translation(f.payload_skeleton,sm::translation_reference::animation_root,{}, {3.0,0.0});
     sm::animation animation;animation.base_pose=f.base.id;
     animation.layers.push_back({{first}});animation.layers.push_back({{second}});animation.layers.push_back({{third}});
-    const auto order=sm::animation_evaluation_order(animation,f.root_bone,f.topology);
+    const auto order=sm::animation_evaluation_order(animation);
     require(order==std::vector<sm::object_id>{first.id,second.id,third.id},
         "unrelated actions did not retain ordinary layer order");
 }
@@ -410,8 +417,8 @@ void circular_reference_dependency_is_rejected() {
     const auto base=sm::capture_pose(topology,{a_skel,b_skel},"base");
     sm::animation animation;animation.base_pose=base.id;animation.layers.push_back({{a}});animation.layers.push_back({{b}});
     bool rejected=false;
-    try{(void)sm::animation_evaluation_order(animation,a_bone->get().id(),topology);}
-    catch(const std::invalid_argument& error){rejected=std::string(error.what()).find("circular animation dependency")!=std::string::npos;}
+    try{sm::validate_animation_order(animation,a_bone->get().id(),topology);}
+    catch(const std::invalid_argument& error){rejected=true;}
     require(rejected,"circular reference dependency was not rejected");
 
     sm::animation_assets assets;assets.default_pose=base.id;assets.poses.push_back(base);assets.animations.push_back(animation);
@@ -425,14 +432,14 @@ void self_reference_does_not_create_dependency() {
     frame_fixture f;
     auto self=relative_translation(f.skeleton_id,sm::translation_reference::character_root);
     sm::animation animation;animation.base_pose=f.base.id;animation.layers.push_back({{self}});
-    const auto order=sm::animation_evaluation_order(animation,f.root_bone_id,f.topology);
+    const auto order=sm::animation_evaluation_order(animation);
     require(order==std::vector<sm::object_id>{self.id},"an action was made dependent on itself");
     const auto report=sm::evaluate_animation(animation,f.base,f.root_bone_id,f.topology,1000);
     require(report.invalid_actions.empty(),"self-referential frame action was rejected despite pre-action semantics");
 }
 
 void translation_context_is_the_frame_used_for_application() {
-    dependency_fixture f;
+    composition_fixture f;
     auto follow=relative_translation(f.payload_skeleton,sm::translation_reference::character_root,{}, {7.0,3.0});
     auto rotate=rotate_action(f.root_bone);
     sm::animation animation;animation.base_pose=f.base.id;animation.layers.push_back({{follow}});animation.layers.push_back({{rotate}});
@@ -457,9 +464,9 @@ int main() {
         bone_frame_follows_earlier_translation_and_rotation();
         animation_root_frame_stays_in_base_pose();
         reference_frame_round_trips_points_and_vectors();
-        character_root_dependency_overrides_later_layer_translation();
-        character_root_dependency_follows_rotation();
-        bone_dependency_follows_later_translation_and_rotation();
+        character_root_placement_follows_later_layer_translation();
+        character_root_placement_follows_rotation();
+        bone_placement_follows_later_translation_and_rotation();
         animation_root_has_no_animation_dependencies();
         direct_time_evaluation_is_history_independent();
         unrelated_actions_keep_ordinary_order();
