@@ -63,6 +63,12 @@ namespace ui {
 
 }
 
+namespace {
+    ui::tool::id toolbar_tool_id(ui::tool::id id) {
+        return id == ui::tool::id::animate ? ui::tool::id::selection : id;
+    }
+}
+
 ui::pane::tools::tools(QMainWindow* wnd) :
         QToolBar(tr("Tools"), wnd),
         tools_(static_cast<stick_man*>(wnd)->tool_mgr()) {
@@ -82,7 +88,7 @@ ui::pane::tools::tools(QMainWindow* wnd) :
     }
     connect(&tools_, &tool::manager::current_tool_changed, this, [this](tool::base& current) {
         for (auto* button : findChildren<tool_btn*>()) button->deactivate();
-        if (auto* button = tool_from_id(current.id())) button->activate();
+        if (auto* button = tool_from_id(toolbar_tool_id(current.id()))) button->activate();
     });
 }
 
@@ -92,21 +98,21 @@ ui::tool_btn* ui::pane::tools::tool_from_id(tool::id id)
         return nullptr;
     }
     auto tools = this->findChildren<tool_btn*>();
-    return *r::find_if(tools,
-        [id](auto ptr) {return ptr->id() == id; }
-    );
+    auto found = r::find_if(tools, [id](auto ptr) { return ptr->id() == id; });
+    return found == tools.end() ? nullptr : *found;
 }
 void ui::pane::tools::handle_tool_click(canvas::manager& canvases, tool_btn* btn) {
 
     tool::id current_tool_id = (tools_.has_current_tool()) ?
         tools_.current_tool().id() : tool::id::none;
+    const auto current_toolbar_id = toolbar_tool_id(current_tool_id);
 
-    if (btn->id() == current_tool_id) {
+    if (btn->id() == current_toolbar_id) {
         return;
     }
 
-    if (current_tool_id != tool::id::none) {
-        tool_from_id(current_tool_id)->deactivate();
+    if (current_toolbar_id != tool::id::none) {
+        if (auto* current_button = tool_from_id(current_toolbar_id)) current_button->deactivate();
     }
 
     btn->activate();

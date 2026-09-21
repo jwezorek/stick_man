@@ -2,6 +2,7 @@
 #include "../canvas/canvas_manager.hpp"
 #include "tool.hpp"
 #include "selection_tool.hpp"
+#include "animate_tool.hpp"
 #include "pan_tool.hpp"
 #include "zoom_tool.hpp"
 #include "add_node_tool.hpp"
@@ -19,6 +20,7 @@ ui::tool::manager::manager() :
     tool_registry_.emplace_back(std::make_unique<ui::tool::pan>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::zoom>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::select>());
+    tool_registry_.emplace_back(std::make_unique<ui::tool::animate>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::constraint>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::add_node>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::add_bone>());
@@ -76,7 +78,10 @@ void ui::tool::manager::wheelEvent(ui::canvas::scene& c, QGraphicsSceneWheelEven
 std::span<const ui::tool::fields> ui::tool::manager::tool_info() const {
     static std::vector<ui::tool::fields> tool_records;
     if (tool_records.empty()) {
+        // Animate is the Animation Mode counterpart of Selection.  It is a real
+        // tool internally, but deliberately shares Selection's toolbar button.
         tool_records = tool_registry_ |
+            rv::filter([](const auto& t) { return t->id() != id::animate; }) |
             rv::transform(
                 [](const auto& t)->ui::tool::fields {
                     return ui::tool::fields{
@@ -106,9 +111,17 @@ const ui::tool::base& ui::tool::manager::tool_from_id(id id) const {
 }
 
 void ui::tool::manager::set_current_tool(canvas::manager& canvases, id id) {
-    if (project_ && project_->animation_mode() &&
-        id != id::selection && id != id::pan && id != id::zoom && id != id::constraint) {
-        return;
+    if (project_ && project_->animation_mode()) {
+        // The Selection toolbar slot becomes the real Animate tool while in
+        // Animation Mode.  Pan/Zoom/Constraint remain independently usable.
+        if (id == id::selection) id = id::animate;
+        if (id != id::animate && id != id::pan && id != id::zoom && id != id::constraint) {
+            return;
+        }
+    }
+    else if (id == id::animate) {
+        // Animate is not directly user-selectable outside Animation Mode.
+        id = id::selection;
     }
     int new_tool_index = index_from_id(id);
     if (new_tool_index == curr_item_index_) {

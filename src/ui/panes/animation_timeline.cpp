@@ -2,7 +2,7 @@
 #include "../canvas/canvas_manager.hpp"
 #include "../canvas/bone_item.hpp"
 #include "../canvas/node_item.hpp"
-#include "../tools/selection_tool.hpp"
+#include "../tools/animate_tool.hpp"
 #include "../tools/select_tool_panel.hpp"
 #include "../tools/motion_path_fit.hpp"
 #include "../tools/tool_manager.hpp"
@@ -346,9 +346,9 @@ sm::object_id ui::pane::animation_timeline::character_root_bone() const {
     auto c=project_.core().character(character_);
     return c ? c->get().character_root_bone() : sm::object_id{};
 }
-ui::tool::select_tool_panel& ui::pane::animation_timeline::selection_panel() const {
-    auto& selection=static_cast<tool::select&>(tools_.tool_from_id(tool::id::selection));
-    return *static_cast<tool::select_tool_panel*>(selection.settings_widget());
+ui::tool::select_tool_panel& ui::pane::animation_timeline::animation_tool_panel() const {
+    auto& animation_tool=static_cast<tool::animate&>(tools_.tool_from_id(tool::id::animate));
+    return *static_cast<tool::select_tool_panel*>(animation_tool.settings_widget());
 }
 void ui::pane::animation_timeline::begin(sm::object_id character,sm::object_id animation,sm::topology& working) {
     character_=character;animation_=animation;working_=&working;selected_={};time_=0;insertion_={};
@@ -375,14 +375,14 @@ void ui::pane::animation_timeline::begin(sm::object_id character,sm::object_id a
         animation_root_angle=frame->angle;
     }
 
-    auto& panel=selection_panel();
+    auto& panel=animation_tool_panel();
     panel.set_reference_bones(reference_bones);
     panel.set_animation_mode(true);
     panel.set_animation_property_changed([this]{translation_properties_changed();});
     panel.set_capture_pins_requested([this]{capture_selected_pins();});
 
-    auto& selection=static_cast<tool::select&>(tools_.tool_from_id(tool::id::selection));
-    selection.set_animation_authoring(tool::select::animation_authoring{
+    auto& animation_tool=static_cast<tool::animate&>(tools_.tool_from_id(tool::id::animate));
+    animation_tool.set_animation_authoring(tool::animate::animation_authoring{
         root_bone,
         animation_root_origin,
         animation_root_angle,
@@ -398,9 +398,9 @@ void ui::pane::animation_timeline::begin(sm::object_id character,sm::object_id a
 void ui::pane::animation_timeline::end() {
     pause(); cancel_gesture();
     canvases_.active_canvas().clear_interactive_adornment();
-    auto& selection=static_cast<tool::select&>(tools_.tool_from_id(tool::id::selection));
-    selection.set_animation_authoring({});
-    auto& panel=selection_panel();
+    auto& animation_tool=static_cast<tool::animate&>(tools_.tool_from_id(tool::id::animate));
+    animation_tool.set_animation_authoring({});
+    auto& panel=animation_tool_panel();
     panel.set_animation_property_changed({});
     panel.set_capture_pins_requested({});
     panel.set_animation_mode(false);
@@ -481,8 +481,8 @@ void ui::pane::animation_timeline::update_action_field_visibility() {
     angle_label_->setVisible(bone_rotation || ik_rotation); angle_->setVisible(bone_rotation || ik_rotation);
     easing_->setEnabled(!translation);
 }
-void ui::pane::animation_timeline::sync_selection_tool_properties() {
-    auto& panel=selection_panel();
+void ui::pane::animation_timeline::sync_animation_tool_properties() {
+    auto& panel=animation_tool_panel();
     if(const auto* action=selected_action()) {
         if(const auto* t=std::get_if<sm::rigid_translation>(&action->data)) {
             panel.set_animation_translation({t->path.kind(),t->reference,t->reference_bone},false);return;
@@ -541,7 +541,7 @@ void ui::pane::animation_timeline::refresh_parameters() {
     if(a->layers.empty()) insertion_={};
     layer_->setCurrentIndex(2*insertion_.index+(insertion_.kind==row_head_position::placement::on_row?1:0));
     timeline_->set_row_head(insertion_); update_action_field_visibility(); updating_=false;
-    sync_selection_tool_properties();
+    sync_animation_tool_properties();
 }
 std::optional<sm::animation> ui::pane::animation_timeline::place(sm::animation_action action,row_head_position row,bool replace,bool explain) {
     auto* a=current();if(!a) return {};
@@ -679,7 +679,7 @@ void ui::pane::animation_timeline::translation_properties_changed() {
     const auto* it=std::get_if<sm::ik_translation>(&action->data);
     if(!rt&&!it)return;
 
-    auto settings=selection_panel().animation_translation();
+    auto settings=animation_tool_panel().animation_translation();
     const auto old_reference=rt?rt->reference:it->reference;
     const auto old_bone=rt?rt->reference_bone:it->reference_bone;
     // A missing reference is displayed as a blank combo rather than another bone.

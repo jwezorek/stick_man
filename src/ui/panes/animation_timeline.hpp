@@ -38,7 +38,7 @@ namespace ui::pane {
         const sm::animation* current() const;
         const sm::animation_action* selected_action() const;
         sm::object_id character_root_bone() const;
-        tool::select_tool_panel& selection_panel() const;
+        tool::select_tool_panel& animation_tool_panel() const;
         void refresh();
         void refresh_parameters();
         void present(const sm::animation& animation, sm::animation_time time,
@@ -63,7 +63,7 @@ namespace ui::pane {
         void action_complete(const authored_action& action);
         void translation_properties_changed();
         void capture_selected_pins();
-        void sync_selection_tool_properties();
+        void sync_animation_tool_properties();
         void focus_action_editor(QString id);
         void update_action_field_visibility();
         void tick();
