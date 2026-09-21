@@ -78,7 +78,6 @@ namespace ui {
             sm::object_id reference_bone;
             sm::point reference_origin{};
             double reference_angle = 0.0;
-            sm::point effector_start{};
         };
 
         enum rubber_band_type {

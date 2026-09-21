@@ -688,9 +688,6 @@ std::optional<ui::tool::translation_state> ui::tool::rig_interaction::create_tra
         if(!frame) return {};
         state.reference_origin=frame->origin;
         state.reference_angle=frame->angle;
-        if(state.mode==sel_drag_mode::rag_doll && state.moving.size()==1) {
-            state.effector_start=frame->world_to_local(state.moving.front()->world_pos());
-        }
     }
     return state;
 }
@@ -918,7 +915,7 @@ std::optional<ui::tool::rig_interaction::authored_action> ui::tool::rig_interact
         std::vector<sm::object_id> pins; pins.reserve(state.pinned.size());
         for(auto pin:state.pinned) if(&pin->owner()==&state.moving.front()->owner() && pin->id()!=state.moving.front()->id()) pins.push_back(pin->id());
         std::ranges::sort(pins); pins.erase(std::unique(pins.begin(),pins.end()),pins.end());
-        return authored_action{sm::ik_translation{state.moving.front()->id(),std::move(pins),std::move(path),state.reference,state.reference_bone,state.effector_start}};
+        return authored_action{sm::ik_translation{state.moving.front()->id(),std::move(pins),std::move(path),state.reference,state.reference_bone}};
     }
     return {};
 }

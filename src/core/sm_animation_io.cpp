@@ -76,7 +76,7 @@ json data_json(const action_data& data) {
             auto j=translation_common(d.path,d.reference,d.reference_bone); j["type"]="translation"; j["skeletons"]=ids(d.skeletons); return j;
         } else {
             auto j=translation_common(d.path,d.reference,d.reference_bone); j["type"]="ik_translation";
-            j["effector"]=d.effector.to_string(); j["pins"]=ids(d.pins); j["effector_start"]=pt(d.effector_start); return j;
+            j["effector"]=d.effector.to_string(); j["pins"]=ids(d.pins); return j;
         }
     }, data);
 }
@@ -97,8 +97,7 @@ action_data read_data(const json& j) {
     if (type == "ik_translation") {
         auto reference=read_reference(j.at("reference"));
         object_id bone{}; if(reference==translation_reference::bone) bone=id(j.at("reference_bone"));
-        return ik_translation{id(j.at("effector")),ids(j.at("pins")),read_path(j.at("path")),reference,bone,
-            j.contains("effector_start")?pt(j.at("effector_start")):point{}};
+        return ik_translation{id(j.at("effector")),ids(j.at("pins")),read_path(j.at("path")),reference,bone};
     }
     throw std::invalid_argument("Unknown action type");
 }

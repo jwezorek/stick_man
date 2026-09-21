@@ -86,12 +86,11 @@ namespace sm {
     struct ik_translation {
         object_id effector;
         std::vector<object_id> pins;
+        // The path is a displacement from the incoming evaluated effector position,
+        // expressed in the selected reference frame.
         motion_path path;
         translation_reference reference = translation_reference::animation_root;
         object_id reference_bone;
-        // Effector position at action start, expressed in the selected reference frame.
-        // Storing this makes direct-time evaluation independent of transient editor state.
-        point effector_start{};
     };
     using action_data = std::variant<rigid_rotation, ik_rotation, rigid_translation, ik_translation>;
     struct animation_action {

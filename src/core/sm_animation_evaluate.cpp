@@ -180,7 +180,9 @@ sm::animation_evaluation sm::evaluate_animation(const animation& animation, cons
             if(!valid) { report.invalid_actions.push_back(action->id); continue; }
             if (progress > 0.0) {
                 const auto displacement=translation->path.evaluate_by_arc_length(progress);
-                const auto target=frame->local_to_world(translation->effector_start+displacement);
+                // IK translation composes with preceding actions: its path displaces
+                // the effector from the pose handed to this action, not from an authored snapshot.
+                const auto target=effector->get().world_pos()+frame->vector_to_world(displacement);
                 sm::perform_fabrik(std::vector<std::tuple<sm::node_ref,sm::point>>{{*effector,target}},pins);
             }
             continue;

@@ -185,7 +185,7 @@ void sm::animation_assets::validate() const {
                         validate_path(data.path);
                     } else if constexpr(std::is_same_v<T,ik_translation>) {
                         if(!valid_reference(data.reference)) throw std::invalid_argument("Invalid translation reference");
-                        if(data.effector.is_nil() || !finite(data.effector_start)) throw std::invalid_argument("Invalid IK translation action");
+                        if(data.effector.is_nil()) throw std::invalid_argument("Invalid IK translation action");
                         std::unordered_set<object_id> pins;
                         for(auto id:data.pins) if(id.is_nil() || id==data.effector || !pins.insert(id).second) throw std::invalid_argument("Invalid IK translation pin");
                         if(data.reference==translation_reference::bone && data.reference_bone.is_nil()) throw std::invalid_argument("Missing translation reference bone");

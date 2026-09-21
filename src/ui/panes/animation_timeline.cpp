@@ -672,7 +672,11 @@ void ui::pane::animation_timeline::refresh_action_adornment() {
 
         if(!context.translation_reference_frame)return;
         const sm::motion_path* path=rigid_translation?&rigid_translation->path:&ik_translation->path;
-        const sm::point local_offset=ik_translation?ik_translation->effector_start:sm::point{};
+        sm::point local_offset{};
+        if(ik_translation) {
+            if(!context.translation_anchor_world)return;
+            local_offset=context.translation_reference_frame->world_to_local(*context.translation_anchor_world);
+        }
         scene.set_interactive_adornment(std::make_shared<translation_action_adornment>(scene,*path,*context.translation_reference_frame,local_offset,
             [this](const sm::motion_path& p){preview_selected_path(p);},[this](const sm::motion_path& p){commit_selected_path(p);},
             [this]{refresh();message("Action edit cancelled.");}));
@@ -693,26 +697,6 @@ void ui::pane::animation_timeline::translation_properties_changed() {
     // retarget (or become impossible) before the user repairs the reference.
     if(settings.reference==sm::translation_reference::bone && settings.reference_bone.is_nil() &&
        old_reference==sm::translation_reference::bone) settings.reference_bone=old_bone;
-    const bool reference_changed=settings.reference!=old_reference ||
-        (settings.reference==sm::translation_reference::bone && settings.reference_bone!=old_bone);
-
-    std::optional<sm::point> new_effector_start;
-    if(it && reference_changed) {
-        const auto& data=project_.core().animation_data(character_);const auto* base=data.find_pose(a->base_pose);if(!base)return;
-        const auto root_bone=character_root_bone();
-        try {
-            auto probe=*a;
-            for(auto& layer:probe.layers)for(auto& candidate:layer.actions)if(candidate.id==action->id)
-                if(auto* t=std::get_if<sm::ik_translation>(&candidate.data)) {t->reference=settings.reference;t->reference_bone=settings.reference_bone;}
-            probe=sm::place_animation_action(probe,action->id,root_bone,project_.core().topology());
-            const auto report=sm::evaluate_animation(probe,*base,root_bone,*working_,action->start);
-            const auto context=report.contexts.find(action->id);
-            if(context==report.contexts.end() || !context->second.translation_reference_frame || !context->second.translation_anchor_world) {
-                refresh();message("The selected translation reference or effector is missing.");return;
-            }
-            new_effector_start=context->second.translation_reference_frame->world_to_local(*context->second.translation_anchor_world);
-        } catch(const std::exception& error){refresh();reject_action(error.what());return;}
-    }
     edit_selected_action([&](auto& candidate){
         if(auto* t=std::get_if<sm::rigid_translation>(&candidate.data)) {
             if(t->path.kind()!=settings.path)t->path=tool::convert_motion_path(t->path,settings.path);
@@ -720,7 +704,6 @@ void ui::pane::animation_timeline::translation_properties_changed() {
         } else if(auto* t=std::get_if<sm::ik_translation>(&candidate.data)) {
             if(t->path.kind()!=settings.path)t->path=tool::convert_motion_path(t->path,settings.path);
             t->reference=settings.reference;t->reference_bone=settings.reference_bone;
-            if(new_effector_start)t->effector_start=*new_effector_start;
         }
     });
 }
