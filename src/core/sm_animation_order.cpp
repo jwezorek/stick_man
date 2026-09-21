@@ -124,5 +124,7 @@ sm::animation sm::place_animation_action(const animation& requested, object_id i
             if (valid(shared)) return shared;
         }
     }
-    throw std::invalid_argument("No valid position above this action: its reference and affected frames require conflicting layer order.");
+    throw std::invalid_argument(
+        "These actions have conflicting animated reference-frame dependencies, and changing their layer order cannot resolve the conflict.\n\n"
+        "Use Animation Root for a fixed reference frame, or change the reference bone or pins so the actions no longer affect each other's reference frames.");
 }

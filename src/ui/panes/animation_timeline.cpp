@@ -408,6 +408,10 @@ void ui::pane::animation_timeline::end() {
     working_=nullptr; selected_={}; last_evaluation_.reset(); hide();
 }
 void ui::pane::animation_timeline::message(QString text) {status_->setText(std::move(text));}
+void ui::pane::animation_timeline::reject_action(QString text) {
+    message(text);
+    QMessageBox::warning(this,"Cannot place action",text);
+}
 void ui::pane::animation_timeline::evaluate(const sm::animation& a,sm::animation_time time) {
     const auto& data=project_.core().animation_data(character_);
     last_evaluation_.reset();
@@ -546,7 +550,7 @@ void ui::pane::animation_timeline::refresh_parameters() {
 }
 std::optional<sm::animation> ui::pane::animation_timeline::place(sm::animation_action action,row_head_position row,bool replace,bool explain) {
     auto* a=current();if(!a) return {};
-    auto fail=[&](QString text)->std::optional<sm::animation>{if(explain)message(text);return {};};
+    auto fail=[&](QString text)->std::optional<sm::animation>{if(explain)reject_action(std::move(text));return {};};
     if(action.start<0 || action.duration<=0 || action.start>INT64_MAX-action.duration) return fail("Invalid action time.");
     sm::animation copy=*a;
     if(replace) for(auto& l:copy.layers) std::erase_if(l.actions,[&](const auto& v){return v.id==action.id;});
@@ -707,7 +711,7 @@ void ui::pane::animation_timeline::translation_properties_changed() {
                 refresh();message("The selected translation reference or effector is missing.");return;
             }
             new_effector_start=context->second.translation_reference_frame->world_to_local(*context->second.translation_anchor_world);
-        } catch(const std::exception& error){refresh();message(error.what());return;}
+        } catch(const std::exception& error){refresh();reject_action(error.what());return;}
     }
     edit_selected_action([&](auto& candidate){
         if(auto* t=std::get_if<sm::rigid_translation>(&candidate.data)) {
@@ -784,7 +788,7 @@ void ui::pane::animation_timeline::action_update(const authored_action& authored
     else if(const auto* r=std::get_if<sm::ik_rotation>(&authored)){g.moved=std::abs(r->angle)>1e-8;preview_text=QString("Rotation preview: %1°").arg(r->angle*degrees,0,'f',1);}
     else if(const auto* t=std::get_if<sm::rigid_translation>(&authored)){g.moved=t->path.length()>1e-6;preview_text=QString("Translation preview: %1 units (%2)").arg(t->path.length(),0,'f',1).arg(t->path.kind()==sm::motion_path_kind::straight?"Straight":t->path.kind()==sm::motion_path_kind::curve?"Curve":"Spline");}
     else if(const auto* t=std::get_if<sm::ik_translation>(&authored)){g.moved=t->path.length()>1e-6;preview_text=QString("IK translation preview: %1 units (%2)").arg(t->path.length(),0,'f',1).arg(t->path.kind()==sm::motion_path_kind::straight?"Straight":t->path.kind()==sm::motion_path_kind::curve?"Curve":"Spline");}
-    if(auto candidate=place(g.action,g.row,false,true)) {
+    if(auto candidate=place(g.action,g.row,false,false)) {
         // The Selection tool itself owns the live manipulation during the gesture.
         // Do not reset/re-evaluate the detached topology here; doing so would move
         // the drag anchor out from under the next mouse-move event.

@@ -21,7 +21,7 @@ namespace ui {
 
         struct animation_translation_settings {
             sm::motion_path_kind path = sm::motion_path_kind::straight;
-            sm::translation_reference reference = sm::translation_reference::character_root;
+            sm::translation_reference reference = sm::translation_reference::animation_root;
             sm::object_id reference_bone;
         };
       

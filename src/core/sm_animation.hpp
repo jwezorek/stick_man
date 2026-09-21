@@ -80,14 +80,14 @@ namespace sm {
     struct rigid_translation {
         std::vector<object_id> skeletons;
         motion_path path;
-        translation_reference reference = translation_reference::character_root;
+        translation_reference reference = translation_reference::animation_root;
         object_id reference_bone;
     };
     struct ik_translation {
         object_id effector;
         std::vector<object_id> pins;
         motion_path path;
-        translation_reference reference = translation_reference::character_root;
+        translation_reference reference = translation_reference::animation_root;
         object_id reference_bone;
         // Effector position at action start, expressed in the selected reference frame.
         // Storing this makes direct-time evaluation independent of transient editor state.

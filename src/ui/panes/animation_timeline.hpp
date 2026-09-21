@@ -68,6 +68,7 @@ namespace ui::pane {
         void update_action_field_visibility();
         void tick();
         void message(QString text);
+        void reject_action(QString text);
     public:
         animation_timeline(mdl::project& project, canvas::manager& canvases,
             tool::manager& tools, QWidget* parent);

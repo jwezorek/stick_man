@@ -104,7 +104,7 @@ void ui::tool::select_tool_panel::init() {
     for(auto* rot:rot_ctrls(false))rot->setEnabled(false);
     for(auto* trans:trans_ctrls(false))trans->setEnabled(true);
     path_->setCurrentIndex(int(sm::motion_path_kind::straight));
-    reference_->setCurrentIndex(int(sm::translation_reference::character_root));
+    reference_->setCurrentIndex(int(sm::translation_reference::animation_root));
     set_animation_mode(false);
 }
 

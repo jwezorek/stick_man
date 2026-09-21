@@ -74,7 +74,7 @@ namespace ui {
             node_locs old_locs;
             std::vector<sm::point> gesture_samples;
             sm::motion_path_kind path_kind = sm::motion_path_kind::straight;
-            sm::translation_reference reference = sm::translation_reference::character_root;
+            sm::translation_reference reference = sm::translation_reference::animation_root;
             sm::object_id reference_bone;
             sm::point reference_origin{};
             double reference_angle = 0.0;
