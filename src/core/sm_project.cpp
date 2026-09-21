@@ -161,6 +161,12 @@ sm::expected_skel sm::project::copy_skeleton(
 sm::result sm::project::delete_skeleton(const object_id& id) {
     auto skel = topology_.skeleton(id);
     if (!skel) return skel.error();
+    std::vector<object_id> removed_nodes;
+    std::vector<object_id> removed_bones;
+    for (auto node : skel->get().nodes()) removed_nodes.push_back(node->id());
+    for (auto bone : skel->get().bones()) removed_bones.push_back(bone->id());
+    const auto effects = effects_for_removed_objects(
+        std::move(removed_nodes), std::move(removed_bones), {id});
     detach_skeleton(skel->get());
     auto deleted = topology_.delete_skeleton(id);
     if (deleted != result::success) {
@@ -171,11 +177,13 @@ sm::result sm::project::delete_skeleton(const object_id& id) {
         repair_character_root_bone(*c);
         initialize_animation_assets(c->animation_data_, topology_, c->rig().skeleton_ids());
     }
+    erase_cascade_actions(effects);
     invalidate_object_index();
     if (!ensure_object_index()) {
         throw std::runtime_error("deleting skeleton left duplicate object IDs");
     }
     assert(has_consistent_membership());
+    assert_animation_references_resolve();
     return result::success;
 }
 
@@ -202,6 +210,107 @@ void sm::project::repair_character_root_bone(sm::character& character) {
     character.set_character_root_bone(default_character_root_bone(topology_,character.rig().skeleton_ids()));
 }
 
+sm::topology_edit_effects sm::project::effects_for_removed_objects(
+        std::vector<object_id> nodes,
+        std::vector<object_id> bones,
+        std::vector<object_id> skeletons) const {
+    auto normalize = [](auto& ids) {
+        std::ranges::sort(ids);
+        ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+    };
+    normalize(nodes);
+    normalize(bones);
+    normalize(skeletons);
+
+    topology_edit_effects effects{std::move(nodes), std::move(bones), std::move(skeletons), {}};
+    const std::unordered_set<object_id> removed_nodes(effects.removed_nodes.begin(), effects.removed_nodes.end());
+    const std::unordered_set<object_id> removed_bones(effects.removed_bones.begin(), effects.removed_bones.end());
+    const std::unordered_set<object_id> removed_skeletons(effects.removed_skeletons.begin(), effects.removed_skeletons.end());
+
+    auto removed = [&](const animation_dependency& dependency) {
+        switch (dependency.kind) {
+        case animation_dependency_kind::node: return removed_nodes.contains(dependency.id);
+        case animation_dependency_kind::bone: return removed_bones.contains(dependency.id);
+        case animation_dependency_kind::skeleton: return removed_skeletons.contains(dependency.id);
+        }
+        return false;
+    };
+
+    for (const auto& [character_id, character] : characters_) {
+        for (const auto& animation : character->animation_data().animations) {
+            for (const auto& layer : animation.layers) for (const auto& action : layer.actions) {
+                const auto dependencies = animation_action_dependencies(action);
+                if (std::ranges::any_of(dependencies, removed))
+                    effects.removed_animation_actions.push_back({character_id, animation.id, action.id});
+            }
+        }
+    }
+    std::ranges::sort(effects.removed_animation_actions, [](const auto& a, const auto& b) {
+        if (a.character != b.character) return a.character < b.character;
+        if (a.animation != b.animation) return a.animation < b.animation;
+        return a.action < b.action;
+    });
+    return effects;
+}
+
+void sm::project::erase_cascade_actions(animation_assets& assets, const topology_edit_effects& effects) {
+    const std::unordered_set<object_id> removed_nodes(effects.removed_nodes.begin(), effects.removed_nodes.end());
+    const std::unordered_set<object_id> removed_bones(effects.removed_bones.begin(), effects.removed_bones.end());
+    const std::unordered_set<object_id> removed_skeletons(effects.removed_skeletons.begin(), effects.removed_skeletons.end());
+    auto invalid = [&](const animation_action& action) {
+        for (const auto& dependency : animation_action_dependencies(action)) {
+            switch (dependency.kind) {
+            case animation_dependency_kind::node:
+                if (removed_nodes.contains(dependency.id)) return true;
+                break;
+            case animation_dependency_kind::bone:
+                if (removed_bones.contains(dependency.id)) return true;
+                break;
+            case animation_dependency_kind::skeleton:
+                if (removed_skeletons.contains(dependency.id)) return true;
+                break;
+            }
+        }
+        return false;
+    };
+    for (auto& animation : assets.animations)
+        for (auto& layer : animation.layers)
+            std::erase_if(layer.actions, invalid);
+}
+
+void sm::project::erase_cascade_actions(const topology_edit_effects& effects) {
+    if (!effects.has_animation_cascade()) return;
+    for (auto& [id, character] : characters_)
+        erase_cascade_actions(character->animation_data_, effects);
+}
+
+bool sm::project::has_valid_animation_references() const {
+    for (const auto& [id, character] : characters_) {
+        for (const auto& animation : character->animation_data().animations) {
+            for (const auto& layer : animation.layers) for (const auto& action : layer.actions) {
+                for (const auto& dependency : animation_action_dependencies(action)) {
+                    switch (dependency.kind) {
+                    case animation_dependency_kind::node:
+                        if (!topology_.get<sm::node>(dependency.id)) return false;
+                        break;
+                    case animation_dependency_kind::bone:
+                        if (!topology_.get<sm::bone>(dependency.id)) return false;
+                        break;
+                    case animation_dependency_kind::skeleton:
+                        if (!topology_.skeleton(dependency.id)) return false;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    return true;
+}
+
+void sm::project::assert_animation_references_resolve() const {
+    assert(has_valid_animation_references());
+}
+
 sm::result sm::project::can_create_bone(const node& u, const node& v) const {
     if (&u.owner().owner() != &topology_ || &v.owner().owner() != &topology_)
         return result::foreign_skeleton;
@@ -210,6 +319,13 @@ sm::result sm::project::can_create_bone(const node& u, const node& v) const {
     if (&u.owner() == &v.owner()) return result::cyclic_bones;
     if (!v.is_root()) return result::multi_parent_node;
     return result::success;
+}
+
+std::expected<sm::topology_edit_effects, sm::result> sm::project::preview_create_bone(
+        const node& u, const node& v) const {
+    if (const auto status = can_create_bone(u, v); status != result::success)
+        return std::unexpected(status);
+    return effects_for_removed_objects({}, {}, {v.owner().id()});
 }
 
 sm::expected_bone sm::project::create_bone(const std::string& name, node& u, node& v) {
@@ -233,6 +349,7 @@ sm::expected_bone sm::project::create_bone(
     if (objects_.contains(id)) {
         return std::unexpected(result::duplicate_id);
     }
+    const auto effects = effects_for_removed_objects({}, {}, {v.owner().id()});
     const auto removed_id = v.owner().id();
     const auto parent_u = u.owner().parent_character(), parent_v = v.owner().parent_character();
     auto parent = parent_u ? parent_u : parent_v;
@@ -252,7 +369,9 @@ sm::expected_bone sm::project::create_bone(
     if (!ensure_object_index()) {
         throw std::runtime_error("creating bone produced duplicate object IDs");
     }
+    erase_cascade_actions(effects);
     assert(has_consistent_membership());
+    assert_animation_references_resolve();
     return created;
 }
 
@@ -262,8 +381,9 @@ sm::topology_change sm::project::replace_skeletons(
         const std::unordered_set<object_id>& regenerate_ids,
         const membership_state* restored_membership) {
     topology_change change;
-    auto plan = plan_replacement(replacees, replacements, restored_membership);
+    auto plan = plan_replacement(replacees, replacements, regenerate_ids, restored_membership);
     if (!plan) { change.status = plan.error(); return change; }
+    change.effects = plan->effects;
     change.removed_skeleton_ids.reserve(replacees.size());
     change.added_skeleton_ids.reserve(replacements.size());
 
@@ -327,11 +447,13 @@ sm::topology_change sm::project::replace_skeletons(
 
         auto copied = replacement->copy_to(staged, id_remap);
         if (!copied) {
-            return {{}, {}, copied.error()};
+            topology_change failed;
+            failed.status = copied.error();
+            return failed;
         }
         // Artwork follows surviving bones when replacement assigns fresh IDs.
-        // Apply only this component's bone remap to its owning character's staged
-        // semantic state; unresolved references to deleted bones remain intact.
+        // Animation action references are deliberately not remapped here: the replacement
+        // plan has already removed any action whose persistent dependency is losing identity.
         const auto parent = plan->membership.parents.at(replacement->id());
         if (parent) {
             std::unordered_map<object_id, object_id> bone_remap;
@@ -376,10 +498,12 @@ sm::topology_change sm::project::replace_skeletons(
         initialize_animation_assets(c->animation_data_, topology_, c->rig().skeleton_ids());
     }
     assert(has_consistent_membership());
+    assert_animation_references_resolve();
     return change;
 }
 
-sm::membership_state sm::project::snapshot_membership(const std::vector<object_id>& ids) const {
+sm::membership_state sm::project::snapshot_membership(
+        const std::vector<object_id>& ids, std::span<const object_id> extra_characters) const {
     membership_state state;
     std::unordered_set<object_id> seen;
     for (const auto& id : ids) {
@@ -390,6 +514,12 @@ sm::membership_state sm::project::snapshot_membership(const std::vector<object_i
         if (parent && seen.insert(parent->get().id()).second)
             state.characters.push_back({parent->get().id(), parent->get().name(), parent->get().character_root_bone(),
                 parent->get().artwork(), parent->get().animation_data()});
+    }
+    for (const auto& id : extra_characters) {
+        auto it = characters_.find(id);
+        if (it != characters_.end() && seen.insert(id).second)
+            state.characters.push_back({it->second->id(), it->second->name(), it->second->character_root_bone(),
+                it->second->artwork(), it->second->animation_data()});
     }
     return state;
 }
@@ -430,9 +560,11 @@ sm::result sm::project::restore_membership(const membership_state& state) {
 
 std::expected<sm::replacement_plan, sm::result> sm::project::plan_replacement(
         const std::vector<object_id>& replacees, const std::vector<skel_ref>& replacements,
+        const std::unordered_set<object_id>& regenerate_ids,
         const membership_state* restored) const {
     replacement_plan plan;
     std::unordered_set<object_id> removed, affected_characters;
+    std::unordered_set<object_id> old_nodes, old_bones;
     std::unordered_map<object_id, std::optional<object_id>> node_parents;
     for (const auto& id : replacees) {
         if (!removed.insert(id).second) return std::unexpected(result::duplicate_skeleton);
@@ -441,7 +573,11 @@ std::expected<sm::replacement_plan, sm::result> sm::project::plan_replacement(
         auto parent = skel->get().parent_character();
         std::optional<object_id> cid = parent ? std::optional(parent->get().id()) : std::nullopt;
         if (cid) affected_characters.insert(*cid);
-        for (auto node : skel->get().nodes()) node_parents.emplace(node->id(), cid);
+        for (auto node : skel->get().nodes()) {
+            node_parents.emplace(node->id(), cid);
+            old_nodes.insert(node->id());
+        }
+        for (auto bone : skel->get().bones()) old_bones.insert(bone->id());
     }
     if (restored) plan.membership.characters = restored->characters;
     else plan.membership.characters = snapshot_membership(replacees).characters;
@@ -489,6 +625,35 @@ std::expected<sm::replacement_plan, sm::result> sm::project::plan_replacement(
         }
         plan.membership.parents.emplace(replacement->id(), parent);
     }
+
+    std::unordered_set<object_id> preserved_nodes, preserved_bones, preserved_skeletons;
+    for (auto replacement : replacements) {
+        if (!regenerate_ids.contains(replacement->id())) preserved_skeletons.insert(replacement->id());
+        for (auto node : replacement->nodes())
+            if (!regenerate_ids.contains(node->id())) preserved_nodes.insert(node->id());
+        for (auto bone : replacement->bones())
+            if (!regenerate_ids.contains(bone->id())) preserved_bones.insert(bone->id());
+    }
+    std::vector<object_id> removed_nodes, removed_bones, removed_skeletons;
+    for (const auto& id : old_nodes) if (!preserved_nodes.contains(id)) removed_nodes.push_back(id);
+    for (const auto& id : old_bones) if (!preserved_bones.contains(id)) removed_bones.push_back(id);
+    for (const auto& id : removed) if (!preserved_skeletons.contains(id)) removed_skeletons.push_back(id);
+    plan.effects = effects_for_removed_objects(
+        std::move(removed_nodes), std::move(removed_bones), std::move(removed_skeletons));
+
+    // A malformed cross-character action can still reference an object owned by a
+    // different character. Preserve atomic undo for that case too by snapshotting
+    // every character whose action is part of the semantic cascade.
+    for (const auto& removed_action : plan.effects.removed_animation_actions) {
+        if (metadata.insert(removed_action.character).second) {
+            const auto& c = *characters_.at(removed_action.character);
+            plan.membership.characters.push_back({c.id(), c.name(), c.character_root_bone(),
+                c.artwork(), c.animation_data()});
+        }
+    }
+    for (auto& state : plan.membership.characters)
+        erase_cascade_actions(state.animation_data, plan.effects);
+
     for (const auto& id : affected_characters) {
         const auto& rig = characters_.at(id)->rig();
         bool survives = std::ranges::any_of(rig.skeleton_ids(), [&](const auto& sid) { return !removed.contains(sid); });
@@ -496,6 +661,15 @@ std::expected<sm::replacement_plan, sm::result> sm::project::plan_replacement(
         if (!survives) plan.deleted_character_ids.push_back(id);
     }
     return plan;
+}
+
+std::expected<sm::topology_edit_effects, sm::result> sm::project::preview_replace_skeletons(
+        const std::vector<object_id>& replacees,
+        const std::vector<skel_ref>& replacements,
+        const std::unordered_set<object_id>& regenerate_ids) const {
+    auto plan = plan_replacement(replacees, replacements, regenerate_ids);
+    if (!plan) return std::unexpected(plan.error());
+    return plan->effects;
 }
 
 bool sm::project::has_consistent_membership() const {

@@ -43,6 +43,7 @@ namespace mdl {
         std::stack<command> undo_stack_;
         std::size_t next_node_name_ = 1;
         std::size_t next_bone_name_ = 1;
+        std::function<bool(const sm::topology_edit_effects&)> topology_edit_confirmation_;
         void clear_redo_stack();
         sm::result execute_command(const command& cmd);
         void notify_command_change(const command& cmd);
@@ -57,8 +58,11 @@ namespace mdl {
         std::string next_default_node_name();
         std::string next_default_bone_name();
         void advance_default_name_counters_from_topology();
+        bool confirm_topology_edit(const sm::topology_edit_effects& effects) const;
     public:
         project();
+        void set_topology_edit_confirmation(
+            std::function<bool(const sm::topology_edit_effects&)> confirmation);
         bool animation_mode() const { return animation_mode_; }
         void set_animation_mode(bool active);
         void edit_animation_data(sm::object_id character, const std::function<void(sm::animation_assets&)>& edit);

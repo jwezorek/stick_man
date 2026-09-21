@@ -44,9 +44,11 @@ namespace mdl {
             sm::result status = sm::result::success;
             sm::object_id merged;
             std::optional<sm::object_id> bone_id;
+            std::vector<sm::object_id> cascade_characters;
             add_bone_state(const std::string& bone_name,
                 const handle& u_hnd,
-                const handle& v_hnd);
+                const handle& v_hnd,
+                const sm::topology_edit_effects& effects);
         };
         struct rename_state {
             handle object;
@@ -62,10 +64,12 @@ namespace mdl {
             std::optional<sm::membership_state> after_membership;
             sm::result status = sm::result::success;
             std::unordered_set<sm::object_id> regenerate_ids;
+            std::vector<sm::object_id> cascade_characters;
             replace_skeleton_state(
                 const std::vector<sm::object_id>& replacees,
                 const std::vector<sm::skel_ref>& replacements,
-                const std::unordered_set<sm::object_id>& regenerate_ids);
+                const std::unordered_set<sm::object_id>& regenerate_ids,
+                const sm::topology_edit_effects& effects);
         };
         struct transform_nodes_and_bones_state {
             std::function<void(sm::node&)> transform_nodes;
@@ -101,11 +105,13 @@ namespace mdl {
         static command make_create_node_command(
             const sm::point& pt, const std::string& node_name);
         static command make_add_bone_command(
-            const handle& u_hnd, const handle& v_hnd, const std::string& bone_name);
+            const handle& u_hnd, const handle& v_hnd, const std::string& bone_name,
+            const sm::topology_edit_effects& effects);
         static command make_replace_skeletons_command(
             const std::vector<sm::object_id>& replacees,
             const std::vector<sm::skel_ref>& replacements,
-            const std::unordered_set<sm::object_id>& regenerate_ids
+            const std::unordered_set<sm::object_id>& regenerate_ids,
+            const sm::topology_edit_effects& effects
         );
         static command make_transform_bones_or_nodes_command(
             project& proj,

@@ -75,7 +75,6 @@ void translation_actions_round_trip_with_bone_reference() {
     ik.path = sm::motion_path(std::move(spline));
     ik.reference = sm::translation_reference::bone;
     ik.reference_bone = reference_bone;
-    ik.effector_start = {5.0, -2.0};
     ik_action.data = ik;
 
     animation.layers.push_back({{rigid_action, ik_action}});
@@ -99,10 +98,64 @@ void translation_actions_round_trip_with_bone_reference() {
     require(restored_ik.reference_bone == reference_bone, "IK translation reference bone changed");
     require(restored_ik.effector == effector, "IK translation effector changed");
     require(restored_ik.pins == std::vector<sm::object_id>{pin}, "IK translation pins changed");
-    require(near(restored_ik.effector_start.x, 5.0) && near(restored_ik.effector_start.y, -2.0),
-        "IK translation start changed");
     require(std::holds_alternative<sm::spline_path>(restored_ik.path.geometry()),
         "IK translation spline was not preserved");
+}
+
+
+void ik_translation_composes_from_incoming_effector_position() {
+    sm::topology topology;
+    auto& root = topology.create_skeleton(sm::point{0.0, 0.0});
+    auto& middle = topology.create_skeleton(sm::point{5.0, 0.0});
+    auto& tip = topology.create_skeleton(sm::point{10.0, 0.0});
+    auto& root_node = root.root_node();
+    auto& middle_node = middle.root_node();
+    auto& tip_node = tip.root_node();
+    auto root_bone_result = topology.create_bone("root", root_node, middle_node);
+    require(root_bone_result.has_value(), "failed to create IK composition root bone");
+    auto child_bone_result = topology.create_bone("child", middle_node, tip_node);
+    require(child_bone_result.has_value(), "failed to create IK composition child bone");
+
+    const auto skeleton = root_bone_result->get().owner().id();
+    const auto root_bone = root_bone_result->get().id();
+    const auto root_id = root_node.id();
+    const auto effector_id = tip_node.id();
+    const auto base = sm::capture_pose(topology, {skeleton}, "base");
+
+    sm::animation_action move;
+    move.start = 0;
+    move.duration = 1000;
+    move.data = sm::rigid_translation{{skeleton},
+        sm::motion_path(sm::line_path{{0.0, 0.0}, {5.0, 0.0}}),
+        sm::translation_reference::animation_root,{}};
+
+    sm::animation_action ik;
+    ik.start = 0;
+    ik.duration = 1000;
+    sm::ik_translation translation;
+    translation.effector = effector_id;
+    translation.pins = {root_id};
+    translation.path = sm::motion_path(sm::line_path{{0.0, 0.0}, {-3.0, 2.0}});
+    translation.reference = sm::translation_reference::animation_root;
+    ik.data = translation;
+
+    sm::animation animation;
+    animation.base_pose = base.id;
+    animation.layers.push_back({{move}});
+    animation.layers.push_back({{ik}});
+
+    const auto report = sm::evaluate_animation(animation, base, root_bone, topology, 1000);
+    require(report.invalid_actions.empty(), "compositional IK translation evaluated as invalid");
+    const auto context = report.contexts.at(ik.id);
+    require(context.translation_anchor_world.has_value(), "IK translation did not capture its incoming effector position");
+    require(near(context.translation_anchor_world->x, 15.0) && near(context.translation_anchor_world->y, 0.0),
+        "IK translation did not see the effector position produced by the preceding action");
+
+    const auto effector = topology.get<sm::node>(effector_id);
+    require(effector.has_value(), "IK effector disappeared during evaluation");
+    const auto position = effector->get().world_pos();
+    require(sm::distance(position, {12.0, 2.0}) < 0.005,
+        "IK translation did not add its displacement to the incoming effector position");
 }
 
 void root_reference_frames_use_the_character_root_bone() {
@@ -458,6 +511,7 @@ int main() {
     try {
         motion_paths_are_persistent_displacement_paths();
         translation_actions_round_trip_with_bone_reference();
+        ik_translation_composes_from_incoming_effector_position();
         root_reference_frames_use_the_character_root_bone();
         character_root_frame_follows_earlier_translation();
         character_root_frame_follows_earlier_rotation();

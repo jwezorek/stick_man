@@ -93,6 +93,12 @@ namespace sm {
         object_id reference_bone;
     };
     using action_data = std::variant<rigid_rotation, ik_rotation, rigid_translation, ik_translation>;
+    enum class animation_dependency_kind { node, bone, skeleton };
+    struct animation_dependency {
+        animation_dependency_kind kind;
+        object_id id;
+        bool operator==(const animation_dependency&) const = default;
+    };
     struct animation_action {
         object_id id = object_id::generate();
         animation_time start = 0;
@@ -100,6 +106,10 @@ namespace sm {
         sm::easing easing = easing::linear;
         action_data data = rigid_rotation{};
     };
+    // The single authoritative description of persistent project-object references
+    // carried by an action. This visitor is intentionally exhaustive: adding a new
+    // action_data alternative must also define its dependencies here.
+    std::vector<animation_dependency> animation_action_dependencies(const animation_action& action);
     struct animation_layer { std::vector<animation_action> actions; };
     struct animation {
         object_id id = object_id::generate();

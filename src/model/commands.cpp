@@ -9,6 +9,14 @@
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
 namespace {
+    std::vector<sm::object_id> cascade_characters(const sm::topology_edit_effects& effects) {
+        std::vector<sm::object_id> ids;
+        for (const auto& removed : effects.removed_animation_actions) ids.push_back(removed.character);
+        std::ranges::sort(ids);
+        ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+        return ids;
+    }
+
     auto find_roots(const std::unordered_set<sm::node*>& node_set) {
         return rv::all(node_set) |
             rv::filter(
@@ -66,12 +74,14 @@ mdl::command mdl::commands::make_create_node_command(
     };
 }
 mdl::commands::add_bone_state::add_bone_state(
-        const std::string& name, const handle& u, const handle& v):
-    bone_name(name), u_hnd(u), v_hnd(v) {
+        const std::string& name, const handle& u, const handle& v,
+        const sm::topology_edit_effects& effects):
+    bone_name(name), u_hnd(u), v_hnd(v), cascade_characters(::cascade_characters(effects)) {
 }
 mdl::command mdl::commands::make_add_bone_command(
-        const handle& u_hnd, const handle& v_hnd, const std::string& bone_name) {
-    auto state = std::make_shared<add_bone_state>(bone_name, u_hnd, v_hnd);
+        const handle& u_hnd, const handle& v_hnd, const std::string& bone_name,
+        const sm::topology_edit_effects& effects) {
+    auto state = std::make_shared<add_bone_state>(bone_name, u_hnd, v_hnd, effects);
     return {
         [state](mdl::project& proj) {
             auto& u = commands::resolve<sm::node>(proj, state->u_hnd);
@@ -80,7 +90,8 @@ mdl::command mdl::commands::make_add_bone_command(
             if (state->status != sm::result::success) return;
             auto& skel_u = u.owner();
             auto& skel_v = v.owner();
-            state->membership = proj.core().snapshot_membership({skel_u.id(), skel_v.id()});
+            state->membership = proj.core().snapshot_membership(
+                {skel_u.id(), skel_v.id()}, state->cascade_characters);
             auto new_u = skel_u.copy_to(state->original);
             auto new_v = skel_v.copy_to(state->original);
             if (!new_u || !new_v) {
@@ -115,8 +126,10 @@ mdl::command mdl::commands::make_add_bone_command(
 mdl::commands::replace_skeleton_state::replace_skeleton_state(
         const std::vector<sm::object_id>& replacees_arg,
         const std::vector<sm::skel_ref>& replacers,
-        const std::unordered_set<sm::object_id>& regenerate_ids_arg):
-    replacee_ids(replacees_arg), regenerate_ids(regenerate_ids_arg) {
+        const std::unordered_set<sm::object_id>& regenerate_ids_arg,
+        const sm::topology_edit_effects& effects):
+    replacee_ids(replacees_arg), regenerate_ids(regenerate_ids_arg),
+    cascade_characters(::cascade_characters(effects)) {
     for (auto skel : replacers) {
         // An insertion (not a replacement) is an editor duplication operation, e.g. paste.
         // Allocate the duplicate IDs once here; redo then restores those same IDs.
@@ -131,12 +144,14 @@ mdl::commands::replace_skeleton_state::replace_skeleton_state(
 mdl::command mdl::commands::make_replace_skeletons_command(
         const std::vector<sm::object_id>& replacees,
         const std::vector<sm::skel_ref>& replacements,
-        const std::unordered_set<sm::object_id>& regenerate_ids) {
+        const std::unordered_set<sm::object_id>& regenerate_ids,
+        const sm::topology_edit_effects& effects) {
     auto state = std::make_shared<replace_skeleton_state>(
-        replacees, replacements, regenerate_ids);
+        replacees, replacements, regenerate_ids, effects);
     return {
         [state](mdl::project& proj) {
-            state->before_membership = proj.core().snapshot_membership(state->replacee_ids);
+            state->before_membership = proj.core().snapshot_membership(
+                state->replacee_ids, state->cascade_characters);
             if (state->replacees.empty()) {
                 for (const auto& skel_id : state->replacee_ids) {
                     auto skel = proj.topology().skeleton(skel_id);
@@ -154,7 +169,8 @@ mdl::command mdl::commands::make_replace_skeletons_command(
             state->status = change.status;
             if (change.status != sm::result::success) return;
             state->replacement_ids = std::move(change.added_skeleton_ids);
-            state->after_membership = proj.core().snapshot_membership(state->replacement_ids);
+            state->after_membership = proj.core().snapshot_membership(
+                state->replacement_ids, state->cascade_characters);
             // Replacement may remap any object ID to avoid collisions. Retain the
             // actual inserted topology so later commands keep valid handles on redo.
             sm::topology inserted;

@@ -20,9 +20,24 @@ namespace sm {
     using const_project_object = std::variant<const_node_ref, const_bone_ref, const_skel_ref, const_character_ref>;
     using project_buffer = std::vector<std::uint8_t>;
 
+    struct removed_animation_action {
+        object_id character;
+        object_id animation;
+        object_id action;
+        bool operator==(const removed_animation_action&) const = default;
+    };
+    struct topology_edit_effects {
+        std::vector<object_id> removed_nodes;
+        std::vector<object_id> removed_bones;
+        std::vector<object_id> removed_skeletons;
+        std::vector<removed_animation_action> removed_animation_actions;
+
+        bool has_animation_cascade() const noexcept { return !removed_animation_actions.empty(); }
+    };
     struct topology_change {
         std::vector<object_id> removed_skeleton_ids;
         std::vector<object_id> added_skeleton_ids;
+        topology_edit_effects effects;
         result status = result::success;
     };
 
@@ -41,6 +56,7 @@ namespace sm {
     struct replacement_plan {
         membership_state membership;
         std::vector<object_id> deleted_character_ids;
+        topology_edit_effects effects;
     };
 
     enum class project_result {
@@ -72,6 +88,13 @@ namespace sm {
         void detach_skeleton(skeleton& skel);
         void prune_empty_characters();
         void repair_character_root_bone(character& character);
+        topology_edit_effects effects_for_removed_objects(
+            std::vector<object_id> nodes,
+            std::vector<object_id> bones,
+            std::vector<object_id> skeletons) const;
+        static void erase_cascade_actions(animation_assets& assets, const topology_edit_effects& effects);
+        void erase_cascade_actions(const topology_edit_effects& effects);
+        void assert_animation_references_resolve() const;
 
     public:
         project() = default;
@@ -90,19 +113,27 @@ namespace sm {
         result can_create_bone(const node& u, const node& v) const;
         expected_bone create_bone(const std::string& name, node& u, node& v);
         expected_bone create_bone(object_id id, const std::string& name, node& u, node& v);
+        std::expected<topology_edit_effects, result> preview_create_bone(const node& u, const node& v) const;
         topology_change replace_skeletons(
             const std::vector<object_id>& replacees,
             const std::vector<skel_ref>& replacements,
             const std::unordered_set<object_id>& regenerate_ids = {},
             const membership_state* restored_membership = nullptr);
-        membership_state snapshot_membership(const std::vector<object_id>& skeletons) const;
+        membership_state snapshot_membership(const std::vector<object_id>& skeletons,
+            std::span<const object_id> extra_characters = {}) const;
         // Restore affected membership without replacing topology (e.g. adoption undo).
         result restore_membership(const membership_state& state);
         std::expected<replacement_plan, result> plan_replacement(
             const std::vector<object_id>& replacees,
             const std::vector<skel_ref>& replacements,
+            const std::unordered_set<object_id>& regenerate_ids = {},
             const membership_state* restored_membership = nullptr) const;
+        std::expected<topology_edit_effects, result> preview_replace_skeletons(
+            const std::vector<object_id>& replacees,
+            const std::vector<skel_ref>& replacements,
+            const std::unordered_set<object_id>& regenerate_ids = {}) const;
         bool has_consistent_membership() const;
+        bool has_valid_animation_references() const;
 
         expected_const_character create_character(std::span<const const_skel_ref> skeletons);
         result adopt_skeletons(const object_id& character_id, std::span<const const_skel_ref> skeletons);

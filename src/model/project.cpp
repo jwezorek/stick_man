@@ -53,6 +53,15 @@ sm::result mdl::project::execute_command(const command& cmd) {
 
 mdl::project::project() {}
 
+void mdl::project::set_topology_edit_confirmation(
+        std::function<bool(const sm::topology_edit_effects&)> confirmation) {
+    topology_edit_confirmation_ = std::move(confirmation);
+}
+
+bool mdl::project::confirm_topology_edit(const sm::topology_edit_effects& effects) const {
+    return !effects.has_animation_cascade() || !topology_edit_confirmation_ || topology_edit_confirmation_(effects);
+}
+
 const sm::project& mdl::project::core() const { return core_; }
 sm::project& mdl::project::core() { return core_; }
 void mdl::project::edit_artwork(const sm::object_id& id, const std::function<void(sm::artwork&)>& edit) {
@@ -161,9 +170,13 @@ bool mdl::project::deserialize(std::span<const std::uint8_t> buffer) {
     return true;
 }
 sm::result mdl::project::add_bone(const handle& u, const handle& v) {
-    auto status = core_.can_create_bone(commands::resolve<sm::node>(*this, u), commands::resolve<sm::node>(*this, v));
-    if (status != sm::result::success) return status;
-    return execute_command(commands::make_add_bone_command(u, v, next_default_bone_name()));
+    auto& node_u = commands::resolve<sm::node>(*this, u);
+    auto& node_v = commands::resolve<sm::node>(*this, v);
+    auto preview = core_.preview_create_bone(node_u, node_v);
+    if (!preview) return preview.error();
+    if (!confirm_topology_edit(*preview)) return sm::result::cancelled;
+    return execute_command(commands::make_add_bone_command(
+        u, v, next_default_bone_name(), *preview));
 }
 sm::result mdl::project::adopt_skeletons(const sm::object_id& character_id,
         std::span<const sm::const_skel_ref> skeletons) {
@@ -381,10 +394,11 @@ sm::result mdl::project::replace_skeletons(
         const std::vector<sm::object_id>& replacees,
         const std::vector<sm::skel_ref>& replacements,
         const std::unordered_set<sm::object_id>& regenerate_ids) {
-    auto plan = core_.plan_replacement(replacees, replacements);
-    if (!plan) return plan.error();
+    auto preview = core_.preview_replace_skeletons(replacees, replacements, regenerate_ids);
+    if (!preview) return preview.error();
+    if (!confirm_topology_edit(*preview)) return sm::result::cancelled;
     return execute_command(commands::make_replace_skeletons_command(
-        replacees, replacements, regenerate_ids));
+        replacees, replacements, regenerate_ids, *preview));
 }
 
 bool mdl::identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2) {

@@ -9,11 +9,13 @@
 
 namespace {
 constexpr double epsilon = 1e-8;
+template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 sm::point lerp(sm::point a, sm::point b, double t) { return (1.0-t)*a + t*b; }
 sm::point cubic_at(const sm::cubic_bezier_path& c, double t) {
     const double u=1.0-t, b0=u*u*u, b1=3*u*u*t, b2=3*u*t*t, b3=t*t*t;
     return b0*c.start + b1*c.control1 + b2*c.control2 + b3*c.end;
 }
+
 bool finite(sm::point p) { return std::isfinite(p.x) && std::isfinite(p.y); }
 bool near_zero(sm::point p) { return sm::distance(p,{0,0}) <= 1e-7; }
 bool valid_reference(sm::translation_reference reference) {
@@ -53,6 +55,38 @@ void validate_path(const sm::motion_path& path) {
         }
     },path.geometry());
 }
+}
+
+std::vector<sm::animation_dependency> sm::animation_action_dependencies(const animation_action& action) {
+    return std::visit(overloaded{
+        [](const rigid_rotation& data) {
+            return std::vector<animation_dependency>{{animation_dependency_kind::bone, data.bone}};
+        },
+        [](const ik_rotation& data) {
+            return std::vector<animation_dependency>{
+                {animation_dependency_kind::node, data.effector},
+                {animation_dependency_kind::node, data.pivot_node}};
+        },
+        [](const rigid_translation& data) {
+            std::vector<animation_dependency> dependencies;
+            dependencies.reserve(data.skeletons.size() + 1);
+            for (const auto id : data.skeletons)
+                dependencies.push_back({animation_dependency_kind::skeleton, id});
+            if (data.reference == translation_reference::bone)
+                dependencies.push_back({animation_dependency_kind::bone, data.reference_bone});
+            return dependencies;
+        },
+        [](const ik_translation& data) {
+            std::vector<animation_dependency> dependencies;
+            dependencies.reserve(data.pins.size() + 2);
+            dependencies.push_back({animation_dependency_kind::node, data.effector});
+            for (const auto id : data.pins)
+                dependencies.push_back({animation_dependency_kind::node, id});
+            if (data.reference == translation_reference::bone)
+                dependencies.push_back({animation_dependency_kind::bone, data.reference_bone});
+            return dependencies;
+        }
+    }, action.data);
 }
 
 void sm::motion_path::set_geometry(motion_path_geometry path) {
@@ -203,8 +237,25 @@ void sm::animation_assets::validate() const {
 }
 void sm::animation_assets::validate(const topology& topology, object_id character_root_bone) const {
     validate();
-    for (const auto& animation : animations)
+    for (const auto& animation : animations) {
+        for (const auto& layer : animation.layers) for (const auto& action : layer.actions) {
+            for (const auto& dependency : animation_action_dependencies(action)) {
+                const bool resolved = [&] {
+                    switch (dependency.kind) {
+                    case animation_dependency_kind::node:
+                        return topology.get<sm::node>(dependency.id).has_value();
+                    case animation_dependency_kind::bone:
+                        return topology.get<sm::bone>(dependency.id).has_value();
+                    case animation_dependency_kind::skeleton:
+                        return topology.skeleton(dependency.id).has_value();
+                    }
+                    return false;
+                }();
+                if (!resolved) throw std::invalid_argument("Animation action contains an unresolved project reference");
+            }
+        }
         validate_animation_order(animation, character_root_bone, topology);
+    }
 }
 sm::pose sm::capture_pose(const topology& topology, const std::vector<object_id>& skeletons, std::string name) {
     pose p; p.name = std::move(name);

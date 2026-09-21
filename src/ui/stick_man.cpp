@@ -81,6 +81,17 @@ ui::stick_man::stick_man(QWidget* parent) :
     center_layout->addWidget(canvases_ = new canvas::manager(tool_mgr_));
     setCentralWidget(center);
     setWindowTitle("stick_man - untitled");
+    project_.set_topology_edit_confirmation([this](const sm::topology_edit_effects& effects) {
+        const auto count = effects.removed_animation_actions.size();
+        const auto message = count == 1
+            ? QStringLiteral(
+                "This edit will also delete 1 animation action that depends on a node, bone, or skeleton being removed.\n\nContinue?")
+            : QStringLiteral(
+                "This edit will also delete %1 animation actions that depend on nodes, bones, or skeletons being removed.\n\nContinue?")
+                .arg(count);
+        return QMessageBox::question(this, QStringLiteral("Delete Animation Actions"), message,
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes;
+    });
     canvases_->init(project_);
 
     auto* artwork_browser = new pane::artwork_browser(project_, *canvases_, this);
