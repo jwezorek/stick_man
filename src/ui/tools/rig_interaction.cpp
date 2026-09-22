@@ -1,7 +1,7 @@
 #include "rig_interaction.hpp"
 #include "../../model/selection.hpp"
 #include "select_tool_panel.hpp"
-#include "motion_path_fit.hpp"
+#include "../animation_action_editor.hpp"
 #include "../panes/skeleton_pane.hpp"
 #include "../util.hpp"
 #include "../canvas/scene.hpp"
@@ -569,22 +569,22 @@ void  ui::tool::rig_interaction::do_dragging(canvas::scene& canv, QPointF pt) {
                 },
                 [&](rotation_state& ri) {
                     if (started && authoring_animation() && animation_authoring_ && animation_authoring_->begin)
-                        animation_authoring_->begin(authored_rotation_for(ri));
+                        animation_authoring_->begin(animation_editing::authored_action_for(ri));
                     handle_rotation(canv, pt, ri);
                     if (authoring_animation() && animation_authoring_ && animation_authoring_->update)
-                        animation_authoring_->update(authored_rotation_for(ri));
+                        animation_authoring_->update(animation_editing::authored_action_for(ri));
                 },
                 [&](translation_state& ti) {
                     const auto sample=from_qt_pt(pt);
                     if(ti.gesture_samples.empty() || sm::distance(ti.gesture_samples.back(),sample)>=0.25)
                         ti.gesture_samples.push_back(sample);
                     if(started && authoring_animation() && animation_authoring_) {
-                        if(auto action=authored_translation_for(ti); action && animation_authoring_->begin)
+                        if(auto action=animation_editing::authored_action_for(ti); action && animation_authoring_->begin)
                             animation_authoring_->begin(*action);
                     }
                     handle_translation(canv, pt, ti);
                     if(authoring_animation() && animation_authoring_) {
-                        if(auto action=authored_translation_for(ti); action && animation_authoring_->update)
+                        if(auto action=animation_editing::authored_action_for(ti); action && animation_authoring_->update)
                             animation_authoring_->update(*action);
                     }
                 }
@@ -805,7 +805,7 @@ void ui::tool::rig_interaction::handle_click(
 void ui::tool::rig_interaction::do_rotation_complete(canvas::scene& canv, const rotation_state& ri) {
     if (authoring_animation()) {
         if (animation_authoring_ && animation_authoring_->complete) {
-            animation_authoring_->complete(authored_rotation_for(ri));
+            animation_authoring_->complete(animation_editing::authored_action_for(ri));
         }
         else {
             for (const auto& [id, old_pos] : ri.old_node_locs())
@@ -825,7 +825,7 @@ void ui::tool::rig_interaction::do_rotation_complete(canvas::scene& canv, const 
 
 void ui::tool::rig_interaction::do_translation_complete(canvas::scene& canv, const translation_state& ri) {
     if (authoring_animation()) {
-        auto authored=authored_translation_for(ri);
+        auto authored=animation_editing::authored_action_for(ri);
         for (const auto& [id, old_pos] : ri.old_locs)
             for (auto* node : canv.node_items()) if (node->model().id() == id) { node->model().set_world_pos(old_pos); break; }
         canv.sync_to_model();
@@ -883,41 +883,6 @@ QWidget* ui::tool::rig_interaction::settings_widget() {
         );
     }
     return settings_panel_;
-}
-
-ui::tool::rig_interaction::authored_action ui::tool::rig_interaction::authored_rotation_for(const rotation_state& state) const {
-    if (state.mode() == sel_drag_mode::rag_doll) {
-        return sm::ik_rotation{state.rotating().id(), state.axis().id(), state.gesture_angle()};
-    }
-    const auto pivot = &state.axis() == &state.bone().parent_node() ?
-        sm::rotation_pivot::root : sm::rotation_pivot::tip;
-    const auto propagation = state.mode() == sel_drag_mode::unique ?
-        sm::rotation_propagation::bone_only : sm::rotation_propagation::hierarchy;
-    return sm::rigid_rotation{state.bone().id(), pivot, state.gesture_angle(), propagation};
-}
-
-std::optional<ui::tool::rig_interaction::authored_action> ui::tool::rig_interaction::authored_translation_for(const translation_state& state) const {
-    if(state.mode==sel_drag_mode::rubber_band || state.gesture_samples.size()<2) return {};
-    std::vector<sm::point> local_samples; local_samples.reserve(state.gesture_samples.size());
-    const sm::reference_frame frame{state.reference_origin,state.reference_angle};
-    const auto origin=frame.world_to_local(state.gesture_samples.front());
-    for(auto p:state.gesture_samples) local_samples.push_back(frame.world_to_local(p)-origin);
-    auto path=fit_motion_path(local_samples,state.path_kind);
-    if(state.mode==sel_drag_mode::rigid) {
-        std::vector<sm::object_id> skeletons;
-        for(auto skel:skeletons_from_nodes(state.moving)) skeletons.push_back(skel->id());
-        std::ranges::sort(skeletons); skeletons.erase(std::unique(skeletons.begin(),skeletons.end()),skeletons.end());
-        if(skeletons.empty()) return {};
-        return authored_action{sm::rigid_translation{std::move(skeletons),std::move(path),state.reference,state.reference_bone}};
-    }
-    if(state.mode==sel_drag_mode::rag_doll) {
-        if(state.moving.size()!=1) return {};
-        std::vector<sm::object_id> pins; pins.reserve(state.pinned.size());
-        for(auto pin:state.pinned) if(&pin->owner()==&state.moving.front()->owner() && pin->id()!=state.moving.front()->id()) pins.push_back(pin->id());
-        std::ranges::sort(pins); pins.erase(std::unique(pins.begin(),pins.end()),pins.end());
-        return authored_action{sm::ik_translation{state.moving.front()->id(),std::move(pins),std::move(path),state.reference,state.reference_bone}};
-    }
-    return {};
 }
 
 void ui::tool::rig_interaction::cancel_animation_drag(canvas::scene& canv) {

@@ -87,8 +87,6 @@ namespace ui {
             std::optional<translation_state> create_translation_state(
                 canvas::scene& canv, QPointF clicked_pt, const sel_drag_settings& settings) const;
 
-            authored_action authored_rotation_for(const rotation_state& state) const;
-            std::optional<authored_action> authored_translation_for(const translation_state& state) const;
             void cancel_animation_drag(canvas::scene& canv);
         };
     }

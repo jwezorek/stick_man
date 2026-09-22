@@ -5,6 +5,7 @@
 
 namespace ui::canvas { class manager; }
 namespace ui::tool { class manager; class select_tool_panel; }
+namespace ui::animation_editing { class action_properties; }
 namespace ui::pane {
     // Owns playback time and translates generic timeline intentions to animation commands.
     class animation_timeline : public QDockWidget {
@@ -16,11 +17,10 @@ namespace ui::pane {
         sm::object_id character_, animation_, selected_;
         timeline* timeline_;
         QPushButton *play_, *undo_, *redo_, *remove_;
-        QComboBox *bone_, *pivot_, *propagation_, *effector_, *pivot_node_, *easing_, *layer_;
+        QComboBox *easing_, *layer_;
         QSpinBox *start_, *duration_;
-        QDoubleSpinBox* angle_;
         QLabel *time_label_, *status_, *selection_label_;
-        QLabel *bone_label_, *pivot_label_, *propagation_label_, *effector_label_, *pivot_node_label_, *angle_label_;
+        animation_editing::action_properties* action_properties_;
         QWidget* parameters_;
         QTimer timer_;
         QElapsedTimer clock_;
@@ -50,10 +50,8 @@ namespace ui::pane {
         void select_action(QString id);
         void edit_selected_action(const std::function<void(sm::animation_action&)>& edit,
             std::optional<row_head_position> row = {});
-        void preview_selected_angle(double angle);
-        void commit_selected_angle(double angle);
-        void preview_selected_path(const sm::motion_path& path);
-        void commit_selected_path(const sm::motion_path& path);
+        void preview_selected_data(sm::action_data data);
+        void commit_selected_data(sm::action_data data);
         void refresh_action_adornment();
         void delete_action();
         void move_action(QString id, qint64 start, row_head_position row);
@@ -65,7 +63,6 @@ namespace ui::pane {
         void capture_selected_pins();
         void sync_animation_tool_properties();
         void focus_action_editor(QString id);
-        void update_action_field_visibility();
         void tick();
         void message(QString text);
         void reject_action(QString text);
