@@ -1,11 +1,11 @@
 # stick_man Artwork and Appearances
 
-**Current implementation and design constraints**  
+**Current implementation reference**  
 **Reviewed against the September 22, 2026 source selection**
 
 ## 1. Status
 
-Artwork and appearances are implemented character data, not a future skinning plan.
+Artwork and appearances are implemented character-owned data and editor functionality.
 
 The current system includes:
 
@@ -25,7 +25,7 @@ The current system includes:
 - packaged-project persistence;
 - Core sprite-page packing and PNG resource loading;
 - animation preview against a detached evaluated topology;
-- whole-character clipboard preservation of artwork, with bone-ID remapping on paste.
+- whole-character clipboard preservation of artwork and animation resources, with topology-ID remapping on paste.
 
 The terminology is deliberately **artwork**, **frame**, **slot**, **state**, and **appearance** rather than “skin.”
 
@@ -374,7 +374,7 @@ This allows artwork definitions to survive some rig editing without silently reb
 
 When topology replacement deliberately assigns a fresh ID to a surviving bone, the project's replacement machinery remaps artwork bone IDs so the authored binding follows that surviving semantic bone.
 
-This distinction is intentional current behavior and should be preserved/documented if a future “repair unresolved artwork slot” workflow is added.
+This distinction is intentional current behavior: unresolved artwork is retained as authored data while rendering simply omits bindings that cannot currently resolve.
 
 ---
 
@@ -455,61 +455,50 @@ Qt/SDL/GPU objects do not appear in Core artwork data.
 
 ## 14. Clipboard behavior
 
-Whole-character copy/cut/paste currently preserves artwork.
+Whole-character copy/cut/paste preserves the character's artwork resources together with its animation resources.
 
-The clipboard payload contains topology separately and embeds a serialized temporary Core package for character resources. On paste:
+The clipboard payload stores the selected character's topology separately and embeds a serialized temporary Core package containing the character-owned semantic/resource data. On paste:
 
-- the topology receives fresh skeleton/node/bone IDs;
-- artwork is recovered from the resource package;
-- artwork bone bindings are remapped to the new bone IDs;
-- the character root bone is remapped similarly.
+- the pasted character receives a fresh character ID;
+- every skeleton, node, and bone receives a fresh topology ID;
+- artwork bone bindings are remapped through that old-to-new ID table;
+- the character root bone is remapped through the same table;
+- animation pose/action topology references are remapped by `remap_animation_assets()`;
+- if the paste operation applies a spatial offset, stored pose node positions are transformed by the same paste matrix;
+- image/frame resources are recovered through Core package deserialization rather than through editor-specific atlas handling.
 
-At present the same character-copy path does **not** preserve animation assets. That is a character/animation gap rather than an artwork gap and should be fixed before the action vocabulary grows substantially.
+The pasted character's name receives a `copy`/`copy N` suffix, and the complete paste is one undoable operation.
 
 ---
 
 ## 15. Semantic states and animation
 
-Semantic states are currently authoring/preview data, not animation actions.
+Semantic slot states currently belong to artwork authoring/preview state rather than to `action_data`.
 
-The artwork layer can preview a chosen state for a slot, but no current animation action changes:
+The Artwork Browser/canvas can choose a preview state for a slot and resolve that state through the active appearance, but the four implemented animation actions affect rig geometry only. Playback does not currently change:
 
 - a slot's semantic state;
 - the active appearance;
-- an appearance-slot transform;
+- an appearance-slot transform; or
 - a frame registration origin.
 
-These are plausible future animation capabilities, especially semantic state changes such as blink/mouth/hand state. They should not be added until the animation action-extension/remapping/integrity work described in `Animation.md` is in place.
-
-When state animation is designed, prefer animating the semantic state (`blink`) rather than directly naming a frame (`eyes_closed.png`) so the same animation can work across different appearances.
+This is independent of skeletal animation preview: while an animation is playing or scrubbed, the currently selected artwork state/appearance is still resolved against the evaluated detached rig topology, so the sprites follow the animated bones correctly.
 
 ---
 
-## 16. Remaining artwork/appearance work
+## 16. Current design invariants
 
-The core artwork system is usable and internally coherent. Remaining work is mainly integration/polish rather than another data-model rewrite.
-
-Important follow-ups are:
-
-1. **Define repair UX for unresolved slot bindings.** Current rendering safely skips them, but the editor should make the unresolved condition obvious and make rebinding easy.
-2. **Decide whether project-level validation should optionally enforce fully resolved artwork.** Today unresolved slot references are tolerated intentionally.
-3. **Complete character-level copy semantics.** Artwork already remaps correctly; animation should join it so a copied character is genuinely self-contained.
-4. **Keep preview state separate from authored animation state.** If semantic-state actions are added, do not accidentally serialize the editor's current preview selection as character state.
-5. **Add focused persistence/transform tests** for packing, edge padding, state fallback, root/tip anchors, painter order, remapping, and animation-preview geometry.
-
----
-
-## 17. Stable design principles
-
-Future artwork work should preserve these rules:
+The implemented artwork system follows these rules:
 
 - artwork belongs to a character;
-- frames are logical named resources independent of packing layout;
-- slots are semantic rig interfaces independent of bone display names;
-- appearances map semantics to artwork rather than redefining rig structure;
-- root/tip changes the anchor origin, not the root-to-tip orientation;
-- painter order is explicit authored appearance order;
-- active appearance and preview states are editor/session choices unless an explicit animation/runtime feature says otherwise;
-- Core owns renderer-neutral resource semantics and package persistence;
-- Qt owns editor presentation and interactive handles;
-- animation preview resolves persistent artwork against evaluated rig geometry rather than duplicating artwork into the animation working topology.
+- frames are logical named resources independent of sprite-page packing layout;
+- slot names form the semantic interface between the rig and interchangeable appearances;
+- ordinary bone/node display names are not artwork identity;
+- slot state vocabularies are shared semantics, while each appearance chooses how those states map to frames/hidden values;
+- root/tip changes the anchor origin but both anchors use the same root-to-tip orientation;
+- painter order is the authored order of `appearance_slots`;
+- active appearance and per-slot preview states are editor/session state, not persistent "currently active" character fields;
+- unresolved slot-to-bone references may remain in authored artwork and are skipped by resolution/rendering;
+- Core owns renderer-neutral image resources, artwork semantics, packing, package persistence, and transform resolution;
+- Qt owns artwork-browser presentation, hit testing, transform handles, drag/drop, and interactive preview;
+- Animation Mode reuses persistent artwork semantics against evaluated rig geometry rather than copying artwork into the detached animation topology.

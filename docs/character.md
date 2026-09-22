@@ -233,7 +233,7 @@ artwork& project::artwork(character_id);
 
 The editor model wraps ordinary animation/artwork changes in undoable snapshot-style edit commands, but Core itself does not make those mutable references transactional.
 
-As the semantic model grows, it would be reasonable to tighten this boundary so invariants such as character-scoped animation references cannot be bypassed accidentally. This is a hardening opportunity rather than evidence that the current architecture needs replacement.
+The editor model does not mutate those references in place during ordinary UI edits: it copies the semantic value, applies the requested edit, validates the candidate when appropriate, and records an undoable replacement command.
 
 ---
 
@@ -263,28 +263,31 @@ Character selection is visually distinct from raw skeleton editing, and characte
 
 ## 13. Cut, copy, and paste
 
-Whole-character clipboard copy is partially self-contained today.
+Whole-character clipboard copy/paste is self-contained at the character level.
 
 Current copy/paste preserves:
 
-- character name (with `copy` suffix on paste);
+- the character name (with a `copy`/`copy N` suffix on paste);
 - all member topology;
-- character root bone;
-- artwork and image resources.
+- the character root bone;
+- artwork, appearances, and image/frame resources;
+- the Default and named poses;
+- animations, layers, actions, motion paths, pins, and action timing/easing data.
 
-On paste, fresh skeleton/node/bone IDs are generated. Artwork bone bindings and the character root bone are remapped to those fresh IDs.
+The clipboard embeds a temporary serialized Core package for the character-owned resources so the editor does not need to copy packed image resources manually.
 
-### Current missing piece: animation
+On paste, the new character and all topology objects receive fresh identities. A single old-to-new topology-ID map is then used to:
 
-Whole-character copy/paste does **not** currently preserve `animation_assets`.
+- remap artwork bone bindings;
+- remap the character root bone;
+- remap every pose node-position key;
+- remap every persistent node/bone/skeleton reference stored by animation actions.
 
-The clipboard's temporary Core resource package copies artwork but never assigns the source character's animation data, and `mdl::project::paste_character()` creates membership state with empty animation data. Core subsequently creates a fresh Default pose for the pasted rig.
+`remap_animation_assets()` uses the same exhaustive persistent-reference visitor that dependency discovery uses. Pose/animation/action IDs themselves are preserved inside the copied animation assets; only topology references are rewritten.
 
-Thus a copied animated character keeps its artwork but loses named poses and animations.
+When paste applies a spatial translation rather than using Paste in Place, the copied pose positions are transformed by that same translation so animation base/named poses remain spatially aligned with the pasted rig.
 
-This should be fixed before adding many more action types because every additional action payload increases the amount of ID-remapping logic required for a correct character copy.
-
-The preferred direction is a centralized animation remapper that receives the old->new topology-ID map and rewrites every pose/action reference through one exhaustive action visitor.
+The complete character paste is one undoable command; redo restores the same pasted character identity. Ordinary non-character topology copy/paste continues to create loose skeleton geometry rather than implicitly adopting it into the currently selected character.
 
 ---
 
@@ -304,56 +307,61 @@ Current character semantic persistence includes:
 
 Topology remains a project-level structure rather than being duplicated inside each character record.
 
-Core owns package/JSON/image serialization so the Qt editor and future runtimes do not need separate persistence implementations.
+Core owns package/JSON/image serialization so the Qt editor and runtime consumers do not need separate persistence implementations.
 
 ---
 
-## 15. Current character-level integrity strengths
+## 15. Character-level integrity
 
-Several previously risky areas are now well defined:
+The current character/project boundary enforces several semantic invariants:
 
-- global persistent IDs replaced load-bearing node/bone names;
-- mutable generic project lookup is limited to node/bone editing;
+- global persistent IDs, rather than display names, carry structural identity;
+- generic mutable project lookup is limited to node/bone editing;
 - character membership is bidirectional and validated;
-- the character can own multiple skeletons;
-- character root is an explicit persistent bone designation;
-- topology replacement is planned/staged before live mutation;
-- undo snapshots character membership plus artwork/animation semantics;
-- artwork bone IDs are remapped for identity-preserving replacement;
-- animation actions that would dangle are identified centrally and removed atomically;
-- Core package persistence includes character artwork and animation.
+- a character may own multiple disconnected skeletons;
+- the character root is an explicit persistent bone designation;
+- topology replacement is planned and semantically validated before live mutation;
+- undo snapshots character membership together with artwork and animation assets;
+- artwork bone IDs are remapped when a preserved semantic bone receives a fresh ID;
+- animation actions whose dependencies are truly removed are identified centrally and deleted atomically with the topology edit;
+- animation pose membership is reconciled after supported structural/membership edits;
+- animation validation is scoped to the owning character rig;
+- whole-character copy/paste remaps both artwork and animation references;
+- Core package persistence includes both character artwork and animation data.
 
-These pieces make the current model coherent enough that the next work should be hardening, not another ownership refactor.
+`project::validate_integrity()` combines object-index uniqueness, membership consistency, and character-scoped animation validation.
 
 ---
 
-## 16. Character-level gaps to fix before broad action expansion
+## 16. Rig changes, poses, and animation integrity
 
-### 16.1 Pose reconciliation during rig evolution
+Character membership can change without changing the character's user-level identity, so the project normalizes animation state as part of structural transactions.
 
-This is the largest current mismatch between “character as stable authored boundary” and animation behavior.
+### 16.1 Pose reconciliation
 
-The character may validly gain/lose rig nodes, but stored poses are not automatically reconciled with those membership changes. Since pose compatibility requires an exact node set, supported structural edits can strand existing poses/animations.
+`reconcile_animation_poses()` applies the current membership policy:
 
-Core needs an explicit policy and API for reconciling Default/named poses when character membership changes.
+- Default removes nodes that no longer belong to the character;
+- Default adds newly introduced member nodes at their current world positions;
+- retained Default entries keep their existing authored positions;
+- named poses drop nodes that no longer belong to the character;
+- named poses are not automatically extended when new member nodes are introduced.
+
+Because pose compatibility is an exact node-set comparison, a named pose may therefore become incomplete when the rig grows. Applying such a pose or using it as an Animation Mode base pose is rejected until it is updated/recreated. This is current authored-pose behavior rather than a dangling-reference condition.
 
 ### 16.2 Character-scoped animation validation
 
-Animation validation currently checks that action references resolve in the project topology, not that they belong to the animation's owning character.
+`animation_assets::validate(topology, rig_skeletons, character_root_bone)` requires pose/action topology references to resolve inside the owning character rig. It also checks same-skeleton IK constraints, character-root requirements, and reference-frame ordering.
 
-The Core invariant should become:
+`mdl::project::edit_animation_data()` validates a copied candidate before committing it as an undoable edit. Structural operations validate a detached candidate character/topology state before committing live changes.
 
-> Every persistent topology reference stored by a character animation resolves to an object in that character's rig and satisfies the structural requirements of its action type.
+Changing `character_root_bone` is also validated before commit because Character Root references and their ordering constraints are defined in terms of that designation.
 
-### 16.3 Character copy must include animation
+### 16.3 Structural deletion and action cascades
 
-As described above, copied characters are currently missing their animation assets. Implementing this now is much cheaper than implementing it after the action variant grows.
+Before an edit removes persistent topology identities, Core computes `topology_edit_effects`. Any action whose active persistent dependency is being removed is included in the semantic cascade and removed atomically with the topology edit. Undo restores the topology and affected animation data together.
 
-### 16.4 Consider narrowing raw mutable semantic access
-
-`project::animation_data()` and `project::artwork()` expose mutable references. The model uses them responsibly through commands, but a future Core API could provide mutation methods/transactions that validate before commit.
-
-This would make the project's semantic invariants harder to bypass accidentally.
+No heuristic retargeting is performed.
 
 ---
 
@@ -375,4 +383,4 @@ animations
 
 while nodes, bones, and skeleton connectivity remain in the project topology.
 
-That division is working. Future features should build on it rather than collapsing character and skeleton back into the same concept.
+The current project, artwork, animation, clipboard, and undo implementations all rely on that division: topology supplies structural geometry; the character supplies persistent semantic ownership over it.

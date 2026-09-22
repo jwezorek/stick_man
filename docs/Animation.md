@@ -1,11 +1,11 @@
 # stick_man Animation System
 
-**Current implementation and design constraints**  
+**Current implementation reference**  
 **Reviewed against the September 22, 2026 source selection**
 
 ## 1. Status
 
-Animation is now a working subsystem rather than a future design.
+Animation is a working, persisted editor subsystem.
 
 The current implementation includes:
 
@@ -31,7 +31,7 @@ The current implementation includes:
 - Core serialization and validation of animation data in the packaged project format;
 - topology-edit dependency discovery and atomic deletion of actions whose persistent references would otherwise dangle.
 
-The important work before adding many more action types is therefore not “build animation.” It is to harden the boundaries around the existing animation model: pose/rig reconciliation, character-scoped validation, animation remapping for character copy/paste, a more explicit action-extension contract, and stronger diagnostics/tests.
+Core also keeps pose membership synchronized across structural edits, validates animation references against the owning character's rig, and remaps pose/action references when an entire character is copied and pasted. The editor-side action-specific behavior is centralized so the four action alternatives share one consistent timeline/gesture/adornment integration layer.
 
 ---
 
@@ -127,20 +127,21 @@ The Default pose cannot be deleted through the Animation pane. Deleting a named 
 
 Animation Mode refuses to open an animation whose base pose is not exactly compatible with the current rig.
 
-### 3.3 Known rig-evolution gap
+### 3.3 Rig evolution and pose reconciliation
 
-This exact compatibility rule exposes an important unfinished area.
+`reconcile_animation_poses()` keeps stored poses coherent with character membership after supported topology and membership edits.
 
-Structural topology edits already reconcile animation **actions** by deleting actions whose persistent references would dangle, but they do not reconcile stored **poses**. `initialize_animation_assets()` creates Default only when the pose list is empty; it does not add newly adopted/created rig nodes to existing poses or remove deleted nodes from them.
+The current policy is deliberately different for Default and named poses:
 
-Consequences include:
+- the Default pose removes nodes that are no longer members of the character;
+- the Default pose adds newly introduced member nodes using their current world positions;
+- existing Default entries are preserved rather than being recaptured from the current on-screen pose;
+- named poses remove entries for nodes that cease to belong to the character;
+- named poses are **not** automatically extended when new nodes are added to the rig.
 
-- adding a node/skeleton to a character can make existing poses incomplete;
-- deleting a node/skeleton can leave stale node entries in poses;
-- either condition makes `pose_compatible()` fail;
-- an animation using such a pose can no longer be opened until the pose is repaired/recreated.
+As a result, adding geometry can make an existing named pose incomplete. `pose_compatible()` continues to require an exact node-set match, so applying an incomplete pose or opening an animation that uses it as its base pose is rejected until that named pose is updated/recreated. Removing geometry, by contrast, prunes deleted-node entries from both Default and named poses.
 
-This should be resolved before broadening the action vocabulary. See section 18.
+Pose reconciliation participates in the same undoable semantic snapshots as the structural edit, so undo/redo restores the exact pre/post-edit pose data.
 
 ---
 
@@ -187,7 +188,7 @@ The central semantic rule is:
 
 This gives deterministic scrubbing, seeking, pause/resume, and playback. The result at 2300 ms does not depend on whether the editor previously displayed 2284 ms, 0 ms, or 8000 ms.
 
-That property should remain non-negotiable for future action types.
+That absolute-time rule is the basis for playback, seeking, and adornment evaluation throughout the current implementation.
 
 ---
 
@@ -207,14 +208,13 @@ Core applies the action's easing to normalized action progress before evaluating
 
 For translation actions, this eased progress is the fraction of total motion-path arc length.
 
-### Current UI mismatch
+### Editor easing policy
 
-The timeline currently disables the easing control for translation actions and presents them as linear even though Core stores and evaluates an easing value for every action.
+Every `animation_action` stores an easing value and the Core evaluator applies it before evaluating the action geometry.
 
-Before adding additional action families, decide one of two policies and make the type model/UI agree:
+The editor currently exposes easing for the two rotation actions. Translation actions are authored and edited as linear: their action-editor capability reports `uses_easing = false`, authoring coerces their easing to `linear`, and the timeline disables the easing control for them.
 
-1. **Easing is universally supported** — expose the existing Core behavior for translations; or
-2. **Easing is an action capability** — explicitly model which action types support which timing controls instead of relying on UI special cases.
+This means Core can still evaluate a persisted/programmatically supplied non-linear easing value on a translation action, but the normal editor workflow creates linear translation actions.
 
 ---
 
@@ -465,7 +465,7 @@ Current dependencies are:
 
 Animation Root and Character Root are symbolic character-level semantics and do not store the current root bone as an action-local persistent dependency.
 
-This helper is used by topology-edit cascade logic and should remain the authoritative dependency surface for future action types.
+The same exhaustive persistent-reference semantics are also used for animation ID remapping, so dependency discovery and whole-character copy/paste cannot silently diverge.
 
 ---
 
@@ -491,23 +491,24 @@ The older design idea of retaining broken actions in the timeline for later repa
 
 ---
 
-## 13. Character-scoped validation: current limitation
+## 13. Character-scoped validation
 
-`animation_assets::validate(topology, character_root_bone)` currently proves that each persistent referenced ID resolves somewhere in the supplied project topology and that the animation ordering constraints are valid.
+`animation_assets` has two validation layers.
 
-It does **not** prove that every target/reference belongs to the character that owns the animation.
+`validate()` checks the animation data structurally: asset/action IDs, base-pose existence, finite values, valid enums, motion-path shape, non-overlapping actions within a layer, and the type-specific shape of each payload.
 
-For example, malformed data could theoretically contain an action on character A that names a valid node or bone owned by character B. The project replacement code even preserves atomic undo for this malformed cross-character case when cascading deletions.
+`validate(topology, rig_skeletons, character_root_bone)` then validates the assets in the context of the owning character. It requires that:
 
-Normal editor authoring does not intentionally create such actions, but this is a weaker Core invariant than the character-owned animation model implies.
+- every rig skeleton exists;
+- a non-nil character root bone belongs to that rig;
+- every node stored by every pose belongs to the rig;
+- every active persistent node/bone/skeleton reference carried by an action resolves inside the rig;
+- IK Rotation's effector and pivot belong to the same skeleton;
+- IK Translation's pins belong to the effector skeleton;
+- Animation Root / Character Root translations have a usable character root bone;
+- the animation's reference-frame ordering rules are valid.
 
-Before more action types are added, topology-aware validation should receive a character/rig scope and require that:
-
-- Rigid Translation target skeletons are members of the owning character;
-- Rigid Rotation target bones are in the owning character rig;
-- IK effectors, pivots, and pins are in the owning character rig and satisfy their same-skeleton rules;
-- Bone reference frames refer to bones in the owning character rig;
-- the character root bone resolves inside the owning character.
+`mdl::project::edit_animation_data()` validates the edited copy before committing the undoable command. Structural project operations likewise validate the candidate semantic state before committing it, and project loading rejects invalid character-scoped animation data.
 
 ---
 
@@ -623,154 +624,45 @@ Unknown action/path/reference types are rejected during load rather than preserv
 
 ---
 
-## 17. Current action-extension problem
+## 17. Action integration structure
 
-The four existing action types are semantically coherent, but adding a fifth type currently requires coordinated changes in several places.
+The action vocabulary is a closed `std::variant`:
 
-At minimum a new action may need updates to:
-
-- the `action_data` variant;
-- structural validation;
-- topology dependency enumeration;
-- write-scope analysis;
-- reference-frame ordering logic if applicable;
-- absolute-time evaluation;
-- serialization/deserialization;
-- gesture authoring;
-- timeline label/presentation;
-- property controls and visibility logic;
-- canvas adornments/editing;
-- character-copy remapping once that is implemented.
-
-Some sites use exhaustive `std::visit`, but others use chains of `std::get_if` with a fallback such as `unsupported_actions`. That means adding a variant alternative does not guarantee a compile-time failure at every missing integration point.
-
-Before the action set grows, establish an explicit action-extension contract. This does not necessarily require a heavyweight class hierarchy or runtime plugin system. A small compile-time traits/visitor layer would be enough if it makes the required semantics obvious and exhaustive.
-
-A useful action contract should cover:
-
-```text
-type identity / serialization name
-structural validation
-persistent dependency enumeration
-character-scope validation
-write scope
-evaluation
-ID remapping
-presentation name/color/capabilities
-whether it has a canvas adornment
-whether it supports easing/path editing/etc.
+```cpp
+using action_data = std::variant<
+    rigid_rotation,
+    ik_rotation,
+    rigid_translation,
+    ik_translation
+>;
 ```
 
----
+Core handles the alternatives through explicit visitors for validation, evaluation, write-scope analysis, ordering, serialization, and deserialization.
 
-## 18. Work to complete before adding many new action types
+Persistent project-object references are centralized in `sm_animation_action_semantics.hpp`. `for_each_action_persistent_reference()` has one constrained overload per action type and intentionally has no generic fallback. It drives both:
 
-The following items are higher priority than expanding `action_data`.
+- `animation_action_dependencies()` for topology-edit cascade discovery; and
+- `remap_animation_assets()` for whole-character ID remapping.
 
-### 18.1 Reconcile poses with rig evolution
+The editor has a similar central dispatch layer in `animation_action_editor.cpp`. Action-specific timeline presentation, authoring messages, easing capability, equivalence checks, gesture construction, tool-property synchronization, pin capture, and adornment installation are dispatched through `action_editor<Action>` specializations. There is intentionally no primary implementation, so adding an `action_data` alternative requires an explicit editor implementation at compile time.
 
-This is the most immediate semantic hole.
+The timeline and generic rig-interaction code therefore operate on `action_data` without duplicating most type switches throughout the UI.
 
-Define a single Core policy for topology/membership changes and poses. At minimum:
-
-- remove entries for nodes that cease to belong to the character;
-- define how newly added nodes enter Default;
-- define how newly added nodes affect named poses;
-- provide an explicit named-pose recapture/update operation in the editor;
-- keep animations from becoming unusable merely because an ordinary supported topology edit occurred.
-
-A reasonable policy is for Default to follow character membership automatically while named poses remain explicit authored snapshots that can become “needs update” when new nodes appear. Whatever policy is chosen should be centralized rather than encoded opportunistically in the UI.
-
-### 18.2 Add animation-asset ID remapping and preserve animation on character copy/paste
-
-Whole-character copy/paste currently copies the rig and artwork but not the character's poses/animations.
-
-`mdl::project::paste_character()` creates fresh skeleton/node/bone IDs and already remaps artwork bone bindings and the character root bone. Animation assets are initialized empty, so copied animations are lost.
-
-Before action payloads become more numerous, add a Core animation remapping facility that can remap every topology reference in:
-
-- pose node-position keys;
-- Rigid Rotation bone IDs;
-- IK Rotation effector/pivot IDs;
-- Rigid Translation skeleton/reference-bone IDs;
-- IK Translation effector/pin/reference-bone IDs;
-- future action payloads through the same extension contract.
-
-Then make character clipboard copy/paste include animation assets as well as artwork.
-
-### 18.3 Enforce character-scoped action integrity
-
-Strengthen topology-aware validation as described in section 13 so “resolves in project” becomes “resolves in this character and satisfies this action's structural rules.”
-
-### 18.4 Make action integration exhaustive
-
-Introduce a single documented/compile-time action extension surface so a new type cannot be half implemented.
-
-### 18.5 Improve validation diagnostics
-
-The current public validation path mostly throws broad `std::invalid_argument` messages, while `animation_evaluation` reports only lists of invalid/unsupported action IDs. Some editor adornment refresh code catches all exceptions and silently suppresses them.
-
-A structured issue type would make failures much easier to surface and test:
-
-```text
-action ID
-issue code
-referenced object ID when relevant
-human-readable diagnostic
-```
-
-This should be usable by deserialization validation, editor commit validation, and Animation Mode preview.
-
-### 18.6 Add focused Core regression tests
-
-The supplied source selection does not include the repository's test/build files, so this document does not make a claim about the full repository's current test coverage. Regardless, the semantics now justify a dedicated animation regression suite covering at least:
-
-- seeking directly versus playback-step equivalence;
-- evaluation at action start/mid/end/after-end;
-- layer ordering;
-- reference-frame capture before the selected action;
-- Animation Root versus Character Root versus Bone behavior;
-- Rigid and IK translation path/adornment agreement;
-- IK action-local pins;
-- reference dependency placement;
-- topology-edit action cascades and undo;
-- pose/rig reconciliation once implemented;
-- character-copy ID remapping once implemented;
-- cross-character reference rejection;
-- JSON round trips for every action/path/reference type.
-
-### 18.7 Resolve action capability policy
-
-Easing is the visible current example: Core supports it for translation while the UI suppresses it. Future actions may similarly differ in whether they have an angle, path, target frame, pins, or direct adornment.
-
-Model those differences deliberately rather than accumulating `holds_alternative` UI special cases.
+`animation_evaluation` still contains an `unsupported_actions` vector for reporting, but the current evaluator exhaustively handles all four variant alternatives and does not place any current action into that list.
 
 ---
 
-## 19. Lower-priority animation/editor cleanup
+## 18. Current system invariants
 
-These should not block the semantic work above, but they are worth addressing during stabilization:
+The implementation is built around the following rules:
 
-- `rig_interaction.cpp` currently ignores returned FABRIK result values in two ordinary manipulation paths; decide whether failures should produce UI feedback or simply terminate the gesture cleanly.
-- `constraint_tool.cpp` intentionally refuses to edit bone constraints in Animation Mode and contains a TODO for action-local constraint authoring. That should remain a future action/design decision rather than mutating persistent rig constraints during animation editing.
-- `animation_skeleton_pane.cpp` still contains a TODO for resynchronizing its tree selection after rebuild.
-- the evaluator's `unsupported_actions` fallback is not a useful forward-compatibility mechanism while deserialization rejects unknown action types; either keep it as an internal assertion/diagnostic or make the extension contract exhaustive.
-
----
-
-## 20. Rules future actions should preserve
-
-Any new action type should preserve these system-level invariants:
-
-1. **Absolute-time determinism.** Evaluation at `t` starts from the animation's base pose, not the previous displayed frame.
-2. **Persistent-reference integrity.** Ordinary editor topology edits must not leave dangling action references.
-3. **Character locality.** An action may affect/reference only objects in its owning character unless a future feature explicitly defines cross-character semantics.
-4. **No silent retargeting.** Persistent IDs are authoritative.
-5. **Explicit ordering.** If an action samples mutable intermediate state, the ordering dependency must be represented/validated rather than inferred from playback history.
-6. **Self-contained action data.** Playback must not depend on transient Selection-tool state.
-7. **Core/editor separation.** Core owns semantic data/evaluation; Qt owns authoring interaction/presentation.
-8. **Serializable authored state only.** Derived caches and transient preview state are rebuilt after load.
-9. **Copy/remap support.** Every persistent topology reference introduced by an action must participate in the common remapping path.
-10. **Exhaustive integration.** A new action should not compile as “supported” while silently lacking evaluation, validation, persistence, or editor presentation.
-
-With those foundations in place, adding new action kinds becomes a local extension of the model rather than another round of architectural repair.
+1. **Absolute-time determinism.** Evaluation at `t` starts from the animation's base pose, not the previously displayed frame.
+2. **Persistent-reference integrity.** Ordinary editor topology edits do not leave dangling action references.
+3. **Character locality.** Persistent references in a character's poses/actions must resolve inside that character's rig.
+4. **No silent retargeting.** Persistent object IDs are authoritative; deleted dependencies cause action removal rather than heuristic rebinding.
+5. **Explicit composition order.** Layers compose bottom-to-top and actions within a layer are evaluated chronologically.
+6. **Reference-frame capture is pre-action.** Character Root and Bone frames are evaluated from the intermediate topology immediately before the action that uses them.
+7. **Self-contained action state.** Playback depends on persisted action data, including IK Translation pins, rather than current Selection-tool state.
+8. **Core/editor separation.** Core owns animation semantics, validation, evaluation, persistence, dependency analysis, and remapping; Qt owns authoring interaction and presentation.
+9. **Derived data stays derived.** Motion-path arc-length caches and editor preview/adornment state are rebuilt rather than persisted.
+10. **Whole-character copying is semantic.** Pose node IDs and every persistent action reference are remapped alongside the copied topology, while animation asset identity and authored values are otherwise preserved.
