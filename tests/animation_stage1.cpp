@@ -102,6 +102,53 @@ void translation_actions_round_trip_with_bone_reference() {
         "IK translation spline was not preserved");
 }
 
+void animation_assets_remap_all_topology_references() {
+    const auto old_node_a = sm::object_id::generate(), old_node_b = sm::object_id::generate();
+    const auto old_bone_a = sm::object_id::generate(), old_bone_b = sm::object_id::generate();
+    const auto old_skeleton_a = sm::object_id::generate(), old_skeleton_b = sm::object_id::generate();
+    const auto new_node_a = sm::object_id::generate(), new_node_b = sm::object_id::generate();
+    const auto new_bone_a = sm::object_id::generate(), new_bone_b = sm::object_id::generate();
+    const auto new_skeleton_a = sm::object_id::generate(), new_skeleton_b = sm::object_id::generate();
+
+    sm::animation_assets assets;
+    sm::pose base; base.name = "Default"; base.node_positions = {{old_node_a,{1,2}}, {old_node_b,{3,4}}};
+    assets.default_pose = base.id; assets.poses.push_back(base);
+    sm::pose named = base; named.id = sm::object_id::generate(); named.name = "Named"; assets.poses.push_back(named);
+
+    sm::animation animation; animation.name = "all refs"; animation.base_pose = base.id;
+    sm::animation_layer layer;
+    sm::animation_action rigid_rotation; rigid_rotation.data = sm::rigid_rotation{old_bone_a}; layer.actions.push_back(rigid_rotation);
+    sm::animation_action ik_rotation; ik_rotation.start = 1000; ik_rotation.data = sm::ik_rotation{old_node_a,old_node_b,.5}; layer.actions.push_back(ik_rotation);
+    sm::animation_action rigid_translation; rigid_translation.start = 2000;
+    rigid_translation.data = sm::rigid_translation{{old_skeleton_a,old_skeleton_b}, sm::motion_path(sm::line_path{{0,0},{1,0}}),
+        sm::translation_reference::bone, old_bone_b}; layer.actions.push_back(rigid_translation);
+    sm::animation_action ik_translation; ik_translation.start = 3000;
+    ik_translation.data = sm::ik_translation{old_node_b,{old_node_a},sm::motion_path(sm::line_path{{0,0},{2,0}}),
+        sm::translation_reference::bone,old_bone_a}; layer.actions.push_back(ik_translation);
+    animation.layers.push_back(std::move(layer)); assets.animations.push_back(std::move(animation));
+
+    sm::remap_animation_assets(assets, {
+        {old_node_a,new_node_a}, {old_node_b,new_node_b},
+        {old_bone_a,new_bone_a}, {old_bone_b,new_bone_b},
+        {old_skeleton_a,new_skeleton_a}, {old_skeleton_b,new_skeleton_b}
+    });
+
+    for (const auto& pose : assets.poses)
+        require(pose.node_positions.contains(new_node_a) && pose.node_positions.contains(new_node_b) &&
+            !pose.node_positions.contains(old_node_a) && !pose.node_positions.contains(old_node_b),
+            "pose node IDs were not remapped");
+    const auto& actions = assets.animations.front().layers.front().actions;
+    require(std::get<sm::rigid_rotation>(actions[0].data).bone == new_bone_a, "rigid rotation bone was not remapped");
+    const auto& ir = std::get<sm::ik_rotation>(actions[1].data);
+    require(ir.effector == new_node_a && ir.pivot_node == new_node_b, "IK rotation nodes were not remapped");
+    const auto& rt = std::get<sm::rigid_translation>(actions[2].data);
+    require(rt.skeletons == std::vector<sm::object_id>{new_skeleton_a,new_skeleton_b} && rt.reference_bone == new_bone_b,
+        "rigid translation references were not remapped");
+    const auto& it = std::get<sm::ik_translation>(actions[3].data);
+    require(it.effector == new_node_b && it.pins == std::vector<sm::object_id>{new_node_a} && it.reference_bone == new_bone_a,
+        "IK translation references were not remapped");
+}
+
 
 void ik_translation_composes_from_incoming_effector_position() {
     sm::topology topology;
@@ -511,6 +558,7 @@ int main() {
     try {
         motion_paths_are_persistent_displacement_paths();
         translation_actions_round_trip_with_bone_reference();
+        animation_assets_remap_all_topology_references();
         ik_translation_composes_from_incoming_effector_position();
         root_reference_frames_use_the_character_root_bone();
         character_root_frame_follows_earlier_translation();

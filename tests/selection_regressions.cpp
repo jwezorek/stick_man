@@ -473,6 +473,16 @@ void character_test(fixture& f, const std::string& mode) {
         require(model.core().character(id)->get().rig().size() == 2, "drag must not merge topology");
     } else if (mode == "character_clipboard") {
         auto id = f.make_character();
+        const auto source_bone = (*f.skeleton(f.first).bones().begin())->id();
+        model.edit_animation_data(id, [&](auto& data) {
+            auto pose = sm::capture_pose(model.topology(), model.core().character(id)->get().rig().skeleton_ids(), "Wave");
+            const auto pose_id = pose.id;
+            data.poses.push_back(std::move(pose));
+            sm::animation animation; animation.name = "Wave animation"; animation.base_pose = pose_id;
+            sm::animation_action action; action.data = sm::rigid_rotation{source_bone};
+            animation.layers.push_back({{action}});
+            data.animations.push_back(std::move(animation));
+        });
         ui::clipboard::copy(f.window);
         ui::clipboard::paste(f.window, true);
         auto copy = f.canvas().selected_character()->id();
@@ -482,6 +492,24 @@ void character_test(fixture& f, const std::string& mode) {
             for (auto n : s->nodes())
                 for (auto original : model.core().character(id)->get().rig().skeletons())
                     require(!original->contains<sm::node>(n->id()), "pasted node identity must be fresh");
+        }
+        const auto& copied_character = model.core().character(copy)->get();
+        const auto& copied_assets = copied_character.animation_data();
+        require(copied_assets.poses.size() == model.core().animation_data(id).poses.size() &&
+            copied_assets.animations.size() == 1, "character copy lost poses or animations");
+        copied_assets.validate(model.topology(), copied_character.character_root_bone());
+        const auto& copied_action = copied_assets.animations.front().layers.front().actions.front();
+        const auto copied_bone = std::get<sm::rigid_rotation>(copied_action.data).bone;
+        require(copied_bone != source_bone, "character copy retained source animation bone reference");
+        auto copied_bone_ref = model.topology().get<sm::bone>(copied_bone);
+        require(copied_bone_ref && copied_bone_ref->get().owner().parent_character() &&
+            copied_bone_ref->get().owner().parent_character()->get().id() == copy,
+            "character copy animation reference was not remapped into copied rig");
+        for (const auto& pose : copied_assets.poses) for (const auto& [node_id, pt] : pose.node_positions) {
+            auto node = model.topology().get<sm::node>(node_id);
+            require(node && node->get().owner().parent_character() &&
+                node->get().owner().parent_character()->get().id() == copy,
+                "character copy pose retained a source node ID");
         }
         model.undo(); require(!model.core().character(copy), "character paste must undo in one step");
         model.redo(); require(model.core().character(copy).has_value(), "character paste redo must preserve identity");

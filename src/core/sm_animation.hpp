@@ -134,6 +134,15 @@ namespace sm {
     };
     pose capture_pose(const topology& topology, const std::vector<object_id>& skeletons, std::string name);
     void initialize_animation_assets(animation_assets& assets, const topology& topology, const std::vector<object_id>& skeletons);
+    // Keep pose data coherent as a character's rig evolves. The Default pose
+    // tracks character membership automatically while named poses retain their
+    // authored positions, losing only entries for nodes that no longer exist.
+    void reconcile_animation_poses(animation_assets& assets, const topology& topology,
+        const std::vector<object_id>& skeletons);
+    // Remap every persistent topology reference stored by poses and actions.
+    // Asset identities (pose/animation/action IDs) are intentionally unchanged.
+    void remap_animation_assets(animation_assets& assets,
+        const std::unordered_map<object_id, object_id>& id_remap);
     void apply_pose(const pose& pose, const topology& topology);
     bool pose_compatible(const pose& pose, const topology& topology, const std::vector<object_id>& skeletons);
     struct rotation_evaluation_context {

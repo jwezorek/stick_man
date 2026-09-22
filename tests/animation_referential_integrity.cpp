@@ -431,6 +431,80 @@ void cancellation_is_atomic() {
     require(!f.model.can_undo(), "cancelled edit entered undo history");
 }
 
+void pose_membership_reconciliation_is_undoable() {
+    chain_fixture f;
+    auto& assets = f.model.core().animation_data(f.character);
+    auto named = sm::capture_pose(f.model.core().topology(),
+        f.model.core().character(f.character)->get().rig().skeleton_ids(), "Named");
+    const auto named_id = named.id;
+    assets.poses.push_back(named);
+    const auto original_default = *assets.find_pose(assets.default_pose);
+    const auto original_named = *assets.find_pose(named_id);
+
+    // Default membership synchronization must add only the newly adopted node;
+    // retained entries remain the authored Default positions rather than being
+    // recaptured from whatever happens to be on screen at edit time.
+    f.model.core().topology().get<sm::node>(f.root)->get().set_world_pos({123.0, 45.0});
+    auto& extra = f.model.core().create_skeleton({60.0, 70.0});
+    const auto extra_node = extra.root_node().id();
+    std::vector<sm::const_skel_ref> adopted{extra};
+    require(f.model.adopt_skeletons(f.character, adopted) == sm::result::success,
+        "adopting a new component failed");
+
+    const auto& after_adopt = f.model.core().animation_data(f.character);
+    const auto* synced_default = after_adopt.find_pose(after_adopt.default_pose);
+    const auto* incomplete_named = after_adopt.find_pose(named_id);
+    require(synced_default && synced_default->node_positions.contains(extra_node),
+        "Default pose did not acquire newly adopted node");
+    require(synced_default->node_positions.at(f.root) == original_default.node_positions.at(f.root),
+        "Default pose unnecessarily recaptured existing node positions");
+    require(incomplete_named && !incomplete_named->node_positions.contains(extra_node),
+        "named pose was silently extended instead of remaining explicitly incomplete");
+    require(!sm::pose_compatible(*incomplete_named, f.model.core().topology(),
+        f.model.core().character(f.character)->get().rig().skeleton_ids()),
+        "new geometry did not make the named pose incomplete");
+
+    f.model.undo();
+    const auto& after_undo = f.model.core().animation_data(f.character);
+    require(after_undo.find_pose(after_undo.default_pose)->node_positions == original_default.node_positions,
+        "adoption undo did not restore Default pose exactly");
+    require(after_undo.find_pose(named_id)->node_positions == original_named.node_positions,
+        "adoption undo did not restore named pose exactly");
+
+    require(f.model.redo() == sm::result::success, "adoption redo failed");
+    require(f.model.core().animation_data(f.character).find_pose(
+        f.model.core().animation_data(f.character).default_pose)->node_positions.contains(extra_node),
+        "adoption redo did not restore synchronized Default pose");
+}
+
+void deleted_nodes_are_removed_from_named_poses() {
+    chain_fixture f;
+    auto& assets = f.model.core().animation_data(f.character);
+    auto named = sm::capture_pose(f.model.core().topology(),
+        f.model.core().character(f.character)->get().rig().skeleton_ids(), "Named");
+    const auto named_id = named.id;
+    assets.poses.push_back(named);
+    const auto before = sm::animation_assets_to_json(assets);
+
+    auto replacements = delete_tip_replacements(f);
+    require(f.model.replace_skeletons({f.skeleton}, refs(replacements)) == sm::result::success,
+        "tip deletion failed");
+    const auto& after = f.model.core().animation_data(f.character);
+    const auto* default_pose = after.find_pose(after.default_pose);
+    const auto* named_pose = after.find_pose(named_id);
+    require(default_pose && !default_pose->node_positions.contains(f.tip),
+        "Default pose retained a deleted node");
+    require(named_pose && !named_pose->node_positions.contains(f.tip),
+        "named pose retained a genuinely deleted node");
+    require(sm::pose_compatible(*named_pose, f.model.core().topology(),
+        f.model.core().character(f.character)->get().rig().skeleton_ids()),
+        "named pose did not become compatible after deleted-node cleanup");
+
+    f.model.undo();
+    require(sm::animation_assets_to_json(f.model.core().animation_data(f.character)) == before,
+        "deletion undo did not restore removed named-pose entries");
+}
+
 } // namespace
 
 int main() {
@@ -446,6 +520,8 @@ int main() {
         skeleton_identity_is_not_heuristically_retargeted();
         merge_removes_old_skeleton_target_and_undo_restores();
         cancellation_is_atomic();
+        pose_membership_reconciliation_is_undoable();
+        deleted_nodes_are_removed_from_named_poses();
     } catch (const std::exception& e) {
         std::cerr << e.what() << '\n';
         return 1;

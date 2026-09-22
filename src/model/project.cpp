@@ -195,7 +195,8 @@ sm::result mdl::project::adopt_skeletons(const sm::object_id& character_id,
             } else {
                 std::vector<sm::object_id> ids;
                 for (auto s : candidates) ids.push_back(s->id());
-                state->before = proj.core_.snapshot_membership(ids);
+                state->before = proj.core_.snapshot_membership(ids,
+                    std::span<const sm::object_id>(&character_id, 1));
                 state->status = proj.core_.adopt_skeletons(character_id, candidates);
                 if (state->status == sm::result::success)
                     state->after = proj.core_.snapshot_membership(ids);
@@ -256,7 +257,7 @@ std::expected<sm::object_id, sm::result> mdl::project::make_character(
 
 std::expected<sm::object_id, sm::result> mdl::project::paste_character(
         const sm::topology& rig, const std::string& name, const sm::artwork& artwork,
-        sm::object_id character_root_bone) {
+        sm::object_id character_root_bone, const sm::animation_assets& animation_data) {
     if (rig.empty()) return std::unexpected(sm::result::empty_character);
     struct state_type {
         sm::topology topology;
@@ -279,10 +280,12 @@ std::expected<sm::object_id, sm::result> mdl::project::paste_character(
     }
     auto copied_artwork = artwork;
     copied_artwork.remap_bones(remap);
+    auto copied_animation_data = animation_data;
+    sm::remap_animation_assets(copied_animation_data, remap);
     if(auto it=remap.find(character_root_bone);it!=remap.end()) character_root_bone=it->second;
     else character_root_bone={};
     state->membership.characters.push_back({state->character, copied_name, character_root_bone,
-        std::move(copied_artwork), {}});
+        std::move(copied_artwork), std::move(copied_animation_data)});
     for (auto skel : rig.skeletons()) {
         auto copy = skel->copy_to(state->topology, remap);
         if (!copy) return std::unexpected(copy.error());

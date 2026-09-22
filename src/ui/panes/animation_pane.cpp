@@ -202,10 +202,14 @@ void ui::pane::animation::context_menu(QPoint point) {
             });
         bases->setEnabled(!bases->actions().empty());
     }
-    if (k == default_pose) menu.addAction("Update Default from Current",this,[this,cid,id] {
-        auto p = sm::capture_pose(project_->topology(),project_->core().character(cid)->get().rig().skeleton_ids(),"Default"); p.id = id;
-        project_->edit_animation_data(cid,[&](auto& data) { for (auto& old : data.poses) if (old.id == id) old = p; });
-    });
+    if (k == pose || k == default_pose) menu.addAction(
+        k == default_pose ? "Update Default from Current" : "Update Pose from Current",
+        this,[this,cid,id] {
+            auto character = project_->core().character(cid); if (!character) return;
+            const auto* old = character->get().animation_data().find_pose(id); if (!old) return;
+            auto p = sm::capture_pose(project_->topology(),character->get().rig().skeleton_ids(),old->name); p.id = id;
+            project_->edit_animation_data(cid,[&](auto& data) { for (auto& existing : data.poses) if (existing.id == id) existing = p; });
+        });
     if (k == pose || k == ::animation) { menu.addSeparator(); menu.addAction("Rename",this,[this,item] { tree_->editItem(item); }); }
     if (k == pose || k == ::animation || k == default_pose) menu.addAction("Duplicate",this,&animation::duplicate_current);
     if (k == pose || k == ::animation) menu.addAction("Delete",this,&animation::delete_current);

@@ -85,7 +85,8 @@ namespace mdl {
             std::span<const sm::const_skel_ref> skeletons);
         std::expected<sm::object_id, sm::result> make_character(std::span<const sm::const_skel_ref> skeletons);
         std::expected<sm::object_id, sm::result> paste_character(const sm::topology& rig, const std::string& name,
-            const sm::artwork& artwork = {}, sm::object_id character_root_bone = {});
+            const sm::artwork& artwork = {}, sm::object_id character_root_bone = {},
+            const sm::animation_assets& animation_data = {});
         sm::result delete_character(const sm::object_id& id);
         sm::result set_character_root_bone(const sm::object_id& character, const sm::object_id& bone);
         bool rename(const sm::object_id& id, const std::string& new_name);

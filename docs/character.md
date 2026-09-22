@@ -1,169 +1,378 @@
-# `sm::character`: Architectural Purpose
+# `sm::character`: Current Architecture
 
-## Goal
+**Reviewed against the September 22, 2026 source selection**
 
-`sm::character` should be the persistent semantic object that represents an actual animatable character.
+## 1. Purpose
 
-The project already has skeletons, but a skeleton is the wrong place to attach long-lived character data such as artwork and animations. Skeletons are intentionally lightweight topology objects. Their identity and lifetime are tied to the current structure of the drawing, and ordinary editing can create, destroy, split, or merge them.
+A character is the stable authored boundary that turns one or more skeleton components into a single animation/artwork object.
 
-A character needs a more stable identity.
+A skeleton is topology. A character is ownership and semantics.
 
-The intended distinction is:
-
-- **skeleton** — a lightweight rooted connected component of the current topology;
-- **rig** — the collection of skeleton components that currently make up a character;
-- **character** — the persistent authored object that owns the rig and the resources associated with that character.
-
-Conceptually:
+The current character owns:
 
 ```text
-project
-├── topology
-│   ├── nodes
-│   ├── bones
-│   └── skeleton components
-│
-└── characters
-    └── character
-        ├── rig
-        │   └── references to one or more skeletons
-        ├── artwork (future effort)
-        └── animation (future effort)
+identity and display name
+rig membership
+character root bone
+artwork / appearances
+poses and animations
 ```
 
-## Initial implementation scope and ownership
+Loose skeletons remain valid project objects and are useful while constructing geometry before promoting/adopting it into a character.
 
-The initial version introduces `sm_character.hpp/.cpp` with a character that has an ID, a name, a project owner, and a privately held rig. Artwork and animation are separate future efforts and are not implemented in this version.
+---
 
-The project owns both its topology and its characters. Topology continues to own all skeleton, node, and bone objects. A character owns its rig membership list, not the skeleton objects themselves. The rig can be represented as a vector of skeleton IDs resolved through the project.
+## 2. Core representation
 
-Each skeleton retains its topology owner and also has an optional, non-owning character parent reference, for example `std::optional<std::reference_wrapper<character>>`. An absent parent means the skeleton is loose. This reference allows a skeleton to identify its character directly without changing lifetime ownership.
+The current Core shape is approximately:
 
-The parent reference and rig membership must agree: a skeleton names a character as its parent if and only if that character's rig includes the skeleton. Both must belong to the same project. Project-controlled operations update both sides together during creation, adoption, splitting, merging, deletion, and restoration. Neither side is independently editable by callers. No surviving skeleton may retain a reference to a destroyed character.
+```cpp
+class character {
+    object_id id_;
+    std::string name_;
+    project& owner_;
+    sm::rig rig_;
+    object_id character_root_bone_;
+    sm::artwork artwork_;
+    animation_assets animation_data_;
+};
+```
 
-Character IDs are stable identity; names are display labels. Creation generates a name such as `character-1`, using a simple advancing counter or equivalent. Duplicate names are allowed. Users can rename characters through the properties pane or skeleton pane. Pasted characters receive a fresh ID and a roughly unique name suffix; exhaustive name uniqueness is unnecessary.
+`sm::rig` is a character-owned membership view containing persistent skeleton IDs. It does not duplicate the skeleton geometry.
 
-## Why a skeleton should not be a character
+The authoritative nodes, bones, and skeletons live in `sm::project::topology()`.
 
-A skeleton is fundamentally a consequence of topology.
+This separation is fundamental:
 
-For example, deleting a single connecting bone can trivially turn one skeleton into two skeletons. Adding a bone can join previously separate components. Cut/copy/paste can create new loose skeletons. These are normal structural edits, not semantic operations on the identity of a character.
+```text
+project topology
+    owns nodes/bones/skeletons
 
-If artwork and animation were owned directly by a skeleton, those ordinary topology changes would force us to answer awkward questions about which newly created skeleton inherits the old resources, whether a merge combines resources, and whether a split implicitly creates multiple characters.
+character
+    owns membership + character semantics
+```
 
-That is a sign that the ownership is at the wrong level.
+---
 
-Skeletons should remain deliberately inexpensive and ephemeral. They describe the current connected structure; they should not have to become persistent containers for every higher-level feature simply because they are currently the nearest object to the bones.
+## 3. Why character and skeleton are separate
 
-## Character as the stable authored boundary
+A character can legitimately contain multiple disconnected skeletons.
 
-A character is the object the user actually means when they say, for example, "this is Alice."
+Examples include:
 
-It should remain the same character even if its rig changes structurally.
+- a conventional body plus detached eye/face controls;
+- floating accessories;
+- intentionally disconnected animated pieces;
+- a skeleton split by an edit where both surviving components should remain part of the same character.
 
-A character may contain a single skeleton, which will probably be the common case, but it may also contain several disconnected skeletons. This is useful for characters whose independently movable pieces are not physically connected by bones. Character identity therefore cannot be equated with one connected skeleton component.
+Therefore “one skeleton == one character” would make ordinary editing operations change user-level identity.
 
-The character provides the stable place to own data whose meaning spans the rig:
+The character survives changes in the number/connectivity of its member skeletons.
 
-- artwork and appearances;
-- animation and poses;
-- eventually other character-level metadata or resources.
+---
 
-The rig tells the character which skeleton components in the project's current topology belong to it.
+## 4. Rig membership
 
-## Loose skeletons remain useful
+`sm::rig` stores the IDs of skeletons owned by the character.
 
-Not every skeleton in a project needs to belong to a character.
+Each owned skeleton also carries a non-owning parent-character relationship back to the character. `project::has_consistent_membership()` checks both directions.
 
-Users should be able to create and manipulate loose skeletons as lightweight construction objects. A loose skeleton can become part of a character through **Make Character**, adoption into an existing character, or by connecting it to a skeleton that already belongs to a character. Adoption is in scope for the initial version; its GUI interaction remains to be decided.
+A valid character:
 
-This keeps basic skeleton editing simple and avoids silently creating heavyweight semantic objects during ordinary topology manipulation.
+- contains at least one skeleton;
+- contains no duplicate skeleton membership;
+- owns only live skeletons from the project topology;
+- agrees with each member skeleton's parent-character link;
+- has a character root bone that, when non-nil, belongs to that character.
 
-## Character membership and editing rules
+Loose skeletons have no parent character and may later be adopted.
 
-A skeleton belongs to at most one character. A skeleton with no character membership is loose.
+---
 
-### Connecting skeletons
+## 5. Character root bone
 
-- Adding a bone between skeletons belonging to different characters fails and displays an error dialog. The failed operation leaves the project unchanged.
-- Adding a bone between a loose skeleton and a character's skeleton succeeds. The resulting connected skeleton belongs to that character, incorporating the previously loose topology regardless of which endpoint was chosen first.
-- Connecting components of the same character retains that character's membership.
-- Connecting loose skeletons leaves the result loose; it does not create a character.
+A character has a persistent `character_root_bone`.
 
-### Splitting and deleting
+This is a **bone**, not a node.
 
-Every component produced by splitting a character's skeleton retains membership in the same character. A split does not create new characters.
+The root bone supplies an oriented 2D frame:
 
-Deleting a character's final rig component also deletes the character. The operation is applied immediately without a confirmation dialog. Empty characters are not retained after this deletion.
+```text
+origin      = root/parent node of the bone
+orientation = root -> tip direction
+```
 
-Deleting a selected character immediately deletes the character and its entire rig, including its nodes and bones, without a confirmation dialog. The initial version has no command to dissolve a character while retaining its rig as loose skeletons.
+Animation uses that designation for two symbolic translation frames:
 
-Ordinary node, bone, and skeleton editing and deletion must work for character rigs in the initial version, preserving membership according to these rules.
+- **Animation Root** — the root-bone frame in the animation base pose;
+- **Character Root** — the root-bone frame in the currently evaluated intermediate topology.
 
-## GUI behavior
+The project repairs the root-bone designation after structural changes if the previous root is removed. Setting the character root is a character-level semantic edit rather than renaming/reidentifying a skeleton.
 
-### Creating a character
+Because actions refer symbolically to “Animation Root” or “Character Root,” changing the character's designated root bone intentionally changes what those symbolic references mean. A Bone-relative action, by contrast, stores a specific reference-bone ID.
 
-When one or more loose skeletons are selected, the selection properties pane offers a **Make Character** button. The skeleton pane also offers **Make Character** in the context menu for the selected loose skeletons. Both promote the entire skeleton selection into a single new character whose rig contains all selected skeletons, preserving their topology and positions. This includes creating a character from multiple disconnected skeletons in the initial version.
+---
 
-**Make Character** requires a nonempty selection of complete skeletons, all of which are loose. It is unavailable for partial topology selections or selections containing skeletons that already belong to a character. Characters can also acquire additional components through adoption or splitting.
+## 6. Character-owned artwork
 
-### Skeleton pane and character selection
+Every character owns one `sm::artwork` value.
 
-The skeleton pane displays characters as parent entries above the skeletons that comprise their rigs. Loose skeletons remain available without a character parent.
+That artwork contains:
 
-Multiple-skeleton selection is supported in the initial version. Selection inferred from nodes and bones in the editor follows this precedence:
+- logical image frames;
+- semantic slot definitions bound to bones;
+- slot state vocabularies;
+- appearances;
+- appearance-slot state mappings;
+- local sprite transforms.
 
-1. Selecting exactly all the components of one or more complete skeletons selects those skeletons.
-2. If that set of skeletons is exactly the complete rig of one character, it selects the character instead.
-3. A selection that includes only part of any skeleton remains a topology selection.
+Artwork bone references are remapped when a topology replacement deliberately preserves a bone while assigning it a fresh ID.
 
-Only one character can be selected at a time. A set of complete skeletons that includes a character plus additional skeletons, or the rigs of multiple characters, remains a skeleton selection because it does not exactly match one character's rig.
+Artwork can also remain temporarily unresolved when its bound bone disappears. Rendering checks that a slot's bone both exists and belongs to the owning character; unresolved slots are skipped rather than silently rebound.
 
-A character can also be selected directly through its entry in the skeleton pane. The editor indicates character selection with a bounding rectangle similar to the skeleton-selection indicator, but in a different color and with an attached label such as **character: Fred**. The exact color and label styling remain UI design details. Since selecting the skeleton comprising a one-skeleton character selects the character, to select that skeleton itself, the user selects its entry in the skeleton pane or clicks the corresponding skeleton in the character's properties pane.
+See `Appearances.md` for the full model.
 
-Explicit skeleton selection through either pane must remain skeleton selection even when that skeleton is the character's entire rig. Selection therefore distinguishes a character from its component skeletons; selecting the same topology does not always imply the same semantic selection.
+---
 
-### Editing and dragging
+## 7. Character-owned animation
 
-Existing editing tools retain their behavior for loose skeletons when working on character topology. Dragging multiple selected skeletons moves them together. Dragging a whole selected character moves every skeleton in its rig together using the same underlying operation. No new character-specific rotation or scaling behavior is introduced.
+Every character owns `animation_assets` containing:
 
-### Cut, copy, and paste
+- the built-in Default pose;
+- named poses;
+- animations and their actions.
 
-Cut, copy, and paste support whole-character selections. Copying a selected character includes its complete rig and character data. Pasting that whole-character clipboard content creates a character with its rig, preserving their internal associations while assigning fresh identities. Cutting a selected character removes the whole character and places it on the clipboard for pasting. Future artwork and animation efforts will extend whole-character copying to their associated resources.
+Actions use persistent node/bone/skeleton IDs into the character rig.
 
-When the selection is one or more skeletons or a topology selection rather than a whole character, ordinary paste creates loose skeletons, including when the copied or cut topology came from a character. It does not retain the source character's membership. This also applies to a skeleton explicitly selected through a pane in a single-skeleton character.
+Ordinary structural editor operations calculate which actions depend on topology objects that will be removed. Those actions are deleted atomically with the topology edit after editor confirmation, and undo restores them with the rest of the character membership snapshot.
 
-Ordinary paste does not insert clipboard content into an existing character, regardless of the current selection. Whole-character paste creates a character; topology paste creates loose skeletons.
+This means normal editor operations do not intentionally leave dangling animation action references.
 
-Special commands for pasting directly into a character are outside the initial version. The ordinary bone-connection rule above still allows pasted loose topology to be connected to an existing character.
+See `Animation.md` for evaluation and action semantics.
 
-## Undo and persistence
+---
 
-Character creation, renaming, adoption, deletion, clipboard edits, and structural edits to rigs participate in undo and redo. Restoration preserves character identity and restores rig membership and skeleton parent references consistently with the topology.
+## 8. Structural editing and character stability
 
-Project serialization includes character IDs, names, and rig membership. Deserialization reconstructs characters and their skeleton parent references; runtime references are not serialized as memory addresses. Backward compatibility with older project files is not required.
+The Core project centralizes operations that can change topology or membership.
 
-## Project topology remains authoritative
+Important operations include:
 
-The project owns the live topology. Characters do not need their own independent copies of nodes, bones, or skeleton structure.
+```text
+create/delete skeleton
+create bone (including skeleton merges)
+replace skeletons
+plan/preview replacement
+create character
+adopt skeletons
+remove character
+set character root bone
+restore membership
+```
 
-Instead, a character's rig identifies the relevant skeleton components within the project's topology. Structural operations remain project-controlled, while the character supplies the durable semantic grouping above that topology.
+`replace_skeletons()` is the major structural transaction boundary used by editor operations. It stages/validates replacements before erasing live topology, then restores character membership metadata around the replacement.
 
-This separation gives the model two different kinds of identity:
+A `membership_state` snapshot can include:
 
-- **topological identity**, which can change as the user edits connectivity;
-- **character identity**, which should persist across those changes.
+```text
+character ID/name
+character root bone
+artwork
+animation assets
+skeleton -> parent-character membership
+```
 
-That distinction is the primary reason for introducing `sm::character`.
+That snapshot makes topology edits and undo semantic rather than merely geometric.
 
-## Design principle
+---
 
-The purpose of `sm::character` is **not** to make skeletons more complicated under another name.
+## 9. Deletion, splits, and merges
 
-It exists specifically so that skeletons can remain lightweight and ephemeral while stick_man gains persistent character-level concepts such as artwork and animation.
+### 9.1 Deleting topology
 
-In short:
+When a structural edit removes persistent node/bone/skeleton identities, Core calculates `topology_edit_effects`.
 
-> A skeleton describes what is connected right now.  
-> A character describes what those pieces collectively *are*.
+For animation, dependent actions are removed rather than retained with dangling IDs.
+
+Artwork has different semantics: an artwork slot whose bone no longer resolves may remain as an unresolved authored binding and is skipped at render time.
+
+### 9.2 Splitting skeletons
+
+Deleting a bone can turn one skeleton into multiple skeletons. This does not inherently destroy the character because the character's rig may own multiple components.
+
+### 9.3 Merging skeletons
+
+Creating a bone can merge previously separate skeleton components. The project owns the membership bookkeeping and action-dependency effects associated with disappearing skeleton IDs.
+
+Character identity is therefore not tied to one particular skeleton object surviving forever.
+
+---
+
+## 10. Identity and naming
+
+Persistent structural references use `sm::object_id`.
+
+Node, bone, skeleton, and character display names are labels rather than structural identity.
+
+`project::rename()` is a generic cosmetic rename operation across named project entities supported by the project's object lookup.
+
+Artwork introduces its own intentional semantic string namespaces (frame names, slot names, appearance names, state names). Those are character-local artwork semantics, not substitutes for topology object identity.
+
+---
+
+## 11. Mutable access boundary
+
+The project intentionally limits generic mutable object lookup to nodes and bones. Aggregate objects are exposed through const lookup/membership APIs instead of handing callers arbitrary mutable topology/character references.
+
+There are still direct character-data mutation accessors:
+
+```cpp
+animation_assets& project::animation_data(character_id);
+artwork& project::artwork(character_id);
+```
+
+The editor model wraps ordinary animation/artwork changes in undoable snapshot-style edit commands, but Core itself does not make those mutable references transactional.
+
+As the semantic model grows, it would be reasonable to tighten this boundary so invariants such as character-scoped animation references cannot be bypassed accidentally. This is a hardening opportunity rather than evidence that the current architecture needs replacement.
+
+---
+
+## 12. Editor character workflow
+
+The editor supports both loose skeleton construction and character-centric authoring.
+
+A typical workflow is:
+
+```text
+construct one or more loose skeletons
+        ->
+Make Character / adopt skeletons
+        ->
+choose/repair character root bone
+        ->
+author artwork and appearances
+        ->
+capture poses
+        ->
+author animations
+```
+
+Character selection is visually distinct from raw skeleton editing, and character-owned panes such as Artwork and Animation operate against this stable boundary.
+
+---
+
+## 13. Cut, copy, and paste
+
+Whole-character clipboard copy is partially self-contained today.
+
+Current copy/paste preserves:
+
+- character name (with `copy` suffix on paste);
+- all member topology;
+- character root bone;
+- artwork and image resources.
+
+On paste, fresh skeleton/node/bone IDs are generated. Artwork bone bindings and the character root bone are remapped to those fresh IDs.
+
+### Current missing piece: animation
+
+Whole-character copy/paste does **not** currently preserve `animation_assets`.
+
+The clipboard's temporary Core resource package copies artwork but never assigns the source character's animation data, and `mdl::project::paste_character()` creates membership state with empty animation data. Core subsequently creates a fresh Default pose for the pasted rig.
+
+Thus a copied animated character keeps its artwork but loses named poses and animations.
+
+This should be fixed before adding many more action types because every additional action payload increases the amount of ID-remapping logic required for a correct character copy.
+
+The preferred direction is a centralized animation remapper that receives the old->new topology-ID map and rewrites every pose/action reference through one exhaustive action visitor.
+
+---
+
+## 14. Persistence
+
+Characters are serialized by Core inside the `.stickman` packaged project.
+
+The current project JSON format version is 6. The loader also contains compatibility paths for versions 4 and 5.
+
+Current character semantic persistence includes:
+
+- character ID and name;
+- member skeleton IDs;
+- character root bone;
+- artwork metadata/resources;
+- animation data.
+
+Topology remains a project-level structure rather than being duplicated inside each character record.
+
+Core owns package/JSON/image serialization so the Qt editor and future runtimes do not need separate persistence implementations.
+
+---
+
+## 15. Current character-level integrity strengths
+
+Several previously risky areas are now well defined:
+
+- global persistent IDs replaced load-bearing node/bone names;
+- mutable generic project lookup is limited to node/bone editing;
+- character membership is bidirectional and validated;
+- the character can own multiple skeletons;
+- character root is an explicit persistent bone designation;
+- topology replacement is planned/staged before live mutation;
+- undo snapshots character membership plus artwork/animation semantics;
+- artwork bone IDs are remapped for identity-preserving replacement;
+- animation actions that would dangle are identified centrally and removed atomically;
+- Core package persistence includes character artwork and animation.
+
+These pieces make the current model coherent enough that the next work should be hardening, not another ownership refactor.
+
+---
+
+## 16. Character-level gaps to fix before broad action expansion
+
+### 16.1 Pose reconciliation during rig evolution
+
+This is the largest current mismatch between “character as stable authored boundary” and animation behavior.
+
+The character may validly gain/lose rig nodes, but stored poses are not automatically reconciled with those membership changes. Since pose compatibility requires an exact node set, supported structural edits can strand existing poses/animations.
+
+Core needs an explicit policy and API for reconciling Default/named poses when character membership changes.
+
+### 16.2 Character-scoped animation validation
+
+Animation validation currently checks that action references resolve in the project topology, not that they belong to the animation's owning character.
+
+The Core invariant should become:
+
+> Every persistent topology reference stored by a character animation resolves to an object in that character's rig and satisfies the structural requirements of its action type.
+
+### 16.3 Character copy must include animation
+
+As described above, copied characters are currently missing their animation assets. Implementing this now is much cheaper than implementing it after the action variant grows.
+
+### 16.4 Consider narrowing raw mutable semantic access
+
+`project::animation_data()` and `project::artwork()` expose mutable references. The model uses them responsibly through commands, but a future Core API could provide mutation methods/transactions that validate before commit.
+
+This would make the project's semantic invariants harder to bypass accidentally.
+
+---
+
+## 17. Design principle
+
+The current architecture can be summarized as:
+
+> **Topology owns geometry and persistent structural objects; a character owns the stable semantic boundary over one or more topology components.**
+
+The character is therefore the right home for:
+
+```text
+rig membership
+root-frame semantics
+artwork / appearances
+poses
+animations
+```
+
+while nodes, bones, and skeleton connectivity remain in the project topology.
+
+That division is working. Future features should build on it rather than collapsing character and skeleton back into the same concept.

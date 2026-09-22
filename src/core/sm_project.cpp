@@ -178,6 +178,7 @@ sm::result sm::project::delete_skeleton(const object_id& id) {
         initialize_animation_assets(c->animation_data_, topology_, c->rig().skeleton_ids());
     }
     erase_cascade_actions(effects);
+    reconcile_character_animation_poses();
     invalidate_object_index();
     if (!ensure_object_index()) {
         throw std::runtime_error("deleting skeleton left duplicate object IDs");
@@ -284,6 +285,11 @@ void sm::project::erase_cascade_actions(const topology_edit_effects& effects) {
         erase_cascade_actions(character->animation_data_, effects);
 }
 
+void sm::project::reconcile_character_animation_poses() {
+    for (auto& [id, character] : characters_)
+        reconcile_animation_poses(character->animation_data_, topology_, character->rig().skeleton_ids());
+}
+
 bool sm::project::has_valid_animation_references() const {
     for (const auto& [id, character] : characters_) {
         for (const auto& animation : character->animation_data().animations) {
@@ -370,6 +376,7 @@ sm::expected_bone sm::project::create_bone(
         throw std::runtime_error("creating bone produced duplicate object IDs");
     }
     erase_cascade_actions(effects);
+    reconcile_character_animation_poses();
     assert(has_consistent_membership());
     assert_animation_references_resolve();
     return created;
@@ -497,6 +504,7 @@ sm::topology_change sm::project::replace_skeletons(
         repair_character_root_bone(*c);
         initialize_animation_assets(c->animation_data_, topology_, c->rig().skeleton_ids());
     }
+    reconcile_character_animation_poses();
     assert(has_consistent_membership());
     assert_animation_references_resolve();
     return change;
@@ -543,6 +551,13 @@ sm::result sm::project::restore_membership(const membership_state& state) {
     }
     for (const auto& [sid, parent] : state.parents) detach_skeleton(topology_.skeleton(sid)->get());
     characters_.merge(prepared);
+    for (const auto& saved : state.characters) {
+        auto& c = *characters_.at(saved.id);
+        c.name_ = saved.name;
+        c.character_root_bone_ = saved.character_root_bone;
+        c.artwork_ = saved.artwork;
+        c.animation_data_ = saved.animation_data;
+    }
     for (const auto& [sid, parent] : state.parents) {
         if (!parent) continue;
         auto& c = *characters_.at(*parent);
@@ -554,6 +569,7 @@ sm::result sm::project::restore_membership(const membership_state& state) {
         repair_character_root_bone(*c);
         initialize_animation_assets(c->animation_data_, topology_, c->rig().skeleton_ids());
     }
+    reconcile_character_animation_poses();
     assert(has_consistent_membership());
     return result::success;
 }
@@ -716,6 +732,7 @@ sm::result sm::project::adopt_skeletons(const object_id& id, std::span<const con
         live->get().set_parent_character(*it->second);
     }
     repair_character_root_bone(*it->second);
+    reconcile_character_animation_poses();
     assert(has_consistent_membership());
     return result::success;
 }

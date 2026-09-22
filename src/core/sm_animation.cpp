@@ -269,6 +269,62 @@ void sm::initialize_animation_assets(animation_assets& assets, const topology& t
     assets.default_pose = p.id;
     assets.poses.push_back(std::move(p));
 }
+void sm::reconcile_animation_poses(animation_assets& assets, const topology& topology,
+        const std::vector<object_id>& skeletons) {
+    initialize_animation_assets(assets, topology, skeletons);
+    if (assets.poses.empty()) return;
+
+    std::unordered_map<object_id, point> members;
+    for (const auto& sid : skeletons) if (auto skel = topology.skeleton(sid))
+        for (auto node : skel->get().nodes()) members.emplace(node->id(), node->world_pos());
+
+    for (auto& p : assets.poses) {
+        if (p.id == assets.default_pose) {
+            std::erase_if(p.node_positions, [&](const auto& entry) { return !members.contains(entry.first); });
+            for (const auto& [id, pt] : members) p.node_positions.try_emplace(id, pt);
+        } else {
+            std::erase_if(p.node_positions, [&](const auto& entry) {
+                return !topology.get<sm::node>(entry.first).has_value();
+            });
+        }
+    }
+}
+void sm::remap_animation_assets(animation_assets& assets,
+        const std::unordered_map<object_id, object_id>& id_remap) {
+    auto remap = [&](object_id& id) {
+        if (auto it = id_remap.find(id); it != id_remap.end()) id = it->second;
+    };
+
+    for (auto& p : assets.poses) {
+        std::unordered_map<object_id, point> remapped;
+        remapped.reserve(p.node_positions.size());
+        for (const auto& [old_id, pt] : p.node_positions) {
+            auto id = old_id;
+            remap(id);
+            if (!remapped.emplace(id, pt).second)
+                throw std::invalid_argument("Animation pose remap produced duplicate node IDs");
+        }
+        p.node_positions = std::move(remapped);
+    }
+
+    for (auto& animation : assets.animations) for (auto& layer : animation.layers)
+        for (auto& action : layer.actions) std::visit([&](auto& data) {
+            using T = std::decay_t<decltype(data)>;
+            if constexpr (std::is_same_v<T, rigid_rotation>) {
+                remap(data.bone);
+            } else if constexpr (std::is_same_v<T, ik_rotation>) {
+                remap(data.effector);
+                remap(data.pivot_node);
+            } else if constexpr (std::is_same_v<T, rigid_translation>) {
+                for (auto& id : data.skeletons) remap(id);
+                remap(data.reference_bone);
+            } else if constexpr (std::is_same_v<T, ik_translation>) {
+                remap(data.effector);
+                for (auto& id : data.pins) remap(id);
+                remap(data.reference_bone);
+            }
+        }, action.data);
+}
 void sm::apply_pose(const pose& pose, const topology& topology) {
     for (const auto& [id, pt] : pose.node_positions) if (auto node = topology.get<sm::node>(id)) node->get().set_world_pos(pt);
 }

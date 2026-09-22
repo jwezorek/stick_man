@@ -287,6 +287,7 @@ namespace {
                 if (resources.set_character_root_bone(copied->get().id(), character->model().character_root_bone()) != sm::result::success)
                     return {};
                 resources.artwork(copied->get().id()) = character->model().artwork();
+                resources.animation_data(copied->get().id()) = character->model().animation_data();
                 auto encoded = resources.serialize();
                 if (!encoded) return {};
                 payload["artwork_package"] = QByteArray(reinterpret_cast<const char*>(encoded->data()),
@@ -362,6 +363,7 @@ namespace {
         auto& project = main_wnd.project();
         if (character) {
             sm::artwork artwork;
+            sm::animation_assets animation_data;
             sm::object_id character_root_bone;
             if (payload.contains("artwork_package")) {
                 if (!payload["artwork_package"].is_string()) return;
@@ -372,9 +374,15 @@ namespace {
                     std::ranges::distance(resources.characters()) != 1) return;
                 const auto copied_character=*resources.characters().begin();
                 artwork = copied_character->artwork();
+                animation_data = copied_character->animation_data();
                 character_root_bone = copied_character->character_root_bone();
             }
-            auto pasted = project.paste_character(clipboard_topology, payload["name"].get<std::string>(), artwork, character_root_bone);
+            if (dest_mat) {
+                for (auto& pose : animation_data.poses)
+                    for (auto& [id, pt] : pose.node_positions) pt = sm::transform(pt, *dest_mat);
+            }
+            auto pasted = project.paste_character(clipboard_topology, payload["name"].get<std::string>(),
+                artwork, character_root_bone, animation_data);
             if (!pasted) QMessageBox::warning(&main_wnd, "Paste Character", "Cannot paste this character.");
             return;
         }

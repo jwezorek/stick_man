@@ -1,48 +1,60 @@
 # stick_man Artwork and Appearances
 
-Current implementation — September 15, 2026
+**Current implementation and design constraints**  
+**Reviewed against the September 22, 2026 source selection**
 
-This document describes the artwork/appearance system as it exists now. Animation integration and a standalone runtime are intentionally out of scope; they will be designed when those systems are actually under development.
+## 1. Status
 
-## 1. Overview
+Artwork and appearances are implemented character data, not a future skinning plan.
 
-Artwork is owned directly by `sm::character`:
+The current system includes:
+
+- character-local image/frame resources;
+- per-frame registration origins;
+- semantic slot definitions bound to bones;
+- explicit root/tip bone anchors;
+- per-slot semantic state vocabularies;
+- multiple appearances;
+- per-state frame mappings, including hidden mappings and fallback to default;
+- per-appearance-slot translation/rotation/non-uniform scale;
+- painter order represented by appearance-slot vector order;
+- canvas artwork rendering and alpha-aware hit testing;
+- canvas transform handles and numeric transform editing;
+- editor-only active appearance and state preview;
+- drag/drop of image frames onto rig bones;
+- packaged-project persistence;
+- Core sprite-page packing and PNG resource loading;
+- animation preview against a detached evaluated topology;
+- whole-character clipboard preservation of artwork, with bone-ID remapping on paste.
+
+The terminology is deliberately **artwork**, **frame**, **slot**, **state**, and **appearance** rather than “skin.”
+
+---
+
+## 2. Ownership
+
+`sm::character` owns one `sm::artwork` value directly.
+
+Artwork is not a project-wide shared sprite library. Frames, slot definitions, and appearances are character-local.
+
+Conceptually:
 
 ```text
 character
-├── rig
-└── artwork
-    ├── frames
-    ├── slot definitions
-    └── appearances
-        └── ordered appearance slots
+    rig
+    artwork
+        frames
+        slot definitions
+        appearances
 ```
 
-There is no project-level artwork registry and no cross-character sharing of image resources. Copying a character copies its artwork semantics; immutable image pixels may remain shared internally.
+This makes a character a self-contained authored unit while still allowing all of its appearances to share the same underlying frame resources.
 
-The model separates four ideas:
+---
 
-```text
-sprite frame
-    named bitmap resource + registration origin
+## 3. Core data model
 
-slot definition
-    named visual channel + driving bone + root/tip anchor + semantic states
-
-appearance slot
-    implementation of one slot in one appearance
-    state -> frame/hidden mappings + local transform
-
-appearance
-    ordered appearance slots
-    vector order is painter order
-```
-
-A static visual channel normally has only the mandatory `default` state. Stateful channels can add names such as `open`, `closed`, `smile`, or `fist`. These are semantic names shared by every appearance of the character.
-
-## 2. Core Data Model
-
-The implemented Core types are conceptually:
+The current semantic model is:
 
 ```cpp
 struct sprite_frame {
@@ -60,11 +72,11 @@ struct slot_definition {
 
 struct sprite_transform {
     point translation{};
-    double rotation = 0;       // radians
+    double rotation = 0;
     point scale{1, 1};
 };
 
-using frame_target = std::optional<std::string>; // nullopt = explicitly hidden
+using frame_target = std::optional<std::string>;
 
 struct appearance_slot {
     std::string slot;
@@ -77,384 +89,427 @@ struct appearance {
 };
 ```
 
-`sm::artwork` owns three character-local namespaces:
-
-- `frames()` — frame name -> `sprite_frame`;
-- `slot_definitions()` — slot name -> `slot_definition`;
-- `appearances()` — appearance name -> `appearance`.
-
-Frame names, slot names, appearance names, and state names are strings because their identity is local to the containing artwork aggregate. Project/model objects such as characters and bones continue to use `sm::object_id`.
-
-## 3. Frames and Image Resources
-
-A frame is one logical bitmap resource available to every appearance of the character.
-
-Core decodes images into renderer-neutral RGBA8 resources. Qt image objects, SDL textures, and GPU resources are not part of Core artwork semantics.
-
-### 3.1 Registration origin
-
-Each frame stores a registration-origin offset. The rendered image is otherwise centered on its local origin, so the default `{0, 0}` registration origin corresponds to the image center. Editing the registration origin lets differently cropped frames line up without changing every appearance-slot transform.
-
-Registration coordinates use Core's Cartesian convention. Rendering converts the top-left-oriented pixel buffer appropriately.
-
-### 3.2 Physical backing is private
-
-A logical frame may be backed by a standalone decoded image or by a rectangular region of a decoded packed page. The rest of the program sees the same `image_resource` interface either way.
-
-This allows loaded packed resources and newly imported images to coexist without forcing an immediate repack.
-
-### 3.3 Frame operations
-
-Core implements:
-
-- insert/import;
-- rename, with propagation through appearance mappings;
-- delete, rejected while the frame is referenced;
-- registration-origin editing.
-
-The editor derives a unique frame name when importing images with colliding filenames.
-
-## 4. Slot Definitions
-
-A slot definition is a character-wide semantic visual channel. It says which bone drives the channel and which semantic states are valid.
-
-Examples include:
+`artwork` owns three named collections:
 
 ```text
-torso
-eyes
+frames       : map<string, sprite_frame>
+slots        : map<string, slot_definition>
+appearances  : map<string, appearance>
+```
+
+The map keys are semantic names local to the character artwork. Ordinary node/bone display names remain cosmetic and are not used to resolve artwork.
+
+---
+
+## 4. Frames
+
+A frame is a logical image resource available to any appearance in the character.
+
+A frame contains:
+
+- immutable/copy-shareable decoded image data through `image_resource`;
+- a registration origin in the frame's centered Cartesian image coordinate system.
+
+The frame name is its artwork-local semantic key.
+
+Current operations include:
+
+- insert/decode a frame;
+- rename a frame;
+- delete an unreferenced frame;
+- edit registration origin.
+
+Renaming a frame propagates through appearance mappings. Deleting a frame is rejected while an appearance still references it.
+
+Frame dimensions are bounded so Core can reserve packing padding within the image-resource maximum size.
+
+---
+
+## 5. Slot definitions
+
+A slot is the stable semantic interface between a character rig and its interchangeable appearance artwork.
+
+Examples might be:
+
+```text
+head
+upper_arm_l
+hand_r
+eye_l
 mouth
-left_hand
-glasses
 ```
 
-Several slots may be driven by the same bone. Slots are artwork data; bones themselves do not contain artwork slots.
-
-### 4.1 Bone binding and root/tip anchor
-
-A slot stores the stable `object_id` of its driving bone and an explicit root/tip anchor.
+A slot definition stores:
 
 ```text
-root -> use the bone's root-node position
-tip  -> use the bone's tip-node position
+bone ID
+anchor = root | tip
+semantic state vocabulary
 ```
 
-Both anchors retain the same local orientation:
+The slot name, rather than the bone's display name, is the semantic key used by appearances.
+
+### 5.1 Root and tip anchoring
+
+The anchor chooses which endpoint supplies the local origin:
 
 ```text
-+X = root -> tip
+root -> bone parent/root node
+ tip -> bone child/tip node
 ```
 
-Changing root to tip changes the frame origin, not the axis direction.
+Both anchors use the same root-to-tip bone orientation. Choosing `tip` moves the origin; it does not reverse the local axes.
 
-If topology editing removes the referenced bone, the slot is retained and becomes unresolved. Rendering skips unresolved slots. The Structure tab displays them as unresolved and allows rebinding to another bone.
+Node-specific sprite bindings are therefore unnecessary in the current model. Artwork centered at a joint can bind to an incident bone and choose the endpoint coincident with that joint.
 
-### 4.2 Semantic states
+### 5.2 Semantic states
 
-Every slot must contain `default`. It cannot be renamed or deleted.
-
-Additional states are optional and unique within the slot:
+Each slot defines its own state vocabulary. Every slot always includes the state:
 
 ```text
-eyes = { default, open, half, closed }
+default
 ```
 
-Adding, renaming, or deleting a state is a slot-definition operation. Rename/delete propagates to the corresponding mappings in every appearance.
-
-## 5. Appearances and Appearance Slots
-
-An appearance is one visual realization of a character, such as `Human`, `Robot`, or `Winter`.
-
-An appearance contains zero or one implementation of each slot definition. The ordered `appearance_slots` vector is authoritative painter order: earlier items are drawn first and later items appear in front.
-
-### 5.1 State mappings
-
-Each appearance slot maps semantic states to frame targets.
-
-There are three meaningful cases:
+Additional examples might be:
 
 ```text
-state -> frame name     explicit image
-state -> nullopt        explicitly Hidden
-no mapping for state    Use default
+eye: default, blink, closed
+mouth: default, smile, frown, open
+hand: default, fist, point
 ```
 
-`default` itself is always present in an appearance slot. Its target may be a frame or Hidden.
+State vocabulary belongs to the slot definition so every appearance agrees on the semantic meaning even when it maps that state to different image frames.
 
-For a non-default state, absence of an explicit mapping means `resolve_frame()` falls back to the slot's `default` target. This is intentionally different from an explicit Hidden mapping.
+The `default` state cannot be renamed or deleted.
 
-If the appearance does not include a given slot at all, that slot renders nothing for that appearance.
+Renaming/deleting a non-default state propagates through appearance mappings for that slot.
 
-### 5.2 Local transform
+---
 
-Every appearance slot stores one transform shared by all of its semantic states:
+## 6. Appearances
 
-- translation X/Y;
-- rotation in radians in Core and project data;
-- independent X/Y scale.
+An appearance is an ordered list of implementations of semantic slots.
 
-Negative scale is valid and can be used for mirroring.
+Each `appearance_slot` stores:
 
-Bone length does not implicitly scale artwork.
+- the semantic slot name;
+- a state-to-frame mapping;
+- one local sprite transform shared by the slot's state frames.
 
-## 6. Rendering Semantics
+An appearance does not have to implement every slot.
 
-Core resolves a character/appearance plus semantic state choices into `resolved_sprite` values containing the image resource, registration origin, bone transform, and final transform.
+### 6.1 State mappings
+
+Each included slot must explicitly contain a `default` mapping.
+
+A mapping value is `optional<string>`:
+
+- a frame name means draw that frame;
+- `nullopt` means intentionally hidden.
+
+For non-default states, a missing map entry means **inherit the default mapping**.
+
+Thus there are three useful states for an appearance mapping:
+
+```text
+explicit frame
+explicitly hidden
+inherit default
+```
+
+This is different from a missing slot implementation: if the appearance omits the slot itself, nothing is drawn for that slot.
+
+### 6.2 Local transform
+
+The appearance slot stores:
+
+```text
+translation
+rotation (radians in Core/persistence)
+scale X/Y
+```
+
+The transform is appearance-specific and slot-specific but currently not state-specific. Switching a slot from one frame state to another keeps the same local placement transform.
+
+### 6.3 Painter order
+
+Painter order is the order of `appearance.appearance_slots`.
+
+Earlier entries draw first; later entries draw on top.
+
+There is no separate persisted integer `draw_order` in the current model. Reordering the vector is the semantic layering operation.
+
+This supersedes the older design proposal that used an explicit numeric draw-order property.
+
+---
+
+## 7. Transform semantics
+
+Artwork resolution produces a world transform for each visible slot.
+
+For a resolved bone:
+
+```text
+anchor position = root or tip node world position
+bone orientation = current root -> tip world rotation
+```
+
+Core composes:
+
+```text
+bone_transform
+    = translate(anchor position)
+    * rotate(current bone angle)
+
+sprite_transform
+    = bone_transform
+    * translate(appearance-slot translation)
+    * rotate(appearance-slot rotation)
+    * scale(appearance-slot X/Y scale)
+    * translate(-frame registration origin)
+```
+
+Bone length does not implicitly stretch a sprite. Scale is explicit appearance data.
+
+The resolved result includes both the final transform and the pre-local `bone_transform`, which allows the editor's transform handles to edit local placement correctly.
+
+---
+
+## 8. Rendering and animation preview
+
+`project::resolve_artwork()` accepts an optional geometry topology.
+
+Normally it resolves the slot's bone in the persistent project topology. During Animation Mode the canvas supplies the detached evaluated working topology instead.
+
+This is important: the persistent slot still names the same bone ID, but its current position/orientation can come from the animation preview topology.
 
 Conceptually:
 
 ```text
-bone endpoint position/orientation
-    * appearance-slot translation
-    * appearance-slot rotation
-    * appearance-slot scale
-    * registration-origin adjustment
+persistent artwork semantics
+    slot -> bone ID
+    appearance/state mapping
+    local transform
+        +
+current geometry topology
+        ->
+resolved sprites
 ```
 
-The editor renders sprites in appearance-slot vector order. Skeleton guides are a separate editor layer and may be shown above the artwork without affecting sprite painter order.
+Therefore artwork already follows Rigid/IK rotation and translation during animation playback and scrubbing. No duplicate animation-specific artwork representation is required for skeletal motion.
 
-Unresolved slots and slots absent from the active appearance do not produce drawables.
+The editor owns active appearance and preview-state selection. These are session/presentation state, not fields stored on the character as “currently active appearance/state.”
 
-## 7. Artwork Browser
+---
 
-The Artwork Browser follows the selected character. Selecting a character, skeleton, bone, or node belonging to one character establishes that character as the artwork context. Loose topology or a mixed-character selection has no artwork context.
+## 9. Artwork Browser
 
-The browser currently has three tabs: **Structure**, **Appearances**, and **Images**.
+The current Artwork Browser has three authoring concerns.
 
-### 7.1 Structure tab
+### 9.1 Structure
 
-The Structure tab edits character-wide slot definitions and state vocabularies.
+The Structure view manages semantic slot definitions and their state vocabularies.
 
-The Slots view is multi-column:
+The user can:
 
-```text
-Slot | Bone | Anchor
-```
+- create/delete/rename slots;
+- bind a slot to a bone;
+- choose root or tip anchor;
+- add/rename/delete semantic states.
 
-- Slot names are renamed inline.
-- The Bone column is edited with a combo box listing bones in the character, plus **Pick on canvas...**.
-- The Anchor column is an inline Root/Tip combo box.
-- **New slot...** creates a slot bound to a character bone.
-- **Delete** removes the slot definition and its implementations from every appearance.
+### 9.2 Appearances
 
-The selected slot's semantic states are shown below it. Non-default state names are renamed inline. **New state** and **Delete** manage the vocabulary; `default` remains protected.
+The Appearances view manages appearance definitions and the ordered slot implementations.
 
-### 7.2 Appearances tab
+The user can:
 
-The Appearances tab selects and edits one appearance at a time.
+- create/rename/delete appearances;
+- include/exclude semantic slots in an appearance;
+- choose frame/hidden/inherited mappings per state;
+- preview a semantic state;
+- reorder appearance slots to change painter order;
+- edit local translation, rotation, and X/Y scale numerically;
+- reset a slot transform.
 
-Its tree has top-level slot rows and semantic-state children:
+### 9.3 Images
 
-```text
-✓ eyes
-    ◉ default        eye_open
-    ○ closed         eye_closed
-✓ face
-    default          face
-⊘ glasses
-    default          —
-```
+The Images view exposes the character-local frame resources. Frames can be imported/managed and dragged onto the canvas/bones as part of the binding workflow.
 
-The green check / red prohibition icon on a top-level row toggles whether that slot is included in the active appearance.
+The editor displays logical frames, not packed sprite-page rectangles.
 
-The Image column for each included state is an inline combo box:
+---
 
-- a concrete frame name;
-- **Hidden (none)**;
-- **Use default (unmapped)** for non-default states.
+## 10. Canvas editing
 
-For slots with more than one semantic state, the state rows also display radio-style preview bullets. They have one-of-N semantics within that slot. Clicking a bullet changes the editor's preview state through `artwork_layer::set_preview_state()`.
+The canvas artwork layer supports:
 
-Static slots whose vocabulary contains only `default` do **not** show a preview radio indicator; there is nothing meaningful to switch.
+- drawing visible sprites in appearance painter order;
+- stable cross-character drawing order;
+- alpha-aware sprite hit testing;
+- selected-sprite outline;
+- direct translate/rotate/scale handles when transform editing is enabled;
+- local transform preview while dragging;
+- frame drag/drop targeting bones;
+- active appearance selection;
+- per-slot semantic state preview.
 
-Preview state is editor/session state. It is not persisted into the project and it does not create an undo command. Selecting `default` returns that slot to its normal preview state.
+The rig remains the reference geometry for artwork transforms. Editing a sprite's appearance transform does not invoke IK or change skeleton node positions.
 
-### 7.3 Painter order
+---
 
-Top-level appearance-slot rows can be dragged to reorder painter order. A compact toolbar also provides send-to-back, move-backward, move-forward, and bring-to-front operations.
+## 11. Topology changes and unresolved slots
 
-Semantic-state child rows cannot be reordered independently because painter order belongs to the appearance slot, not to an individual state mapping.
+Artwork handles destructive topology changes differently from animation actions.
 
-### 7.4 Transform drawer
+Animation actions with deleted persistent dependencies are removed because keeping an action that cannot evaluate would violate the ordinary-editor referential-integrity invariant.
 
-Transform editing is not a global tool in the tool palette. It is an explicit editing state owned by the Appearances tab.
+Artwork slot definitions, however, may remain with a bone ID that no longer resolves to the character. `project::slot_resolved()` checks both:
 
-The **Transform** button expands an in-pane drawer containing exact numeric controls for:
+- that the ID resolves to a bone; and
+- that the bone belongs to the character that owns the artwork.
 
-- Translation X;
-- Translation Y;
-- Rotation in degrees;
-- Scale X;
-- Scale Y;
-- Reset transform.
+Unresolved slots are skipped during rendering.
 
-Core continues to store rotation in radians; degree conversion is only an editor presentation detail.
+This allows artwork definitions to survive some rig editing without silently rebinding themselves to a different bone.
 
-Opening the Transform drawer also enables direct manipulation handles for the selected rendered appearance slot on the canvas:
+When topology replacement deliberately assigns a fresh ID to a surviving bone, the project's replacement machinery remaps artwork bone IDs so the authored binding follows that surviving semantic bone.
 
-- drag the center to translate;
-- drag left/right side handles to scale X;
-- drag top/bottom side handles to scale Y;
-- drag corner handles for two-axis scaling;
-- drag the rotation handle above the selection frame to rotate.
+This distinction is intentional current behavior and should be preserved/documented if a future “repair unresolved artwork slot” workflow is added.
 
-The skeleton stays fixed while these handles are used; transform editing does not invoke IK or mutate bone geometry.
+---
 
-A direct-manipulation drag previews continuously but commits as one artwork edit when the drag ends. Cancelling the drag discards the preview.
+## 12. Validation rules
 
-### 7.5 Selecting artwork on the canvas
+`sm::artwork` enforces local semantic consistency for normal mutation operations:
 
-Rendered sprites participate in artwork hit testing. Selecting a sprite selects its appearance slot and synchronizes the browser. The selection outline is shown whenever an artwork slot is selected; transform handles are shown only while Transform editing is active.
-
-### 7.6 Dragging images onto bones
-
-Frames in the Images tab can be dragged to the canvas.
-
-Dropping a frame on a character bone either assigns it to a suitable existing slot or creates/uses a slot according to the current drop workflow. The operation validates that the frame belongs to the same character as the target bone and is committed as an artwork edit.
-
-## 8. Images Tab
-
-The Images tab displays the character-local frame library with thumbnails.
-
-Current operations are:
-
-- multi-file image import;
-- rename;
-- delete;
-- registration-origin X/Y editing;
-- drag a frame to the canvas for bone assignment.
-
-Image file access belongs to the editor. Core receives encoded image bytes and owns decoding/validation.
-
-## 9. Undo, Redo, Copy, and Topology Changes
-
-Editor artwork mutations use `mdl::project::edit_artwork()`. The editor snapshots the character's `sm::artwork` before and after the semantic edit and records that as one undoable command.
-
-This deliberately favors simple, reliable artwork undo semantics over a large family of tiny command classes. Immutable pixel resources make artwork copies inexpensive enough for the current scale.
-
-Continuous direct transform dragging is special-cased so the intermediate mouse positions are preview-only and the completed drag becomes one undo step.
-
-Whole-character copy/paste carries artwork with the character. Bone IDs referenced by slot definitions are remapped to the copied rig's new IDs.
-
-Topology replacement also remaps artwork bone references when identities are intentionally replaced. Ordinary deletion can leave a slot unresolved rather than silently destroying its artwork semantics.
-
-## 10. Project Persistence and Packing
-
-Artwork is serialized inside the existing Core-owned `.stickman` ZIP package.
-
-`project.json` contains artwork semantics and packed-frame metadata. PNG page resources live in character-scoped package paths.
-
-Artwork serialization currently records:
-
-- packed page filenames;
-- logical frame names;
-- each frame's page rectangle and registration origin;
-- slot names, bone IDs, anchors, and state vocabularies;
-- appearance names;
-- ordered appearance slots;
-- state mappings;
-- translation/rotation/scale transforms.
-
-There is no separate atlas JSON file.
-
-### 10.1 Packing
-
-`sm::artwork::pack()` produces `packed_artwork` containing PNG pages and logical frame regions.
-
-Packing currently:
-
-- uses `stb_rect_pack`;
-- never rotates source frames;
-- reserves padding around frames;
-- extrudes edge pixels into the padding to avoid filtering bleed;
-- records rectangles for the real frame pixels, excluding padding;
-- supports multiple pages;
-- uses transparent RGBA8 page storage.
-
-Packed page placement is generated resource metadata, not semantic identity. Saving may repack frames without changing frame names, slots, mappings, or registration origins.
-
-### 10.2 Loading
-
-Core loads the package, decodes PNG pages, validates frame regions, reconstructs logical frames as image regions, then reconstructs slots and appearances through the normal validated artwork APIs.
-
-Malformed artwork/package data causes load failure rather than partially mutating the live project.
-
-## 11. View Controls
-
-The View menu currently exposes:
-
-```text
-Show Artwork
-Show Skeleton
-Skeleton Display
-    Normal
-    Wireframe
-```
-
-Artwork visibility and skeleton-guide visibility are independent. Wireframe affects only the rig guide presentation.
-
-## 12. Validation Rules
-
-The current Core model enforces the important semantic invariants:
-
-- frame, slot, and appearance names are non-empty and unique in their scopes;
-- every slot contains `default` exactly once;
-- state names are unique within a slot;
-- `default` cannot be renamed or deleted;
+- names cannot be empty;
+- names are unique within their corresponding artwork map;
+- frame dimensions and registration origins must be valid;
+- slot anchors must be root or tip;
+- slot state names are unique and include `default`;
 - an appearance cannot contain the same slot twice;
-- every appearance slot references an existing slot definition;
-- every mapped state belongs to that slot's vocabulary;
-- every named frame target exists;
-- every appearance slot contains a `default` mapping;
-- transforms and registration origins contain finite values;
-- bone anchors are Root or Tip;
-- imported frame dimensions fit the packing limits.
+- every appearance slot must name an existing slot definition;
+- every appearance slot must contain a default mapping;
+- mapped states must be declared by the slot;
+- mapped frame names must exist;
+- local transforms must contain finite values.
 
-Semantic operations throw for invalid edits instead of allowing dangling internal artwork references.
+Bone existence/ownership is checked at the project resolution boundary rather than by standalone `artwork` mutation. This is why unresolved slot definitions can persist safely.
 
-## 13. Current Completion Boundary
+---
 
-The artwork/appearance authoring system is considered complete for the application's current scope.
+## 13. Persistence and sprite-page packing
 
-Implemented now:
+Artwork is stored inside the Core-owned `.stickman` packaged project.
 
-- character-owned image resources;
-- slot definitions and bone binding;
-- root/tip anchoring;
-- multiple appearances;
-- semantic state vocabularies;
-- per-appearance frame/Hidden/fallback mappings;
-- semantic-state preview in the editor;
-- sprite rendering and canvas selection;
-- explicit painter order;
-- numeric and direct transform editing;
-- registration-origin editing;
-- undo/redo integration;
-- character copy/remapping behavior;
-- package persistence and sprite-page packing;
-- artwork/skeleton display controls.
+Project format version 6 writes character artwork metadata into `project.json` and character-specific PNG sprite pages into the package.
 
-Not part of the current implementation boundary:
+The current resource model does **not** use a separate atlas JSON file per page. Page names and frame rectangles are represented directly by the artwork JSON in the semantic project document.
 
-- animation/timeline events that drive semantic states over time;
-- playback evaluation;
-- a standalone game/framework runtime integration.
+For each character artwork package, serialized data contains:
 
-Those systems do not exist yet, so this document intentionally does not prescribe their APIs or implementation phases. The existing artwork model provides the semantic state and packed-resource foundations they can build on when that work begins.
+```text
+pages
+frames
+    name
+    registration origin
+    page index
+    source rectangle
+slots
+    name
+    bone ID
+    root/tip anchor
+    state vocabulary
+appearances
+    name
+    ordered slots
+    state mappings
+    translation/rotation/scale
+```
 
-## 14. Typical Authoring Workflow
+### 13.1 Packing
 
-1. Create or select a character.
-2. Import bitmap frames on the Images tab.
-3. Create slot definitions on the Structure tab and bind them to bones/root-or-tip anchors.
-4. Add semantic states only where the visual channel needs them.
-5. Create an appearance.
-6. Include the desired slots in the appearance.
-7. Choose a frame, Hidden, or default fallback for each state.
-8. Reorder the top-level slot rows until painter order is correct.
-9. Select a rendered slot and open the Transform drawer.
-10. Position, rotate, and scale it numerically or directly on the canvas.
-11. Adjust frame registration origins where alternate crops need alignment.
-12. For stateful slots, use the radio bullets in the appearance tree to preview each semantic state.
-13. Create additional appearances and map the same character-wide slot/state vocabulary to different frames.
-14. Save the project; Core persists the semantics and packs the image resources into the `.stickman` package.
+Packing is a private Core persistence concern.
+
+Current behavior:
+
+- `stb_rect_pack` places rectangles;
+- the default page size is at least 2048 and grows to fit the largest padded frame;
+- multiple pages are emitted when required;
+- sprites are not rotated by packing;
+- padding defaults to one pixel;
+- padding pixels are **edge-extruded** from the image, rather than left transparent;
+- stored frame rectangles exclude the padding;
+- pages are encoded as PNG;
+- packing layout is not semantic identity.
+
+Repacking may change page placement without changing frame names, slot mappings, or appearance semantics.
+
+### 13.2 Loading
+
+Core reads PNG pages, validates page naming/rectangles, creates image regions, then reconstructs frames/slots/appearances through the same semantic APIs.
+
+Qt/SDL/GPU objects do not appear in Core artwork data.
+
+---
+
+## 14. Clipboard behavior
+
+Whole-character copy/cut/paste currently preserves artwork.
+
+The clipboard payload contains topology separately and embeds a serialized temporary Core package for character resources. On paste:
+
+- the topology receives fresh skeleton/node/bone IDs;
+- artwork is recovered from the resource package;
+- artwork bone bindings are remapped to the new bone IDs;
+- the character root bone is remapped similarly.
+
+At present the same character-copy path does **not** preserve animation assets. That is a character/animation gap rather than an artwork gap and should be fixed before the action vocabulary grows substantially.
+
+---
+
+## 15. Semantic states and animation
+
+Semantic states are currently authoring/preview data, not animation actions.
+
+The artwork layer can preview a chosen state for a slot, but no current animation action changes:
+
+- a slot's semantic state;
+- the active appearance;
+- an appearance-slot transform;
+- a frame registration origin.
+
+These are plausible future animation capabilities, especially semantic state changes such as blink/mouth/hand state. They should not be added until the animation action-extension/remapping/integrity work described in `Animation.md` is in place.
+
+When state animation is designed, prefer animating the semantic state (`blink`) rather than directly naming a frame (`eyes_closed.png`) so the same animation can work across different appearances.
+
+---
+
+## 16. Remaining artwork/appearance work
+
+The core artwork system is usable and internally coherent. Remaining work is mainly integration/polish rather than another data-model rewrite.
+
+Important follow-ups are:
+
+1. **Define repair UX for unresolved slot bindings.** Current rendering safely skips them, but the editor should make the unresolved condition obvious and make rebinding easy.
+2. **Decide whether project-level validation should optionally enforce fully resolved artwork.** Today unresolved slot references are tolerated intentionally.
+3. **Complete character-level copy semantics.** Artwork already remaps correctly; animation should join it so a copied character is genuinely self-contained.
+4. **Keep preview state separate from authored animation state.** If semantic-state actions are added, do not accidentally serialize the editor's current preview selection as character state.
+5. **Add focused persistence/transform tests** for packing, edge padding, state fallback, root/tip anchors, painter order, remapping, and animation-preview geometry.
+
+---
+
+## 17. Stable design principles
+
+Future artwork work should preserve these rules:
+
+- artwork belongs to a character;
+- frames are logical named resources independent of packing layout;
+- slots are semantic rig interfaces independent of bone display names;
+- appearances map semantics to artwork rather than redefining rig structure;
+- root/tip changes the anchor origin, not the root-to-tip orientation;
+- painter order is explicit authored appearance order;
+- active appearance and preview states are editor/session choices unless an explicit animation/runtime feature says otherwise;
+- Core owns renderer-neutral resource semantics and package persistence;
+- Qt owns editor presentation and interactive handles;
+- animation preview resolves persistent artwork against evaluated rig geometry rather than duplicating artwork into the animation working topology.

@@ -94,6 +94,7 @@ namespace sm {
             std::vector<object_id> skeletons) const;
         static void erase_cascade_actions(animation_assets& assets, const topology_edit_effects& effects);
         void erase_cascade_actions(const topology_edit_effects& effects);
+        void reconcile_character_animation_poses();
         void assert_animation_references_resolve() const;
 
     public:
