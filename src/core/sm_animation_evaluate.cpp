@@ -102,93 +102,86 @@ sm::animation_evaluation sm::evaluate_animation(const animation& animation, cons
         const double progress = absolute_progress(*action, time);
         const double eased = ease(action->easing, progress);
 
-        if (const auto* rotation = std::get_if<rigid_rotation>(&action->data)) {
-            auto bone = working.get<sm::bone>(rotation->bone);
-            if (!bone || !std::isfinite(rotation->angle) || !valid_pivot(rotation->pivot) ||
-                !valid_propagation(rotation->propagation)) {
-                report.invalid_actions.push_back(action->id);
-                continue;
+        std::visit(sm::overloaded{
+            [&](const rigid_rotation& rotation) {
+                auto bone = working.get<sm::bone>(rotation.bone);
+                if (!bone || !std::isfinite(rotation.angle) || !valid_pivot(rotation.pivot) ||
+                    !valid_propagation(rotation.propagation)) {
+                    report.invalid_actions.push_back(action->id);
+                    return;
+                }
+                auto& pivot = rotation.pivot == rotation_pivot::root ?
+                    bone->get().parent_node() : bone->get().child_node();
+                auto& rotating = rotation.pivot == rotation_pivot::root ?
+                    bone->get().child_node() : bone->get().parent_node();
+                context.rotation = rotation_evaluation_context{pivot.world_pos(), rotating.world_pos()};
+                if (progress > 0.0) bone->get().rotate_by(rotation.angle * eased, pivot,
+                    rotation.propagation == rotation_propagation::bone_only);
+            },
+            [&](const ik_rotation& rotation) {
+                auto effector = working.get<sm::node>(rotation.effector);
+                auto pivot = working.get<sm::node>(rotation.pivot_node);
+                if (!effector || !pivot || effector->get().id() == pivot->get().id() ||
+                    &effector->get().owner() != &pivot->get().owner() || !std::isfinite(rotation.angle)) {
+                    report.invalid_actions.push_back(action->id);
+                    return;
+                }
+                const auto origin = pivot->get().world_pos();
+                const auto effector_pos = effector->get().world_pos();
+                context.rotation = rotation_evaluation_context{origin, effector_pos};
+                const double radius = sm::distance(origin, effector_pos);
+                if (!(radius > 0.0) || !std::isfinite(radius)) {
+                    report.invalid_actions.push_back(action->id);
+                    return;
+                }
+                if (progress > 0.0) {
+                    const double theta = sm::angle_from_u_to_v(origin, effector_pos) + rotation.angle * eased;
+                    const sm::point target = origin + radius * sm::point(std::cos(theta), std::sin(theta));
+                    sm::perform_fabrik(*effector, target, *pivot);
+                }
+            },
+            [&](const rigid_translation& translation) {
+                auto frame=translation_reference_frame(translation.reference,translation.reference_bone,character_root_bone,base,working);
+                context.translation_reference_frame=frame;
+                if(!frame) { report.invalid_actions.push_back(action->id); return; }
+                bool valid=!translation.skeletons.empty();
+                std::vector<sm::skel_ref> targets;
+                for(auto id:translation.skeletons) {
+                    auto skeleton=working.skeleton(id);
+                    if(!skeleton) { valid=false; break; }
+                    targets.push_back(*skeleton);
+                }
+                if(!valid) { report.invalid_actions.push_back(action->id); return; }
+                if (progress > 0.0) {
+                    const auto local=translation.path.evaluate_by_arc_length(progress);
+                    const auto world_delta=frame->vector_to_world(local);
+                    auto matrix=sm::translation_matrix(world_delta);
+                    for(auto skeleton:targets) skeleton->apply(matrix);
+                }
+            },
+            [&](const ik_translation& translation) {
+                auto effector=working.get<sm::node>(translation.effector);
+                auto frame=translation_reference_frame(translation.reference,translation.reference_bone,character_root_bone,base,working);
+                context.translation_reference_frame=frame;
+                if (effector) context.translation_anchor_world=effector->get().world_pos();
+                if(!effector || !frame) { report.invalid_actions.push_back(action->id); return; }
+                std::vector<sm::node_ref> pins; bool valid=true;
+                pins.reserve(translation.pins.size());
+                for(auto id:translation.pins) {
+                    auto pin=working.get<sm::node>(id);
+                    if(!pin || id==translation.effector || &pin->get().owner()!=&effector->get().owner()) { valid=false; break; }
+                    pins.push_back(*pin);
+                }
+                if(!valid) { report.invalid_actions.push_back(action->id); return; }
+                if (progress > 0.0) {
+                    const auto displacement=translation.path.evaluate_by_arc_length(progress);
+                    // IK translation composes with preceding actions: its path displaces
+                    // the effector from the pose handed to this action, not from an authored snapshot.
+                    const auto target=effector->get().world_pos()+frame->vector_to_world(displacement);
+                    sm::perform_fabrik(std::vector<std::tuple<sm::node_ref,sm::point>>{{*effector,target}},pins);
+                }
             }
-            auto& pivot = rotation->pivot == rotation_pivot::root ?
-                bone->get().parent_node() : bone->get().child_node();
-            auto& rotating = rotation->pivot == rotation_pivot::root ?
-                bone->get().child_node() : bone->get().parent_node();
-            context.rotation = rotation_evaluation_context{pivot.world_pos(), rotating.world_pos()};
-            if (progress > 0.0) bone->get().rotate_by(rotation->angle * eased, pivot,
-                rotation->propagation == rotation_propagation::bone_only);
-            continue;
-        }
-
-        if (const auto* rotation = std::get_if<ik_rotation>(&action->data)) {
-            auto effector = working.get<sm::node>(rotation->effector);
-            auto pivot = working.get<sm::node>(rotation->pivot_node);
-            if (!effector || !pivot || effector->get().id() == pivot->get().id() ||
-                &effector->get().owner() != &pivot->get().owner() || !std::isfinite(rotation->angle)) {
-                report.invalid_actions.push_back(action->id);
-                continue;
-            }
-            const auto origin = pivot->get().world_pos();
-            const auto effector_pos = effector->get().world_pos();
-            context.rotation = rotation_evaluation_context{origin, effector_pos};
-            const double radius = sm::distance(origin, effector_pos);
-            if (!(radius > 0.0) || !std::isfinite(radius)) {
-                report.invalid_actions.push_back(action->id);
-                continue;
-            }
-            if (progress > 0.0) {
-                const double theta = sm::angle_from_u_to_v(origin, effector_pos) + rotation->angle * eased;
-                const sm::point target = origin + radius * sm::point(std::cos(theta), std::sin(theta));
-                sm::perform_fabrik(*effector, target, *pivot);
-            }
-            continue;
-        }
-
-        if(const auto* translation=std::get_if<rigid_translation>(&action->data)) {
-            auto frame=translation_reference_frame(translation->reference,translation->reference_bone,character_root_bone,base,working);
-            context.translation_reference_frame=frame;
-            if(!frame) { report.invalid_actions.push_back(action->id); continue; }
-            bool valid=!translation->skeletons.empty();
-            std::vector<sm::skel_ref> targets;
-            for(auto id:translation->skeletons) {
-                auto skeleton=working.skeleton(id);
-                if(!skeleton) { valid=false; break; }
-                targets.push_back(*skeleton);
-            }
-            if(!valid) { report.invalid_actions.push_back(action->id); continue; }
-            if (progress > 0.0) {
-                const auto local=translation->path.evaluate_by_arc_length(progress);
-                const auto world_delta=frame->vector_to_world(local);
-                auto matrix=sm::translation_matrix(world_delta);
-                for(auto skeleton:targets) skeleton->apply(matrix);
-            }
-            continue;
-        }
-
-        if(const auto* translation=std::get_if<ik_translation>(&action->data)) {
-            auto effector=working.get<sm::node>(translation->effector);
-            auto frame=translation_reference_frame(translation->reference,translation->reference_bone,character_root_bone,base,working);
-            context.translation_reference_frame=frame;
-            if (effector) context.translation_anchor_world=effector->get().world_pos();
-            if(!effector || !frame) { report.invalid_actions.push_back(action->id); continue; }
-            std::vector<sm::node_ref> pins; bool valid=true;
-            pins.reserve(translation->pins.size());
-            for(auto id:translation->pins) {
-                auto pin=working.get<sm::node>(id);
-                if(!pin || id==translation->effector || &pin->get().owner()!=&effector->get().owner()) { valid=false; break; }
-                pins.push_back(*pin);
-            }
-            if(!valid) { report.invalid_actions.push_back(action->id); continue; }
-            if (progress > 0.0) {
-                const auto displacement=translation->path.evaluate_by_arc_length(progress);
-                // IK translation composes with preceding actions: its path displaces
-                // the effector from the pose handed to this action, not from an authored snapshot.
-                const auto target=effector->get().world_pos()+frame->vector_to_world(displacement);
-                sm::perform_fabrik(std::vector<std::tuple<sm::node_ref,sm::point>>{{*effector,target}},pins);
-            }
-            continue;
-        }
-
-        report.unsupported_actions.push_back(action->id);
+        }, action->data);
     }
     return report;
 }

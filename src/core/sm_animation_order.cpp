@@ -3,7 +3,6 @@
 #include "sm_visit.hpp"
 #include <algorithm>
 #include <stdexcept>
-#include <type_traits>
 #include <unordered_set>
 
 namespace {
@@ -21,13 +20,16 @@ scope ik_scope(sm::object_id effector, const std::vector<sm::object_id>& pins, c
     return result;
 }
 std::optional<sm::object_id> reference_bone(const sm::animation_action& action, sm::object_id root) {
-    return std::visit([&](const auto& data) -> std::optional<sm::object_id> {
-        using T = std::decay_t<decltype(data)>;
-        if constexpr (std::is_same_v<T, sm::rigid_translation> || std::is_same_v<T, sm::ik_translation>) {
+    auto translation_reference = [root](const auto& data) -> std::optional<sm::object_id> {
             if (data.reference == sm::translation_reference::character_root) return root;
             if (data.reference == sm::translation_reference::bone) return data.reference_bone;
-        }
         return {};
+    };
+    return std::visit(sm::overloaded{
+        [](const sm::rigid_rotation&) -> std::optional<sm::object_id> { return {}; },
+        [](const sm::ik_rotation&) -> std::optional<sm::object_id> { return {}; },
+        [&](const sm::rigid_translation& data) { return translation_reference(data); },
+        [&](const sm::ik_translation& data) { return translation_reference(data); }
     }, action.data);
 }
 bool overlaps(const sm::animation_layer& layer, const sm::animation_action& action) {
@@ -39,12 +41,12 @@ bool overlaps(const sm::animation_layer& layer, const sm::animation_action& acti
 
 std::vector<sm::object_id> sm::animation_action_write_scope(const animation_action& action, const topology& topology) {
     scope result;
-    std::visit([&](const auto& data) {
-        using T = std::decay_t<decltype(data)>;
-        if constexpr (std::is_same_v<T, rigid_translation>) {
+    std::visit(sm::overloaded{
+        [&](const rigid_translation& data) {
             for (auto id : data.skeletons) if (auto skeleton = topology.skeleton(id))
                 for (auto node : skeleton->get().nodes()) result.insert(node->id());
-        } else if constexpr (std::is_same_v<T, rigid_rotation>) {
+        },
+        [&](const rigid_rotation& data) {
             if (auto bone = topology.get<sm::bone>(data.bone)) {
                 const auto pivot = data.pivot == rotation_pivot::root
                     ? bone->get().parent_node().id() : bone->get().child_node().id();
@@ -52,9 +54,11 @@ std::vector<sm::object_id> sm::animation_action_write_scope(const animation_acti
                 // including in bone_only mode. Only the pivot is guaranteed fixed.
                 for (auto node : bone->get().owner().nodes()) if (node->id() != pivot) result.insert(node->id());
             }
-        } else if constexpr (std::is_same_v<T, ik_translation>) {
+        },
+        [&](const ik_translation& data) {
             result = ik_scope(data.effector, data.pins, topology);
-        } else if constexpr (std::is_same_v<T, ik_rotation>) {
+        },
+        [&](const ik_rotation& data) {
             result = ik_scope(data.effector, {data.pivot_node}, topology);
         }
     }, action.data);

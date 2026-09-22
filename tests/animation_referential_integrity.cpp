@@ -210,9 +210,10 @@ void validation_rejects_unresolved_action_reference() {
     f.add_rotation(sm::object_id::generate());
     bool rejected = false;
     try {
+        const auto& character = f.model.core().character(f.character)->get();
         f.model.core().animation_data(f.character).validate(
             f.model.core().topology(),
-            f.model.core().character(f.character)->get().character_root_bone());
+            character.rig().skeleton_ids(), character.character_root_bone());
     } catch (const std::invalid_argument&) {
         rejected = true;
     }

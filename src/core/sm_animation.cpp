@@ -1,4 +1,5 @@
 #include "sm_animation.hpp"
+#include "sm_animation_action_semantics.hpp"
 #include "sm_skeleton.hpp"
 #include <algorithm>
 #include <cmath>
@@ -9,7 +10,6 @@
 
 namespace {
 constexpr double epsilon = 1e-8;
-template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 sm::point lerp(sm::point a, sm::point b, double t) { return (1.0-t)*a + t*b; }
 sm::point cubic_at(const sm::cubic_bezier_path& c, double t) {
     const double u=1.0-t, b0=u*u*u, b1=3*u*u*t, b2=3*u*t*t, b3=t*t*t;
@@ -58,35 +58,14 @@ void validate_path(const sm::motion_path& path) {
 }
 
 std::vector<sm::animation_dependency> sm::animation_action_dependencies(const animation_action& action) {
-    return std::visit(overloaded{
-        [](const rigid_rotation& data) {
-            return std::vector<animation_dependency>{{animation_dependency_kind::bone, data.bone}};
-        },
-        [](const ik_rotation& data) {
-            return std::vector<animation_dependency>{
-                {animation_dependency_kind::node, data.effector},
-                {animation_dependency_kind::node, data.pivot_node}};
-        },
-        [](const rigid_translation& data) {
-            std::vector<animation_dependency> dependencies;
-            dependencies.reserve(data.skeletons.size() + 1);
-            for (const auto id : data.skeletons)
-                dependencies.push_back({animation_dependency_kind::skeleton, id});
-            if (data.reference == translation_reference::bone)
-                dependencies.push_back({animation_dependency_kind::bone, data.reference_bone});
-            return dependencies;
-        },
-        [](const ik_translation& data) {
-            std::vector<animation_dependency> dependencies;
-            dependencies.reserve(data.pins.size() + 2);
-            dependencies.push_back({animation_dependency_kind::node, data.effector});
-            for (const auto id : data.pins)
-                dependencies.push_back({animation_dependency_kind::node, id});
-            if (data.reference == translation_reference::bone)
-                dependencies.push_back({animation_dependency_kind::bone, data.reference_bone});
-            return dependencies;
-        }
+    std::vector<animation_dependency> dependencies;
+    std::visit([&](const auto& data) {
+        detail::for_each_action_persistent_reference(data,
+            [&](animation_dependency_kind kind, const object_id& id, bool active_dependency) {
+                if (active_dependency) dependencies.push_back({kind, id});
+            });
     }, action.data);
+    return dependencies;
 }
 
 void sm::motion_path::set_geometry(motion_path_geometry path) {
@@ -200,24 +179,26 @@ void sm::animation_assets::validate() const {
             std::vector<const animation_action*> sorted;
             for (const auto& action : layer.actions) {
                 add(action.id);
-                std::visit([](const auto& data) {
-                    using T = std::decay_t<decltype(data)>;
-                    if constexpr (std::is_same_v<T, rigid_rotation>) {
+                std::visit(sm::overloaded{
+                    [](const rigid_rotation& data) {
                         if (data.bone.is_nil() || !std::isfinite(data.angle) ||
                             (data.pivot != rotation_pivot::root && data.pivot != rotation_pivot::tip) ||
                             (data.propagation != rotation_propagation::hierarchy && data.propagation != rotation_propagation::bone_only))
                             throw std::invalid_argument("Invalid bone rotation action");
-                    } else if constexpr (std::is_same_v<T, ik_rotation>) {
+                    },
+                    [](const ik_rotation& data) {
                         if (data.effector.is_nil() || data.pivot_node.is_nil() || data.effector == data.pivot_node || !std::isfinite(data.angle))
                             throw std::invalid_argument("Invalid IK rotation action");
-                    } else if constexpr(std::is_same_v<T,rigid_translation>) {
+                    },
+                    [](const rigid_translation& data) {
                         if(!valid_reference(data.reference)) throw std::invalid_argument("Invalid translation reference");
                         if(data.skeletons.empty()) throw std::invalid_argument("Rigid translation has no target skeletons");
                         std::unordered_set<object_id> targets;
                         for(auto id:data.skeletons) if(id.is_nil() || !targets.insert(id).second) throw std::invalid_argument("Invalid rigid translation target");
                         if(data.reference==translation_reference::bone && data.reference_bone.is_nil()) throw std::invalid_argument("Missing translation reference bone");
                         validate_path(data.path);
-                    } else if constexpr(std::is_same_v<T,ik_translation>) {
+                    },
+                    [](const ik_translation& data) {
                         if(!valid_reference(data.reference)) throw std::invalid_argument("Invalid translation reference");
                         if(data.effector.is_nil()) throw std::invalid_argument("Invalid IK translation action");
                         std::unordered_set<object_id> pins;
@@ -277,14 +258,22 @@ void sm::animation_assets::validate(const topology& topology, std::span<const ob
                     "Animation action contains a reference outside the character rig");
             }
 
-            std::visit([&](const auto& data) {
-                using T = std::decay_t<decltype(data)>;
-                if constexpr (std::is_same_v<T, ik_rotation>) {
+            std::visit(sm::overloaded{
+                [](const rigid_rotation&) {
+                    // All rigid-rotation referential rules are covered by the
+                    // common persistent-reference validation above.
+                },
+                [&](const ik_rotation& data) {
                     const auto effector = topology.get<sm::node>(data.effector);
                     const auto pivot = topology.get<sm::node>(data.pivot_node);
                     if (!effector || !pivot || &effector->get().owner() != &pivot->get().owner())
                         throw std::invalid_argument("IK rotation nodes must belong to the same skeleton");
-                } else if constexpr (std::is_same_v<T, ik_translation>) {
+                },
+                [&](const rigid_translation& data) {
+                    root_frame_required |= data.reference == translation_reference::animation_root ||
+                        data.reference == translation_reference::character_root;
+                },
+                [&](const ik_translation& data) {
                     const auto effector = topology.get<sm::node>(data.effector);
                     if (!effector) throw std::invalid_argument("IK translation effector is unresolved");
                     for (const auto pin_id : data.pins) {
@@ -292,9 +281,6 @@ void sm::animation_assets::validate(const topology& topology, std::span<const ob
                         if (!pin || &pin->get().owner() != &effector->get().owner())
                             throw std::invalid_argument("IK translation pins must belong to the effector skeleton");
                     }
-                    root_frame_required |= data.reference == translation_reference::animation_root ||
-                        data.reference == translation_reference::character_root;
-                } else if constexpr (std::is_same_v<T, rigid_translation>) {
                     root_frame_required |= data.reference == translation_reference::animation_root ||
                         data.reference == translation_reference::character_root;
                 }
@@ -358,20 +344,8 @@ void sm::remap_animation_assets(animation_assets& assets,
 
     for (auto& animation : assets.animations) for (auto& layer : animation.layers)
         for (auto& action : layer.actions) std::visit([&](auto& data) {
-            using T = std::decay_t<decltype(data)>;
-            if constexpr (std::is_same_v<T, rigid_rotation>) {
-                remap(data.bone);
-            } else if constexpr (std::is_same_v<T, ik_rotation>) {
-                remap(data.effector);
-                remap(data.pivot_node);
-            } else if constexpr (std::is_same_v<T, rigid_translation>) {
-                for (auto& id : data.skeletons) remap(id);
-                remap(data.reference_bone);
-            } else if constexpr (std::is_same_v<T, ik_translation>) {
-                remap(data.effector);
-                for (auto& id : data.pins) remap(id);
-                remap(data.reference_bone);
-            }
+            detail::for_each_action_persistent_reference(data,
+                [&](animation_dependency_kind, object_id& id, bool) { remap(id); });
         }, action.data);
 }
 void sm::apply_pose(const pose& pose, const topology& topology) {

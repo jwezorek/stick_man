@@ -149,6 +149,56 @@ void animation_assets_remap_all_topology_references() {
         "IK translation references were not remapped");
 }
 
+void inactive_reference_bones_are_remapped_without_becoming_dependencies() {
+    const auto old_skeleton = sm::object_id::generate();
+    const auto new_skeleton = sm::object_id::generate();
+    const auto old_effector = sm::object_id::generate();
+    const auto new_effector = sm::object_id::generate();
+    const auto old_pin = sm::object_id::generate();
+    const auto new_pin = sm::object_id::generate();
+    const auto old_rigid_reference = sm::object_id::generate();
+    const auto new_rigid_reference = sm::object_id::generate();
+    const auto old_ik_reference = sm::object_id::generate();
+    const auto new_ik_reference = sm::object_id::generate();
+
+    sm::animation_action rigid_action;
+    rigid_action.data = sm::rigid_translation{{old_skeleton}, {},
+        sm::translation_reference::animation_root, old_rigid_reference};
+    require(sm::animation_action_dependencies(rigid_action) ==
+        std::vector<sm::animation_dependency>{{sm::animation_dependency_kind::skeleton, old_skeleton}},
+        "inactive rigid reference bone became an action dependency");
+
+    sm::animation_action ik_action;
+    ik_action.data = sm::ik_translation{old_effector, {old_pin}, {},
+        sm::translation_reference::character_root, old_ik_reference};
+    require(sm::animation_action_dependencies(ik_action) == std::vector<sm::animation_dependency>{
+        {sm::animation_dependency_kind::node, old_effector},
+        {sm::animation_dependency_kind::node, old_pin}},
+        "inactive IK reference bone became an action dependency");
+
+    sm::animation_assets assets;
+    sm::animation animation;
+    animation.layers.push_back({{rigid_action, ik_action}});
+    assets.animations.push_back(std::move(animation));
+    sm::remap_animation_assets(assets, {
+        {old_skeleton, new_skeleton},
+        {old_effector, new_effector},
+        {old_pin, new_pin},
+        {old_rigid_reference, new_rigid_reference},
+        {old_ik_reference, new_ik_reference}
+    });
+
+    const auto& actions = assets.animations.front().layers.front().actions;
+    const auto& rigid = std::get<sm::rigid_translation>(actions[0].data);
+    require(rigid.skeletons == std::vector<sm::object_id>{new_skeleton} &&
+        rigid.reference_bone == new_rigid_reference,
+        "rigid translation did not remap all stored persistent IDs");
+    const auto& ik = std::get<sm::ik_translation>(actions[1].data);
+    require(ik.effector == new_effector && ik.pins == std::vector<sm::object_id>{new_pin} &&
+        ik.reference_bone == new_ik_reference,
+        "IK translation did not remap all stored persistent IDs");
+}
+
 
 void ik_translation_composes_from_incoming_effector_position() {
     sm::topology topology;
@@ -560,6 +610,7 @@ int main() {
         motion_paths_are_persistent_displacement_paths();
         translation_actions_round_trip_with_bone_reference();
         animation_assets_remap_all_topology_references();
+        inactive_reference_bones_are_remapped_without_becoming_dependencies();
         ik_translation_composes_from_incoming_effector_position();
         root_reference_frames_use_the_character_root_bone();
         character_root_frame_follows_earlier_translation();

@@ -2,6 +2,8 @@
 #include "json.hpp"
 #include <stdexcept>
 #include <cmath>
+#include <string_view>
+#include <type_traits>
 
 namespace {
 using nlohmann::json;
@@ -65,41 +67,91 @@ json translation_common(const motion_path& path,translation_reference reference,
     if(reference==translation_reference::bone) j["reference_bone"]=reference_bone.to_string();
     return j;
 }
-json data_json(const action_data& data) {
-    return std::visit([](const auto& d) -> json {
-        using T = std::decay_t<decltype(d)>;
-        if constexpr (std::is_same_v<T, rigid_rotation>) return {{"type", "rotation"}, {"bone", d.bone.to_string()},
-            {"pivot", int(d.pivot)}, {"propagation", int(d.propagation)}, {"angle", d.angle}};
-        else if constexpr (std::is_same_v<T, ik_rotation>) return {{"type", "ik_rotation"},
-            {"effector", d.effector.to_string()}, {"pivot_node", d.pivot_node.to_string()}, {"angle", d.angle}};
-        else if constexpr (std::is_same_v<T, rigid_translation>) {
-            auto j=translation_common(d.path,d.reference,d.reference_bone); j["type"]="translation"; j["skeletons"]=ids(d.skeletons); return j;
-        } else {
-            auto j=translation_common(d.path,d.reference,d.reference_bone); j["type"]="ik_translation";
-            j["effector"]=d.effector.to_string(); j["pins"]=ids(d.pins); return j;
-        }
-    }, data);
-}
-action_data read_data(const json& j) {
-    auto type = j.at("type").get<std::string>();
-    if (type == "rotation") {
+
+// Persistence is intentionally keyed from the action_data alternatives rather
+// than from a separate hand-maintained type switch. The recursive reader below
+// instantiates this codec for every variant alternative, so adding an action
+// without defining both its read and write behavior fails to compile.
+template<class Action>
+struct action_json_codec;
+
+template<>
+struct action_json_codec<rigid_rotation> {
+    static constexpr std::string_view tag = "rotation";
+    static json write(const rigid_rotation& d) {
+        return {{"type", std::string(tag)}, {"bone", d.bone.to_string()}, {"pivot", int(d.pivot)},
+            {"propagation", int(d.propagation)}, {"angle", d.angle}};
+    }
+    static rigid_rotation read(const json& j) {
         const auto propagation = j.contains("propagation") ?
             enumeration<rotation_propagation>(j.at("propagation"), 1) : rotation_propagation::hierarchy;
-        return rigid_rotation{id(j.at("bone")), enumeration<rotation_pivot>(j.at("pivot"), 1), j.at("angle").get<double>(), propagation};
+        return {id(j.at("bone")), enumeration<rotation_pivot>(j.at("pivot"), 1),
+            j.at("angle").get<double>(), propagation};
     }
-    if (type == "ik_rotation") return ik_rotation{id(j.at("effector")), id(j.at("pivot_node")), j.at("angle").get<double>()};
-    if (type == "translation") {
-        if(j.contains("offset")) return rigid_translation{ids(j.at("skeletons")),motion_path(line_path{{0,0},pt(j.at("offset"))}),translation_reference::animation_root,{}};
+};
+
+template<>
+struct action_json_codec<ik_rotation> {
+    static constexpr std::string_view tag = "ik_rotation";
+    static json write(const ik_rotation& d) {
+        return {{"type", std::string(tag)}, {"effector", d.effector.to_string()},
+            {"pivot_node", d.pivot_node.to_string()}, {"angle", d.angle}};
+    }
+    static ik_rotation read(const json& j) {
+        return {id(j.at("effector")), id(j.at("pivot_node")), j.at("angle").get<double>()};
+    }
+};
+
+template<>
+struct action_json_codec<rigid_translation> {
+    static constexpr std::string_view tag = "translation";
+    static json write(const rigid_translation& d) {
+        auto j=translation_common(d.path,d.reference,d.reference_bone);
+        j["type"]=std::string(tag); j["skeletons"]=ids(d.skeletons); return j;
+    }
+    static rigid_translation read(const json& j) {
+        if(j.contains("offset")) return {ids(j.at("skeletons")),
+            motion_path(line_path{{0,0},pt(j.at("offset"))}),translation_reference::animation_root,{}};
         auto reference=read_reference(j.at("reference"));
         object_id bone{}; if(reference==translation_reference::bone) bone=id(j.at("reference_bone"));
-        return rigid_translation{ids(j.at("skeletons")),read_path(j.at("path")),reference,bone};
+        return {ids(j.at("skeletons")),read_path(j.at("path")),reference,bone};
     }
-    if (type == "ik_translation") {
+};
+
+template<>
+struct action_json_codec<ik_translation> {
+    static constexpr std::string_view tag = "ik_translation";
+    static json write(const ik_translation& d) {
+        auto j=translation_common(d.path,d.reference,d.reference_bone);
+        j["type"]=std::string(tag); j["effector"]=d.effector.to_string(); j["pins"]=ids(d.pins); return j;
+    }
+    static ik_translation read(const json& j) {
         auto reference=read_reference(j.at("reference"));
         object_id bone{}; if(reference==translation_reference::bone) bone=id(j.at("reference_bone"));
-        return ik_translation{id(j.at("effector")),ids(j.at("pins")),read_path(j.at("path")),reference,bone};
+        return {id(j.at("effector")),ids(j.at("pins")),read_path(j.at("path")),reference,bone};
     }
-    throw std::invalid_argument("Unknown action type");
+};
+
+json data_json(const action_data& data) {
+    return std::visit([](const auto& d) -> json {
+        return action_json_codec<std::decay_t<decltype(d)>>::write(d);
+    }, data);
+}
+
+template<std::size_t I = 0>
+action_data read_data_for_type(std::string_view type, const json& j) {
+    if constexpr (I == std::variant_size_v<action_data>) {
+        throw std::invalid_argument("Unknown action type");
+    } else {
+        using action_type = std::variant_alternative_t<I, action_data>;
+        if (type == action_json_codec<action_type>::tag)
+            return action_json_codec<action_type>::read(j);
+        return read_data_for_type<I + 1>(type, j);
+    }
+}
+
+action_data read_data(const json& j) {
+    return read_data_for_type(j.at("type").get<std::string>(), j);
 }
 animation_time time(const json& j) {
     if (!j.is_number_integer() || (j.is_number_unsigned() && j.get<std::uint64_t>() > INT64_MAX))

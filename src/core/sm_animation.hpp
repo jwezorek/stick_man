@@ -107,9 +107,9 @@ namespace sm {
         sm::easing easing = easing::linear;
         action_data data = rigid_rotation{};
     };
-    // The single authoritative description of persistent project-object references
-    // carried by an action. This visitor is intentionally exhaustive: adding a new
-    // action_data alternative must also define its dependencies here.
+    // Active project-object dependencies carried by an action. These are derived
+    // from the same exhaustive persistent-reference semantics used by ID remapping,
+    // so cleanup/integrity checks and character copying cannot drift apart.
     std::vector<animation_dependency> animation_action_dependencies(const animation_action& action);
     struct animation_layer { std::vector<animation_action> actions; };
     struct animation {
