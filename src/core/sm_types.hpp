@@ -112,6 +112,7 @@ namespace sm {
         different_characters,
         ambiguous_membership,
         invalid_membership,
+        invalid_animation,
 		cancelled,
 		unknown_error
 	};

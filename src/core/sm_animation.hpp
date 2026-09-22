@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <utility>
 #include <optional>
+#include <span>
 
 namespace sm {
     // Authored times are integer milliseconds; layers are ordered bottom to top.
@@ -130,7 +131,10 @@ namespace sm {
         const pose* find_pose(object_id id) const;
         const animation* find_animation(object_id id) const;
         void validate() const;
-        void validate(const topology& topology, object_id character_root_bone) const;
+        // Validate assets in the context of the owning character. Persistent topology
+        // references are legal only when they resolve inside that character's rig.
+        void validate(const topology& topology, std::span<const object_id> rig_skeletons,
+            object_id character_root_bone) const;
     };
     pose capture_pose(const topology& topology, const std::vector<object_id>& skeletons, std::string name);
     void initialize_animation_assets(animation_assets& assets, const topology& topology, const std::vector<object_id>& skeletons);

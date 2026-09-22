@@ -98,3 +98,7 @@ set_target_properties(rotation_editor PROPERTIES AUTORCC ON)
 add_test(NAME rotation_editor COMMAND "${CMAKE_COMMAND}" -E env
     "QT_QPA_PLATFORM=offscreen" "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
     $<TARGET_FILE:rotation_editor>)
+
+add_executable(animation_character_integrity animation_character_integrity.cpp)
+target_link_libraries(animation_character_integrity PRIVATE stick_man_core)
+add_test(NAME animation_character_integrity COMMAND $<TARGET_FILE:animation_character_integrity>)

@@ -523,7 +523,8 @@ void circular_reference_dependency_is_rejected() {
 
     sm::animation_assets assets;assets.default_pose=base.id;assets.poses.push_back(base);assets.animations.push_back(animation);
     rejected=false;
-    try{assets.validate(topology,a_bone->get().id());}
+    const std::vector<sm::object_id> rig{a_skel,b_skel};
+    try{assets.validate(topology,rig,a_bone->get().id());}
     catch(const std::invalid_argument&){rejected=true;}
     require(rejected,"animation asset validation did not reject a circular dependency");
 }

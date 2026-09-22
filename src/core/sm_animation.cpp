@@ -235,27 +235,76 @@ void sm::animation_assets::validate() const {
         }
     }
 }
-void sm::animation_assets::validate(const topology& topology, object_id character_root_bone) const {
+void sm::animation_assets::validate(const topology& topology, std::span<const object_id> rig_skeletons,
+        object_id character_root_bone) const {
     validate();
+
+    const std::unordered_set<object_id> rig(rig_skeletons.begin(), rig_skeletons.end());
+    for (const auto id : rig_skeletons)
+        if (!topology.skeleton(id)) throw std::invalid_argument("Character rig contains a missing skeleton");
+
+    auto node_in_rig = [&](object_id id) {
+        auto node = topology.get<sm::node>(id);
+        return node && rig.contains(node->get().owner().id());
+    };
+    auto bone_in_rig = [&](object_id id) {
+        auto bone = topology.get<sm::bone>(id);
+        return bone && rig.contains(bone->get().owner().id());
+    };
+    auto skeleton_in_rig = [&](object_id id) {
+        return rig.contains(id) && topology.skeleton(id).has_value();
+    };
+
+    if (!character_root_bone.is_nil() && !bone_in_rig(character_root_bone))
+        throw std::invalid_argument("Character root bone does not belong to the character rig");
+
+    for (const auto& p : poses) for (const auto& [id, pt] : p.node_positions)
+        if (!node_in_rig(id)) throw std::invalid_argument("Pose contains a node outside the character rig");
+
+    bool root_frame_required = false;
     for (const auto& animation : animations) {
         for (const auto& layer : animation.layers) for (const auto& action : layer.actions) {
             for (const auto& dependency : animation_action_dependencies(action)) {
                 const bool resolved = [&] {
                     switch (dependency.kind) {
-                    case animation_dependency_kind::node:
-                        return topology.get<sm::node>(dependency.id).has_value();
-                    case animation_dependency_kind::bone:
-                        return topology.get<sm::bone>(dependency.id).has_value();
-                    case animation_dependency_kind::skeleton:
-                        return topology.skeleton(dependency.id).has_value();
+                    case animation_dependency_kind::node: return node_in_rig(dependency.id);
+                    case animation_dependency_kind::bone: return bone_in_rig(dependency.id);
+                    case animation_dependency_kind::skeleton: return skeleton_in_rig(dependency.id);
                     }
                     return false;
                 }();
-                if (!resolved) throw std::invalid_argument("Animation action contains an unresolved project reference");
+                if (!resolved) throw std::invalid_argument(
+                    "Animation action contains a reference outside the character rig");
             }
+
+            std::visit([&](const auto& data) {
+                using T = std::decay_t<decltype(data)>;
+                if constexpr (std::is_same_v<T, ik_rotation>) {
+                    const auto effector = topology.get<sm::node>(data.effector);
+                    const auto pivot = topology.get<sm::node>(data.pivot_node);
+                    if (!effector || !pivot || &effector->get().owner() != &pivot->get().owner())
+                        throw std::invalid_argument("IK rotation nodes must belong to the same skeleton");
+                } else if constexpr (std::is_same_v<T, ik_translation>) {
+                    const auto effector = topology.get<sm::node>(data.effector);
+                    if (!effector) throw std::invalid_argument("IK translation effector is unresolved");
+                    for (const auto pin_id : data.pins) {
+                        const auto pin = topology.get<sm::node>(pin_id);
+                        if (!pin || &pin->get().owner() != &effector->get().owner())
+                            throw std::invalid_argument("IK translation pins must belong to the effector skeleton");
+                    }
+                    root_frame_required |= data.reference == translation_reference::animation_root ||
+                        data.reference == translation_reference::character_root;
+                } else if constexpr (std::is_same_v<T, rigid_translation>) {
+                    root_frame_required |= data.reference == translation_reference::animation_root ||
+                        data.reference == translation_reference::character_root;
+                }
+            }, action.data);
         }
         validate_animation_order(animation, character_root_bone, topology);
     }
+
+    if (root_frame_required && character_root_bone.is_nil())
+        throw std::invalid_argument("Translation action requires a usable character root bone");
 }
 sm::pose sm::capture_pose(const topology& topology, const std::vector<object_id>& skeletons, std::string name) {
     pose p; p.name = std::move(name);
@@ -284,7 +333,7 @@ void sm::reconcile_animation_poses(animation_assets& assets, const topology& top
             for (const auto& [id, pt] : members) p.node_positions.try_emplace(id, pt);
         } else {
             std::erase_if(p.node_positions, [&](const auto& entry) {
-                return !topology.get<sm::node>(entry.first).has_value();
+                return !members.contains(entry.first);
             });
         }
     }

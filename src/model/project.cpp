@@ -419,7 +419,8 @@ void mdl::project::edit_animation_data(sm::object_id id, const std::function<voi
     edit(after);
     const auto character = core_.character(id);
     if (!character) throw std::invalid_argument("Missing character");
-    after.validate(core_.topology(), character->get().character_root_bone());
+    after.validate(core_.topology(), character->get().rig().skeleton_ids(),
+        character->get().character_root_bone());
     execute_command({[id, after](project& p) { p.core_.animation_data(id) = after; },
         [id, before](project& p) { p.core_.animation_data(id) = before; }, {}, true});
 }

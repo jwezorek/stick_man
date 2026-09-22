@@ -497,7 +497,8 @@ void character_test(fixture& f, const std::string& mode) {
         const auto& copied_assets = copied_character.animation_data();
         require(copied_assets.poses.size() == model.core().animation_data(id).poses.size() &&
             copied_assets.animations.size() == 1, "character copy lost poses or animations");
-        copied_assets.validate(model.topology(), copied_character.character_root_bone());
+        copied_assets.validate(model.topology(), copied_character.rig().skeleton_ids(),
+            copied_character.character_root_bone());
         const auto& copied_action = copied_assets.animations.front().layers.front().actions.front();
         const auto copied_bone = std::get<sm::rigid_rotation>(copied_action.data).bone;
         require(copied_bone != source_bone, "character copy retained source animation bone reference");

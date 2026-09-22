@@ -477,6 +477,35 @@ void pose_membership_reconciliation_is_undoable() {
         "adoption redo did not restore synchronized Default pose");
 }
 
+
+void character_root_change_is_undoable_and_keeps_integrity() {
+    chain_fixture f;
+    f.add_rigid_translation(f.skeleton);
+    auto& action = f.animation().layers.front().actions.front();
+    std::get<sm::rigid_translation>(action.data).reference = sm::translation_reference::character_root;
+    require(f.model.core().validate_integrity() == sm::result::success,
+        "root-change undo fixture begins invalid");
+
+    const auto before = f.model.core().character(f.character)->get().character_root_bone();
+    require(before == f.root_bone, "unexpected initial character root");
+    require(f.model.set_character_root_bone(f.character, f.child_bone) == sm::result::success,
+        "valid character-root edit failed");
+    require(f.model.core().validate_integrity() == sm::result::success,
+        "accepted root edit left project invalid");
+
+    f.model.undo();
+    require(f.model.core().character(f.character)->get().character_root_bone() == before,
+        "root edit undo did not restore the original root");
+    require(f.model.core().validate_integrity() == sm::result::success,
+        "root edit undo restored an invalid project");
+
+    require(f.model.redo() == sm::result::success, "root edit redo failed");
+    require(f.model.core().character(f.character)->get().character_root_bone() == f.child_bone,
+        "root edit redo did not restore the accepted root");
+    require(f.model.core().validate_integrity() == sm::result::success,
+        "root edit redo restored an invalid project");
+}
+
 void deleted_nodes_are_removed_from_named_poses() {
     chain_fixture f;
     auto& assets = f.model.core().animation_data(f.character);
@@ -521,6 +550,7 @@ int main() {
         merge_removes_old_skeleton_target_and_undo_restores();
         cancellation_is_atomic();
         pose_membership_reconciliation_is_undoable();
+        character_root_change_is_undoable_and_keeps_integrity();
         deleted_nodes_are_removed_from_named_poses();
     } catch (const std::exception& e) {
         std::cerr << e.what() << '\n';

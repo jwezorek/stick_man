@@ -135,6 +135,7 @@ namespace sm {
             const std::unordered_set<object_id>& regenerate_ids = {}) const;
         bool has_consistent_membership() const;
         bool has_valid_animation_references() const;
+        result validate_integrity() const noexcept;
 
         expected_const_character create_character(std::span<const const_skel_ref> skeletons);
         result adopt_skeletons(const object_id& character_id, std::span<const const_skel_ref> skeletons);
