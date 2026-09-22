@@ -92,7 +92,10 @@ ui::pane::animation_timeline::animation_timeline(mdl::project& project, canvas::
         else { insertion_=row; timeline_->set_row_head(insertion_); }
     });
     timer_.setInterval(16); connect(&timer_,&QTimer::timeout,this,&animation_timeline::tick);
-    connect(&project_,&mdl::project::project_changed,this,[this]{ if(working_) {pause();cancel_gesture();refresh();} });
+    connect(&project_,&mdl::project::project_changed,this,[this]{
+        evaluator_.invalidate();
+        if(working_) {pause();cancel_gesture();refresh();}
+    });
     connect(&project_,&mdl::project::refresh_undo_redo_state,this,[this](bool redo,bool undo){undo_->setEnabled(undo);redo_->setEnabled(redo);});
     auto shortcut = [&](QKeySequence key, auto callback) {
         auto* s = new QShortcut(key,this); s->setContext(Qt::WidgetWithChildrenShortcut); connect(s,&QShortcut::activated,this,callback);
@@ -121,6 +124,7 @@ ui::tool::select_tool_panel& ui::pane::animation_timeline::animation_tool_panel(
     return *static_cast<tool::select_tool_panel*>(animation_tool.settings_widget());
 }
 void ui::pane::animation_timeline::begin(sm::object_id character,sm::object_id animation,sm::topology& working) {
+    evaluator_.invalidate();
     character_=character;animation_=animation;working_=&working;selected_={};time_=0;insertion_={};
     action_properties_->set_topology(&working);
     std::vector<std::pair<sm::object_id,std::string>> reference_bones;
@@ -168,6 +172,7 @@ void ui::pane::animation_timeline::end() {
     panel.set_animation_mode(false);
     action_properties_->set_action(nullptr);
     action_properties_->set_topology(nullptr);
+    evaluator_.invalidate();
     working_=nullptr; selected_={}; last_evaluation_.reset(); hide();
 }
 void ui::pane::animation_timeline::message(QString text) {status_->setText(std::move(text));}
@@ -179,7 +184,7 @@ void ui::pane::animation_timeline::evaluate(const sm::animation& a,sm::animation
     const auto& data=project_.core().animation_data(character_);
     last_evaluation_.reset();
     const auto* base=data.find_pose(a.base_pose); if(!base || !working_) return;
-    last_evaluation_=sm::evaluate_animation(a,*base,character_root_bone(),*working_,time);
+    last_evaluation_=evaluator_.evaluate(a,*base,character_root_bone(),*working_,time);
     if(!last_evaluation_->invalid_actions.empty()) message("Some actions have missing or invalid targets and are skipped.");
     else if(!last_evaluation_->unsupported_actions.empty()) message("Some action types are not previewed in this phase.");
     canvases_.active_canvas().sync_to_model();

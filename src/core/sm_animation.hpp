@@ -10,6 +10,7 @@
 #include <utility>
 #include <optional>
 #include <span>
+#include <memory>
 
 namespace sm {
     // Authored times are integer milliseconds; layers are ordered bottom to top.
@@ -183,6 +184,40 @@ namespace sm {
     animation place_animation_action(const animation& requested, object_id action,
         object_id character_root_bone, const topology& topology);
 
+    // IK continuation spacing is part of animation evaluation semantics.  It is
+    // intentionally geometry-relative and independent of authored duration or
+    // display frame rate.  Keep this policy centralized so it can be tuned without
+    // conflating it with checkpoint density.
+    inline constexpr double ik_continuation_step_bone_fraction = 0.05;
+
+    // Checkpoint density is evaluator-local performance policy only.  Changing it
+    // must not change the evaluated pose.
+    struct animation_evaluator_cache_policy {
+        std::size_t continuation_steps_per_checkpoint = 16;
+    };
+
+    // Owns derived IK continuation checkpoints.  Authored animation/project data
+    // remains free of evaluation state and serialization concerns.  invalidate() is
+    // deliberately broad: editor/runtime owners should call it whenever model or
+    // dynamic animation inputs change.
+    class animation_evaluator {
+        struct implementation;
+        std::unique_ptr<implementation> implementation_;
+    public:
+        explicit animation_evaluator(animation_evaluator_cache_policy policy = {});
+        ~animation_evaluator();
+        animation_evaluator(animation_evaluator&&) noexcept;
+        animation_evaluator& operator=(animation_evaluator&&) noexcept;
+        animation_evaluator(const animation_evaluator&) = delete;
+        animation_evaluator& operator=(const animation_evaluator&) = delete;
+
+        void invalidate();
+        animation_evaluation evaluate(const animation& animation, const pose& base,
+            object_id character_root_bone, topology& working, animation_time time);
+    };
+
+    // Stateless compatibility entry point.  It has the same deterministic
+    // continuation semantics but does not retain checkpoints between calls.
     // Evaluation always resets detached working geometry to the base pose; it never
     // integrates from the previously displayed frame.
     animation_evaluation evaluate_animation(const animation& animation, const pose& base,

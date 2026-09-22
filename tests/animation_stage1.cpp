@@ -1,6 +1,7 @@
 #include "core/sm_animation.hpp"
 #include "core/sm_skeleton.hpp"
 #include "core/sm_bone.hpp"
+#include "core/sm_fabrik.hpp"
 #include "json.hpp"
 
 #include <cmath>
@@ -603,6 +604,225 @@ void translation_context_is_the_frame_used_for_application() {
         "recorded translation context differs from the frame used to apply the action");
 }
 
+
+struct ik_continuation_fixture {
+    sm::topology topology;
+    sm::object_id skeleton_id;
+    sm::object_id root_bone_id;
+    sm::object_id middle_bone_id;
+    sm::object_id root_node_id;
+    sm::object_id effector_id;
+    sm::pose base;
+
+    ik_continuation_fixture() {
+        auto& n0=topology.create_skeleton(sm::point{0.0,0.0});
+        auto& n1=topology.create_skeleton(sm::point{8.0,6.0});
+        auto& n2=topology.create_skeleton(sm::point{16.0,0.0});
+        auto& n3=topology.create_skeleton(sm::point{24.0,6.0});
+        auto& j0=n0.root_node(); auto& j1=n1.root_node();
+        auto& j2=n2.root_node(); auto& j3=n3.root_node();
+        auto b0=topology.create_bone("root",j0,j1);
+        auto b1=topology.create_bone("middle",j1,j2);
+        auto b2=topology.create_bone("tip",j2,j3);
+        require(b0.has_value()&&b1.has_value()&&b2.has_value(),"failed to create IK continuation fixture");
+        skeleton_id=b0->get().owner().id();
+        root_bone_id=b0->get().id();
+        middle_bone_id=b1->get().id();
+        root_node_id=j0.id();
+        effector_id=j3.id();
+        base=sm::capture_pose(topology,{skeleton_id},"base");
+    }
+};
+
+std::vector<sm::point> continuation_positions(const ik_continuation_fixture& f) {
+    std::vector<std::pair<sm::object_id,sm::point>> ordered;
+    auto skeleton=f.topology.skeleton(f.skeleton_id);
+    require(skeleton.has_value(),"missing IK continuation skeleton");
+    for(auto node:skeleton->get().nodes()) ordered.push_back({node->id(),node->world_pos()});
+    std::ranges::sort(ordered,{},&std::pair<sm::object_id,sm::point>::first);
+    std::vector<sm::point> result; result.reserve(ordered.size());
+    for(const auto& [id,pt]:ordered) result.push_back(pt);
+    return result;
+}
+
+void require_same_pose(const std::vector<sm::point>& a,const std::vector<sm::point>& b,const char* message) {
+    require(a.size()==b.size(),message);
+    for(std::size_t i=0;i<a.size();++i)
+        if(sm::distance(a[i],b[i])>1e-7) throw std::runtime_error(message);
+}
+
+sm::motion_path curved_ik_path() {
+    return sm::motion_path(sm::cubic_bezier_path{
+        {0.0,0.0},{4.0,12.0},{-8.0,16.0},{-10.0,6.0}});
+}
+
+sm::animation make_ik_translation_animation(const ik_continuation_fixture& f) {
+    sm::animation_action action;
+    action.start=0; action.duration=1000;
+    sm::ik_translation translation;
+    translation.effector=f.effector_id;
+    translation.pins={f.root_node_id};
+    translation.path=curved_ik_path();
+    translation.reference=sm::translation_reference::bone;
+    translation.reference_bone=f.root_bone_id;
+    action.data=translation;
+    sm::animation animation; animation.base_pose=f.base.id; animation.layers.push_back({{action}});
+    return animation;
+}
+
+void manual_translation_continuation(ik_continuation_fixture& f,const sm::ik_translation& translation,double progress) {
+    sm::apply_pose(f.base,f.topology);
+    auto effector=f.topology.get<sm::node>(translation.effector);
+    auto pin=f.topology.get<sm::node>(translation.pins.front());
+    require(effector.has_value()&&pin.has_value(),"manual continuation fixture lost IK nodes");
+    const auto frame=sm::translation_reference_frame(translation.reference,translation.reference_bone,
+        f.root_bone_id,f.base,f.topology);
+    require(frame.has_value(),"manual continuation could not resolve reference frame");
+    const auto anchor=effector->get().world_pos();
+    std::vector<double> lengths;
+    for(auto bone:effector->get().owner().bones()) lengths.push_back(bone->scaled_length());
+    std::ranges::sort(lengths);
+    const double median=lengths[lengths.size()/2];
+    const double step=median*sm::ik_continuation_step_bone_fraction;
+    const double requested=translation.path.length()*progress;
+    std::size_t full=static_cast<std::size_t>(std::floor(requested/step));
+    const double ratio=requested/step;
+    const bool boundary=std::abs(ratio-std::round(ratio))<=1e-12*std::max(1.0,std::abs(ratio));
+    if(boundary) full=static_cast<std::size_t>(std::round(ratio));
+    auto solve=[&](double distance) {
+        const double fraction=translation.path.length()>0.0 ? distance/translation.path.length() : 0.0;
+        const auto target=anchor+frame->vector_to_world(translation.path.evaluate_by_arc_length(fraction));
+        sm::perform_fabrik(std::vector<std::tuple<sm::node_ref,sm::point>>{{*effector,target}},std::vector<sm::node_ref>{*pin});
+    };
+    for(std::size_t i=1;i<=full;++i) solve(step*double(i));
+    if(!boundary) solve(requested);
+}
+
+void ik_translation_matches_canonical_continuation() {
+    ik_continuation_fixture f;
+    const auto animation=make_ik_translation_animation(f);
+    const auto& translation=std::get<sm::ik_translation>(animation.layers.front().actions.front().data);
+    sm::animation_evaluator evaluator;
+    evaluator.evaluate(animation,f.base,f.root_bone_id,f.topology,800);
+    const auto evaluated=continuation_positions(f);
+    manual_translation_continuation(f,translation,0.8);
+    require_same_pose(evaluated,continuation_positions(f),
+        "IK translation did not follow the canonical target-distance continuation sequence");
+}
+
+void ik_scrubbing_is_history_independent_with_checkpoints() {
+    ik_continuation_fixture f;
+    const auto animation=make_ik_translation_animation(f);
+    sm::animation_evaluator evaluator;
+    evaluator.evaluate(animation,f.base,f.root_bone_id,f.topology,200);
+    evaluator.evaluate(animation,f.base,f.root_bone_id,f.topology,800);
+    const auto from_02=continuation_positions(f);
+    evaluator.evaluate(animation,f.base,f.root_bone_id,f.topology,700);
+    evaluator.evaluate(animation,f.base,f.root_bone_id,f.topology,800);
+    require_same_pose(from_02,continuation_positions(f),"0.7 -> 0.8 changed the IK result");
+    evaluator.evaluate(animation,f.base,f.root_bone_id,f.topology,1000);
+    evaluator.evaluate(animation,f.base,f.root_bone_id,f.topology,800);
+    require_same_pose(from_02,continuation_positions(f),"1.0 -> 0.8 changed the IK result");
+    sm::animation_evaluator fresh;
+    fresh.evaluate(animation,f.base,f.root_bone_id,f.topology,800);
+    require_same_pose(from_02,continuation_positions(f),"direct 0.8 evaluation differed from scrubbed evaluation");
+}
+
+void checkpoint_density_does_not_change_ik_result() {
+    ik_continuation_fixture f;
+    const auto animation=make_ik_translation_animation(f);
+    sm::animation_evaluator dense({1});
+    dense.evaluate(animation,f.base,f.root_bone_id,f.topology,1000);
+    dense.evaluate(animation,f.base,f.root_bone_id,f.topology,830);
+    const auto dense_pose=continuation_positions(f);
+    sm::animation_evaluator sparse({31});
+    sparse.evaluate(animation,f.base,f.root_bone_id,f.topology,1000);
+    sparse.evaluate(animation,f.base,f.root_bone_id,f.topology,830);
+    require_same_pose(dense_pose,continuation_positions(f),"checkpoint interval changed the IK result");
+}
+
+void ik_cache_detects_changed_action_inputs() {
+    ik_continuation_fixture f;
+    auto animation=make_ik_translation_animation(f);
+    sm::animation_evaluator evaluator;
+    evaluator.evaluate(animation,f.base,f.root_bone_id,f.topology,1000);
+    auto& translation=std::get<sm::ik_translation>(animation.layers.front().actions.front().data);
+    translation.path=sm::motion_path(sm::cubic_bezier_path{{0.0,0.0},{8.0,-4.0},{4.0,-14.0},{-6.0,-8.0}});
+    evaluator.evaluate(animation,f.base,f.root_bone_id,f.topology,800);
+    const auto reused=continuation_positions(f);
+    sm::animation_evaluator fresh;
+    fresh.evaluate(animation,f.base,f.root_bone_id,f.topology,800);
+    require_same_pose(reused,continuation_positions(f),"editing an IK path reused stale checkpoints");
+}
+
+
+void ik_cache_detects_changed_skeleton_constraints() {
+    ik_continuation_fixture f;
+    const auto animation=make_ik_translation_animation(f);
+    sm::animation_evaluator evaluator;
+    evaluator.evaluate(animation,f.base,f.root_bone_id,f.topology,1000);
+    auto middle=f.topology.get<sm::bone>(f.middle_bone_id);
+    require(middle.has_value(),"missing middle bone for IK cache invalidation test");
+    require(middle->get().set_rotation_constraint(-0.25,0.5,false)==sm::result::success,
+        "failed to change IK rotation constraint");
+    evaluator.evaluate(animation,f.base,f.root_bone_id,f.topology,800);
+    const auto reused=continuation_positions(f);
+    sm::animation_evaluator fresh;
+    fresh.evaluate(animation,f.base,f.root_bone_id,f.topology,800);
+    require_same_pose(reused,continuation_positions(f),"editing an IK constraint reused stale checkpoints");
+}
+
+void ik_translation_keeps_incoming_reference_frame_fixed() {
+    ik_continuation_fixture f;
+    const auto animation=make_ik_translation_animation(f);
+    const auto action_id=animation.layers.front().actions.front().id;
+    const auto& translation=std::get<sm::ik_translation>(animation.layers.front().actions.front().data);
+    sm::animation_evaluator evaluator;
+    const auto report=evaluator.evaluate(animation,f.base,f.root_bone_id,f.topology,900);
+    const auto& context=report.contexts.at(action_id);
+    require(context.translation_reference_frame.has_value()&&context.translation_anchor_world.has_value(),
+        "IK translation did not record its incoming frame and anchor");
+    const auto expected=*context.translation_anchor_world+
+        context.translation_reference_frame->vector_to_world(translation.path.evaluate_by_arc_length(0.9));
+    const auto actual=f.topology.get<sm::node>(f.effector_id)->get().world_pos();
+    require(sm::distance(expected,actual)<0.01,
+        "IK continuation recomputed a reference frame moved by its own FABRIK solves");
+}
+
+void ik_rotation_matches_canonical_continuation() {
+    ik_continuation_fixture f;
+    sm::animation_action action; action.start=0; action.duration=1000;
+    action.data=sm::ik_rotation{f.effector_id,f.root_node_id,std::acos(-1.0)*0.75};
+    sm::animation animation; animation.base_pose=f.base.id; animation.layers.push_back({{action}});
+    sm::animation_evaluator evaluator;
+    evaluator.evaluate(animation,f.base,f.root_bone_id,f.topology,800);
+    const auto evaluated=continuation_positions(f);
+
+    sm::apply_pose(f.base,f.topology);
+    auto effector=f.topology.get<sm::node>(f.effector_id);
+    auto pivot=f.topology.get<sm::node>(f.root_node_id);
+    const auto origin=pivot->get().world_pos();
+    const auto start=effector->get().world_pos();
+    const double radius=sm::distance(origin,start);
+    const double initial_theta=sm::angle_from_u_to_v(origin,start);
+    std::vector<double> lengths;
+    for(auto bone:effector->get().owner().bones()) lengths.push_back(bone->scaled_length());
+    std::ranges::sort(lengths);
+    const double step=lengths[lengths.size()/2]*sm::ik_continuation_step_bone_fraction;
+    const double requested=radius*std::abs(std::get<sm::ik_rotation>(action.data).angle)*0.8;
+    const double ratio=requested/step;
+    bool boundary=std::abs(ratio-std::round(ratio))<=1e-12*std::max(1.0,std::abs(ratio));
+    std::size_t full=static_cast<std::size_t>(boundary?std::round(ratio):std::floor(ratio));
+    auto solve=[&](double distance) {
+        const double theta=initial_theta+distance/radius;
+        sm::perform_fabrik(*effector,origin+radius*sm::point(std::cos(theta),std::sin(theta)),*pivot);
+    };
+    for(std::size_t i=1;i<=full;++i) solve(step*double(i));
+    if(!boundary) solve(requested);
+    require_same_pose(evaluated,continuation_positions(f),
+        "IK rotation did not continue along the effector circular trajectory");
+}
+
 } // namespace
 
 int main() {
@@ -627,6 +847,13 @@ int main() {
         circular_reference_dependency_is_rejected();
         self_reference_does_not_create_dependency();
         translation_context_is_the_frame_used_for_application();
+        ik_translation_matches_canonical_continuation();
+        ik_scrubbing_is_history_independent_with_checkpoints();
+        checkpoint_density_does_not_change_ik_result();
+        ik_cache_detects_changed_action_inputs();
+        ik_cache_detects_changed_skeleton_constraints();
+        ik_translation_keeps_incoming_reference_frame_fixed();
+        ik_rotation_matches_canonical_continuation();
         std::cout << "PASS animation_stage1\n";
         return 0;
     } catch (const std::exception& error) {

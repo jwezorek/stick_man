@@ -27,6 +27,7 @@ namespace ui::pane {
         sm::animation_time time_ = 0, playback_start_ = 0;
         row_head_position insertion_;
         bool updating_ = false;
+        sm::animation_evaluator evaluator_;
         std::optional<sm::animation_evaluation> last_evaluation_;
         using authored_action = sm::action_data;
         struct gesture {
