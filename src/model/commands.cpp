@@ -55,7 +55,9 @@ mdl::command mdl::commands::make_create_node_command(
                 auto& created = proj.core().create_skeleton(state->loc);
                 proj.core().rename(created.root_node().id(), state->node_name);
                 state->skeleton = created.id();
-                created.copy_to(state->snapshot);
+                if (!created.copy_to(state->snapshot)) {
+                    throw std::runtime_error("unable to snapshot created skeleton");
+                }
                 skel = &created;
             } else {
                 auto snapshot = state->snapshot.skeleton(state->skeleton);

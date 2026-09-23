@@ -89,8 +89,9 @@ namespace {
                     dest_skel = create_skeleton(dest, node.owner().name());
                 }
                 if (!dest_skel->contains<sm::node>(node.id())) {
-                    bool is_root = dest_skel->empty();
-                    auto copy = node.copy_to(dest, dest_skel->id());
+                    if (!node.copy_to(dest, dest_skel->id())) {
+                        throw std::runtime_error("unable to copy node to split skeleton");
+                    }
                 }
                 return sm::visit_result::continue_traversal;
             };
@@ -104,10 +105,16 @@ namespace {
                     dest_skel = create_skeleton(dest, bone.owner().name());
                 }
                 if (!dest_skel->get<sm::node>(bone.parent_node().id())) {
-                    bone.parent_node().copy_to(dest, dest_skel->id());
+                    if (!bone.parent_node().copy_to(dest, dest_skel->id())) {
+                        throw std::runtime_error("unable to copy parent node to split skeleton");
+                    }
                 }
-                bone.child_node().copy_to(dest, dest_skel->id());
-                bone.copy_to(dest, dest_skel->id());
+                if (!bone.child_node().copy_to(dest, dest_skel->id())) {
+                    throw std::runtime_error("unable to copy child node to split skeleton");
+                }
+                if (!bone.copy_to(dest, dest_skel->id())) {
+                    throw std::runtime_error("unable to copy bone to split skeleton");
+                }
 
                 return sm::visit_result::continue_traversal;
             };
