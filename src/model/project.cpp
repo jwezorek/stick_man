@@ -33,6 +33,11 @@ namespace {
 }
 /*------------------------------------------------------------------------------------------------*/
 void mdl::project::clear_redo_stack() { redo_stack_ = {}; }
+void mdl::project::emit_history_state(bool was_dirty) {
+    emit refresh_undo_redo_state(can_redo(), can_undo());
+    const bool dirty = is_dirty();
+    if (dirty != was_dirty) emit dirty_changed(dirty);
+}
 void mdl::project::notify_command_change(const command& cmd) {
     if (cmd.artwork_character)
         emit artwork_changed(*this, *cmd.artwork_character);
@@ -41,13 +46,16 @@ void mdl::project::notify_command_change(const command& cmd) {
 }
 sm::result mdl::project::execute_command(const command& cmd) {
     if (animation_mode_ && !cmd.animation_edit) return sm::result::invalid_membership;
-    cmd.redo(*this);
-    if (cmd.outcome && cmd.outcome() != sm::result::success) return cmd.outcome();
+    const bool was_dirty = is_dirty();
+    command stored = cmd;
+    stored.redo(*this);
+    if (stored.outcome && stored.outcome() != sm::result::success) return stored.outcome();
     clear_redo_stack();
     animation_redo_count_ = 0;
-    undo_stack_.push(cmd);
-    emit refresh_undo_redo_state(can_redo(), can_undo());
-    notify_command_change(cmd);
+    stored.history_transition = history_.advance();
+    undo_stack_.push(stored);
+    emit_history_state(was_dirty);
+    notify_command_change(stored);
     return sm::result::success;
 }
 
@@ -90,6 +98,10 @@ void mdl::project::clear() {
     core_.clear();
     redo_stack_ = {};
     undo_stack_ = {};
+    history_.reset_clean();
+    animation_mode_ = false;
+    animation_undo_depth_ = 0;
+    animation_redo_count_ = 0;
     next_node_name_ = 1;
     next_bone_name_ = 1;
 }
@@ -121,26 +133,30 @@ void mdl::project::undo() {
     if (!can_undo()) {
         return;
     }
+    const bool was_dirty = is_dirty();
     auto cmd = undo_stack_.top();
     undo_stack_.pop();
     cmd.undo(*this);
+    history_.undo(cmd.history_transition);
     redo_stack_.push(cmd);
     if (animation_mode_) ++animation_redo_count_;
-    emit refresh_undo_redo_state(can_redo(), can_undo());
+    emit_history_state(was_dirty);
     notify_command_change(cmd);
 }
 sm::result mdl::project::redo() {
     if (!can_redo()) {
         return sm::result::success;
     }
+    const bool was_dirty = is_dirty();
     auto cmd = redo_stack_.top();
     if (animation_mode_ && !cmd.animation_edit) return sm::result::invalid_membership;
     cmd.redo(*this);
     if (cmd.outcome && cmd.outcome() != sm::result::success) return cmd.outcome();
     redo_stack_.pop();
     if (animation_mode_) --animation_redo_count_;
+    history_.redo(cmd.history_transition);
     undo_stack_.push(cmd);
-    emit refresh_undo_redo_state(can_redo(), can_undo());
+    emit_history_state(was_dirty);
     notify_command_change(cmd);
     return sm::result::success;
 }
@@ -151,23 +167,50 @@ bool mdl::project::can_undo() const {
 bool mdl::project::can_redo() const {
     return !redo_stack_.empty() && (!animation_mode_ || (animation_redo_count_ > 0 && redo_stack_.top().animation_edit));
 }
+bool mdl::project::is_dirty() const noexcept {
+    return history_.dirty();
+}
+void mdl::project::mark_saved() {
+    const bool was_dirty = is_dirty();
+    history_.mark_saved();
+    if (was_dirty != is_dirty()) emit dirty_changed(is_dirty());
+}
+void mdl::project::new_document() {
+    const bool was_dirty = is_dirty();
+    clear();
+    emit_history_state(was_dirty);
+    emit new_project_opened(*this);
+}
 std::expected<sm::project_buffer, sm::project_result> mdl::project::serialize() const {
     return core_.serialize();
 }
-bool mdl::project::deserialize(std::span<const std::uint8_t> buffer) {
-    if (animation_mode_) return false;
-    auto result = core_.deserialize(buffer);
+sm::project_result mdl::project::validate_serialized(std::span<const std::uint8_t> buffer) {
+    sm::project candidate;
+    return candidate.deserialize(buffer);
+}
+sm::project_result mdl::project::deserialize_result(std::span<const std::uint8_t> buffer) {
+    const bool was_dirty = is_dirty();
+    // Core deserialization is transactional: it builds a staged project and only
+    // commits to core_ after the entire package has validated successfully.
+    const auto result = core_.deserialize(buffer);
     if (result != sm::project_result::success) {
-        return false;
+        return result;
     }
     redo_stack_ = {};
     undo_stack_ = {};
+    history_.reset_clean();
+    animation_undo_depth_ = 0;
+    animation_redo_count_ = 0;
     next_node_name_ = 1;
     next_bone_name_ = 1;
     advance_default_name_counters_from_topology();
-    emit refresh_undo_redo_state(false, false);
+    emit_history_state(was_dirty);
     emit new_project_opened(*this);
-    return true;
+    return sm::project_result::success;
+}
+bool mdl::project::deserialize(std::span<const std::uint8_t> buffer) {
+    if (animation_mode_) return false;
+    return deserialize_result(buffer) == sm::project_result::success;
 }
 sm::result mdl::project::add_bone(const handle& u, const handle& v) {
     auto& node_u = commands::resolve<sm::node>(*this, u);

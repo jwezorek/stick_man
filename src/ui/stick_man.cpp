@@ -13,10 +13,12 @@
 #include "clipboard.hpp"
 #include <QtWidgets>
 #include <QFileInfo>
+#include <QSaveFile>
 #include <QSettings>
 #include <cstdint>
 #include <ranges>
 #include <span>
+#include <utility>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <dwmapi.h>
@@ -54,6 +56,31 @@ namespace {
             &USE_DARK_MODE, sizeof(USE_DARK_MODE));
     #endif
     }
+
+    QString project_result_message(sm::project_result result) {
+        switch (result) {
+        case sm::project_result::success:
+            return {};
+        case sm::project_result::invalid_archive:
+            return QStringLiteral("The file is not a valid stick_man project archive.");
+        case sm::project_result::missing_project_json:
+            return QStringLiteral("The project package is missing project.json.");
+        case sm::project_result::invalid_project_json:
+            return QStringLiteral("The project data is invalid or uses an unsupported format.");
+        case sm::project_result::duplicate_object_id:
+            return QStringLiteral("The project contains duplicate object IDs.");
+        case sm::project_result::archive_error:
+            return QStringLiteral("The project package could not be read or written completely.");
+        case sm::project_result::invalid_artwork:
+            return QStringLiteral("The project contains invalid or unreadable artwork resources.");
+        }
+        return QStringLiteral("An unknown project error occurred.");
+    }
+
+    QString file_operation_message(QString operation, const QString& file_path, QString detail) {
+        return QStringLiteral("%1 failed for:\n%2\n\n%3")
+            .arg(std::move(operation), QDir::toNativeSeparators(file_path), std::move(detail));
+    }
 }
 ui::stick_man::stick_man(QWidget* parent) :
         QMainWindow(parent),
@@ -80,7 +107,7 @@ ui::stick_man::stick_man(QWidget* parent) :
     center_layout->setContentsMargins(0, 0, 0, 0);
     center_layout->addWidget(canvases_ = new canvas::manager(tool_mgr_));
     setCentralWidget(center);
-    setWindowTitle("stick_man - untitled");
+    update_window_title();
     project_.set_topology_edit_confirmation([this](const sm::topology_edit_effects& effects) {
         const auto count = effects.removed_animation_actions.size();
         const auto message = count == 1
@@ -111,6 +138,7 @@ ui::stick_man::stick_man(QWidget* parent) :
     });
 
     createMainMenu();
+    connect(&project_, &mdl::project::dirty_changed, this, [this](bool) { update_window_title(); });
     skel_pane_->init(*canvases_, project_);
     anim_pane_->init(*canvases_, project_);
     tool_mgr_.init(*canvases_, project_);
@@ -118,21 +146,55 @@ ui::stick_man::stick_man(QWidget* parent) :
 }
 void ui::stick_man::set_current_file(const QString& file_path) {
     current_file_path_ = file_path;
-    const auto file_name = QFileInfo(file_path).fileName();
+    const auto file_name = file_path.isEmpty()
+        ? QStringLiteral("untitled")
+        : QFileInfo(file_path).fileName();
     canvases_->set_canvas_name(file_name.toStdString());
-    setWindowTitle(QString("stick_man - %1").arg(file_name));
+    update_window_title();
+}
+
+void ui::stick_man::update_window_title() {
+    const auto file_name = current_file_path_.isEmpty()
+        ? QStringLiteral("untitled")
+        : QFileInfo(current_file_path_).fileName();
+    setWindowTitle(QStringLiteral("stick_man - %1%2")
+        .arg(file_name, project_.is_dirty() ? QStringLiteral(" *") : QString{}));
+}
+
+ui::stick_man::save_decision ui::stick_man::maybe_save_changes() {
+    if (!project_.is_dirty()) {
+        return save_decision::proceed;
+    }
+
+    const auto response = QMessageBox::warning(
+        this,
+        QStringLiteral("Unsaved Changes"),
+        QStringLiteral("The current project has unsaved changes. Save them before continuing?"),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+        QMessageBox::Save);
+
+    if (response == QMessageBox::Discard) {
+        return save_decision::proceed;
+    }
+    if (response == QMessageBox::Save && save()) {
+        return save_decision::proceed;
+    }
+    return save_decision::cancel;
 }
 
 bool ui::stick_man::write_project_file(const QString& file_path) {
     auto serialized = project_.serialize();
     if (!serialized) {
-        QMessageBox::critical(this, "Error", "Could not serialize project.");
+        QMessageBox::critical(this, QStringLiteral("Save Project"),
+            file_operation_message(QStringLiteral("Saving"), file_path,
+                project_result_message(serialized.error())));
         return false;
     }
 
-    QFile file(file_path);
+    QSaveFile file(file_path);
     if (!file.open(QIODevice::WriteOnly)) {
-        QMessageBox::critical(this, "Error", "Could not open project file for writing.");
+        QMessageBox::critical(this, QStringLiteral("Save Project"),
+            file_operation_message(QStringLiteral("Saving"), file_path, file.errorString()));
         return false;
     }
 
@@ -140,82 +202,121 @@ bool ui::stick_man::write_project_file(const QString& file_path) {
     const auto written = file.write(
         reinterpret_cast<const char*>(buffer.data()),
         static_cast<qint64>(buffer.size()));
-    file.close();
-
     if (written != static_cast<qint64>(buffer.size())) {
-        QMessageBox::critical(this, "Error", "Could not write complete project file.");
+        const auto detail = file.errorString().isEmpty()
+            ? QStringLiteral("The complete project could not be written.")
+            : file.errorString();
+        file.cancelWriting();
+        QMessageBox::critical(this, QStringLiteral("Save Project"),
+            file_operation_message(QStringLiteral("Saving"), file_path, detail));
+        return false;
+    }
+
+    if (!file.commit()) {
+        QMessageBox::critical(this, QStringLiteral("Save Project"),
+            file_operation_message(QStringLiteral("Saving"), file_path, file.errorString()));
         return false;
     }
     return true;
 }
-void ui::stick_man::open()
-{
-    QString filePath = QFileDialog::getOpenFileName(
-        this, "Open stick_man project", QDir::homePath(), "stick_man Project (*.stickman)");
-    if (filePath.isEmpty()) {
+
+void ui::stick_man::new_file() {
+    if (maybe_save_changes() == save_decision::cancel) {
         return;
     }
 
-    QFile file(filePath);
+    anim_pane_->leave_animation();
+    project_.new_document();
+    set_current_file(QString{});
+}
+
+void ui::stick_man::open() {
+    if (maybe_save_changes() == save_decision::cancel) {
+        return;
+    }
+
+    const QString file_path = QFileDialog::getOpenFileName(
+        this, QStringLiteral("Open stick_man project"), QDir::homePath(),
+        QStringLiteral("stick_man Project (*.stickman)"));
+    if (file_path.isEmpty()) {
+        return;
+    }
+
+    QFile file(file_path);
     if (!file.open(QIODevice::ReadOnly)) {
-        QMessageBox::critical(this, "Error", "Could not open project file.");
+        QMessageBox::critical(this, QStringLiteral("Open Project"),
+            file_operation_message(QStringLiteral("Opening"), file_path, file.errorString()));
         return;
     }
 
     const QByteArray content = file.readAll();
-    file.close();
+    if (file.error() != QFileDevice::NoError) {
+        QMessageBox::critical(this, QStringLiteral("Open Project"),
+            file_operation_message(QStringLiteral("Reading"), file_path, file.errorString()));
+        return;
+    }
+
     const auto* first = reinterpret_cast<const std::uint8_t*>(content.constData());
     const std::span<const std::uint8_t> buffer(first, static_cast<std::size_t>(content.size()));
+
+    // Validate before leaving Animation Mode so a bad package changes neither the
+    // current project nor the current editing session. Core loading itself is also
+    // transactional, so the live project is replaced only after successful parsing.
+    const auto validation = mdl::project::validate_serialized(buffer);
+    if (validation != sm::project_result::success) {
+        QMessageBox::critical(this, QStringLiteral("Open Project"),
+            file_operation_message(QStringLiteral("Opening"), file_path,
+                project_result_message(validation)));
+        return;
+    }
+
     anim_pane_->leave_animation();
-    if (!project_.deserialize(buffer)) {
-        QMessageBox::critical(this, "Error", "Error opening project file.");
+    const auto result = project_.deserialize_result(buffer);
+    if (result != sm::project_result::success) {
+        QMessageBox::critical(this, QStringLiteral("Open Project"),
+            file_operation_message(QStringLiteral("Opening"), file_path,
+                project_result_message(result)));
         return;
     }
-    set_current_file(filePath);
+    set_current_file(file_path);
 }
 
-void ui::stick_man::save() {
+bool ui::stick_man::save() {
     if (current_file_path_.isEmpty()) {
-        save_as();
-        return;
+        return save_as();
     }
-    write_project_file(current_file_path_);
+    if (!write_project_file(current_file_path_)) {
+        return false;
+    }
+    project_.mark_saved();
+    return true;
 }
 
-void ui::stick_man::save_as() {
-    QString filePath = QFileDialog::getSaveFileName(
-        this, "Save stick_man project As", QDir::homePath(), "stick_man Project (*.stickman)");
-    if (filePath.isEmpty()) {
-        return;
+bool ui::stick_man::save_as() {
+    const auto initial_dir = current_file_path_.isEmpty()
+        ? QDir::homePath()
+        : QFileInfo(current_file_path_).absolutePath();
+    QString file_path = QFileDialog::getSaveFileName(
+        this, QStringLiteral("Save stick_man project As"), initial_dir,
+        QStringLiteral("stick_man Project (*.stickman)"));
+    if (file_path.isEmpty()) {
+        return false;
     }
-    if (!filePath.endsWith(".stickman", Qt::CaseInsensitive)) {
-        filePath += ".stickman";
+    if (!file_path.endsWith(QStringLiteral(".stickman"), Qt::CaseInsensitive)) {
+        file_path += QStringLiteral(".stickman");
     }
-    if (write_project_file(filePath)) {
-        set_current_file(filePath);
+    if (!write_project_file(file_path)) {
+        return false;
     }
+    set_current_file(file_path);
+    project_.mark_saved();
+    return true;
 }
+
 void ui::stick_man::exit() {
-    bool unsavedChanges = false; // TODO
-
-    if (unsavedChanges) {
-        QMessageBox::StandardButton response = QMessageBox::question(
-            this, "Unsaved Changes",
-            "You have unsaved changes. Do you want to save them before quitting?",
-            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
-
-        if (response == QMessageBox::Save) {
-            save();
-        }
-        else if (response == QMessageBox::Discard) {
-
-        } else {
-            return;
-        }
-    }
-
-    QCoreApplication::quit();
+    close();
 }
+
 void ui::stick_man::debug() {
 }
 
@@ -248,11 +349,19 @@ ui::canvas::manager& ui::stick_man::canvases() {
 }
 void ui::stick_man::insert_file_menu() {
     auto file_menu = menuBar()->addMenu(tr("&File"));
-    QAction* actionOpen = new QAction(tr("Open stick man"), this);
-    QAction* actionSave = new QAction(tr("Save stick man"), this);
-    QAction* actionSaveAs = new QAction(tr("Save as..."), this);
+    QAction* actionNew = new QAction(tr("New"), this);
+    QAction* actionOpen = new QAction(tr("Open..."), this);
+    QAction* actionSave = new QAction(tr("Save"), this);
+    QAction* actionSaveAs = new QAction(tr("Save As..."), this);
     QAction* actionExit = new QAction(tr("Exit"), this);
+    actionNew->setShortcut(QKeySequence::New);
+    actionOpen->setShortcut(QKeySequence::Open);
+    actionSave->setShortcut(QKeySequence::Save);
+    actionSaveAs->setShortcut(QKeySequence::SaveAs);
+    actionExit->setShortcut(QKeySequence::Quit);
+    file_menu->addAction(actionNew);
     file_menu->addAction(actionOpen);
+    file_menu->addSeparator();
     file_menu->addAction(actionSave);
     file_menu->addAction(actionSaveAs);
     file_menu->addSeparator();
@@ -260,9 +369,10 @@ void ui::stick_man::insert_file_menu() {
     QFontMetrics metrics(file_menu->font());
     int maxWidth = metrics.horizontalAdvance(actionSaveAs->text()) + 20;
     file_menu->setMinimumWidth(maxWidth);
+    connect(actionNew, &QAction::triggered, this, &stick_man::new_file);
     connect(actionOpen, &QAction::triggered, this, &stick_man::open);
-    connect(actionSave, &QAction::triggered, this, &stick_man::save);
-    connect(actionSaveAs, &QAction::triggered, this, &stick_man::save_as);
+    connect(actionSave, &QAction::triggered, this, [this] { save(); });
+    connect(actionSaveAs, &QAction::triggered, this, [this] { save_as(); });
     connect(actionExit, &QAction::triggered, this, &stick_man::exit);
 }
 
@@ -390,6 +500,13 @@ void ui::stick_man::resizeEvent(QResizeEvent* event) {
         canvases_->center_active_view();
         has_fully_layed_out_widgets_ = true;
     }
+}
+void ui::stick_man::closeEvent(QCloseEvent* event) {
+    if (maybe_save_changes() == save_decision::cancel) {
+        event->ignore();
+        return;
+    }
+    QMainWindow::closeEvent(event);
 }
 
 ui::stick_man::~stick_man() { anim_pane_->leave_animation(); }

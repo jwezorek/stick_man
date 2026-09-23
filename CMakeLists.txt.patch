@@ -1,7 +1,0 @@
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
-@@
-     src/ui/tools/animate_tool.cpp
-     src/ui/tools/selection_tool.cpp
-+    src/ui/tools/rig_interaction.cpp
-     src/ui/tools/drag_state.cpp

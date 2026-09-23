@@ -15,6 +15,7 @@
 #include <unordered_set>
 #include "../core/sm_project.hpp"
 #include "handle.hpp"
+#include "history_state.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -28,6 +29,7 @@ namespace mdl {
         std::function<sm::result()> outcome;
         bool animation_edit = false;
         std::optional<sm::object_id> artwork_character;
+        history_state::transition history_transition;
     };
     class project : public QObject {
 
@@ -41,10 +43,12 @@ namespace mdl {
         std::size_t animation_redo_count_ = 0;
         std::stack<command> redo_stack_;
         std::stack<command> undo_stack_;
+        history_state history_;
         std::size_t next_node_name_ = 1;
         std::size_t next_bone_name_ = 1;
         std::function<bool(const sm::topology_edit_effects&)> topology_edit_confirmation_;
         void clear_redo_stack();
+        void emit_history_state(bool was_dirty);
         sm::result execute_command(const command& cmd);
         void notify_command_change(const command& cmd);
         void rename_aux(handle id, const std::string& new_name);
@@ -76,7 +80,12 @@ namespace mdl {
         const_model_object get(const sm::object_id& id) const;
         bool can_undo() const;
         bool can_redo() const;
+        bool is_dirty() const noexcept;
+        void mark_saved();
+        void new_document();
         std::expected<sm::project_buffer, sm::project_result> serialize() const;
+        static sm::project_result validate_serialized(std::span<const std::uint8_t> buffer);
+        sm::project_result deserialize_result(std::span<const std::uint8_t> buffer);
         bool deserialize(std::span<const std::uint8_t> buffer);
         void undo();
         sm::result redo();
@@ -116,6 +125,7 @@ namespace mdl {
         void artwork_changed(project& model, sm::object_id character);
         void select_character(sm::object_id id);
         void refresh_undo_redo_state(bool, bool);
+        void dirty_changed(bool dirty);
     };
     bool identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2);
 }

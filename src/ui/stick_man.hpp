@@ -21,9 +21,10 @@ namespace ui {
     public:
         stick_man(QWidget* parent = Q_NULLPTR);
         ~stick_man() override;
+        void new_file();
         void open();
-        void save();
-        void save_as();
+        bool save();
+        bool save_as();
         void exit();
 
         void do_undo();
@@ -40,6 +41,8 @@ namespace ui {
         canvas::manager& canvases();
 
     private:
+        enum class save_decision { proceed, cancel };
+
         void insert_file_menu();
         void insert_edit_menu();
         void insert_project_menu();
@@ -47,8 +50,11 @@ namespace ui {
         void createMainMenu();
         void showEvent(QShowEvent* event) override;
         void resizeEvent(QResizeEvent* event) override;
+        void closeEvent(QCloseEvent* event) override;
         void update_undo_and_redo(bool can_redo, bool can_undo);
         void set_current_file(const QString& file_path);
+        void update_window_title();
+        save_decision maybe_save_changes();
         bool write_project_file(const QString& file_path);
         tool::manager tool_mgr_;
         pane::tools* tool_pal_;
