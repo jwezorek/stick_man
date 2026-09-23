@@ -144,6 +144,7 @@ namespace {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::canvas::scene::scene(tool::input_handler& inp_handler) :
+        constraint_adornments_(std::make_unique<constraint_adornment_layer>(*this)),
         inp_handler_(inp_handler), rubber_band_(nullptr) {
     setSceneRect(QRectF(-1500, -1500, 3000, 3000));
 }
@@ -244,6 +245,13 @@ void ui::canvas::scene::set_zoom_level(int zoom, std::optional<QPointF> pt) {
 }
 
 void ui::canvas::scene::sync_to_model() {
+    if (model_) {
+        if (selected_constraint_id_ && !model_->core().constraint_by_id(*selected_constraint_id_))
+            selected_constraint_id_.reset();
+        constraint_adornments_->sync(model_->core(), scale());
+        constraint_adornments_->set_visible(constraints_visible());
+        constraint_adornments_->set_selected(selected_constraint_id_);
+    }
     auto itms = items() | r::to<std::vector>();
     for (auto* child : itms | rv::transform(to_stick_man) | rv::filter([](auto* p) {return p; })) {
         child->sync_to_model();
@@ -253,6 +261,7 @@ void ui::canvas::scene::sync_to_model() {
 
 void ui::canvas::scene::set_contents(mdl::project& model) {
 
+    model_ = &model;
     std::unordered_set<sm::object_id> current_node_ids;
     for (auto skel : model.topology().skeletons()) {
         for (auto node : skel->nodes()) current_node_ids.insert(node->id());
@@ -354,18 +363,57 @@ void ui::canvas::scene::toggle_node_pinned(const sm::object_id& id) {
     set_node_pinned(id, !is_node_pinned(id));
 }
 
-bool ui::canvas::scene::rotation_constraints_visible() const {
-    return show_rotation_constraints_;
+void ui::canvas::scene::toggle_node_pinned_undoable(const sm::object_id& id) {
+    if (!model_) { toggle_node_pinned(id); return; }
+    const bool before = is_node_pinned(id);
+    const bool after = !before;
+    model_->record_transient_edit(
+        [this, id, after] { set_node_pinned(id, after); },
+        [this, id, before] { set_node_pinned(id, before); });
 }
 
-void ui::canvas::scene::set_rotation_constraints_visible(bool visible) {
-    if (show_rotation_constraints_ == visible) {
-        return;
-    }
-    show_rotation_constraints_ = visible;
-    for (auto* bone : bone_items()) {
-        bone->sync_to_model();
-    }
+bool ui::canvas::scene::constraints_visible() const {
+    return constraint_tool_active_ || show_constraints_in_view_;
+}
+
+void ui::canvas::scene::set_constraint_tool_active(bool active) {
+    constraint_tool_active_ = active;
+    constraint_adornments_->set_visible(constraints_visible());
+    if (!active) set_hovered_constraint({});
+}
+
+void ui::canvas::scene::set_constraints_view_visible(bool visible) {
+    show_constraints_in_view_ = visible;
+    constraint_adornments_->set_visible(constraints_visible());
+}
+
+std::optional<ui::canvas::constraint_hit> ui::canvas::scene::constraint_at(const QPointF& point) const {
+    return constraint_adornments_->hit(point);
+}
+
+const sm::constraint* ui::canvas::scene::selected_constraint() const {
+    if (!selected_constraint_id_ || !model_) return nullptr;
+    auto constraint = model_->core().constraint_by_id(*selected_constraint_id_);
+    return constraint ? &constraint->get() : nullptr;
+}
+
+void ui::canvas::scene::select_constraint(sm::object_id id) {
+    if (!model_ || !model_->core().constraint_by_id(id)) return;
+    selection_.clear();
+    selected_constraint_id_ = id;
+    constraint_adornments_->set_selected(id);
+    sync_selection();
+}
+
+void ui::canvas::scene::clear_constraint_selection(bool notify) {
+    if (!selected_constraint_id_) return;
+    selected_constraint_id_.reset();
+    constraint_adornments_->set_selected({});
+    if (notify && !manager().preview_active()) emit manager().selection_changed(*this);
+}
+
+void ui::canvas::scene::set_hovered_constraint(std::optional<sm::object_id> id) {
+    constraint_adornments_->set_hovered(id);
 }
 
 bool ui::canvas::scene::is_status_line_visible() const {
@@ -404,6 +452,7 @@ void ui::canvas::scene::transform_selection(bone_transform trans) {
 }
 
 void ui::canvas::scene::add_to_selection(std::span<ui::canvas::item::base*> itms, bool sync) {
+    if (!itms.empty()) clear_constraint_selection(false);
     selection_.insert(itms.begin(), itms.end());
 	if (sync) {
 		sync_selection();
@@ -428,6 +477,7 @@ void ui::canvas::scene::subtract_from_selection(ui::canvas::item::base* itm, boo
 }
 
 void ui::canvas::scene::set_selection(std::span<ui::canvas::item::base*> itms, bool sync) {
+    clear_constraint_selection(false);
     selection_.clear();
     add_to_selection(itms,sync);
 }
@@ -438,11 +488,14 @@ void ui::canvas::scene::set_selection(ui::canvas::item::base* itm, bool sync) {
 
 void ui::canvas::scene::clear_selection() {
     selection_.clear();
+    clear_constraint_selection(false);
     sync_selection();
 }
 
 void ui::canvas::scene::clear() {
     clear_interactive_adornment();
+    constraint_adornments_->clear();
+    selected_constraint_id_.reset();
     cancel_bone_pick();
     if (artwork_) artwork_->cancel_transform();
     selection_.clear();

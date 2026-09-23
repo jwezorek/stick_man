@@ -733,7 +733,7 @@ void ui::tool::rig_interaction::pin_selection() {
         return;
     }
     for (auto* selected_node_item : nodes) {
-        canvas.toggle_node_pinned(selected_node_item->model().id());
+        canvas.toggle_node_pinned_undoable(selected_node_item->model().id());
     }
 }
 void ui::tool::rig_interaction::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
@@ -832,7 +832,7 @@ void ui::tool::rig_interaction::handle_click(
         if (!clicked_node) {
             return;
         }
-        canv.toggle_node_pinned(clicked_node->model().id());
+        canv.toggle_node_pinned_undoable(clicked_node->model().id());
         return;
     }
     select_topology(canv, {&clicked_item, 1}, shift_down, ctrl_down);

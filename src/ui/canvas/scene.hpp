@@ -3,6 +3,7 @@
 #include "../util.hpp"
 #include "../../model/project.hpp"
 #include "rubber_band.hpp"
+#include "constraint_adornment.hpp"
 #include <QWidget>
 #include <QtWidgets>
 #include <QGraphicsScene>
@@ -87,7 +88,11 @@ namespace ui {
             QString status_line_;
             selection_set selection_;
             std::unordered_set<sm::object_id> pinned_node_ids_;
-            bool show_rotation_constraints_ = false;
+            mdl::project* model_ = nullptr;
+            bool constraint_tool_active_ = false;
+            bool show_constraints_in_view_ = false;
+            std::optional<sm::object_id> selected_constraint_id_;
+            std::unique_ptr<constraint_adornment_layer> constraint_adornments_;
             tool::input_handler& inp_handler_;
             item::rubber_band* rubber_band_;
             std::optional<int> zoom_level_;
@@ -170,9 +175,18 @@ namespace ui {
             bool is_node_pinned(const sm::object_id& id) const;
             void set_node_pinned(const sm::object_id& id, bool pinned);
             void toggle_node_pinned(const sm::object_id& id);
+            void toggle_node_pinned_undoable(const sm::object_id& id);
 
-            bool rotation_constraints_visible() const;
-            void set_rotation_constraints_visible(bool visible);
+            bool constraints_visible() const;
+            void set_constraint_tool_active(bool active);
+            void set_constraints_view_visible(bool visible);
+            bool constraints_view_visible() const { return show_constraints_in_view_; }
+            std::optional<constraint_hit> constraint_at(const QPointF& point) const;
+            std::optional<sm::object_id> selected_constraint_id() const { return selected_constraint_id_; }
+            const sm::constraint* selected_constraint() const;
+            void select_constraint(sm::object_id id);
+            void clear_constraint_selection(bool notify = true);
+            void set_hovered_constraint(std::optional<sm::object_id> id);
 
             bool is_status_line_visible() const;
 

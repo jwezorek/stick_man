@@ -6,11 +6,16 @@
 #include "ui/canvas/node_item.hpp"
 #include "ui/canvas/bone_item.hpp"
 #include "ui/tools/selection_tool.hpp"
+#include "ui/tools/constraint_tool.hpp"
 #include "ui/panes/tree_view.hpp"
 #include "ui/panes/skeleton_properties.hpp"
+#include "ui/panes/bone_properties.hpp"
+#include "ui/panes/constraint_properties.hpp"
+#include "ui/panes/skeleton_pane.hpp"
 #include "ui/clipboard.hpp"
 #include "ui/character_actions.hpp"
 #include "ui/tools/add_bone_tool.hpp"
+#include <cmath>
 #include <numbers>
 #include <iostream>
 #include <stdexcept>
@@ -624,7 +629,155 @@ void character_test(fixture& f, const std::string& mode) {
 
 void run(const std::string& mode) {
     fixture f;
-    if (mode == "character_hierarchy") {
+    if (mode == "constraint_layer") {
+        auto& model = f.window.project();
+        auto& canvas = f.canvas();
+        const auto root = f.skeleton(f.first).root_node().id();
+
+        model.add_new_skeleton_root({0, 80});
+        sm::object_id sibling_tip;
+        for (auto skel : model.topology().skeletons())
+            if (skel->root_node().world_pos() == sm::point{0,80}) sibling_tip = skel->root_node().id();
+        require(!sibling_tip.is_nil(), "constraint fixture sibling tip missing");
+        require(model.add_bone(root, sibling_tip) == sm::result::success, "constraint fixture sibling bone failed");
+
+        sm::object_id horizontal, vertical;
+        for (auto bone : f.skeleton(f.first).bones()) {
+            if (bone->child_node().world_pos() == sm::point{80,0}) horizontal = bone->id();
+            if (bone->child_node().world_pos() == sm::point{0,80}) vertical = bone->id();
+        }
+        require(!horizontal.is_nil() && !vertical.is_nil(), "constraint fixture arms missing");
+        require(model.topology().get<sm::bone>(horizontal)->get().is_sibling(
+                    model.topology().get<sm::bone>(vertical)->get()),
+            "rigid-triangle fixture arms must be semantic siblings");
+
+        model.add_new_skeleton_root({160, 0});
+        sm::object_id extension_tip;
+        for (auto skel : model.topology().skeletons())
+            if (skel->root_node().world_pos() == sm::point{160,0}) extension_tip = skel->root_node().id();
+        require(!extension_tip.is_nil(), "constraint fixture extension tip missing");
+        const auto horizontal_tip = model.topology().get<sm::bone>(horizontal)->get().child_node().id();
+        require(model.add_bone(horizontal_tip, extension_tip) == sm::result::success,
+            "constraint fixture child bone failed");
+        sm::object_id child;
+        for (auto bone : f.skeleton(f.first).bones())
+            if (bone->child_node().world_pos() == sm::point{160,0}) child = bone->id();
+        require(!child.is_nil(), "constraint fixture child bone missing");
+
+        ui::tool::constraint tool;
+        tool.init(f.window.canvases(), model);
+        tool.activate(f.window.canvases());
+        auto* operation = tool.settings_widget()->findChild<QComboBox*>("constraint_operation");
+        auto* reference = tool.settings_widget()->findChild<QComboBox*>("constraint_create_reference");
+        require(operation && reference, "constraint tool options missing");
+        auto click = [&](QPointF pt) {
+            QGraphicsSceneMouseEvent press_event(QEvent::GraphicsSceneMousePress);
+            press_event.setScenePos(pt); press_event.setButton(Qt::LeftButton);
+            press_event.setButtons(Qt::LeftButton);
+            tool.mousePressEvent(canvas, &press_event);
+            QGraphicsSceneMouseEvent release_event(QEvent::GraphicsSceneMouseRelease);
+            release_event.setScenePos(pt); release_event.setButton(Qt::LeftButton);
+            release_event.setButtons(Qt::NoButton);
+            tool.mouseReleaseEvent(canvas, &release_event);
+        };
+
+        operation->setCurrentIndex(1); reference->setCurrentIndex(0); // Rotation / World
+        click({40,0});
+        require(model.core().constraints().size() == 1, "rotation gesture did not create first-class constraint");
+        const auto rotation_id = model.core().constraints().begin()->first;
+        require(canvas.selected_constraint_id() == rotation_id && canvas.selection().empty(),
+            "new rotation constraint must become separate constraint selection");
+        ui::pane::skeleton* skeleton_pane = nullptr;
+        for (auto* dock : f.window.findChildren<QDockWidget*>())
+            if (auto* candidate = dynamic_cast<ui::pane::skeleton*>(dock)) skeleton_pane = candidate;
+        require(skeleton_pane != nullptr &&
+            dynamic_cast<ui::pane::props::constraint_properties*>(skeleton_pane->sel_properties().current_props()),
+            "constraint selection must populate the constraint Properties UI");
+
+        auto hit = canvas.constraint_at({0,52});
+        require(hit && hit->id == rotation_id && hit->part == ui::canvas::constraint_part::rotation_max,
+            "rotation max handle must be hit-testable by constraint ID");
+        QGraphicsSceneMouseEvent press(QEvent::GraphicsSceneMousePress), move(QEvent::GraphicsSceneMouseMove), up(QEvent::GraphicsSceneMouseRelease);
+        press.setScenePos({0,52}); press.setButton(Qt::LeftButton); press.setButtons(Qt::LeftButton);
+        tool.mousePressEvent(canvas, &press);
+        move.setScenePos({-52,0}); move.setButtons(Qt::LeftButton); tool.mouseMoveEvent(canvas, &move);
+        up.setScenePos({-52,0}); up.setButton(Qt::LeftButton); up.setButtons(Qt::NoButton); tool.mouseReleaseEvent(canvas, &up);
+        require(std::abs(model.core().constraint_by_id(rotation_id)->get().rotation()->allowed.span_angle -
+            3*std::numbers::pi/2) < 1e-7, "rotation handle drag did not edit range");
+        model.undo();
+        require(std::abs(model.core().constraint_by_id(rotation_id)->get().rotation()->allowed.span_angle -
+            std::numbers::pi) < 1e-7, "rotation handle drag must undo in one step");
+        model.redo();
+
+        reference->setCurrentIndex(1); // Parent
+        click({120,0});
+        require(model.core().constraints().size() == 2, "parent-relative rotation gesture did not create constraint");
+        auto parent_rotation_id = *canvas.selected_constraint_id();
+        auto parent_rotation = model.core().constraint_by_id(parent_rotation_id)->get().rotation();
+        require(parent_rotation && parent_rotation->target_bone == child &&
+            parent_rotation->reference.kind == sm::rotation_reference_kind::parent,
+            "parent-relative creation stored the wrong reference");
+        model.undo();
+
+        reference->setCurrentIndex(2); // Bone: target then arbitrary reference
+        click({40,0}); click({0,40});
+        require(model.core().constraints().size() == 2, "arbitrary-bone rotation gesture did not create constraint");
+        auto arbitrary_rotation_id = *canvas.selected_constraint_id();
+        auto arbitrary_rotation = model.core().constraint_by_id(arbitrary_rotation_id)->get().rotation();
+        require(arbitrary_rotation && arbitrary_rotation->target_bone == horizontal &&
+            arbitrary_rotation->reference.kind == sm::rotation_reference_kind::bone &&
+            arbitrary_rotation->reference.bone_id == vertical,
+            "arbitrary-bone creation stored the wrong reference");
+        model.undo();
+
+        operation->setCurrentIndex(2); // Rigid Triangle
+        click({40,0}); click({120,0});
+        require(model.core().constraints().size() == 1,
+            "invalid rigid-triangle second target must be rejected by Core");
+        click({0,40});
+        require(model.core().constraints().size() == 2, "rigid-triangle gesture did not create relation");
+        require(canvas.selected_constraint_id().has_value(), "new rigid triangle should be selected");
+        auto triangle_id = *canvas.selected_constraint_id();
+        require(triangle_id != rotation_id && model.core().constraint_by_id(triangle_id)->get().triangle(),
+            "rigid-triangle gesture did not select the new triangle constraint");
+        auto triangle_hit = canvas.constraint_at({0,38});
+        require(triangle_hit && triangle_hit->id == triangle_id &&
+            triangle_hit->part == ui::canvas::constraint_part::triangle_angle,
+            "rigid-triangle manipulation handle missing");
+        press.setScenePos({0,38}); press.setButton(Qt::LeftButton); press.setButtons(Qt::LeftButton);
+        tool.mousePressEvent(canvas, &press);
+        move.setScenePos({-38,0}); move.setButtons(Qt::LeftButton); tool.mouseMoveEvent(canvas, &move);
+        up.setScenePos({-38,0}); up.setButton(Qt::LeftButton); up.setButtons(Qt::NoButton); tool.mouseReleaseEvent(canvas, &up);
+        require(std::abs(model.core().constraint_by_id(triangle_id)->get().triangle()->relative_angle -
+            std::numbers::pi) < 1e-7, "rigid-triangle handle drag did not edit relative angle");
+        model.undo();
+        require(std::abs(model.core().constraint_by_id(triangle_id)->get().triangle()->relative_angle -
+            std::numbers::pi/2) < 1e-7, "rigid-triangle handle drag must undo in one step");
+        model.redo();
+
+        ui::clipboard::del(f.window);
+        require(!model.core().constraint_by_id(triangle_id) && model.core().constraint_by_id(rotation_id),
+            "Delete must remove only selected constraint object");
+        model.undo(); require(model.core().constraint_by_id(triangle_id).has_value(), "constraint delete undo changed identity");
+
+        operation->setCurrentIndex(0);
+        click({0,0}); require(canvas.is_node_pinned(root), "Constraint Tool must still pin nodes");
+        model.undo(); require(!canvas.is_node_pinned(root), "Constraint Tool pin must be undoable");
+
+        tool.deactivate(f.window.canvases());
+        require(!canvas.constraint_at({0,52}), "constraints should hide when tool is inactive and view option is off");
+        canvas.set_constraints_view_visible(true);
+        require(canvas.constraint_at({0,52}).has_value(), "Show Constraints must expose passive adornments outside Constraint Tool");
+
+        ui::canvas::item::bone* horizontal_item = nullptr;
+        for (auto* item : canvas.bone_items()) if (item->model().id() == horizontal) horizontal_item = item;
+        require(horizontal_item != nullptr, "horizontal bone canvas item missing");
+        canvas.set_selection(horizontal_item, true);
+        auto* bone_props = dynamic_cast<ui::pane::props::bones*>(skeleton_pane->sel_properties().current_props());
+        require(bone_props != nullptr, "bone selection must return to topology Properties UI");
+        for (auto* box : bone_props->findChildren<QGroupBox*>())
+            require(box->title() != "Rotation Constraint", "bone Properties must not retain legacy constraint editor");
+    } else if (mode == "character_hierarchy") {
         std::vector<sm::const_skel_ref> rig{f.skeleton(f.first), f.skeleton(f.second)};
         auto character = f.window.project().core().create_character(rig);
         require(character.has_value(), "character fixture creation failed");
@@ -771,6 +924,15 @@ void run(const std::string& mode) {
         require(f.canvas().is_node_pinned(id), "canvas rebuild must preserve pin state for the same node id");
         require(ui::canvas::item_from_model<ui::canvas::item::node>(f.skeleton(f.first).root_node()).pin_visible(),
             "recreated node item must initialize its pin indicator from scene state");
+
+        f.canvas().toggle_node_pinned_undoable(id);
+        require(!f.canvas().is_node_pinned(id), "undoable pin toggle must update scene state");
+        f.window.project().undo();
+        require(f.canvas().is_node_pinned(id), "pin toggle undo must restore pin state");
+        f.window.project().redo();
+        require(!f.canvas().is_node_pinned(id), "pin toggle redo must restore toggled state");
+        f.canvas().toggle_node_pinned_undoable(id);
+        require(f.canvas().is_node_pinned(id), "second pin toggle must re-pin node");
 
         f.canvas().set_selection(f.item(f.first), true);
         ui::clipboard::del(f.window);

@@ -430,5 +430,12 @@ void ui::clipboard::paste(stick_man& main_wnd, bool in_place) {
 }
 
 void ui::clipboard::del(stick_man& main_wnd) {
+    auto& canv = main_wnd.canvases().active_canvas();
+    if (auto constraint_id = canv.selected_constraint_id()) {
+        if (main_wnd.project().remove_constraint(*constraint_id) == sm::result::success) {
+            canv.clear_constraint_selection();
+        }
+        return;
+    }
     perform_op_on_selection(main_wnd, selection_operation::del);
 }

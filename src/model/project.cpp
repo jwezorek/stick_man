@@ -30,6 +30,21 @@ namespace {
         }
         return index;
     }
+
+    bool same_constraint_definition(const sm::constraint_definition& a,
+            const sm::constraint_definition& b) {
+        if (a.index() != b.index()) return false;
+        if (auto ar = std::get_if<sm::rotation_constraint>(&a)) {
+            const auto& br = std::get<sm::rotation_constraint>(b);
+            return ar->target_bone == br.target_bone && ar->reference == br.reference &&
+                ar->allowed.start_angle == br.allowed.start_angle &&
+                ar->allowed.span_angle == br.allowed.span_angle;
+        }
+        const auto& at = std::get<sm::rigid_triangle_constraint>(a);
+        const auto& bt = std::get<sm::rigid_triangle_constraint>(b);
+        return at.first_bone == bt.first_bone && at.second_bone == bt.second_bone &&
+            at.relative_angle == bt.relative_angle;
+    }
 }
 /*------------------------------------------------------------------------------------------------*/
 void mdl::project::clear_redo_stack() { redo_stack_ = {}; }
@@ -52,7 +67,7 @@ sm::result mdl::project::execute_command(const command& cmd) {
     if (stored.outcome && stored.outcome() != sm::result::success) return stored.outcome();
     clear_redo_stack();
     animation_redo_count_ = 0;
-    stored.history_transition = history_.advance();
+    if (stored.document_edit) stored.history_transition = history_.advance();
     undo_stack_.push(stored);
     emit_history_state(was_dirty);
     notify_command_change(stored);
@@ -137,7 +152,7 @@ void mdl::project::undo() {
     auto cmd = undo_stack_.top();
     undo_stack_.pop();
     cmd.undo(*this);
-    history_.undo(cmd.history_transition);
+    if (cmd.document_edit) history_.undo(cmd.history_transition);
     redo_stack_.push(cmd);
     if (animation_mode_) ++animation_redo_count_;
     emit_history_state(was_dirty);
@@ -154,7 +169,7 @@ sm::result mdl::project::redo() {
     if (cmd.outcome && cmd.outcome() != sm::result::success) return cmd.outcome();
     redo_stack_.pop();
     if (animation_mode_) --animation_redo_count_;
-    history_.redo(cmd.history_transition);
+    if (cmd.document_edit) history_.redo(cmd.history_transition);
     undo_stack_.push(cmd);
     emit_history_state(was_dirty);
     notify_command_change(cmd);
@@ -386,6 +401,117 @@ sm::result mdl::project::set_character_root_bone(const sm::object_id& character_
         },
         [state] { return state->status; }
     });
+}
+
+
+std::expected<sm::object_id, sm::result> mdl::project::add_rotation_constraint(
+        sm::object_id target, sm::rotation_reference reference, sm::angle_range allowed,
+        std::string name) {
+    for (;;) {
+        const sm::object_id id = sm::object_id::generate();
+        sm::constraint value{id, name, sm::rotation_constraint{target, reference, allowed}};
+        struct state_type { sm::result status = sm::result::success; };
+        auto state = std::make_shared<state_type>();
+        auto result = execute_command({
+            [state, value](project& proj) {
+                auto added = proj.core_.add_constraint(value);
+                state->status = added ? sm::result::success : added.error();
+            },
+            [id](project& proj) {
+                if (proj.core_.remove_constraint(id) != sm::result::success)
+                    throw std::runtime_error("unable to undo rotation constraint creation");
+            },
+            [state] { return state->status; }
+        });
+        if (result == sm::result::duplicate_id) continue;
+        if (result != sm::result::success) return std::unexpected(result);
+        return id;
+    }
+}
+
+std::expected<sm::object_id, sm::result> mdl::project::add_rigid_triangle_constraint(
+        sm::object_id first, sm::object_id second, std::string name) {
+    struct state_type {
+        sm::result status = sm::result::success;
+        std::optional<sm::constraint> value;
+    };
+    auto state = std::make_shared<state_type>();
+    auto result = execute_command({
+        [state, first, second, name = std::move(name)](project& proj) {
+            if (state->value) {
+                auto restored = proj.core_.add_constraint(*state->value);
+                state->status = restored ? sm::result::success : restored.error();
+                return;
+            }
+
+            // Let Core construct the canonical rigid-triangle definition, including
+            // the signed rest angle and all structural validation.  The editor model
+            // snapshots the resulting first-class object only so redo can preserve
+            // its persistent identity.
+            auto added = proj.core_.add_rigid_triangle_constraint(first, second, name);
+            if (!added) {
+                state->status = added.error();
+                return;
+            }
+            state->value = added->get();
+            state->status = sm::result::success;
+        },
+        [state](project& proj) {
+            if (!state->value || proj.core_.remove_constraint(state->value->id()) != sm::result::success)
+                throw std::runtime_error("unable to undo rigid triangle creation");
+        },
+        [state] { return state->status; }
+    });
+    if (result != sm::result::success) return std::unexpected(result);
+    return state->value->id();
+}
+
+sm::result mdl::project::update_constraint(sm::object_id id, sm::constraint_definition definition) {
+    auto current = core_.constraint_by_id(id);
+    if (!current) return current.error();
+    const auto before = current->get().definition();
+    if (same_constraint_definition(before, definition)) return sm::result::success;
+    struct state_type { sm::result status = sm::result::success; };
+    auto state = std::make_shared<state_type>();
+    return execute_command({
+        [state, id, definition](project& proj) {
+            state->status = proj.core_.update_constraint(id, definition);
+        },
+        [id, before](project& proj) {
+            if (proj.core_.update_constraint(id, before) != sm::result::success)
+                throw std::runtime_error("unable to restore constraint definition");
+        },
+        [state] { return state->status; }
+    });
+}
+
+sm::result mdl::project::remove_constraint(sm::object_id id) {
+    auto current = core_.constraint_by_id(id);
+    if (!current) return current.error();
+    const sm::constraint snapshot = current->get();
+    struct state_type { sm::result status = sm::result::success; };
+    auto state = std::make_shared<state_type>();
+    return execute_command({
+        [state, id](project& proj) { state->status = proj.core_.remove_constraint(id); },
+        [snapshot](project& proj) {
+            auto restored = proj.core_.add_constraint(snapshot);
+            if (!restored) throw std::runtime_error("unable to restore deleted constraint");
+        },
+        [state] { return state->status; }
+    });
+}
+
+void mdl::project::record_transient_edit(std::function<void()> redo, std::function<void()> undo) {
+    command cmd{
+        [redo = std::move(redo)](project&) { redo(); },
+        [undo = std::move(undo)](project&) { undo(); }
+    };
+    // Pins are editor/session state, but they remain editable while Animation
+    // Mode is active.  Mark the command as animation-compatible while keeping
+    // it out of the document dirty-history bookkeeping.
+    cmd.animation_edit = true;
+    cmd.document_edit = false;
+    execute_command(cmd);
 }
 
 bool mdl::project::rename(const sm::object_id& id, const std::string& new_name) {

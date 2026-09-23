@@ -2,6 +2,7 @@
 #include "skeleton_properties.hpp"
 #include "node_properties.hpp"
 #include "bone_properties.hpp"
+#include "constraint_properties.hpp"
 #include "../canvas/scene.hpp"
 #include "../canvas/skel_item.hpp"
 #include "../canvas/node_item.hpp"
@@ -25,8 +26,10 @@ namespace rv = std::ranges::views;
 
 namespace {
 
-	ui::selection_type type_of_selection(const ui::canvas::selection_set& sel) {
+	ui::selection_type type_of_selection(const ui::canvas::scene& canv) {
 
+        if (canv.selected_constraint_id()) return ui::selection_type::constraint;
+        const auto& sel = canv.selection();
 		if (sel.empty()) {
 			return ui::selection_type::none;
 		}
@@ -70,6 +73,7 @@ ui::pane::selection_properties::selection_properties(const props::current_canvas
 			{selection_type::bone, new props::bones(fn, this)},
 			{selection_type::skeleton, new props::skeletons(fn, this)},
             {selection_type::character, new props::character(fn, this)},
+            {selection_type::constraint, new props::constraint_properties(fn, this)},
 			{selection_type::mixed, new props::mixed_properties(fn, this)}
 		} {
 	for (const auto& [key, prop_box] : props_) {
@@ -90,7 +94,7 @@ void ui::pane::selection_properties::set(const ui::canvas::scene& canv) {
 	auto* old_props = current_props();
 
     QScrollArea* scroller = nullptr;
-    QWidget* widg = props_.at(type_of_selection(canv.selection()));
+    QWidget* widg = props_.at(type_of_selection(canv));
     while (scroller == nullptr) {
         scroller = dynamic_cast<QScrollArea*>(widg);
         widg = widg->parentWidget();

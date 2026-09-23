@@ -67,6 +67,12 @@ void ui::canvas::manager::init(mdl::project& proj) {
     );
     // Browser notifications must see the rebuilt scene after topology changes.
     active_canvas().init_artwork(proj);
+
+    // Bind the initial (normally empty/untitled) project to the scene as well.
+    // Previously scene::model_ was only assigned by set_contents(), which was
+    // reached on Open/New but not on ordinary application startup.  Constraint
+    // selection/adornments therefore had no model in a freshly started editor.
+    set_contents(proj);
 }
 void ui::canvas::manager::clear() {
     active_canvas().clear();

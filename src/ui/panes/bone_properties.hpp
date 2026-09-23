@@ -7,7 +7,6 @@ namespace ui {
         namespace props {
 
             class rotation_tab;
-            class rot_constraint_box;
 
             class bones : public single_or_multi_props_widget {
                 ui::labeled_numeric_val* length_;
@@ -16,11 +15,7 @@ namespace ui {
                 ui::labeled_hyperlink* v_;
                 QWidget* nodes_;
                 rotation_tab* rotation_;
-                rot_constraint_box* constraint_box_;
-                QPushButton* constraint_btn_;
                 QPushButton* character_root_btn_;
-
-                void add_or_delete_constraint(mdl::project& proj, ui::canvas::scene& canv);
 
             public:
                 bones(const current_canvas_fn& fn, selection_properties* parent);

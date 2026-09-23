@@ -85,14 +85,6 @@ namespace {
 		}
 	}
 
-	struct constraint_dragging_info {
-		QPointF axis;
-		double anchor_rot;
-		double start_angle;
-		double span_angle;
-		double radius;
-	};
-
 	QStandardItem* make_treeitem(sm::bone& bone) {
 		auto* itm = new QStandardItem(bone.name().c_str());
 		auto& bi = ui::canvas::item_from_model<ui::canvas::item::bone>(bone);

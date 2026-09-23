@@ -300,7 +300,7 @@ std::vector<sm::bone_ref> sm::bone::sibling_bones() {
 }
 bool sm::bone::is_sibling(const bone& b) const
 {
-	return &parent_node() == &b.parent_node();
+	return parent_node().id() == b.parent_node().id();
 }
 
 const sm::node& sm::bone::opposite_node(const node& j) const {

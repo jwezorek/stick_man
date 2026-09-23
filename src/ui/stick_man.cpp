@@ -436,6 +436,11 @@ void ui::stick_man::insert_view_menu() {
     auto* show_skeleton = view_menu->addAction("Show Skeleton");
     show_skeleton->setObjectName("show_skeleton"); show_skeleton->setCheckable(true); show_skeleton->setChecked(true);
     connect(show_skeleton, &QAction::toggled, this, [this](bool show) { canvases_->active_canvas().artwork().set_show_skeleton(show); });
+    auto* show_constraints = view_menu->addAction("Show Constraints");
+    show_constraints->setObjectName("show_constraints"); show_constraints->setCheckable(true); show_constraints->setChecked(false);
+    connect(show_constraints, &QAction::toggled, this, [this](bool show) {
+        for (auto* canv : canvases_->canvases()) canv->set_constraints_view_visible(show);
+    });
     auto* display = view_menu->addMenu("Skeleton Display");
     auto* display_group = new QActionGroup(this);
     auto* normal = display->addAction("Normal"); auto* wire = display->addAction("Wireframe");

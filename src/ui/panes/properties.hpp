@@ -25,6 +25,7 @@ namespace ui {
 		bone,
 		skeleton,
         character,
+		constraint,
 		mixed
 	};
 

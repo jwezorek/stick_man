@@ -52,7 +52,7 @@ result validate_constraints(const topology& topology, const constraint_map& cons
             auto t = c.triangle();
             auto a = topology.get<bone>(t->first_bone), b = topology.get<bone>(t->second_bone);
             if (!a || !b || t->first_bone == t->second_bone || !std::isfinite(t->relative_angle) ||
-                &a->get().parent_node() != &b->get().parent_node()) return result::invalid_constraint;
+                !a->get().is_sibling(b->get())) return result::invalid_constraint;
             auto pair = std::minmax(t->first_bone, t->second_bone);
             if (!pairs.emplace(pair.first,pair.second).second) return result::invalid_constraint;
             graph[t->first_bone].emplace_back(t->second_bone,t->relative_angle);

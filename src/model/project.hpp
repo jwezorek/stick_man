@@ -28,6 +28,7 @@ namespace mdl {
         // Only commands with ordinary user failures need to report an outcome.
         std::function<sm::result()> outcome;
         bool animation_edit = false;
+        bool document_edit = true;
         std::optional<sm::object_id> artwork_character;
         history_state::transition history_transition;
     };
@@ -98,6 +99,14 @@ namespace mdl {
             const sm::animation_assets& animation_data = {});
         sm::result delete_character(const sm::object_id& id);
         sm::result set_character_root_bone(const sm::object_id& character, const sm::object_id& bone);
+        std::expected<sm::object_id, sm::result> add_rotation_constraint(
+            sm::object_id target, sm::rotation_reference reference, sm::angle_range allowed,
+            std::string name = "Rotation constraint");
+        std::expected<sm::object_id, sm::result> add_rigid_triangle_constraint(
+            sm::object_id first, sm::object_id second, std::string name = "Rigid triangle");
+        sm::result update_constraint(sm::object_id id, sm::constraint_definition definition);
+        sm::result remove_constraint(sm::object_id id);
+        void record_transient_edit(std::function<void()> redo, std::function<void()> undo);
         bool rename(const sm::object_id& id, const std::string& new_name);
         void add_new_skeleton_root(sm::point loc);
         bool rename(skel_piece piece, const std::string& new_name);

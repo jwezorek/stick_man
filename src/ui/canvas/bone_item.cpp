@@ -1,4 +1,3 @@
-#include "../../core/sm_constraint.hpp"
 #include "scene.hpp"
 #include "canvas_item.hpp"
 #include "bone_item.hpp"
@@ -9,7 +8,6 @@
 
 namespace {
 
-    constexpr auto k_joint_constraint_radius = 50.0;
     constexpr auto k_bone_zorder = 5;
 
     QPolygonF bone_polygon(double length, double node_radius, double scale) {
@@ -38,8 +36,7 @@ namespace {
 
 ui::canvas::item::bone::bone(sm::bone& bone, double scale) :
         treeview_item_(nullptr),
-        has_stick_man_model<ui::canvas::item::bone, sm::bone&>(bone),
-    rot_constraint_(nullptr) {
+        has_stick_man_model<ui::canvas::item::bone, sm::bone&>(bone) {
     setBrush(Qt::black);
     setPen(QPen(Qt::black, 1.0 / scale));
     set_bone_item_pos(
@@ -64,27 +61,6 @@ ui::canvas::item::node& ui::canvas::item::bone::child_node_item() const {
     );
 }
 
-void ui::canvas::item::bone::sync_rotation_constraint_to_model() {
-    auto constraint = sm::editor_rotation_constraint(model());
-    if (!constraint) {
-        if (rot_constraint_) {
-            rot_constraint_->hide();
-        }
-        return;
-    }
-
-    if (!rot_constraint_) {
-        canvas()->addItem(rot_constraint_ = new rot_constraint_adornment());
-    }
-    rot_constraint_->set(model(), *constraint, canvas()->scale());
-    if (is_selected() || canvas()->rotation_constraints_visible()) {
-        rot_constraint_->show();
-    }
-    else {
-        rot_constraint_->hide();
-    }
-}
-
 mdl::const_skel_piece ui::canvas::item::bone::to_skeleton_piece() const {
     const auto& bone = model();
     return sm::ref(bone);
@@ -100,7 +76,6 @@ void ui::canvas::item::bone::sync_item_to_model() {
         model_.world_rotation(),
         1.0 / canv.scale()
     );
-    sync_rotation_constraint_to_model();
 }
 
 void ui::canvas::item::bone::sync_sel_frame_to_model() {
@@ -125,34 +100,4 @@ bool ui::canvas::item::bone::is_selection_frame_only() const {
 
 QGraphicsItem* ui::canvas::item::bone::item_body() {
     return this;
-}
-
-/*------------------------------------------------------------------------------------------------*/
-
-
-ui::canvas::item::rot_constraint_adornment::rot_constraint_adornment() {
-    setBrush(QBrush(k_sel_color));
-    setPen(Qt::NoPen);
-}
-
-void ui::canvas::item::rot_constraint_adornment::set(const sm::bone& bone,
-    const sm::rot_constraint& constraint, double scale) {
-    QPointF pivot = {};
-    double start_angle = 0;
-    double radius = k_joint_constraint_radius * (1.0 / scale);
-
-    if (constraint.relative_to_parent) {
-        auto& anchor_bone = bone.parent_bone()->get();
-        auto parent_rot = anchor_bone.world_rotation();
-
-        start_angle = normalize_angle(parent_rot + constraint.start_angle);
-        pivot = ui::to_qt_pt(bone.parent_node().world_pos());
-    }
-    else {
-        auto center_pt = 0.5 * (bone.parent_node().world_pos() + bone.child_node().world_pos());
-        start_angle = constraint.start_angle;
-        pivot = ui::to_qt_pt(center_pt);
-    }
-    ui::set_arc(this, pivot, radius, start_angle, constraint.span_angle);
-    show();
 }

@@ -20,24 +20,46 @@ void editor_history() {
     const auto a = arm(p,root,{100,0}), b = arm(p,root,{0,100});
     const auto arbitrary = p.core().add_rotation_constraint(a, sm::rotation_reference::bone(b),
         {-std::numbers::pi,2*std::numbers::pi}, "Reference relation").value()->id();
-    p.transform(std::vector<mdl::handle>{a}, [](sm::bone& target) {
-        require(sm::set_editor_rotation_constraint(target,-1,2,false)==sm::result::success,"create editor constraint");
-    });
-    sm::object_id created;
-    for (const auto& [id,c] : p.core().constraints()) if (id != arbitrary) created=id;
-    require(p.core().constraints().size()==2,"editor leaves arbitrary relation intact");
+
+    const auto created = p.add_rotation_constraint(a, sm::rotation_reference::world(), {-1,2},
+        "Editor limit").value();
+    require(p.core().constraints().size()==2,"model creation leaves arbitrary relation intact");
+    require(p.core().constraint_by_id(created)->get().rotation()->allowed.start_angle==-1,
+        "model creation stores requested range");
     p.undo(); require(p.core().constraints().size()==1,"undo creation retains arbitrary relation");
     p.redo(); require(p.core().constraint_by_id(created).has_value(),"creation redo retains ID");
-    p.core().rename(created,"Named editor limit");
-    p.transform(std::vector<mdl::handle>{a}, [](sm::bone& target) { sm::set_editor_rotation_constraint(target,-0.5,1,false); });
+
+    p.rename(created,"Named editor limit");
+    auto edited = p.core().constraint_by_id(created)->get().definition();
+    auto& rotation = std::get<sm::rotation_constraint>(edited);
+    rotation.allowed = {-0.5,1};
+    require(p.update_constraint(created, edited)==sm::result::success,"model edit failed");
     require(p.core().constraint_by_id(created)->get().name()=="Named editor limit","edit retains name");
-    p.undo(); require(sm::editor_rotation_constraint(bone(p,a))->start_angle==-1,"undo restores definition");
-    p.redo(); require(sm::editor_rotation_constraint(bone(p,a))->start_angle==-0.5,"redo restores definition");
-    p.transform(std::vector<mdl::handle>{a}, [](sm::bone& target) { sm::remove_editor_rotation_constraint(target); });
-    require(p.core().constraints().size()==1 && p.core().constraint_by_id(arbitrary).has_value(),"remove targets only editor relation");
+    p.undo(); require(p.core().constraint_by_id(created)->get().rotation()->allowed.start_angle==-1,
+        "undo restores definition");
+    p.redo(); require(p.core().constraint_by_id(created)->get().rotation()->allowed.start_angle==-0.5,
+        "redo restores definition");
+
+    require(p.remove_constraint(created)==sm::result::success,"model removal failed");
+    require(p.core().constraints().size()==1 && p.core().constraint_by_id(arbitrary).has_value(),
+        "remove targets only selected first-class relation");
     p.undo(); require(p.core().constraint_by_id(created).has_value(),"undo removal retains ID");
     p.redo(); require(!p.core().constraint_by_id(created),"redo removes same ID");
+
+    p.undo(); // restore the rotation relation before exercising triangle commands
+    const auto triangle = p.add_rigid_triangle_constraint(a,b,"Rigid pair").value();
+    auto triangle_def = p.core().constraint_by_id(triangle)->get().definition();
+    std::get<sm::rigid_triangle_constraint>(triangle_def).relative_angle = 0.75;
+    require(p.update_constraint(triangle,triangle_def)==sm::result::success,"triangle angle edit failed");
+    require(std::abs(p.core().constraint_by_id(triangle)->get().triangle()->relative_angle-0.75)<1e-12,
+        "triangle angle edit not stored");
+    p.undo();
+    require(std::abs(p.core().constraint_by_id(triangle)->get().triangle()->relative_angle-
+        std::numbers::pi/2)<1e-12,"triangle angle undo failed");
+    p.undo(); require(!p.core().constraint_by_id(triangle),"triangle create undo failed");
+    p.redo(); require(p.core().constraint_by_id(triangle).has_value(),"triangle create redo changed identity");
 }
+
 void fan_history_and_copy() {
     mdl::project p;
     const auto root = p.core().create_skeleton({0,0}).root_node().id();
