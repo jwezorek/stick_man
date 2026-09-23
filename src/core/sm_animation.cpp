@@ -1,4 +1,5 @@
 #include "sm_animation.hpp"
+#include "sm_geometry_batch.hpp"
 #include "sm_animation_action_semantics.hpp"
 #include "sm_skeleton.hpp"
 #include <algorithm>
@@ -349,7 +350,9 @@ void sm::remap_animation_assets(animation_assets& assets,
         }, action.data);
 }
 void sm::apply_pose(const pose& pose, const topology& topology) {
+    geometry_batch batch(topology);
     for (const auto& [id, pt] : pose.node_positions) if (auto node = topology.get<sm::node>(id)) node->get().set_world_pos(pt);
+    if (batch.commit() != result::success) throw std::invalid_argument("pose violates rigid constraints");
 }
 bool sm::pose_compatible(const pose& pose, const topology& topology, const std::vector<object_id>& skeletons) {
     std::size_t count = 0;

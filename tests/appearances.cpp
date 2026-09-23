@@ -96,7 +96,7 @@ void persistence() {
     sm::detail::package_reader reader(*encoded);
     auto bytes = reader.read("project.json");
     auto semantic = nlohmann::json::parse(bytes);
-    require(semantic["version"] == 5.0, "artwork requires a new package version");
+    require(semantic["version"] == 7.0, "constraints require a new package version");
     auto prefix = "characters/" + id.to_string() + "/artwork/";
     auto png = reader.read(prefix + "page-0.png");
     auto malformed = [&](auto mutate, bool include_page = true) {
@@ -123,8 +123,8 @@ void persistence() {
     sm::detail::package_writer legacy_writer;
     auto legacy_text = legacy.dump();
     legacy_writer.add("project.json", {reinterpret_cast<const std::uint8_t*>(legacy_text.data()), legacy_text.size()});
-    require(loaded.deserialize(legacy_writer.finish()) == sm::project_result::success, "legacy v4 project did not load");
-    require(loaded.artwork(id).frames().empty(), "legacy artwork must start empty");
+    require(loaded.deserialize(legacy_writer.finish()) == sm::project_result::invalid_project_json, "legacy project must be rejected");
+    require(loaded.artwork(id).frames().contains("new"), "rejected legacy load changed project");
 }
 void bone_replacement() {
     sm::project p;

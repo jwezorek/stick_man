@@ -14,6 +14,7 @@
 #include "sm_types.hpp"
 #include "sm_object_id.hpp"
 #include "sm_bone.hpp"
+#include "sm_constraint.hpp"
 #include "json_fwd.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
@@ -126,6 +127,8 @@ namespace sm {
         }
     };
     class topology {
+        friend class project;
+        friend class geometry_batch;
         friend class skeleton;
         friend class node;
         friend class bone;
@@ -134,6 +137,11 @@ namespace sm {
         std::vector<std::unique_ptr<node>> nodes_;
         std::vector<std::unique_ptr<bone>> bones_;
         skeleton_tbl skeletons_;
+        constraint_map constraints_;
+        project* project_ = nullptr;
+        mutable unsigned geometry_edit_depth_ = 0;
+        void copy_constraints_from(const topology&, const std::unordered_map<object_id, object_id>& = {});
+        void prune_constraints();
         object_id generate_object_id() const;
         node_ref create_node(skeleton& parent, object_id id, const std::string& name, double x, double y);
         node_ref create_node(skeleton& parent, const std::string& name, double x, double y);
@@ -143,6 +151,9 @@ namespace sm {
         expected_skel create_skeleton_with_id(object_id id, const std::string& name);
     public:
         topology();
+        const constraint_map& constraints() const { return constraints_; }
+        project* owning_project() const { return project_; }
+        bool geometry_edit_active() const { return geometry_edit_depth_ != 0; }
         topology(topology&& other);
         topology& operator=(topology&& other);
         topology(const topology& other) = delete;

@@ -3,6 +3,7 @@
 #include "ui/panes/animation_timeline.hpp"
 #include "ui/canvas/canvas_manager.hpp"
 #include "ui/canvas/node_item.hpp"
+#include "core/sm_constraint.hpp"
 #include <QtWidgets>
 #include <cmath>
 #include <iostream>

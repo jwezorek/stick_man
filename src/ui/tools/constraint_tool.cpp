@@ -1,3 +1,4 @@
+#include "../../core/sm_constraint.hpp"
 #include "constraint_tool.hpp"
 #include "../canvas/bone_item.hpp"
 #include "../canvas/node_item.hpp"
@@ -67,7 +68,7 @@ void ui::tool::constraint::mouseReleaseEvent(
     }
 
     auto* bone = dynamic_cast<canvas::item::bone*>(item);
-    if (!bone || bone->model().rotation_constraint()) {
+    if (!bone || sm::editor_rotation_constraint(bone->model())) {
         return;
     }
 
@@ -82,7 +83,7 @@ void ui::tool::constraint::mouseReleaseEvent(
     model_->transform(
         std::vector<mdl::handle>{ mdl::to_handle(bone->model()) },
         [relative_to_parent](sm::bone& model_bone) {
-            model_bone.set_rotation_constraint(
+            sm::set_editor_rotation_constraint(model_bone, 
                 k_default_rot_constraint_min,
                 k_default_rot_constraint_span,
                 relative_to_parent

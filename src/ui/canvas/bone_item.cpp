@@ -1,3 +1,4 @@
+#include "../../core/sm_constraint.hpp"
 #include "scene.hpp"
 #include "canvas_item.hpp"
 #include "bone_item.hpp"
@@ -64,7 +65,7 @@ ui::canvas::item::node& ui::canvas::item::bone::child_node_item() const {
 }
 
 void ui::canvas::item::bone::sync_rotation_constraint_to_model() {
-    auto constraint = model().rotation_constraint();
+    auto constraint = sm::editor_rotation_constraint(model());
     if (!constraint) {
         if (rot_constraint_) {
             rot_constraint_->hide();

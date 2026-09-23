@@ -3,7 +3,10 @@
 #include "sm_skeleton.hpp"
 #include "sm_fabrik.hpp"
 #include "sm_visit.hpp"
+#include "sm_geometry_batch.hpp"
+#include "sm_constraint_geometry.hpp"
 #include <unordered_map>
+#include <unordered_set>
 #include <cmath>
 
 using namespace std::placeholders;
@@ -167,6 +170,18 @@ double sm::node::world_y() const {
 	return y_;
 }
 void sm::node::set_world_pos(const point& pt) {
+    auto& topology = owner().owner();
+    if (!topology.geometry_edit_active()) {
+        for (auto& [id,c] : topology.constraints()) if (auto tri = c.triangle()) {
+            auto b = topology.get<bone>(tri->first_bone);
+            if (b && &b->get().owner() == &owner()) {
+                const auto status = perform_fabrik(*this,pt,{});
+                if (status == result::unsatisfiable_constraints || status == result::inconsistent_constraints)
+                    throw std::invalid_argument("node move conflicts with constraints");
+                return;
+            }
+        }
+    }
 	x_ = pt.x;
 	y_ = pt.y;
 }
@@ -208,21 +223,6 @@ sm::bone::bone(object_id id, std::string name, sm::node& u, sm::node& v) :
 void sm::bone::set_name(const std::string& new_name) {
 	name_ = new_name;
 }
-sm::result sm::bone::set_rotation_constraint(double start, double span, bool relative_to_parent) {
-	if (relative_to_parent && !parent_bone()) {
-		return result::no_parent;
-	}
-	rot_constraint_ = rot_constraint{ relative_to_parent, start, span };
-	return result::success;
-}
-
-std::optional<sm::rot_constraint> sm::bone::rotation_constraint() const {
-	return rot_constraint_;
-}
-
-void sm::bone::remove_rotation_constraint() {
-	rot_constraint_ = {};
-}
 const sm::object_id& sm::bone::id() const noexcept {
     return id_;
 }
@@ -248,14 +248,8 @@ sm::expected_bone sm::bone::copy_to(topology& destination, const object_id& skel
         return std::unexpected(result::not_found);
     }
     auto bone = destination.create_bone_in_skeleton(id_, name_, u->get(), v->get());
-    if (rot_constraint_) {
-        bone->get().set_rotation_constraint(
-            rot_constraint_->start_angle,
-            rot_constraint_->span_angle,
-            rot_constraint_->relative_to_parent
-        );
-    }
     skel.register_bone(bone->get());
+    destination.copy_constraints_from(owner().owner());
 
     return bone;
 }
@@ -400,11 +394,20 @@ void sm::bone::set_world_rotation(double theta) {
 }
 void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_bone) {
 
+    constraint_geometry geometry(owner().owner());
+    if (geometry.fan_for(this)) {
+        if (rotate_constrained_bone(*this,theta,!just_this_bone,axis) != result::success)
+            throw std::invalid_argument("rotation conflicts with constraints");
+        return;
+    }
+    geometry_batch batch(owner().owner());
+
 	if (!axis) {
 		axis = sm::ref(parent_node());
 	}
 	auto old_rotation_tbl = create_bone_rotation_tbl(*axis, *this, theta, just_this_bone);
 	std::unordered_map<sm::bone*, double> new_world_rotation;
+    std::unordered_set<std::size_t> projected_fans;
 	visit_bone_hierarchy(*axis,
 		[&](sm::maybe_bone_ref prev, sm::bone& bone)->sm::visit_result {
 			sm::node& u = (prev) ? bone.shared_node(*prev)->get() : axis->get();
@@ -417,14 +420,23 @@ void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_b
 					old_rotation_tbl[&bone].rel_rotation + parent_world_rotation
 				)
 			);
-			new_v_pos = sm::apply_rotation_constraints(new_v_pos, *axis, prev, bone);
-			v.set_world_pos(new_v_pos);
+            if (auto fan = geometry.fan_for(&bone)) {
+                if (projected_fans.insert(*fan).second &&
+                        geometry.project_fan(*fan,bone,u,new_v_pos) != result::success)
+                    throw std::invalid_argument("rotation conflicts with fan limits");
+            } else {
+                new_v_pos = sm::apply_rotation_constraints(new_v_pos, *axis, prev, bone);
+                v.set_world_pos(new_v_pos);
+            }
 			new_world_rotation[&bone] = angle_from_u_to_v(u.world_pos(), v.world_pos());
 			return sm::visit_result::continue_traversal;
 		}
 	);
+    if (batch.commit() != result::success) throw std::invalid_argument("rotation conflicts with rigid geometry");
 }
 void sm::bone::set_length(double len) {
+    if (!std::isfinite(len) || len <= 0) throw std::invalid_argument("invalid bone length");
+    geometry_batch batch(owner().owner());
     std::unordered_map<bone*, std::tuple<double,double>> bone_to_len_and_rot;
     std::vector<bone*> topo_order;
     visit_nodes_and_bones(*this, {},
@@ -445,4 +457,5 @@ void sm::bone::set_length(double len) {
         auto new_child_node_pos = bone->parent_node().world_pos() + offset;
         bone->child_node().set_world_pos(new_child_node_pos);
     }
+    if (batch.commit() != result::success) throw std::invalid_argument("length edit conflicts with rigid geometry");
 }

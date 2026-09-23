@@ -17,7 +17,7 @@
 namespace sm {
 
     using mutable_project_object = std::variant<node_ref, bone_ref>;
-    using const_project_object = std::variant<const_node_ref, const_bone_ref, const_skel_ref, const_character_ref>;
+    using const_project_object = std::variant<const_node_ref, const_bone_ref, const_skel_ref, const_character_ref, const_constraint_ref>;
     using project_buffer = std::vector<std::uint8_t>;
 
     struct removed_animation_action {
@@ -70,7 +70,7 @@ namespace sm {
     };
 
     class project {
-        using mutable_object = std::variant<node_ref, bone_ref, skel_ref, character_ref>;
+        using mutable_object = std::variant<node_ref, bone_ref, skel_ref, character_ref, ref<constraint>>;
         using character_tbl = std::unordered_map<object_id, std::unique_ptr<sm::character>>;
 
         // Keep characters alive until after topology destruction so a surviving skeleton can
@@ -98,13 +98,24 @@ namespace sm {
         void assert_animation_references_resolve() const;
 
     public:
-        project() = default;
+        project();
         project(project&&) = delete;
         project& operator=(project&&) = delete;
         project(const project&) = delete;
         project& operator=(const project&) = delete;
 
         const sm::topology& topology() const;
+        const constraint_map& constraints() const { return topology_.constraints(); }
+        expected_constraint constraint_by_id(object_id id) const;
+        std::vector<const_constraint_ref> constraints_for_bone(object_id id) const;
+        expected_constraint add_rotation_constraint(object_id target, rotation_reference reference,
+            angle_range allowed, std::string name = "Rotation constraint");
+        expected_constraint add_rigid_triangle_constraint(object_id first, object_id second,
+            std::string name = "Rigid triangle");
+        expected_constraint add_constraint(const constraint& value);
+        result update_constraint(object_id id, constraint_definition definition);
+        result remove_constraint(object_id id);
+        result restore_constraints(const constraint_map& snapshot);
 
         skeleton& create_skeleton(const point& pt);
         expected_skel copy_skeleton(

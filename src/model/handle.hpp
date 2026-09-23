@@ -18,7 +18,8 @@ namespace mdl {
     using model_object = sm::mutable_project_object;
     using const_model_object = sm::const_project_object;
     // Editor semantic selection. skel_piece remains exclusively topology-oriented.
-    using selection_object = const_model_object;
+    using selection_object = std::variant<sm::const_node_ref, sm::const_bone_ref,
+        sm::const_skel_ref, sm::const_character_ref>;
     using selection = std::vector<selection_object>;
 
     // All live model objects share one project-global object_id namespace.

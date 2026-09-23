@@ -1,4 +1,5 @@
 #include "sm_animation.hpp"
+#include "sm_geometry_batch.hpp"
 #include "sm_skeleton.hpp"
 #include "sm_fabrik.hpp"
 #include "sm_visit.hpp"
@@ -50,16 +51,33 @@ namespace {
     }
 
     void restore_node_pose(const node_pose& pose, const sm::topology& topology) {
+        sm::geometry_batch batch(topology);
         for (const auto& [id, pt] : pose)
             if (auto node = topology.get<sm::node>(id)) node->get().set_world_pos(pt);
+        if (batch.commit() != sm::result::success) throw std::invalid_argument("cached pose violates rigid constraints");
     }
 
-    bool equal_constraint(const std::optional<sm::rot_constraint>& a,
-            const std::optional<sm::rot_constraint>& b) {
-        if (a.has_value() != b.has_value()) return false;
-        if (!a) return true;
-        return a->relative_to_parent == b->relative_to_parent &&
-            a->start_angle == b->start_angle && a->span_angle == b->span_angle;
+    bool equal_constraints(const sm::constraint_map& a, const sm::constraint_map& b) {
+        if (a.size() != b.size()) return false;
+        auto right = b.begin();
+        for (const auto& [id, left] : a) {
+            const auto& other = right->second;
+            if (id != right->first || left.name() != other.name() ||
+                    left.definition().index() != other.definition().index()) return false;
+            if (auto rotation = left.rotation()) {
+                auto rhs = other.rotation();
+                if (rotation->target_bone != rhs->target_bone || rotation->reference != rhs->reference ||
+                        rotation->allowed.start_angle != rhs->allowed.start_angle ||
+                        rotation->allowed.span_angle != rhs->allowed.span_angle) return false;
+            } else {
+                auto triangle = left.triangle();
+                auto rhs = other.triangle();
+                if (triangle->first_bone != rhs->first_bone || triangle->second_bone != rhs->second_bone ||
+                        triangle->relative_angle != rhs->relative_angle) return false;
+            }
+            ++right;
+        }
+        return true;
     }
 
     struct bone_semantics {
@@ -68,19 +86,18 @@ namespace {
         sm::object_id parent;
         sm::object_id child;
         double length = 0.0;
-        std::optional<sm::rot_constraint> constraint;
     };
 
     bool operator==(const bone_semantics& a, const bone_semantics& b) {
         return a.id == b.id && a.skeleton == b.skeleton && a.parent == b.parent &&
-            a.child == b.child && a.length == b.length && equal_constraint(a.constraint,b.constraint);
+            a.child == b.child && a.length == b.length;
     }
 
     std::vector<bone_semantics> capture_bone_semantics(const sm::topology& topology) {
         std::vector<bone_semantics> result;
         for (auto skeleton : topology.skeletons()) for (auto bone : skeleton->bones())
             result.push_back({bone->id(),skeleton->id(),bone->parent_node().id(),bone->child_node().id(),
-                bone->length(),bone->rotation_constraint()});
+                bone->length()});
         std::ranges::sort(result, {}, &bone_semantics::id);
         return result;
     }
@@ -191,6 +208,7 @@ struct sm::animation_evaluator::implementation {
         node_pose base_pose;
         node_pose incoming_pose;
         std::vector<bone_semantics> topology_semantics;
+        constraint_map constraints;
         double continuation_step = 0.0;
         std::map<std::size_t,node_pose> checkpoints;
     };
@@ -211,6 +229,7 @@ struct sm::animation_evaluator::implementation {
             found->second.character_root_bone==character_root_bone &&
             found->second.base_pose==base.node_positions && found->second.incoming_pose==incoming &&
             found->second.topology_semantics==semantics &&
+            equal_constraints(found->second.constraints,working.constraints()) &&
             found->second.continuation_step==continuation_step;
         if(!reusable) {
             ik_cache_entry fresh;
@@ -219,6 +238,7 @@ struct sm::animation_evaluator::implementation {
             fresh.base_pose=base.node_positions;
             fresh.incoming_pose=incoming;
             fresh.topology_semantics=semantics;
+            fresh.constraints=working.constraints();
             fresh.continuation_step=continuation_step;
             fresh.checkpoints.emplace(0,incoming);
             if(found==ik_cache.end()) found=ik_cache.emplace(action.id,std::move(fresh)).first;

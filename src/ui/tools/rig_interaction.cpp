@@ -1,3 +1,5 @@
+#include "../../core/sm_constraint_geometry.hpp"
+#include "../../core/sm_geometry_batch.hpp"
 #include "rig_interaction.hpp"
 #include "../../model/selection.hpp"
 #include "select_tool_panel.hpp"
@@ -30,6 +32,21 @@ namespace rv = std::ranges::views;
 /*------------------------------------------------------------------------------------------------*/
 
 namespace {
+
+    void restore_scene_locations(ui::canvas::scene& scene, const mdl::project::node_locs& locations) {
+        std::unordered_map<const sm::topology*, std::vector<std::pair<sm::node*, sm::point>>> grouped;
+        for (const auto& [id, position] : locations)
+            for (auto* item : scene.node_items()) if (item->model().id() == id) {
+                auto& node = item->model();
+                grouped[&node.owner().owner()].emplace_back(&node, position);
+                break;
+            }
+        for (const auto& [topology, nodes] : grouped) {
+            sm::geometry_batch batch(*topology);
+            for (const auto& [node, position] : nodes) node->set_world_pos(position);
+            batch.commit();
+        }
+    }
 
     template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
     bool is_bone_from_u_to_v(sm::bone_ref src_bone, sm::node_ref u, sm::node_ref v) {
@@ -331,7 +348,14 @@ namespace {
 
     void do_rubber_band_translate(sm::node& src,
         const sm::point& delta, const std::vector<sm::node_ref>& sel) {
+        sm::geometry_batch batch(src.owner().owner());
         auto tbl = rubber_band_translation_table(src, delta, sel);
+        sm::constraint_geometry geometry(src.owner().owner());
+        if (geometry.status() != sm::result::success) return;
+        std::unordered_map<sm::node*, sm::point> before;
+        for (auto node : src.owner().nodes()) before.emplace(node.ptr(), node->world_pos());
+        std::unordered_set<std::size_t> projected_fans;
+        bool failed = false;
         sm::visit_bone_hierarchy(src,
             [&](sm::maybe_bone_ref maybe_prev, sm::bone& bone)->sm::visit_result {
                 if (!maybe_prev) {
@@ -343,6 +367,14 @@ namespace {
                     sm::node_ref{ src };
                 auto& curr_node = bone.opposite_node(prev_node);
                 auto new_v_pos = prev_node->world_pos() + tbl.at(&curr_node);
+                if (auto fan = geometry.fan_for(&bone)) {
+                    if (projected_fans.insert(*fan).second &&
+                            geometry.project_fan(*fan, bone, prev_node.get(), new_v_pos) != sm::result::success) {
+                        failed = true;
+                        return sm::visit_result::terminate_traversal;
+                    }
+                    return sm::visit_result::continue_traversal;
+                }
                 new_v_pos = sm::apply_rotation_constraints(new_v_pos, src, maybe_prev, bone);
 
                 curr_node.set_world_pos(new_v_pos);
@@ -350,6 +382,9 @@ namespace {
                 return sm::visit_result::continue_traversal;
             }
         );
+        if (failed || geometry.validate() != sm::result::success)
+            for (const auto& [node, point] : before) node->set_world_pos(point);
+        if (!failed) batch.commit();
     }
     void do_ragdoll_translate(sm::skel_ref& skel,
         const sm::point& delta, const std::vector<sm::node_ref>& sel,
@@ -808,8 +843,7 @@ void ui::tool::rig_interaction::do_rotation_complete(canvas::scene& canv, const 
             animation_authoring_->complete(animation_editing::authored_action_for(ri));
         }
         else {
-            for (const auto& [id, old_pos] : ri.old_node_locs())
-                for (auto* node : canv.node_items()) if (node->model().id() == id) { node->model().set_world_pos(old_pos); break; }
+            restore_scene_locations(canv, ri.old_node_locs());
             canv.sync_to_model();
         }
         canv.sync_selection();
@@ -826,8 +860,7 @@ void ui::tool::rig_interaction::do_rotation_complete(canvas::scene& canv, const 
 void ui::tool::rig_interaction::do_translation_complete(canvas::scene& canv, const translation_state& ri) {
     if (authoring_animation()) {
         auto authored=animation_editing::authored_action_for(ri);
-        for (const auto& [id, old_pos] : ri.old_locs)
-            for (auto* node : canv.node_items()) if (node->model().id() == id) { node->model().set_world_pos(old_pos); break; }
+        restore_scene_locations(canv, ri.old_locs);
         canv.sync_to_model();
         if(!authored) {
             if(animation_authoring_ && animation_authoring_->reject) animation_authoring_->reject(
@@ -890,8 +923,7 @@ void ui::tool::rig_interaction::cancel_animation_drag(canvas::scene& canv) {
         const node_locs* old = nullptr;
         if (auto* rotation = std::get_if<rotation_state>(&drag_->extra)) old = &rotation->old_node_locs();
         if (auto* translation = std::get_if<translation_state>(&drag_->extra)) old = &translation->old_locs;
-        if (old) for (const auto& [id, pt] : *old)
-            for (auto* node : canv.node_items()) if (node->model().id() == id) { node->model().set_world_pos(pt); break; }
+        if (old) restore_scene_locations(canv, *old);
         destroy_rubber_band(canv, drag_->rubber_band);
         drag_.reset();
         canv.sync_to_model();

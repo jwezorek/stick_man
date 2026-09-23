@@ -763,7 +763,12 @@ void ik_cache_detects_changed_skeleton_constraints() {
     evaluator.evaluate(animation,f.base,f.root_bone_id,f.topology,1000);
     auto middle=f.topology.get<sm::bone>(f.middle_bone_id);
     require(middle.has_value(),"missing middle bone for IK cache invalidation test");
-    require(middle->get().set_rotation_constraint(-0.25,0.5,false)==sm::result::success,
+    auto snapshot = f.topology.to_json();
+    sm::constraint_map constraints;
+    auto cid = sm::object_id::generate();
+    constraints.emplace(cid,sm::constraint(cid,"limit",sm::rotation_constraint{middle->get().id(),sm::rotation_reference::world(),{-0.25,0.5}}));
+    snapshot["constraints"] = sm::constraints_to_json(constraints);
+    require(f.topology.from_json(snapshot)==sm::result::success,
         "failed to change IK rotation constraint");
     evaluator.evaluate(animation,f.base,f.root_bone_id,f.topology,800);
     const auto reused=continuation_positions(f);

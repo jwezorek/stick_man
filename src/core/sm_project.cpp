@@ -21,7 +21,7 @@ namespace {
     template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 
     constexpr std::string_view project_json_name = "project.json";
-    constexpr double project_json_version = 6.0;
+    constexpr double project_json_version = 7.0;
 
     sm::object_id default_character_root_bone(
             const sm::topology& topology,const std::vector<sm::object_id>& skeletons) {
@@ -72,6 +72,11 @@ namespace {
             if (!insert(sm::character_ref(*entry.second))) {
                 objects.clear();
                 return false;
+            }
+        }
+        for (auto& [id,c] : topology.constraints()) {
+            if (!insert(sm::ref<sm::constraint>(const_cast<sm::constraint&>(c)))) {
+                objects.clear(); return false;
             }
         }
         return true;
@@ -207,10 +212,21 @@ sm::expected_skel sm::project::copy_skeleton(
         }
     }
 
+    // Constraint identities participate in the same namespace. Preflight before
+    // copy_to can insert or replace any semantic records in the destination.
+    for (auto& [id,c] : source.owner().constraints()) {
+        auto target = c.rotation() ? c.rotation()->target_bone : c.triangle()->first_bone;
+        if (!source.contains<bone>(target)) continue;
+        const bool new_identity = id_remap.contains(target) && !id_remap.contains(id);
+        if (!new_identity && objects_.contains(mapped_id(id)))
+            return std::unexpected(result::duplicate_id);
+    }
+
     auto copied = source.copy_to(topology_, id_remap);
     if (!copied) {
         return copied;
     }
+    topology_.prune_constraints();
     invalidate_object_index();
     if (!ensure_object_index()) {
         throw std::runtime_error("copying skeleton produced duplicate object IDs");
@@ -324,6 +340,7 @@ void sm::project::reconcile_character_animation_poses() {
 
 sm::result sm::project::validate_integrity() const noexcept {
     if (!ensure_object_index()) return result::duplicate_id;
+    if (auto status = validate_constraints(topology_,constraints()); status != result::success) return status;
     if (!has_consistent_membership()) return result::invalid_membership;
     try {
         for (const auto& [id, character] : characters_)
@@ -398,6 +415,7 @@ sm::expected_bone sm::project::create_bone(
     auto candidate_bone = candidate_topology.create_bone(id, name, *candidate_u, *candidate_v);
     if (!candidate_bone) return std::unexpected(candidate_bone.error());
 
+    candidate_topology.prune_constraints();
     auto candidate_characters = snapshot_character_states(*this);
     for (auto& [candidate_id, state] : candidate_characters)
         erase_cascade_actions(state.animation_data, effects);
@@ -459,6 +477,10 @@ sm::topology_change sm::project::replace_skeletons(
         for (auto node : skel->get().nodes()) released_ids.insert(node->id());
         for (auto bone : skel->get().bones()) released_ids.insert(bone->id());
     }
+    for (auto& [id,c] : constraints()) {
+        if (std::ranges::any_of(released_ids,[&](object_id bone) { return c.references(bone); }))
+            released_ids.insert(id);
+    }
     std::unordered_set<object_id> used_ids;
     used_ids.reserve(objects_.size());
     for (const auto& [id, object] : objects_) {
@@ -487,8 +509,13 @@ sm::topology_change sm::project::replace_skeletons(
         }
     };
 
+    // Allocate all bone and constraint identities before copying any component.
+    // Arbitrary references can cross replacement skeleton boundaries.
+    std::vector<std::unordered_map<object_id,object_id>> replacement_remaps;
+    std::unordered_map<object_id,object_id> semantic_remap;
+    std::unordered_set<object_id> incoming_constraint_ids;
     for (auto replacement : replacements) {
-        std::unordered_map<object_id, object_id> id_remap;
+        auto& id_remap = replacement_remaps.emplace_back();
         auto reserve_id = [&](const object_id& id) {
             if (regenerate_ids.contains(id) || used_ids.contains(id)) {
                 auto new_id = unused_object_id();
@@ -505,8 +532,19 @@ sm::topology_change sm::project::replace_skeletons(
         }
         for (auto bone : replacement->bones()) {
             reserve_id(bone->id());
+            if (id_remap.contains(bone->id())) semantic_remap[bone->id()] = id_remap.at(bone->id());
         }
-
+        for (auto& [id,c] : replacement->owner().constraints()) {
+            const auto target = c.rotation() ? c.rotation()->target_bone : c.triangle()->first_bone;
+            if (!replacement->contains<bone>(target) || !incoming_constraint_ids.insert(id).second) continue;
+            reserve_id(id);
+            semantic_remap[id] = id_remap.contains(id) ? id_remap.at(id) : id;
+        }
+    }
+    for (size_t i = 0; i < replacements.size(); ++i) {
+        auto replacement = replacements[i];
+        auto id_remap = replacement_remaps[i];
+        for (auto [old_id,new_id] : semantic_remap) id_remap.insert_or_assign(old_id,new_id);
         auto copied = replacement->copy_to(staged, id_remap);
         if (!copied) {
             topology_change failed;
@@ -552,6 +590,12 @@ sm::topology_change sm::project::replace_skeletons(
         }
     }
 
+    candidate_topology.prune_constraints();
+    if (auto status = validate_constraints(candidate_topology,candidate_topology.constraints()); status != result::success) {
+        change.status = status; return change;
+    }
+    for (const auto& [id,c] : candidate_topology.constraints())
+        if (characters_.contains(id)) { change.status = result::duplicate_id; return change; }
     auto candidate_characters = snapshot_character_states(*this);
     for (auto& [candidate_id, state] : candidate_characters)
         for (const auto& removed_id : replacees) std::erase(state.skeletons, removed_id);
@@ -657,6 +701,7 @@ sm::result sm::project::restore_membership(const membership_state& state) {
         if (!topology_.skeleton(sid)) return result::not_found;
         if (parent && !metadata.contains(*parent)) return result::invalid_membership;
     }
+
 
     auto candidate_characters = snapshot_character_states(*this);
     for (const auto& saved : state.characters) {
@@ -855,6 +900,7 @@ sm::result sm::project::adopt_skeletons(const object_id& id, std::span<const con
         if (!seen.insert(skel->id()).second) return result::duplicate_skeleton;
         if (!skel->is_loose()) return result::skeleton_already_owned;
     }
+
     auto candidate_characters = snapshot_character_states(*this);
     auto& candidate = candidate_characters.at(id);
     for (auto skel : skeletons) candidate.skeletons.push_back(skel->id());
@@ -1010,6 +1056,9 @@ sm::mutable_project_object sm::project::get(const object_id& id) {
         },
         [](character_ref) -> mutable_project_object {
             throw std::runtime_error("project object does not support mutable lookup");
+        },
+        [](ref<constraint>) -> mutable_project_object {
+            throw std::runtime_error("project object does not support mutable lookup");
         }
     }, get_mutable(id));
 }
@@ -1032,6 +1081,9 @@ sm::const_project_object sm::project::get(const object_id& id) const {
             },
             [](sm::character_ref ref) -> sm::const_project_object {
                 return sm::const_character_ref(std::as_const(ref.get()));
+            },
+            [](sm::ref<sm::constraint> ref) -> sm::const_project_object {
+                return sm::const_constraint_ref(std::as_const(ref.get()));
             }
         },
         get_mutable(id)
@@ -1069,7 +1121,10 @@ std::expected<sm::project_buffer, sm::project_result> sm::project::serialize() c
                 {"skeletons", std::move(skeletons)}, {"root_bone", character->character_root_bone().to_string()},
                 {"artwork", std::move(art)}, {"animation_data", animation_assets_to_json(character->animation_data())}});
         }
-        json semantic_project{{"version", project_json_version}, {"topology", topology_.to_json()}, {"characters", std::move(characters)}};
+        auto topology_json = topology_.to_json();
+        topology_json.erase("constraints");
+        json semantic_project{{"version", project_json_version}, {"topology", std::move(topology_json)},
+            {"constraints", constraints_to_json(constraints())}, {"characters", std::move(characters)}};
         auto text = semantic_project.dump(4);
         package.add(std::string(project_json_name), {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()});
         return package.finish();
@@ -1101,12 +1156,16 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
             return true;
         });
         const auto version = semantic_project.at("version").get<double>();
-        if (version != project_json_version && version != 5.0 && version != 4.0) {
+        if (version != project_json_version) {
             return project_result::invalid_project_json;
         }
+        if (semantic_project.at("topology").contains("constraints")) return project_result::invalid_project_json;
         if (new_topology.from_json(semantic_project.at("topology")) != result::success) {
             return project_result::invalid_project_json;
         }
+        new_topology.constraints_ = constraints_from_json(semantic_project.at("constraints"));
+        if (validate_constraints(new_topology,new_topology.constraints_) != result::success)
+            return project_result::invalid_project_json;
 
         const auto& character_json = semantic_project.at("characters");
         if (!character_json.is_array()) {

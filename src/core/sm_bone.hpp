@@ -74,7 +74,6 @@ namespace sm {
         node& v_;
         double length_;
         std::any user_data_;
-        std::optional<rot_constraint> rot_constraint_;
 
     protected:
         bone(object_id id, std::string name, node& u, node& v);
@@ -108,10 +107,6 @@ namespace sm {
 
         maybe_const_node_ref shared_node(const bone& b) const;
         maybe_node_ref shared_node(const bone& b);
-
-        std::optional<rot_constraint> rotation_constraint() const;
-        result set_rotation_constraint(double start, double span, bool relative_to_parent);
-        void remove_rotation_constraint();
 
         std::tuple<point, point> line_segment() const;
         double length() const;

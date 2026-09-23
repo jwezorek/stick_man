@@ -70,6 +70,12 @@ add_executable(animation_order animation_order.cpp)
 target_link_libraries(animation_order PRIVATE stick_man_core)
 add_test(NAME animation_order COMMAND $<TARGET_FILE:animation_order>)
 add_executable(fabrik_pins fabrik_pins.cpp)
+add_executable(constraints constraints.cpp)
+target_link_libraries(constraints PRIVATE stick_man_core)
+add_test(NAME constraints COMMAND $<TARGET_FILE:constraints>)
+add_executable(angle_set angle_set.cpp)
+target_link_libraries(angle_set PRIVATE stick_man_core)
+add_test(NAME angle_set COMMAND $<TARGET_FILE:angle_set>)
 target_link_libraries(fabrik_pins PRIVATE stick_man_core)
 add_test(NAME fabrik_pins COMMAND $<TARGET_FILE:fabrik_pins>)
 target_link_libraries(animation_stage1 PRIVATE stick_man_core)
@@ -87,6 +93,11 @@ add_test(NAME animation_ui COMMAND "${CMAKE_COMMAND}" -E env
     "QT_QPA_PLATFORM=offscreen" "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
     $<TARGET_FILE:animation_ui>)
 add_executable(rotation_editor rotation_editor.cpp ${PROJECT_SOURCE_DIR}/src/ui/stick_man.qrc)
+add_executable(constraint_ui constraint_ui.cpp)
+target_link_libraries(constraint_ui PRIVATE stick_man_model)
+add_test(NAME constraint_ui COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+    $<TARGET_FILE:constraint_ui>)
 add_executable(animation_placement_ui animation_placement_ui.cpp ${PROJECT_SOURCE_DIR}/src/ui/stick_man.qrc)
 target_link_libraries(animation_placement_ui PRIVATE stick_man_ui)
 set_target_properties(animation_placement_ui PROPERTIES AUTORCC ON)
@@ -102,3 +113,7 @@ add_test(NAME rotation_editor COMMAND "${CMAKE_COMMAND}" -E env
 add_executable(animation_character_integrity animation_character_integrity.cpp)
 target_link_libraries(animation_character_integrity PRIVATE stick_man_core)
 add_test(NAME animation_character_integrity COMMAND $<TARGET_FILE:animation_character_integrity>)
+
+add_executable(constraint_solver constraint_solver.cpp)
+target_link_libraries(constraint_solver PRIVATE stick_man_core)
+add_test(NAME constraint_solver COMMAND $<TARGET_FILE:constraint_solver>)

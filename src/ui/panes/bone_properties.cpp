@@ -1,3 +1,4 @@
+#include "../../core/sm_constraint.hpp"
 #include "bone_properties.hpp"
 #include "../canvas/scene.hpp"
 #include "../canvas/canvas_item.hpp"
@@ -26,7 +27,7 @@ namespace {
             mdl::to_handles(ui::canvas::to_model_ptrs(canv.selected_bones())) |
             r::to<std::vector<mdl::handle>>(),
             [=](sm::bone& bone) {
-                bone.set_rotation_constraint(start, span, is_parent_relative);
+                sm::set_editor_rotation_constraint(bone, start, span, is_parent_relative);
             }
         );
     }
@@ -36,7 +37,7 @@ namespace {
             mdl::to_handles(ui::canvas::to_model_ptrs(canv.selected_bones())) |
             r::to<std::vector<mdl::handle>>(),
             [=](sm::bone& bone) {
-                bone.remove_rotation_constraint();
+                sm::remove_editor_rotation_constraint(bone);
             }
         );
     }
@@ -409,7 +410,7 @@ void ui::pane::props::bones::set_selection_single(const ui::canvas::scene& canv)
     character_root_btn_->setText(parent && parent->get().character_root_bone()==bone.id()
         ? "Character Root Bone (current)" : "Set as Character Root Bone");
     name_->set_value(bone.name().c_str());
-    auto rot_constraint = bone.rotation_constraint();
+    auto rot_constraint = sm::editor_rotation_constraint(bone);
     if (rot_constraint) {
         constraint_box_->show();
         constraint_box_->set(

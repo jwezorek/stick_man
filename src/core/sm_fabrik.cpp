@@ -1,4 +1,7 @@
+#include <cmath>
 #include "sm_fabrik.hpp"
+#include "sm_constraint_geometry.hpp"
+#include "sm_geometry_batch.hpp"
 #include "sm_skeleton.hpp"
 #include "sm_visit.hpp"
 #include <unordered_set>
@@ -94,252 +97,25 @@ namespace {
 		return sm::transform(pt, rotate_about_point_matrix(u, angle_from_u_to_v(u, v)));
 	}
 
-	std::optional<sm::angle_range> get_forw_rel_rot_constraint(const fabrik_neighborhood& fi) {
-		// a forward relative rotation constraint is the normal case. The bone
-		// has a rotation constraint on it that is relative to its parent and the
-		// predecessor bone is its parent.
-
-		if (!fi.prev) {
-			return {};
-		}
-
-		const auto& pred_bone = fi.prev->get();
-		const auto& curr = fi.current_bone;
-		auto curr_constraint = curr.rotation_constraint();
-
-		if (curr_constraint && curr_constraint->relative_to_parent) {
-			if (curr.parent_bone() && &curr.parent_bone()->get() != &pred_bone) {
-				return {};
-			}
-
-			auto curr_pos = current_node(fi).world_pos();
-			auto pred_pos = pred_node(fi)->get().world_pos();
-			auto anchor_angle = angle_from_u_to_v(pred_pos, curr_pos);
-
-			return sm::angle_range{
-				sm::normalize_angle(curr_constraint->start_angle + anchor_angle),
-				curr_constraint->span_angle
-			};
-		}
-
-		return {};
-	}
-
-	std::optional<sm::angle_range> get_back_rel_rot_constraint(const fabrik_neighborhood& fi) {
-		// a backward relative constraint occurs when the predecessor bone
-		// has a relative-to-parent rotation constraint and the current bone
-		// is the predecessor's parent.
-
-		if (!fi.prev) {
-			return {};
-		}
-
-		const auto& pred_bone = fi.prev->get();
-		const auto& curr = fi.current_bone;
-		auto pred_constraint = pred_bone.rotation_constraint();
-
-		if (!pred_constraint || pred_constraint->relative_to_parent == false) {
-			return {};
-		}
-
-		if (&pred_bone.parent_bone()->get() != &curr) {
-			return {};
-		}
-
-		auto curr_pos = current_node(fi).world_pos();
-		auto pred_pos = pred_node(fi)->get().world_pos();
-		auto anchor_angle = angle_from_u_to_v(pred_pos, curr_pos);
-		auto start_angle = -(pred_constraint->start_angle + pred_constraint->span_angle);
-
-		return sm::angle_range{
-			sm::normalize_angle(start_angle + anchor_angle),
-			pred_constraint->span_angle
-		};
-	}
-
-	std::optional<sm::angle_range>  get_relative_rot_constraint(const fabrik_neighborhood& fi) {
-
-		auto forward = get_forw_rel_rot_constraint(fi);
-		if (forward) {
-			return forward;
-		}
-		return get_back_rel_rot_constraint(fi);
-
-	}
-
-	sm::angle_range absolute_constraint(bool is_forward, double start_angle, double span_angle) {
-		return sm::angle_range{
-			is_forward ? start_angle : sm::normalize_angle(start_angle + std::numbers::pi),
-				span_angle
-		};
-	}
-
-	std::optional<sm::angle_range> get_absolute_rot_constraint(const fabrik_neighborhood& fi) {
-		const sm::bone& curr = fi.current_bone;
-		auto constraint = curr.rotation_constraint();
-
-		if (!constraint) {
-			return {};
-		}
-
-		if (constraint->relative_to_parent) {
-			return {};
-		}
-
-		const auto& pivot_node = current_node(fi);
-		return absolute_constraint(
-			(&pivot_node == &curr.parent_node()), constraint->start_angle, constraint->span_angle
-		);
-	}
-
-	std::vector<sm::angle_range> get_applicable_rot_constraints(const fabrik_neighborhood& fi) {
-		std::vector<sm::angle_range> constraints;
-		auto absolute = get_absolute_rot_constraint(fi);
-
-		if (absolute) {
-			constraints.push_back(*absolute);
-		}
-
-		auto relative = get_relative_rot_constraint(fi);
-		if (relative) {
-			constraints.push_back(*relative);
-		}
-
-		return constraints;
-	}
-
-	std::vector<sm::angle_range> intersect_angle_ranges(const std::vector<sm::angle_range>& ranges) {
-
-		if (ranges.size() > 2) {
-			throw std::runtime_error("invalid rotational constraints");
-		}
-
-		if (ranges.size() == 2) {
-			return sm::intersect_angle_ranges(ranges[0], ranges[1]);
-		}
-
-		return { ranges.front() };
-	}
-
-	double constrain_angle_to_ranges(double theta, std::span<sm::angle_range> ranges) {
-
-		// If theta is in one of the angle ranges there is nothing to do...
-		for (const auto& range : ranges) {
-			if (sm::angle_in_range(theta, range)) {
-				return theta;
-			}
-		}
-
-		std::vector<double> angles;
-		angles.reserve(2 * ranges.size());
-
-		for (const auto& range : ranges) {
-			angles.push_back(range.start_angle);
-			angles.push_back(sm::normalize_angle(range.start_angle + range.span_angle));
-		}
-
-		double closest_dist = std::numeric_limits<double>::max();
-		double closest = 0.0;
-
-		for (auto angle : angles) {
-			auto dist = std::abs(sm::angular_distance(theta, angle));
-			if (dist < closest_dist) {
-				closest_dist = dist;
-				closest = angle;
-			}
-		}
-
-		return closest;
-	}
-
-	double constrain_angle_to_range(double theta, sm::angle_range range) {
-		return constrain_angle_to_ranges(theta, { &range,1 });
-	}
-
-	std::optional<double> apply_rotation_constraints(const fabrik_neighborhood& fi, double theta) {
-
-		auto constraints = get_applicable_rot_constraints(fi);
-		if (constraints.empty()) {
-			return {};
-		}
-
-		auto intersection_of_ranges = intersect_angle_ranges(constraints);
-		if (intersection_of_ranges.empty()) {
-			// if the constraints can not all be satisfied, default to the first one...
-			intersection_of_ranges = { constraints.front() };
-		}
-
-		return constrain_angle_to_ranges(theta, intersection_of_ranges);
-	}
-
-	sm::point apply_rotation_constraints(const fabrik_neighborhood& fi, const sm::point& free_pt) {
-
-		auto pivot_pt = current_node(fi).world_pos();
-		auto old_theta = angle_from_u_to_v(pivot_pt, free_pt);
-		auto new_theta = apply_rotation_constraints(fi, old_theta);
-
-		if (!new_theta) {
-			return free_pt;
-		}
-
-		return sm::transform(
-			sm::point{ sm::distance(pivot_pt, free_pt), 0.0 },
-			translation_matrix(pivot_pt) * sm::rotation_matrix(*new_theta)
-		);
-
-	}
-
-	sm::point constrain_angular_velocity(
-			const fabrik_neighborhood& fi, double original_rot, double max_angle_delta,
-			const sm::point& free_pt) {
-
-		auto curr = fi.current_bone;
-		const auto& pivot_node = current_node(fi);
-		auto old_theta = angle_from_u_to_v(pivot_node.world_pos(), free_pt);
-		bool is_forward = (&pivot_node == &curr.parent_node());
-
-		auto start_angle = sm::normalize_angle(original_rot - max_angle_delta);
-		auto new_theta = constrain_angle_to_range(
-			old_theta,
-			absolute_constraint(is_forward, start_angle, 2.0 * max_angle_delta)
-		);
-
-		return sm::transform(
-			sm::point{ sm::distance(pivot_node.world_pos(), free_pt), 0.0 },
-			translation_matrix(pivot_node.world_pos()) * sm::rotation_matrix(new_theta)
-		);
-
-	}
-
-	sm::point apply_all_constraints(
-			const sm::point& curr_pos,
-			const fabrik_neighborhood& neighborhood,
-			bool apply_rot_constaints,
-			double max_ang_delta,
-			double old_bone_rotation ) {
-
-		sm::point new_pos = curr_pos;
-		if (apply_rot_constaints) {
-			new_pos = apply_rotation_constraints(neighborhood, new_pos);
-		}
-
-		if (max_ang_delta > 0.0) {
-			new_pos = constrain_angular_velocity(
-				neighborhood,
-				old_bone_rotation,
-				max_ang_delta,
-				new_pos
-			);
-		}
-
-		return new_pos;
-	}
+ struct constraint_failure { sm::result code; };
+ sm::point apply_all_constraints(const sm::point& proposed,const fabrik_neighborhood& fn,bool use,double max_delta,double old_rotation,const sm::constraint_geometry& geometry) {
+  if(geometry.status()!=sm::result::success)throw constraint_failure{geometry.status()};
+  auto& leader=current_node(fn);bool forward=&leader==&fn.current_bone.parent_node();
+  double theta=forward?sm::angle_from_u_to_v(leader.world_pos(),proposed):sm::angle_from_u_to_v(proposed,leader.world_pos());
+  auto allowed=geometry.allowed_angles(fn.current_bone,use);
+  if(max_delta>0)allowed=allowed.intersect(sm::angle_set({old_rotation-max_delta,2*max_delta}));
+  auto clamped=allowed.closest_angle(theta);if(!clamped)throw constraint_failure{sm::result::unsatisfiable_constraints};
+  double direction=*clamped+(forward?0:std::numbers::pi),length=sm::distance(leader.world_pos(),proposed);
+  return {leader.world_x()+length*std::cos(direction),leader.world_y()+length*std::sin(direction)};
+ }
 
 	void perform_one_fabrik_pass(sm::node& start_node, const sm::point& target_pt,
 		const std::unordered_map<sm::bone*, bone_info>& bone_tbl, bool use_constraints,
-		double max_ang_delta) {
-
-		auto perform_fabrik_on_bone = 
+		double max_ang_delta, sm::constraint_geometry& geometry,const std::unordered_map<sm::node*,sm::point>& pins) {
+        std::unordered_set<size_t> projected;
+        std::unordered_map<sm::bone*,double> rotations;
+        for(auto [b,info]:bone_tbl)rotations[b]=info.rotation;
+        auto perform_fabrik_on_bone = 
 			[&](sm::maybe_bone_ref prev, sm::bone& current_bone)->sm::visit_result {
 			// The table contains only this effector region, including its boundary bones.
 			if (!bone_tbl.contains(&current_bone)) return sm::visit_result::terminate_branch;
@@ -354,12 +130,19 @@ namespace {
 				bone_tbl.at(&current_bone).length
 			);
 
-			new_follower_pos = apply_all_constraints(
+            if(auto fan=geometry.fan_for(&current_bone)) {
+                if(projected.insert(*fan).second) {
+                    auto outcome=geometry.project_fan(*fan,current_bone,leader_node,new_follower_pos,use_constraints,pins,max_ang_delta,rotations);
+                    if(outcome!=sm::result::success)throw constraint_failure{outcome};
+                }
+                return sm::visit_result::continue_traversal;
+            }
+            new_follower_pos = apply_all_constraints(
 				new_follower_pos,
 				neighborhood,
 				use_constraints,
 				max_ang_delta,
-				bone_tbl.at(&current_bone).rotation
+				bone_tbl.at(&current_bone).rotation, geometry
 			);
 			
 			follower_node.set_world_pos(new_follower_pos);
@@ -433,7 +216,7 @@ namespace {
 
 	void solve_for_multiple_targets(std::span<targeted_node> targeted_nodes,
 		const std::unordered_map<sm::bone*, bone_info>& bone_tbl,
-		const sm::fabrik_options& opts, bool use_constraints) {
+		const sm::fabrik_options& opts, bool use_constraints, sm::constraint_geometry& geometry,const std::unordered_map<sm::node*,sm::point>& pins) {
 		int j = 0;
 		do {
 			if (++j > opts.max_iterations) {
@@ -442,7 +225,7 @@ namespace {
 			for (auto& pinned_node : targeted_nodes) {
 				perform_one_fabrik_pass(
 					pinned_node.node, pinned_node.target_pos, bone_tbl, use_constraints,
-					opts.max_ang_delta
+					opts.max_ang_delta, geometry, pins
 				);
 			}
 		} while (!all_targets_settled(targeted_nodes, opts.tolerance));
@@ -492,14 +275,15 @@ static sm::result solve_fabrik_region(
 	std::erase_if(bone_tbl, [&](const auto& entry) { return !bones.contains(entry.first); });
 	auto targeted_nodes = pinned_nodes(pins);
 	auto num_pinned_nodes = targeted_nodes.size();
-	// FABRIK temporarily moves boundary targets during its forward/backward
-	// passes. Never expose those temporary positions, including on failure.
-	struct restore_pins {
-		std::vector<targeted_node> saved;
-		~restore_pins() {
-			for (auto& pin : saved) pin.node->set_world_pos(pin.target_pos);
-		}
-	} restore{targeted_nodes};
+    sm::constraint_geometry geometry(std::get<0>(effectors.front())->owner().owner());
+    if(geometry.status()!=result::success)return geometry.status();
+    std::unordered_map<sm::node*,sm::point> fixed;
+    for(auto pin:pins)fixed[pin.ptr()]=pin->world_pos();
+    struct pose_transaction {
+        std::unordered_map<sm::node*,sm::point> saved; bool committed=false;
+        ~pose_transaction(){if(!committed)for(auto [n,pt]:saved)n->set_world_pos(pt);}
+    } transaction;
+    for(auto b:bones){transaction.saved.try_emplace(&b->parent_node(),b->parent_node().world_pos());transaction.saved.try_emplace(&b->child_node(),b->child_node().world_pos());}
 
 	r::copy(
 		effectors |
@@ -536,16 +320,21 @@ static sm::result solve_fabrik_region(
 			effectors_and_targets,
 			bone_tbl,
 			opts,
-			!has_pinned_nodes || opts.forw_reaching_constraints
+			!has_pinned_nodes || opts.forw_reaching_constraints, geometry, fixed
 		);
 
 		// reach for pinned locations from pinned nodes
 		if (has_pinned_nodes) {
-			solve_for_multiple_targets(pinned_nodes, bone_tbl, opts, true);
+			solve_for_multiple_targets(pinned_nodes, bone_tbl, opts, true, geometry, fixed);
 		}
 	} while (!all_targets_settled(targeted_nodes, opts.tolerance));
 
-	return fabrik_result(targeted_nodes, opts.tolerance);
+    for(auto [n,pt]:fixed)if(sm::distance(n->world_pos(),pt)>opts.tolerance)return result::unsatisfiable_constraints;
+    for(auto [n,pt]:fixed)n->set_world_pos(pt);
+    for(auto [b,info]:bone_tbl)if(std::abs(b->scaled_length()-info.length)>opts.tolerance)return result::unsatisfiable_constraints;
+    auto valid=geometry.validate(opts.tolerance,true,&bones);if(valid!=result::success)return valid;
+    transaction.committed=true;
+    return fabrik_result(targeted_nodes, opts.tolerance);
 }
 
 sm::result sm::perform_fabrik(
@@ -554,6 +343,7 @@ sm::result sm::perform_fabrik(
 	const fabrik_options& opts) {
 	const auto validation = validate_fabrik_inputs(effectors, pins);
 	if (validation != result::success) return validation;
+    geometry_batch batch(std::get<0>(effectors.front())->owner().owner());
 	std::unordered_set<node*> boundaries;
 	for (auto pin : pins) boundaries.insert(pin.ptr());
 	// A pinned effector cannot be moved to a different target.
@@ -575,30 +365,40 @@ sm::result sm::perform_fabrik(
 	for (auto [effector, target] : effectors) {
 		if (boundaries.contains(effector.ptr()) || assigned.contains(effector.ptr())) continue;
 		auto& component = regions.emplace_back();
-		visit_nodes_and_bones(effector.get(), [&](node& n) {
-			if (boundaries.contains(&n)) {
-				component.pins.push_back(n);
-				return visit_result::terminate_branch;
-			}
-			component.nodes.insert(&n);
-			assigned.insert(&n);
-			return visit_result::continue_traversal;
-		}, [&](bone& b) {
-			component.bones.insert(&b);
-			return visit_result::continue_traversal;
-		});
+        sm::constraint_geometry geometry(effector->owner().owner());
+        if(geometry.status()!=result::success)return geometry.status();
+        std::vector<std::pair<node*,bone*>> pending{{effector.ptr(),nullptr}};
+        std::unordered_set<node*> found_pins;
+        while(!pending.empty()) {
+            auto [n,incoming]=pending.back();pending.pop_back();
+            if(boundaries.contains(n)) {
+                if(found_pins.insert(n).second)component.pins.push_back(*n);
+                if(incoming)if(auto fan=geometry.fan_for(incoming))for(auto member:geometry.fan_members(*fan)) {
+                    if(&member->parent_node()==n&&component.bones.insert(member).second)pending.push_back({&member->child_node(),member});
+                }
+                continue;
+            }
+            if(!component.nodes.insert(n).second)continue;
+            assigned.insert(n);
+            for(auto edge:n->adjacent_bones())if(component.bones.insert(edge.ptr()).second)pending.push_back({&edge->opposite_node(*n),edge.ptr()});
+        }
+
 		for (auto entry : effectors)
 			if (component.nodes.contains(std::get<0>(entry).ptr())) component.effectors.push_back(entry);
 	}
 
 	bool reached = false, converged = false, failed = false;
 	for (const auto& component : regions) {
-		const auto outcome = solve_fabrik_region(component.effectors, component.pins, opts, component.bones);
+		sm::result outcome;
+        try {outcome=solve_fabrik_region(component.effectors, component.pins, opts, component.bones);}
+        catch(const constraint_failure& failure){return failure.code;}
+        if(outcome==result::invalid_constraint||outcome==result::inconsistent_constraints||outcome==result::unsatisfiable_constraints)return outcome;
 		reached |= outcome == result::fabrik_target_reached || outcome == result::fabrik_mixed;
 		converged |= outcome == result::fabrik_converged || outcome == result::fabrik_mixed;
 		failed |= outcome == result::fabrik_no_solution_found;
 	}
 	if (failed) return result::fabrik_no_solution_found;
+    if (auto status = batch.commit(); status != result::success) return status;
 	if (reached && converged) return result::fabrik_mixed;
 	return converged ? result::fabrik_converged : result::fabrik_target_reached;
 }
@@ -622,13 +422,10 @@ sm::result sm::perform_fabrik(
 }
 
 double sm::constrain_rotation(sm::bone& b, double theta) {
-
-	fabrik_neighborhood fi{
-		b.parent_node(),
-		b.parent_bone(),
-		b
-	};
-	return ::apply_rotation_constraints(fi, theta).value_or(theta);
+    constraint_geometry geometry(b.owner().owner());
+    auto clamped = geometry.allowed_angles(b).closest_angle(theta);
+    if (!clamped) throw std::invalid_argument("unsatisfiable rotation constraints");
+    return *clamped;
 }
 
 sm::point sm::apply_rotation_constraints(
@@ -646,6 +443,7 @@ sm::point sm::apply_rotation_constraints(
 		neighborhood, 
 		apply_rot_constaints,
 		max_ang_delta, 
-		old_bone_rotation
+		old_bone_rotation, constraint_geometry(current_bone.owner().owner())
 	);
 }
+

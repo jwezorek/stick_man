@@ -25,11 +25,11 @@ json arm_json() {
 }
 
 void check_constraints(const sm::skeleton& skel) {
-    auto relative = skel.get_by_name<sm::bone>("forearm")->get().rotation_constraint();
+    auto relative = sm::editor_rotation_constraint(skel.get_by_name<sm::bone>("forearm")->get());
     require(relative.has_value(), "parent-relative constraint was lost");
     require(relative->relative_to_parent && relative->start_angle == 0.25 && relative->span_angle == 1.5,
         "parent-relative constraint changed");
-    auto absolute = skel.get_by_name<sm::bone>("upper arm")->get().rotation_constraint();
+    auto absolute = sm::editor_rotation_constraint(skel.get_by_name<sm::bone>("upper arm")->get());
     require(absolute.has_value() && !absolute->relative_to_parent &&
         absolute->start_angle == -0.5 && absolute->span_angle == 2.0, "absolute constraint changed");
 }
@@ -43,11 +43,12 @@ void copying(const std::string& mode) {
         std::swap(fixture["skeletons"][0]["bones"][0]["id"], fixture["skeletons"][0]["bones"][1]["id"]);
         require(source.from_json(fixture) == sm::result::success, "fixture reload failed");
     }
-    auto& arm = (*source.skeletons().begin()).get();
+    sm::project source_project;
+    auto& arm = source_project.copy_skeleton((*source.skeletons().begin()).get()).value().get();
     require((*arm.bones().begin())->name() == "forearm", "fixture must visit child first");
-    require(arm.get_by_name<sm::bone>("forearm")->get().set_rotation_constraint(0.25, 1.5, true)
+    require(sm::set_editor_rotation_constraint(arm.get_by_name<sm::bone>("forearm")->get(),0.25, 1.5, true)
         == sm::result::success, "fixture relative constraint failed");
-    arm.get_by_name<sm::bone>("upper arm")->get().set_rotation_constraint(-0.5, 2.0, false);
+    sm::set_editor_rotation_constraint(arm.get_by_name<sm::bone>("upper arm")->get(),-0.5, 2.0, false);
     sm::topology dest;
     if (mode == "copy") {
         require(arm.copy_to(dest).has_value(), "copy failed");
@@ -60,7 +61,7 @@ void copying(const std::string& mode) {
     } else if (mode == "duplicate") {
         require(arm.duplicate_to(dest).has_value(), "duplicate failed");
     } else if (mode == "json") {
-        auto saved = source.to_json();
+        auto saved = source_project.topology().to_json();
         auto& bones = saved["skeletons"][0]["bones"];
         for (int order = 0; order < 2; ++order) {
             require(dest.from_json(saved) == sm::result::success, "JSON load failed");
@@ -72,7 +73,7 @@ void copying(const std::string& mode) {
         require(original.copy_skeleton(arm).has_value(), "project copy failed");
         // Set constraints on the live source so this tests archive loading independently of copying.
         auto& live = (*original.topology().skeletons().begin()).get();
-        live.get_by_name<sm::bone>("forearm")->get().set_rotation_constraint(0.25, 1.5, true);
+        sm::set_editor_rotation_constraint(live.get_by_name<sm::bone>("forearm")->get(),0.25, 1.5, true);
         auto saved = original.serialize();
         require(saved.has_value(), "archive save failed");
         sm::project loaded;

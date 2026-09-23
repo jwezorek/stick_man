@@ -1,4 +1,5 @@
 #include "sm_skeleton.hpp"
+#include "sm_geometry_batch.hpp"
 #include "sm_character.hpp"
 #include "sm_types.hpp"
 #include "sm_visit.hpp"
@@ -104,13 +105,7 @@ namespace {
             {"u", bone.parent_node().id().to_string()},
             {"v", bone.child_node().id().to_string()}
         };
-        if (auto constraint = bone.rotation_constraint()) {
-            bone_json["rot_constraint"] = {
-                {"relative_to_parent", constraint->relative_to_parent},
-                {"start_angle", constraint->start_angle},
-                {"span_angle", constraint->span_angle}
-            };
-        }
+
         return bone_json;
     }
 }
@@ -198,19 +193,7 @@ sm::expected_skel sm::skeleton::copy_to(
         }
         dest.register_bone(copied->get());
     }
-    // Parent-relative constraints require the complete bone graph, regardless
-    // of the source's unordered bone iteration order.
-    for (auto bone : bones()) {
-        if (auto constraint = bone->rotation_constraint()) {
-            auto result = dest.get<sm::bone>(mapped_id(bone->id()))->get().set_rotation_constraint(
-                constraint->start_angle,
-                constraint->span_angle,
-                constraint->relative_to_parent);
-            if (result != sm::result::success) {
-                return std::unexpected(result);
-            }
-        }
-    }
+    other_topology.copy_constraints_from(owner(), id_remap);
     dest.user_data_ = user_data_;
     return new_skel;
 }
@@ -242,17 +225,7 @@ sm::expected_skel sm::skeleton::duplicate_to(topology& other_topology, const std
         }
         dest.register_bone(copied->get());
     }
-    for (auto bone : bones()) {
-        if (auto constraint = bone->rotation_constraint()) {
-            auto result = dest.get<sm::bone>(id_map.at(bone->id()))->get().set_rotation_constraint(
-                constraint->start_angle,
-                constraint->span_angle,
-                constraint->relative_to_parent);
-            if (result != sm::result::success) {
-                return std::unexpected(result);
-            }
-        }
-    }
+    other_topology.copy_constraints_from(owner(), id_map);
     return new_skel;
 }
 void sm::skeleton::set_name(bone& bone, const std::string& new_name) {
@@ -278,7 +251,7 @@ sm::result sm::skeleton::from_json(sm::topology& owner, const json& jobj) {
         }
         nodes_[new_node->id()] = new_node.ptr();
     }
-    std::vector<std::pair<sm::bone_ref, sm::rot_constraint>> constraints;
+
     for (const auto& bone_json : jobj.at("bones")) {
         auto* u = node_from_reference(*this, bone_json.at("u"));
         auto* v = node_from_reference(*this, bone_json.at("v"));
@@ -291,13 +264,7 @@ sm::result sm::skeleton::from_json(sm::topology& owner, const json& jobj) {
         if (!b || bones_.contains(b->get().id())) {
             return sm::result::invalid_json;
         }
-        if (bone_json.contains("rot_constraint")) {
-            const auto& constraint = bone_json.at("rot_constraint");
-            constraints.emplace_back(b->get(), sm::rot_constraint{
-                constraint.at("relative_to_parent").get<bool>(),
-                constraint.at("start_angle").get<double>(),
-                constraint.at("span_angle").get<double>()});
-        }
+        if (bone_json.contains("rot_constraint")) return sm::result::invalid_json;
         bones_[b->get().id()] = &b->get();
     }
     auto* root = node_from_reference(*this, jobj.at("root"));
@@ -305,12 +272,7 @@ sm::result sm::skeleton::from_json(sm::topology& owner, const json& jobj) {
         return sm::result::invalid_json;
     }
     root_ = *root;
-    for (auto& [bone, constraint] : constraints) {
-        if (bone->set_rotation_constraint(constraint.start_angle, constraint.span_angle,
-                constraint.relative_to_parent) != sm::result::success) {
-            return sm::result::invalid_json;
-        }
-    }
+
     return sm::result::success;
 }
 json sm::skeleton::to_json() const {
@@ -350,16 +312,46 @@ void sm::skeleton::register_bone(sm::bone& new_bone) {
 bool sm::skeleton::empty() const { return !root_.has_value(); }
 const sm::topology& sm::skeleton::owner() const { return owner_; }
 void sm::skeleton::apply(matrix& mat) {
+    geometry_batch batch(owner());
     for (auto node : nodes()) {
         node->apply(mat);
     }
+    if (batch.commit() != result::success) throw std::invalid_argument("transform violates rigid geometry");
 }
 /*------------------------------------------------------------------------------------------------*/
 
 sm::topology::topology() {}
 
+void sm::topology::copy_constraints_from(const topology& source,
+        const std::unordered_map<object_id,object_id>& ids) {
+    // Source can be this topology when duplicating within a scratch document.
+    const auto snapshot = source.constraints();
+    for (auto& [id,c] : snapshot) {
+        auto copy = c.remapped(ids);
+        auto target = copy.rotation() ? copy.rotation()->target_bone : copy.triangle()->first_bone;
+        if (!get<bone>(target)) continue;
+        if (auto r = copy.rotation(); r && r->reference.kind == rotation_reference_kind::bone
+                && !get<bone>(r->reference.bone_id)) continue;
+        if (auto t = copy.triangle(); t && !get<bone>(t->second_bone)) continue;
+        bool changed = false;
+        if (auto r = c.rotation()) changed = ids.contains(r->target_bone);
+        else changed = ids.contains(c.triangle()->first_bone) || ids.contains(c.triangle()->second_bone);
+        if (changed && !ids.contains(id)) {
+            auto remap = ids; remap.emplace(id,generate_object_id()); copy = c.remapped(remap);
+        }
+        constraints_.insert_or_assign(copy.id(),copy);
+    }
+}
+void sm::topology::prune_constraints() {
+    std::erase_if(constraints_,[&](const auto& entry) {
+        constraint_map one; one.emplace(entry);
+        return validate_constraints(*this,one) != result::success;
+    });
+}
+
 sm::topology::topology(sm::topology&& other) { *this = std::move(other); }
 sm::topology& sm::topology::operator=(topology&& other) {
+    constraints_ = std::move(other.constraints_);
     skeletons_ = std::move(other.skeletons_);
     bones_ = std::move(other.bones_);
     nodes_ = std::move(other.nodes_);
@@ -369,6 +361,7 @@ sm::topology& sm::topology::operator=(topology&& other) {
     return *this;
 }
 void sm::topology::clear() {
+    constraints_.clear();
     skeletons_.clear();
     bones_.clear();
     nodes_.clear();
@@ -377,7 +370,7 @@ bool sm::topology::empty() const { return skeletons_.empty(); }
 sm::object_id sm::topology::generate_object_id() const {
     while (true) {
         auto id = object_id::generate();
-        if (!contains_skeleton(id) && !get<node>(id) && !get<bone>(id)) {
+        if (!contains_skeleton(id) && !get<node>(id) && !get<bone>(id) && !constraints_.contains(id)) {
             return id;
         }
     }
@@ -394,7 +387,7 @@ sm::skeleton& sm::topology::create_skeleton(double x, double y) {
 }
 sm::skeleton& sm::topology::create_skeleton(const point& pt) { return create_skeleton(pt.x, pt.y); }
 sm::expected_skel sm::topology::create_skeleton_with_id(object_id id, const std::string& name) {
-    if (skeletons_.contains(id) || get<node>(id) || get<bone>(id)) {
+    if (skeletons_.contains(id) || get<node>(id) || get<bone>(id) || constraints_.contains(id)) {
         return std::unexpected(result::duplicate_id);
     }
     auto [it, inserted] = skeletons_.emplace(id, skeleton::make_unique(*this, id));
@@ -475,6 +468,7 @@ sm::result sm::topology::delete_skeleton(const object_id& id) {
         }), nodes_.end());
 
     skeletons_.erase(id);
+    prune_constraints();
     return sm::result::success;
 }
 std::vector<std::string> sm::topology::skeleton_names() const {
@@ -494,7 +488,7 @@ sm::node_ref sm::topology::create_node(sm::skeleton& parent, object_id id,
     const std::string& name, double x, double y) {
     // Scratch topologies used by selection splitting may contain the same node ID in
     // more than one component, but an object ID may never collide across types.
-    if (parent.contains<node>(id) || skeletons_.contains(id) || get<bone>(id)) {
+    if (parent.contains<node>(id) || skeletons_.contains(id) || get<bone>(id) || constraints_.contains(id)) {
         throw std::runtime_error("duplicate object ID");
     }
     nodes_.push_back(node::make_unique(parent, id, name, x, y));
@@ -517,7 +511,7 @@ sm::expected_bone sm::topology::create_bone_in_skeleton(
     if (&skel_u != &skel_v) {
         return std::unexpected(sm::result::cross_skeleton_bone);
     }
-    if (skeletons_.contains(id) || get<node>(id) || get<bone>(id)) {
+    if (skeletons_.contains(id) || get<node>(id) || get<bone>(id) || constraints_.contains(id)) {
         return std::unexpected(sm::result::duplicate_id);
     }
     bones_.push_back(bone::make_unique(id, bone_name, u, v));
@@ -542,7 +536,7 @@ sm::expected_bone sm::topology::create_bone(object_id id, const std::string& bon
     if (&skel_u == &skel_v) {
         return std::unexpected(sm::result::cyclic_bones);
     }
-    if (contains_skeleton(id) || get<node>(id) || get<bone>(id)) {
+    if (contains_skeleton(id) || get<node>(id) || get<bone>(id) || constraints_.contains(id)) {
         return std::unexpected(sm::result::duplicate_id);
     }
     skeletons_.erase(skel_v.id());
@@ -574,6 +568,10 @@ sm::result sm::topology::from_json(const json& topology_json) {
             }
             skeletons_.emplace(id, std::move(skel));
         }
+        if (topology_json.contains("constraints")) constraints_ = constraints_from_json(topology_json.at("constraints"));
+        if (auto status = validate_constraints(*this,constraints_); status != result::success) {
+            clear(); return status;
+        }
     }
     catch (...) {
         clear();
@@ -587,11 +585,13 @@ json sm::topology::to_json() const {
     for (auto skel : skeletons()) {
         skeleton_json.push_back(skel->to_json());
     }
-    return { {"version", 1.0}, {"skeletons", skeleton_json} };
+    return { {"version", 2.0}, {"skeletons", skeleton_json}, {"constraints", constraints_to_json(constraints_)} };
 }
 
 void sm::topology::apply(matrix& mat) {
+    geometry_batch batch(*this);
     for (auto skel : skeletons()) {
         skel->apply(mat);
     }
+    if (batch.commit() != result::success) throw std::invalid_argument("transform violates rigid geometry");
 }

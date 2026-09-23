@@ -321,6 +321,8 @@ std::expected<sm::object_id, sm::result> mdl::project::paste_character(
         for (auto node : skel->nodes()) remap.emplace(node->id(), sm::object_id::generate());
         for (auto bone : skel->bones()) remap.emplace(bone->id(), sm::object_id::generate());
     }
+    for (const auto& [id, constraint] : rig.constraints())
+        remap.emplace(id, sm::object_id::generate());
     auto copied_artwork = artwork;
     copied_artwork.remap_bones(remap);
     auto copied_animation_data = animation_data;
@@ -402,7 +404,8 @@ void mdl::project::rename_aux(handle id, const std::string& new_name) {
     // and panes resynchronize through the command's project_changed notification.
     std::visit([this, &new_name](auto ref) {
         using value_type = std::remove_cvref_t<decltype(ref.get())>;
-        if constexpr (!std::is_same_v<value_type, sm::character>) {
+        if constexpr (std::is_same_v<value_type, sm::node> ||
+                std::is_same_v<value_type, sm::bone> || std::is_same_v<value_type, sm::skeleton>) {
             emit name_changed(const_skel_piece{ref}, new_name);
         }
     }, std::as_const(core_).get(id));

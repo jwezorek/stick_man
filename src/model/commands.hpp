@@ -41,6 +41,8 @@ namespace mdl {
             handle v_hnd;
             sm::topology original;
             sm::membership_state membership;
+            sm::constraint_map before_constraints;
+            std::optional<sm::constraint_map> after_constraints;
             sm::result status = sm::result::success;
             sm::object_id merged;
             std::optional<sm::object_id> bone_id;
@@ -62,6 +64,8 @@ namespace mdl {
             sm::topology replacements;
             sm::membership_state before_membership;
             std::optional<sm::membership_state> after_membership;
+            sm::constraint_map before_constraints;
+            std::optional<sm::constraint_map> after_constraints;
             sm::result status = sm::result::success;
             std::unordered_set<sm::object_id> regenerate_ids;
             std::vector<sm::object_id> cascade_characters;
@@ -77,7 +81,9 @@ namespace mdl {
             std::vector<handle> nodes;
             std::vector<handle> bones;
             handle_table<sm::point> old_node_to_position;
-            handle_table<sm::rot_constraint> old_bone_to_rotcon;
+            sm::constraint_map old_constraints;
+            std::optional<sm::constraint_map> new_constraints;
+            handle_table<sm::point> new_node_to_position;
             transform_nodes_and_bones_state(
                 project& proj,
                 const std::vector<handle>& nodes,
