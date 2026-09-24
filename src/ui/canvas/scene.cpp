@@ -378,6 +378,7 @@ bool ui::canvas::scene::constraints_visible() const {
 
 void ui::canvas::scene::set_constraint_tool_active(bool active) {
     constraint_tool_active_ = active;
+    constraint_adornments_->set_handles_visible(active);
     constraint_adornments_->set_visible(constraints_visible());
     if (!active) set_hovered_constraint({});
 }

@@ -32,6 +32,7 @@ public:
     void clear();
     void set_visible(bool visible);
     bool visible() const noexcept { return visible_; }
+    void set_handles_visible(bool visible);
 
     void set_selected(std::optional<sm::object_id> id);
     void set_hovered(std::optional<sm::object_id> id);
@@ -45,6 +46,7 @@ private:
     scene& owner_;
     std::map<sm::object_id, visual> visuals_;
     bool visible_ = false;
+    bool handles_visible_ = false;
     std::optional<sm::object_id> selected_;
     std::optional<sm::object_id> hovered_;
 

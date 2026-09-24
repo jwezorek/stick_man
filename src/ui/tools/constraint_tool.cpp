@@ -254,7 +254,11 @@ void ui::tool::constraint::update_drag(canvas::scene& canv, QPointF point) {
     if (auto* rotation = std::get_if<sm::rotation_constraint>(&definition)) {
         auto target = model_->topology().get<sm::bone>(rotation->target_bone);
         if (!target) return;
-        const auto pivot = target->get().parent_node().world_pos();
+        auto pivot = target->get().parent_node().world_pos();
+        if (rotation->reference.kind == sm::rotation_reference_kind::world) {
+            const auto tip = target->get().child_node().world_pos();
+            pivot = {(pivot.x + tip.x) / 2.0, (pivot.y + tip.y) / 2.0};
+        }
         const double world_angle = sm::angle_from_u_to_v(pivot, ui::from_qt_pt(point));
         const double local_angle = sm::normalize_angle(world_angle - reference_angle(model_->topology(), *rotation));
         if (drag_->part == canvas::constraint_part::rotation_min) {

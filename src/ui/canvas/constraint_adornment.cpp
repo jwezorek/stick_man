@@ -4,6 +4,7 @@
 #include "../util.hpp"
 #include <QGraphicsPathItem>
 #include <QGraphicsEllipseItem>
+#include <QGraphicsPolygonItem>
 #include <QPainterPathStroker>
 #include <cmath>
 #include <numbers>
@@ -11,11 +12,12 @@
 
 namespace {
 
-constexpr double k_rotation_radius_px = 52.0;
-constexpr double k_triangle_radius_px = 38.0;
+constexpr double k_rotation_arc_radius_px = 52.0;
+constexpr double k_rotation_wedge_radius_px = 60.0;
 constexpr double k_handle_radius_px = 5.5;
 constexpr double k_hit_width_px = 12.0;
 constexpr double k_z = 40.0;
+constexpr double k_triangle_z = 4.0; // Below bones (z=5) and nodes (z=10).
 
 QColor normal_color() { return QColor("mediumpurple"); }
 QColor hover_color() { return QColor("orange"); }
@@ -35,8 +37,8 @@ private:
 
 class path_graphic final : public QGraphicsPathItem, public constraint_graphic {
 public:
-    path_graphic(sm::object_id id, ui::canvas::constraint_part part, double scale)
-        : constraint_graphic(id, part), hit_width_(k_hit_width_px / scale), scale_(scale) {
+    path_graphic(sm::object_id id, ui::canvas::constraint_part part, double scale, bool filled = false)
+        : constraint_graphic(id, part), hit_width_(k_hit_width_px / scale), scale_(scale), filled_(filled) {
         setZValue(k_z);
         setBrush(Qt::NoBrush);
     }
@@ -45,16 +47,26 @@ public:
         stroker.setWidth(hit_width_);
         stroker.setCapStyle(Qt::RoundCap);
         stroker.setJoinStyle(Qt::RoundJoin);
-        return stroker.createStroke(path());
+        auto result = stroker.createStroke(path());
+        if (filled_) result = result.united(path());
+        return result;
     }
     void set_constraint_state(bool selected, bool hovered) override {
         const QColor color = selected ? selected_color() : hovered ? hover_color() : normal_color();
         const double width = (selected ? 3.5 : hovered ? 3.0 : 2.0) / scale_;
         setPen(QPen(color, width, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        if (filled_) {
+            QColor fill = color;
+            fill.setAlpha(selected ? 96 : hovered ? 80 : 64);
+            setBrush(fill);
+        } else {
+            setBrush(Qt::NoBrush);
+        }
     }
 private:
     double hit_width_;
     double scale_;
+    bool filled_;
 };
 
 class handle_graphic final : public QGraphicsEllipseItem, public constraint_graphic {
@@ -74,6 +86,44 @@ private:
     double scale_;
 };
 
+class triangle_graphic final : public QGraphicsPolygonItem, public constraint_graphic {
+public:
+    triangle_graphic(sm::object_id id, const QPolygonF& polygon, double scale)
+        : constraint_graphic(id, ui::canvas::constraint_part::body), scale_(scale) {
+        setPolygon(polygon);
+        setZValue(k_triangle_z);
+    }
+    void set_constraint_state(bool selected, bool hovered) override {
+        setBrush(QColor(128, 128, 128));
+        const QColor outline = selected ? selected_color() : hovered ? hover_color() : QColor(90, 90, 90);
+        const double width = (selected ? 2.5 : hovered ? 2.0 : 1.0) / scale_;
+        setPen(QPen(outline, width, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    }
+private:
+    double scale_;
+};
+
+// Preserve the existing direct-manipulation affordance for the triangle angle
+// without adding a visible gizmo on top of the filled triangle.  The hit target
+// sits underneath the second bound node, so the node remains the visible handle.
+class triangle_angle_hit_graphic final : public QGraphicsEllipseItem, public constraint_graphic {
+public:
+    triangle_angle_hit_graphic(sm::object_id id, QPointF center, double scale)
+        : constraint_graphic(id, ui::canvas::constraint_part::triangle_angle) {
+        const double r = ui::canvas::k_node_radius / scale;
+        setRect(QRectF(center - QPointF(r, r), QSizeF(2 * r, 2 * r)));
+        setZValue(k_triangle_z + 0.5);
+        setPen(Qt::NoPen);
+        setBrush(Qt::NoBrush);
+    }
+    QPainterPath shape() const override {
+        QPainterPath path;
+        path.addEllipse(rect());
+        return path;
+    }
+    void set_constraint_state(bool, bool) override {}
+};
+
 QPointF radial(QPointF center, double radius, double theta) {
     return center + QPointF(radius * std::cos(theta), radius * std::sin(theta));
 }
@@ -86,6 +136,25 @@ QPainterPath arc_path(QPointF center, double radius, double start, double span) 
     path.arcMoveTo(rect, start_deg);
     path.arcTo(rect, start_deg, span_deg);
     return path;
+}
+
+QPainterPath wedge_path(QPointF center, double radius, double start, double span) {
+    QRectF rect(center - QPointF(radius, radius), QSizeF(2 * radius, 2 * radius));
+    const double start_deg = -ui::radians_to_degrees(start);
+    const double span_deg = -ui::radians_to_degrees(span);
+
+    QPainterPath path;
+    path.moveTo(center);
+    path.lineTo(radial(center, radius, start));
+    path.arcTo(rect, start_deg, span_deg);
+    path.closeSubpath();
+    return path;
+}
+
+QPointF bone_midpoint(const sm::bone& bone) {
+    const auto a = bone.parent_node().world_pos();
+    const auto b = bone.child_node().world_pos();
+    return ui::to_qt_pt(sm::point{(a.x + b.x) / 2.0, (a.y + b.y) / 2.0});
 }
 
 double rotation_reference_angle(const sm::topology& topology, const sm::rotation_constraint& constraint) {
@@ -128,13 +197,19 @@ void ui::canvas::constraint_adornment_layer::sync(const sm::project& project, do
         if (auto rotation = constraint.rotation()) {
             auto target = topology.get<sm::bone>(rotation->target_bone);
             if (!target) continue;
-            const QPointF pivot = ui::to_qt_pt(target->get().parent_node().world_pos());
-            const double radius = k_rotation_radius_px / scale;
+            const bool filled_wedge = rotation->reference.kind == sm::rotation_reference_kind::world ||
+                rotation->reference.kind == sm::rotation_reference_kind::parent;
+            const QPointF pivot = rotation->reference.kind == sm::rotation_reference_kind::world
+                ? bone_midpoint(target->get())
+                : ui::to_qt_pt(target->get().parent_node().world_pos());
+            const double radius = (filled_wedge ? k_rotation_wedge_radius_px : k_rotation_arc_radius_px) / scale;
             const double start = rotation_reference_angle(topology, *rotation) + rotation->allowed.start_angle;
             const double end = start + rotation->allowed.span_angle;
 
-            auto* body = new path_graphic(id, constraint_part::body, scale);
-            body->setPath(arc_path(pivot, radius, start, rotation->allowed.span_angle));
+            auto* body = new path_graphic(id, constraint_part::body, scale, filled_wedge);
+            body->setPath(filled_wedge
+                ? wedge_path(pivot, radius, start, rotation->allowed.span_angle)
+                : arc_path(pivot, radius, start, rotation->allowed.span_angle));
             owner_.addItem(body); v.graphics.push_back(body);
 
             auto* min_handle = new handle_graphic(id, constraint_part::rotation_min,
@@ -147,24 +222,28 @@ void ui::canvas::constraint_adornment_layer::sync(const sm::project& project, do
             auto first = topology.get<sm::bone>(triangle->first_bone);
             auto second = topology.get<sm::bone>(triangle->second_bone);
             if (!first || !second) continue;
-            const QPointF pivot = ui::to_qt_pt(first->get().parent_node().world_pos());
-            const double radius = k_triangle_radius_px / scale;
-            const double start = first->get().world_rotation();
-            const double span = triangle->relative_angle;
 
-            auto* body = new path_graphic(id, constraint_part::body, scale);
-            body->setPath(arc_path(pivot, radius, start, span));
+            // A rigid-triangle constraint binds two sibling bones.  Render the
+            // actual rigid region: shared root + the two bound child nodes.
+            const QPointF root = ui::to_qt_pt(first->get().parent_node().world_pos());
+            const QPointF first_tip = ui::to_qt_pt(first->get().child_node().world_pos());
+            const QPointF second_tip = ui::to_qt_pt(second->get().child_node().world_pos());
+
+            auto* body = new triangle_graphic(id, QPolygonF{root, first_tip, second_tip}, scale);
             owner_.addItem(body); v.graphics.push_back(body);
 
-            // Put the edit handle at the relationship's second ray.  Dragging the
-            // handle can then map directly to the stored first->second relative
-            // angle, rather than requiring a special "half arc" interpretation.
-            const double end = start + span;
-            auto* handle = new handle_graphic(id, constraint_part::triangle_angle,
-                radial(pivot, radius, end), scale);
+            // Keep angle dragging available, but let the second node itself be the
+            // visible affordance instead of drawing a separate constraint handle.
+            auto* handle = new triangle_angle_hit_graphic(id, second_tip, scale);
             owner_.addItem(handle); v.graphics.push_back(handle);
         }
-        for (auto* graphic : v.graphics) graphic->setVisible(visible_);
+        for (auto* graphic : v.graphics) {
+            const auto* constraint_item = dynamic_cast<constraint_graphic*>(graphic);
+            const bool rotation_handle = constraint_item &&
+                (constraint_item->part() == constraint_part::rotation_min ||
+                 constraint_item->part() == constraint_part::rotation_max);
+            graphic->setVisible(visible_ && (!rotation_handle || handles_visible_));
+        }
         visuals_.emplace(id, std::move(v));
     }
     if (selected_ && !visuals_.contains(*selected_)) selected_.reset();
@@ -174,8 +253,28 @@ void ui::canvas::constraint_adornment_layer::sync(const sm::project& project, do
 
 void ui::canvas::constraint_adornment_layer::set_visible(bool visible) {
     visible_ = visible;
-    for (auto& [id, visual] : visuals_)
-        for (auto* graphic : visual.graphics) graphic->setVisible(visible);
+    for (auto& [id, visual] : visuals_) {
+        for (auto* graphic : visual.graphics) {
+            const auto* constraint_item = dynamic_cast<constraint_graphic*>(graphic);
+            const bool rotation_handle = constraint_item &&
+                (constraint_item->part() == constraint_part::rotation_min ||
+                 constraint_item->part() == constraint_part::rotation_max);
+            graphic->setVisible(visible && (!rotation_handle || handles_visible_));
+        }
+    }
+}
+
+void ui::canvas::constraint_adornment_layer::set_handles_visible(bool visible) {
+    handles_visible_ = visible;
+    for (auto& [id, visual] : visuals_) {
+        for (auto* graphic : visual.graphics) {
+            const auto* constraint_item = dynamic_cast<constraint_graphic*>(graphic);
+            if (!constraint_item) continue;
+            if (constraint_item->part() == constraint_part::rotation_min ||
+                constraint_item->part() == constraint_part::rotation_max)
+                graphic->setVisible(visible_ && visible);
+        }
+    }
 }
 
 void ui::canvas::constraint_adornment_layer::set_selected(std::optional<sm::object_id> id) {
