@@ -40,8 +40,21 @@ int main(int argc, char** argv) {
         require(current().layers[1].actions[0].start==100, "UI rejected automatic placement");
         project.undo();
         require(current().layers.size()==2 && current().layers[1].actions[0].start==0, "placement was not one undoable edit");
-        // A writer cannot be moved above the action consuming its frame.
+        // A writer cannot be moved above the action consuming its frame. The UI now
+        // explains that rejection with a modal warning, so make the test acknowledge it.
+        bool rejection_seen = false;
+        QTimer::singleShot(0, [&] {
+            for (auto* widget : QApplication::topLevelWidgets()) {
+                if (auto* message = qobject_cast<QMessageBox*>(widget);
+                    message && message->windowTitle() == "Cannot place action") {
+                    rejection_seen = true;
+                    message->done(QMessageBox::Ok);
+                    return;
+                }
+            }
+        });
         timeline->itemMoveRequested(QString::fromStdString(producer.id.to_string()),0,{ui::row_head_position::placement::between_rows,0});
+        require(rejection_seen, "invalid move did not report placement failure");
         require(current().layers.size()==2 && sm::animation_evaluation_order(current())==expected, "invalid move changed animation");
         std::cout << "PASS animation_placement_ui\n";
     } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
