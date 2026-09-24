@@ -201,9 +201,13 @@ void artwork_canvas_test(fixture& f, bool visual) {
     require(model.core().artwork(id).appearances().at("Default").appearance_slots.front().slot == "a_front", "painter order button failed");
     require(render().pixelColor(150,85) == QColor(Qt::blue), "reordering did not change rendered overlap"); model.undo();
     layer.set_show_artwork(false); require(!layer.hit_test({35,35}) && render().pixelColor(150,85) == QColor(Qt::white), "Show Artwork did not hide sprites"); layer.set_show_artwork(true);
-    layer.set_show_skeleton(false); require(f.canvas().bone_items().front()->effectiveOpacity() == 0, "Show Skeleton did not hide guides");
-    require(f.canvas().selected_character(), "hiding guides lost semantic selection"); layer.set_show_skeleton(true);
-    layer.set_wireframe(true); require(f.canvas().bone_items().front()->brush().style() == Qt::NoBrush, "wireframe not applied"); layer.set_wireframe(false);
+    layer.set_skeleton_display(ui::canvas::skeleton_display::hidden);
+    require(!f.canvas().bone_items().front()->isVisible(), "Show Skeleton did not hide guides");
+    require(f.canvas().selected_character(), "hiding guides lost semantic selection");
+    layer.set_skeleton_display(ui::canvas::skeleton_display::visible);
+    layer.set_skeleton_display(ui::canvas::skeleton_display::wireframe);
+    require(f.canvas().bone_items().front()->brush().style() == Qt::NoBrush, "wireframe not applied");
+    layer.set_skeleton_display(ui::canvas::skeleton_display::visible);
     layer.assign_frame(id,bone,"stripe");
     require(model.core().artwork(id).slot_definitions().contains("stripe"), "frame drop did not create channel");
     require(model.core().artwork(id).resolve_frame("Default","stripe") == "stripe", "frame drop did not map image");

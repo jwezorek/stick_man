@@ -74,6 +74,7 @@ void ui::tool::constraint::activate(canvas::manager& canvases) {
 
 void ui::tool::constraint::deactivate(canvas::manager& canvases) {
     if (drag_) cancel_drag(canvases.active_canvas());
+    clear_triangle_sweep();
     clear_pending();
     for (auto* canv : canvases.canvases()) {
         canv->set_hovered_constraint({});
@@ -107,14 +108,16 @@ void ui::tool::constraint::init(canvas::manager& canvases, mdl::project& model) 
     layout->addWidget(reference_);
     layout->addWidget(new QLabel(
         "Select/Edit: click adornments; drag handles.\n"
-        "Any mode: click a node to pin/unpin.\n"
+        "Nodes: click to pin/unpin in every operation.\n"
         "Bone reference: click target, then reference bone.\n"
-        "Rigid Triangle: click two sibling bones."));
+        "Rigid Triangle: click two sibling bones, or drag\n"
+        "from empty space through both siblings."));
     layout->addStretch();
 
     QObject::connect(operation_, qOverload<int>(&QComboBox::currentIndexChanged), settings_, [this](int) {
         if (canvases_) {
             if (drag_) cancel_drag(canvases_->active_canvas());
+            clear_triangle_sweep();
             clear_pending();
         }
         update_settings_state();
@@ -124,6 +127,7 @@ void ui::tool::constraint::init(canvas::manager& canvases, mdl::project& model) 
     });
     QObject::connect(&model, &mdl::project::new_project_opened, settings_, [this](mdl::project&) {
         // Creation previews are editor state and must not survive a document swap.
+        clear_triangle_sweep();
         clear_pending();
         drag_.reset();
     });
@@ -154,6 +158,125 @@ void ui::tool::constraint::show_pending(canvas::scene& canv, const sm::bone& bon
     pending_highlight_->setZValue(10000);
     canv.addItem(pending_highlight_);
     canv.show_status_line(message);
+}
+
+void ui::tool::constraint::clear_triangle_sweep(bool hide_status) {
+    if (!triangle_sweep_) return;
+    auto* scene = triangle_sweep_->scene;
+    if (triangle_sweep_->trail && scene) {
+        scene->removeItem(triangle_sweep_->trail);
+        delete triangle_sweep_->trail;
+    }
+    if (triangle_sweep_->first_highlight && scene) {
+        scene->removeItem(triangle_sweep_->first_highlight);
+        delete triangle_sweep_->first_highlight;
+    }
+    if (hide_status && scene && scene->is_status_line_visible()) scene->hide_status_line();
+    triangle_sweep_.reset();
+}
+
+void ui::tool::constraint::begin_triangle_sweep(canvas::scene& canv, QPointF point) {
+    clear_triangle_sweep();
+    clear_pending();
+
+    triangle_sweep_state state;
+    state.scene = &canv;
+    state.last_point = point;
+    state.trail = new QGraphicsPathItem;
+    QPainterPath path(point);
+    state.trail->setPath(path);
+    QPen pen(canvas::k_sel_color, 2.0, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin);
+    pen.setCosmetic(true);
+    state.trail->setPen(pen);
+    state.trail->setZValue(9999);
+    canv.addItem(state.trail);
+    triangle_sweep_ = state;
+    canv.show_status_line("Rigid Triangle: sweep through two sibling bones (Esc cancels).");
+}
+
+void ui::tool::constraint::set_triangle_sweep_first(canvas::scene& canv, const sm::bone& bone) {
+    if (!triangle_sweep_) return;
+    if (triangle_sweep_->first_highlight) {
+        canv.removeItem(triangle_sweep_->first_highlight);
+        delete triangle_sweep_->first_highlight;
+    }
+
+    triangle_sweep_->first_bone = bone.id();
+    triangle_sweep_->first_highlight = new QGraphicsLineItem;
+    auto [root, tip] = bone.line_segment();
+    triangle_sweep_->first_highlight->setLine(QLineF(ui::to_qt_pt(root), ui::to_qt_pt(tip)));
+    QPen pen(canvas::k_sel_color, 5.0, Qt::DashLine, Qt::RoundCap);
+    pen.setCosmetic(true);
+    triangle_sweep_->first_highlight->setPen(pen);
+    triangle_sweep_->first_highlight->setZValue(10000);
+    canv.addItem(triangle_sweep_->first_highlight);
+    canv.show_status_line("Rigid Triangle: sweep through a sibling of the highlighted bone.");
+}
+
+void ui::tool::constraint::process_triangle_sweep_bone(canvas::scene& canv, sm::bone& bone) {
+    if (!triangle_sweep_) return;
+    if (!triangle_sweep_->first_bone) {
+        set_triangle_sweep_first(canv, bone);
+        return;
+    }
+
+    auto first = model_->topology().get<sm::bone>(*triangle_sweep_->first_bone);
+    if (!first) {
+        clear_triangle_sweep(false);
+        report_failure(canv, sm::result::not_found, "Cannot create rigid triangle");
+        return;
+    }
+    if (first->get().id() == bone.id()) return;
+
+    if (!first->get().is_sibling(bone)) {
+        // Keep the gesture forgiving: the most recently crossed unrelated bone
+        // becomes the first candidate, so any consecutive sibling pair can win.
+        set_triangle_sweep_first(canv, bone);
+        return;
+    }
+
+    const auto first_id = first->get().id();
+    const auto second_id = bone.id();
+    auto result = add_triangle(canv, first_id, second_id);
+    if (!result) {
+        clear_triangle_sweep(false);
+        return;
+    }
+
+    const auto constraint_id = *result;
+    clear_triangle_sweep();
+    canv.select_constraint(constraint_id);
+}
+
+void ui::tool::constraint::update_triangle_sweep(canvas::scene& canv, QPointF point) {
+    if (!triangle_sweep_ || triangle_sweep_->scene != &canv) return;
+
+    auto path = triangle_sweep_->trail->path();
+    path.lineTo(point);
+    triangle_sweep_->trail->setPath(path);
+
+    const QPointF start = triangle_sweep_->last_point;
+    const QLineF motion(start, point);
+    const double screen_length = motion.length() * std::max(0.01, canv.scale());
+    const int steps = std::clamp(static_cast<int>(std::ceil(screen_length / 3.0)), 1, 512);
+
+    for (int i = 1; i <= steps && triangle_sweep_; ++i) {
+        const double t = static_cast<double>(i) / static_cast<double>(steps);
+        const QPointF sample = start + (point - start) * t;
+        auto* item = canv.top_item(sample);
+        auto* bone = dynamic_cast<canvas::item::bone*>(item);
+        if (!bone) {
+            triangle_sweep_->last_crossed_bone.reset();
+            continue;
+        }
+
+        const auto id = bone->model().id();
+        if (triangle_sweep_->last_crossed_bone && *triangle_sweep_->last_crossed_bone == id) continue;
+        triangle_sweep_->last_crossed_bone = id;
+        process_triangle_sweep_bone(canv, bone->model());
+    }
+
+    if (triangle_sweep_) triangle_sweep_->last_point = point;
 }
 
 void ui::tool::constraint::report_failure(canvas::scene& canv, sm::result result, const QString& action) {
@@ -191,34 +314,39 @@ void ui::tool::constraint::create_rotation(canvas::scene& canv, sm::bone& target
     canv.select_constraint(*result);
 }
 
+std::optional<sm::object_id> ui::tool::constraint::add_triangle(
+    canvas::scene& canv, sm::object_id first_id, sm::object_id second_id) {
+    auto first = model_->topology().get<sm::bone>(first_id);
+    auto second = model_->topology().get<sm::bone>(second_id);
+    if (!first || !second) {
+        report_failure(canv, sm::result::not_found, "Cannot create rigid triangle");
+        return std::nullopt;
+    }
+    if (first_id == second_id) {
+        canv.show_status_line("Rigid Triangle: choose a different second bone.");
+        return std::nullopt;
+    }
+    if (!first->get().is_sibling(second->get())) {
+        canv.show_status_line("Rigid Triangle: second bone must be a sibling with the same root.");
+        return std::nullopt;
+    }
+
+    auto result = model_->add_rigid_triangle_constraint(first_id, second_id);
+    if (!result) {
+        report_failure(canv, result.error(), "Cannot create rigid triangle");
+        return std::nullopt;
+    }
+    return *result;
+}
+
 void ui::tool::constraint::create_triangle(canvas::scene& canv, sm::bone& bone) {
     if (!pending_bone_) {
         show_pending(canv, bone, "Rigid Triangle: click a sibling bone with the same root (Esc cancels).");
         return;
     }
 
-    const auto first_id = *pending_bone_;
-    const auto second_id = bone.id();
-    auto first = model_->topology().get<sm::bone>(first_id);
-    auto second = model_->topology().get<sm::bone>(second_id);
-    if (!first || !second) {
-        report_failure(canv, sm::result::not_found, "Cannot create rigid triangle");
-        return;
-    }
-    if (first_id == second_id) {
-        canv.show_status_line("Rigid Triangle: choose a different second bone.");
-        return;
-    }
-    if (!first->get().is_sibling(second->get())) {
-        canv.show_status_line("Rigid Triangle: second bone must be a sibling with the same root.");
-        return;
-    }
-
-    auto result = model_->add_rigid_triangle_constraint(first_id, second_id);
-    if (!result) {
-        report_failure(canv, result.error(), "Cannot create rigid triangle");
-        return;
-    }
+    auto result = add_triangle(canv, *pending_bone_, bone.id());
+    if (!result) return;
     clear_pending();
     canv.select_constraint(*result);
 }
@@ -226,6 +354,7 @@ void ui::tool::constraint::create_triangle(canvas::scene& canv, sm::bone& bone) 
 void ui::tool::constraint::keyPressEvent(canvas::scene& canv, QKeyEvent* event) {
     if (event->key() == Qt::Key_Escape) {
         if (drag_) cancel_drag(canv);
+        clear_triangle_sweep();
         clear_pending();
         canv.set_hovered_constraint({});
     }
@@ -234,7 +363,15 @@ void ui::tool::constraint::keyPressEvent(canvas::scene& canv, QKeyEvent* event) 
 void ui::tool::constraint::mousePressEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
     press_handled_ = false;
     if (event->button() != Qt::LeftButton) return;
+
+    auto* item = canv.top_item(event->scenePos());
+
+    // Node clicks always mean pin/unpin for the constraint tool.  Give nodes
+    // priority over any constraint adornment that happens to overlap them.
+    if (dynamic_cast<canvas::item::node*>(item)) return;
+
     if (auto hit = canv.constraint_at(event->scenePos())) {
+        clear_triangle_sweep();
         clear_pending();
         canv.select_constraint(hit->id);
         press_handled_ = true;
@@ -242,6 +379,12 @@ void ui::tool::constraint::mousePressEvent(canvas::scene& canv, QGraphicsSceneMo
             auto current = model_->core().constraint_by_id(hit->id);
             if (current) drag_ = drag_state{hit->id, hit->part, current->get().definition()};
         }
+        return;
+    }
+
+    if (current_operation() == operation::rigid_triangle && !item) {
+        begin_triangle_sweep(canv, event->scenePos());
+        press_handled_ = true;
     }
 }
 
@@ -314,6 +457,10 @@ void ui::tool::constraint::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMou
         update_drag(canv, event->scenePos());
         return;
     }
+    if (triangle_sweep_) {
+        update_triangle_sweep(canv, event->scenePos());
+        return;
+    }
     auto hit = canv.constraint_at(event->scenePos());
     canv.set_hovered_constraint(hit ? std::optional<sm::object_id>{hit->id} : std::nullopt);
 
@@ -335,6 +482,12 @@ void ui::tool::constraint::mouseReleaseEvent(canvas::scene& canv, QGraphicsScene
     if (drag_) {
         update_drag(canv, event->scenePos());
         finish_drag(canv);
+        press_handled_ = false;
+        return;
+    }
+    if (triangle_sweep_) {
+        update_triangle_sweep(canv, event->scenePos());
+        clear_triangle_sweep();
         press_handled_ = false;
         return;
     }

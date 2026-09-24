@@ -15,6 +15,15 @@ class constraint : public base {
         sm::constraint_definition original;
     };
 
+    struct triangle_sweep_state {
+        canvas::scene* scene = nullptr;
+        QPointF last_point;
+        std::optional<sm::object_id> first_bone;
+        std::optional<sm::object_id> last_crossed_bone;
+        QGraphicsPathItem* trail = nullptr;
+        QGraphicsLineItem* first_highlight = nullptr;
+    };
+
     QWidget* settings_ = nullptr;
     QComboBox* operation_ = nullptr;
     QComboBox* reference_ = nullptr;
@@ -23,6 +32,7 @@ class constraint : public base {
     canvas::manager* canvases_ = nullptr;
     std::optional<sm::object_id> pending_bone_;
     std::optional<drag_state> drag_;
+    std::optional<triangle_sweep_state> triangle_sweep_;
     bool press_handled_ = false;
     QGraphicsLineItem* pending_highlight_ = nullptr;
     canvas::scene* pending_scene_ = nullptr;
@@ -32,11 +42,17 @@ class constraint : public base {
     void update_settings_state();
     void clear_pending();
     void show_pending(canvas::scene& canv, const sm::bone& bone, const QString& message);
+    void clear_triangle_sweep(bool hide_status = true);
+    void begin_triangle_sweep(canvas::scene& canv, QPointF point);
+    void update_triangle_sweep(canvas::scene& canv, QPointF point);
+    void set_triangle_sweep_first(canvas::scene& canv, const sm::bone& bone);
+    void process_triangle_sweep_bone(canvas::scene& canv, sm::bone& bone);
     void cancel_drag(canvas::scene& canv);
     void update_drag(canvas::scene& canv, QPointF point);
     void finish_drag(canvas::scene& canv);
     void create_rotation(canvas::scene& canv, sm::bone& target);
     void create_triangle(canvas::scene& canv, sm::bone& bone);
+    std::optional<sm::object_id> add_triangle(canvas::scene& canv, sm::object_id first, sm::object_id second);
     void report_failure(canvas::scene& canv, sm::result result, const QString& action);
 
 public:
