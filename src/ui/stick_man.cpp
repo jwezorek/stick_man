@@ -429,51 +429,122 @@ void ui::stick_man::update_undo_and_redo(bool can_redo, bool can_undo) {
     undo_action_->setEnabled(can_undo);
 }
 void ui::stick_man::insert_view_menu() {
-    auto view_menu = menuBar()->addMenu(tr("View"));
-    auto* show_artwork = view_menu->addAction("Show Artwork");
-    show_artwork->setObjectName("show_artwork"); show_artwork->setCheckable(true); show_artwork->setChecked(true);
-    connect(show_artwork, &QAction::toggled, this, [this](bool show) { canvases_->active_canvas().artwork().set_show_artwork(show); });
-    auto* show_skeleton = view_menu->addAction("Show Skeleton");
-    show_skeleton->setObjectName("show_skeleton"); show_skeleton->setCheckable(true); show_skeleton->setChecked(true);
-    connect(show_skeleton, &QAction::toggled, this, [this](bool show) { canvases_->active_canvas().artwork().set_show_skeleton(show); });
-    auto* show_constraints = view_menu->addAction("Show Constraints");
-    show_constraints->setObjectName("show_constraints"); show_constraints->setCheckable(true); show_constraints->setChecked(false);
-    connect(show_constraints, &QAction::toggled, this, [this](bool show) {
+    auto* view_menu = menuBar()->addMenu(tr("View"));
+
+    auto* reset_view_action = view_menu->addAction(tr("Reset view"));
+    connect(reset_view_action, &QAction::triggered, this, &stick_man::reset_view);
+    view_menu->addSeparator();
+
+    auto* panes_menu = view_menu->addMenu(tr("Panes"));
+    panes_menu->addAction(tool_pal_->toggleViewAction());
+    auto* tool_settings_action = tool_pane_->toggleViewAction();
+    tool_settings_action->setText(tr("Tool settings"));
+    panes_menu->addAction(tool_settings_action);
+    panes_menu->addAction(skel_pane_->toggleViewAction());
+    if (auto* artwork = findChild<pane::artwork_browser*>()) {
+        auto* action = artwork->toggleViewAction();
+        action->setText(tr("Artwork"));
+        panes_menu->addAction(action);
+    }
+    panes_menu->addAction(anim_pane_->toggleViewAction());
+
+    auto* canvas_view_menu = view_menu->addMenu(tr("Canvas view"));
+    show_constraints_action_ = canvas_view_menu->addAction(tr("Show constraints"));
+    show_constraints_action_->setObjectName("show_constraints");
+    show_constraints_action_->setCheckable(true);
+    connect(show_constraints_action_, &QAction::toggled, this, [this](bool show) {
         for (auto* canv : canvases_->canvases()) canv->set_constraints_view_visible(show);
     });
-    auto* display = view_menu->addMenu("Skeleton Display");
-    auto* display_group = new QActionGroup(this);
-    auto* normal = display->addAction("Normal"); auto* wire = display->addAction("Wireframe");
-    normal->setCheckable(true); wire->setCheckable(true); normal->setChecked(true);
-    display_group->addAction(normal); display_group->addAction(wire);
-    connect(wire, &QAction::toggled, this, [this](bool value) { canvases_->active_canvas().artwork().set_wireframe(value); });
-    view_menu->addSeparator();
-    for (auto* dock : findChildren<pane::artwork_browser*>()) view_menu->addAction(dock->toggleViewAction());
-    QMenu* magnification_menu = view_menu->addMenu(tr("Magnification"));
-    // Create an action group to make the actions mutually exclusive (like radio buttons)
-    QActionGroup* magnification_group = new QActionGroup(this);
+    show_constraints_action_->setChecked(true);
+
+    auto* show_artwork = canvas_view_menu->addAction(tr("Show artwork"));
+    show_artwork->setObjectName("show_artwork");
+    show_artwork->setCheckable(true);
+    show_artwork->setChecked(true);
+    connect(show_artwork, &QAction::toggled, this, [this](bool show) {
+        canvases_->active_canvas().artwork().set_show_artwork(show);
+    });
+
+    auto* skeleton_menu = canvas_view_menu->addMenu(tr("Skeleton"));
+    auto* skeleton_group = new QActionGroup(this);
+    skeleton_group->setExclusive(true);
+
+    const auto add_skeleton_display_action = [this, skeleton_menu, skeleton_group](
+        const QString& text, canvas::skeleton_display display, bool checked = false) {
+        auto* action = skeleton_menu->addAction(text);
+        action->setCheckable(true);
+        action->setChecked(checked);
+        skeleton_group->addAction(action);
+        connect(action, &QAction::triggered, this, [this, display] {
+            canvases_->active_canvas().artwork().set_skeleton_display(display);
+        });
+        return action;
+    };
+
+    add_skeleton_display_action(tr("Hidden"), canvas::skeleton_display::hidden);
+    add_skeleton_display_action(tr("Wireframe (nodes only)"), canvas::skeleton_display::wireframe_nodes);
+    add_skeleton_display_action(tr("Wireframe"), canvas::skeleton_display::wireframe);
+    skeleton_visible_action_ = add_skeleton_display_action(
+        tr("Visible"), canvas::skeleton_display::visible, true);
+
+    auto* magnification_menu = view_menu->addMenu(tr("Canvas magnification"));
+    auto* magnification_group = new QActionGroup(this);
     magnification_group->setExclusive(true);
     const auto* zoom_tool = static_cast<const tool::zoom*>(
         &tool_mgr_.tool_from_id(tool::id::zoom)
     );
-    // Create actions for each magnification level
-    auto zoom_levels = zoom_tool->magnification_levels();
-    for (auto level : zoom_levels) {
-        auto level_str = std::to_string(level) + "%";
-        QAction* action = new QAction(level_str.c_str(), this);
+    for (auto level : zoom_tool->magnification_levels()) {
+        const auto level_str = std::to_string(level) + "%";
+        auto* action = new QAction(level_str.c_str(), this);
         action->setCheckable(true);
-        if (level == 100) {
-            action->setChecked(true);  // Set default magnification to 100%
-        }
+        action->setChecked(level == 100);
         magnification_group->addAction(action);
         magnification_menu->addAction(action);
-        // Connect each action to a slot if you want to handle magnification changes
         connect(action, &QAction::triggered, this, [=]() {
-            double scale = level / 100.0;
-            zoom_tool->do_zoom(scale);
+            zoom_tool->do_zoom(level / 100.0);
         });
     }
 }
+void ui::stick_man::reset_view() {
+    auto* artwork = findChild<pane::artwork_browser*>();
+
+    // Rebuild the main pane layout rather than merely showing the panes. This also
+    // brings floated/moved panes back to the same arrangement used on a fresh run.
+    removeToolBar(tool_pal_);
+    addToolBar(Qt::LeftToolBarArea, tool_pal_);
+    tool_pal_->show();
+
+    const auto remove_dock = [this](QDockWidget* dock) {
+        dock->setFloating(false);
+        removeDockWidget(dock);
+    };
+    remove_dock(tool_pane_);
+    remove_dock(skel_pane_);
+    remove_dock(anim_pane_);
+    if (artwork) remove_dock(artwork);
+
+    addDockWidget(Qt::RightDockWidgetArea, tool_pane_);
+    addDockWidget(Qt::RightDockWidgetArea, skel_pane_);
+    addDockWidget(Qt::RightDockWidgetArea, anim_pane_);
+    if (artwork) {
+        addDockWidget(Qt::RightDockWidgetArea, artwork);
+        tabifyDockWidget(skel_pane_, artwork);
+    }
+    tabifyDockWidget(skel_pane_, anim_pane_);
+
+    tool_pane_->show();
+    skel_pane_->show();
+    anim_pane_->show();
+    if (artwork) artwork->show();
+    skel_pane_->raise();
+
+    if (show_constraints_action_) show_constraints_action_->setChecked(true);
+    for (auto* canv : canvases_->canvases()) canv->set_constraints_view_visible(true);
+
+    if (skeleton_visible_action_) skeleton_visible_action_->setChecked(true);
+    canvases_->active_canvas().artwork().set_skeleton_display(canvas::skeleton_display::visible);
+}
+
 void ui::stick_man::insert_project_menu() {
     auto project_menu = menuBar()->addMenu(tr("Stick Man"));
     auto* new_animation = new QAction("Create new animation", this);

@@ -90,7 +90,7 @@ namespace ui {
             std::unordered_set<sm::object_id> pinned_node_ids_;
             mdl::project* model_ = nullptr;
             bool constraint_tool_active_ = false;
-            bool show_constraints_in_view_ = false;
+            bool show_constraints_in_view_ = true;
             std::optional<sm::object_id> selected_constraint_id_;
             std::unique_ptr<constraint_adornment_layer> constraint_adornments_;
             tool::input_handler& inp_handler_;

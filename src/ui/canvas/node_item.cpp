@@ -34,8 +34,7 @@ ui::canvas::item::node::node(sm::node& node, double scale) :
     pin_visible_(false),
     pin_(nullptr) {
     auto inv_scale = 1.0 / scale;
-    setBrush(Qt::white);
-    setPen(QPen(Qt::black, 2.0 * inv_scale));
+    apply_display_style(scale);
     set_circle(this, to_qt_pt(model_.world_pos()), k_node_radius, inv_scale);
     setZValue(k_node_zorder);
 }
@@ -59,10 +58,27 @@ bool ui::canvas::item::node::pin_visible() const {
     return pin_visible_;
 }
 
+void ui::canvas::item::node::apply_display_style(double scale) {
+    const auto inv_scale = 1.0 / scale;
+    if (wireframe_) {
+        setBrush(Qt::NoBrush);
+        setPen(QPen(Qt::black, 2.0 * inv_scale, Qt::DotLine));
+    } else {
+        setBrush(Qt::white);
+        setPen(QPen(Qt::black, 2.0 * inv_scale));
+    }
+}
+
+void ui::canvas::item::node::set_wireframe(bool wireframe) {
+    wireframe_ = wireframe;
+    apply_display_style(canvas() ? canvas()->scale() : 1.0);
+    update();
+}
+
 void ui::canvas::item::node::sync_item_to_model() {
     auto& canv = *canvas();
     double inv_scale = 1.0 / canv.scale();
-    setPen(QPen(Qt::black, 2.0 * inv_scale));
+    apply_display_style(canv.scale());
     set_circle(this, to_qt_pt(model_.world_pos()), k_node_radius, inv_scale);
     if (pin_) {
         set_circle(pin_, { 0,0 }, k_pin_radius, inv_scale);

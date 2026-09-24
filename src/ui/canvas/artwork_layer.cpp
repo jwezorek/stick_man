@@ -247,13 +247,37 @@ void ui::canvas::artwork_layer::reset() {
     drag_.reset(); selected_.reset(); active_.clear(); preview_states_.clear(); refresh(); emit selection_changed(); emit appearance_changed(); emit preview_changed(); emit transform_changed();
 }
 void ui::canvas::artwork_layer::set_show_artwork(bool show) { cancel_transform(); show_artwork_ = show; scene_.update(); }
-void ui::canvas::artwork_layer::set_show_skeleton(bool show) { show_skeleton_ = show; refresh_guides(); scene_.update(); }
-void ui::canvas::artwork_layer::set_wireframe(bool value) { wireframe_ = value; refresh_guides(); scene_.update(); }
+void ui::canvas::artwork_layer::set_skeleton_display(skeleton_display display) {
+    if (skeleton_display_ == display) return;
+    skeleton_display_ = display;
+    refresh_guides();
+    scene_.update();
+}
 void ui::canvas::artwork_layer::refresh_guides() {
-    // Opacity preserves the existing selection visibility semantics of rig items.
-    for (auto* item : scene_.items()) if (!item->parentItem()) item->setOpacity(show_skeleton_ ? 1 : 0);
-    for (auto* bone : scene_.bone_items()) bone->setBrush(wireframe_ ? QBrush(Qt::NoBrush) : QBrush(Qt::black));
-    for (auto* node : scene_.node_items()) node->setBrush(wireframe_ ? QBrush(Qt::NoBrush) : QBrush(Qt::white));
+    const bool show_nodes = skeleton_display_ != skeleton_display::hidden;
+    const bool show_bones = skeleton_display_ == skeleton_display::wireframe ||
+        skeleton_display_ == skeleton_display::visible;
+    const bool wireframe = skeleton_display_ == skeleton_display::wireframe_nodes ||
+        skeleton_display_ == skeleton_display::wireframe;
+
+    for (auto* bone : scene_.bone_items()) {
+        bone->set_wireframe(wireframe);
+        bone->setVisible(show_bones);
+    }
+    for (auto* node : scene_.node_items()) {
+        node->set_wireframe(wireframe);
+        node->setVisible(show_nodes);
+    }
+
+    // Skeleton/character aggregate frames are selection guides rather than nodes or bones.
+    // Keep their selection state intact, but hide them whenever bones are not part of the view.
+    for (auto* item : scene_.canvas_items()) {
+        if (dynamic_cast<ui::canvas::item::skeleton*>(item) ||
+            dynamic_cast<ui::canvas::item::character*>(item)) {
+            if (auto* graphics = dynamic_cast<QGraphicsItem*>(item))
+                graphics->setOpacity(show_bones ? 1.0 : 0.0);
+        }
+    }
 }
 void ui::canvas::artwork_layer::set_transform_editing(bool enabled) {
     if (transform_editing_ == enabled) return;

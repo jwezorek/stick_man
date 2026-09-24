@@ -12,6 +12,7 @@ namespace ui::canvas {
         bool operator==(const sprite_selection&) const = default;
     };
     enum class sprite_drag { translate, rotate, scale_x, scale_y, scale_xy };
+    enum class skeleton_display { hidden, wireframe_nodes, wireframe, visible };
     class artwork_layer : public QObject {
         Q_OBJECT
         scene& scene_;
@@ -21,7 +22,8 @@ namespace ui::canvas {
         std::unordered_map<sm::object_id, std::map<std::string, std::string>> preview_states_;
         std::optional<sprite_selection> selected_;
         bool transform_editing_ = false;
-        bool show_artwork_ = true, show_skeleton_ = true, wireframe_ = false;
+        bool show_artwork_ = true;
+        skeleton_display skeleton_display_ = skeleton_display::visible;
         struct drag_state {
             sprite_selection selection;
             sm::sprite_transform before, preview;
@@ -60,11 +62,10 @@ namespace ui::canvas {
         void refresh();
         void reset();
         void set_show_artwork(bool show);
-        void set_show_skeleton(bool show);
-        void set_wireframe(bool wireframe);
+        void set_skeleton_display(skeleton_display display);
         bool show_artwork() const { return show_artwork_; }
-        bool show_skeleton() const { return show_skeleton_; }
-        bool wireframe() const { return wireframe_; }
+        bool show_skeleton() const { return skeleton_display_ != skeleton_display::hidden; }
+        skeleton_display skeleton_display_mode() const { return skeleton_display_; }
         void refresh_guides();
         void set_transform_editing(bool enabled);
         bool transform_editing() const { return transform_editing_; }

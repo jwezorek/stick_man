@@ -47,6 +47,7 @@ namespace ui {
         void insert_edit_menu();
         void insert_project_menu();
         void insert_view_menu();
+        void reset_view();
         void createMainMenu();
         void showEvent(QShowEvent* event) override;
         void resizeEvent(QResizeEvent* event) override;
@@ -68,6 +69,8 @@ namespace ui {
         bool has_fully_layed_out_widgets_;
         QAction* undo_action_;
         QAction* redo_action_;
+        QAction* show_constraints_action_ = nullptr;
+        QAction* skeleton_visible_action_ = nullptr;
     };
 
 }

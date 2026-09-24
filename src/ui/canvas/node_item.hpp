@@ -10,6 +10,8 @@ namespace ui {
                 public has_stick_man_model<node, sm::node&>, public QGraphicsEllipseItem {
             private:
                 QGraphicsEllipseItem* pin_;
+                bool wireframe_ = false;
+                void apply_display_style(double scale);
                 void sync_item_to_model() override;
                 void sync_sel_frame_to_model() override;
                 QGraphicsItem* create_selection_frame() const override;
@@ -22,6 +24,7 @@ namespace ui {
                 using model_type = sm::node;
 
                 node(sm::node& node, double scale);
+                void set_wireframe(bool wireframe);
                 void set_pin_visible(bool visible);
                 bool pin_visible() const;
             };
