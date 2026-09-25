@@ -125,26 +125,4 @@ constraint_map constraints_from_json(const nlohmann::json& j) {
     return out;
 }
 
-static const constraint* editor_record(const bone& b) {
-    for (auto& [id,c] : b.owner().owner().constraints())
-        if (auto r = c.rotation(); r && r->target_bone == b.id() && r->reference.kind != rotation_reference_kind::bone) return &c;
-    return nullptr;
-}
-std::optional<rot_constraint> editor_rotation_constraint(const bone& b) {
-    auto c = editor_record(b);
-    if (!c) return {};
-    auto r = c->rotation();
-    return rot_constraint{r->reference.kind == rotation_reference_kind::parent,r->allowed.start_angle,r->allowed.span_angle};
-}
-result set_editor_rotation_constraint(bone& b, double start, double span, bool parent) {
-    auto p = b.owner().owner().owning_project();
-    if (!p) return result::invalid_constraint;
-    auto reference = parent ? rotation_reference::parent() : rotation_reference::world();
-    if (auto c = editor_record(b)) return p->update_constraint(c->id(),rotation_constraint{b.id(),reference,{start,span}});
-    auto added = p->add_rotation_constraint(b.id(),reference,{start,span});
-    return added ? result::success : added.error();
-}
-void remove_editor_rotation_constraint(bone& b) {
-    if (auto p = b.owner().owner().owning_project()) if (auto c = editor_record(b)) p->remove_constraint(c->id());
-}
 }

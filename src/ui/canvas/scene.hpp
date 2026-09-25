@@ -145,7 +145,6 @@ namespace ui {
             item::base* top_item(const QPointF & pt) const;
             std::vector<item::base*> items_in_rect(const QRectF& pt) const;
             std::vector<item::base*> canvas_items() const;
-            std::vector<item::node*> root_node_items() const;
             std::vector<item::node*> node_items() const;
             std::vector<item::bone*> bone_items() const;
             std::vector<item::skeleton*> skeleton_items() const;
@@ -153,7 +152,6 @@ namespace ui {
             void set_scale(double scale, std::optional<QPointF> pt = {});
             double scale() const;
             void set_zoom_level(int zoom, std::optional<QPointF> pt = {});
-            std::optional<int> zoom_level() const;
             int closest_zoom_level() const;
 
             void sync_to_model();
@@ -180,7 +178,6 @@ namespace ui {
             bool constraints_visible() const;
             void set_constraint_tool_active(bool active);
             void set_constraints_view_visible(bool visible);
-            bool constraints_view_visible() const { return show_constraints_in_view_; }
             std::optional<constraint_hit> constraint_at(const QPointF& point) const;
             std::optional<sm::object_id> selected_constraint_id() const { return selected_constraint_id_; }
             const sm::constraint* selected_constraint() const;
@@ -217,7 +214,6 @@ namespace ui {
             void filter_selection(std::function<bool(item::base*)> filter);
             void delete_item(item::base* item, bool emit_signals);
             QPointF from_global_to_canvas(const QPoint& pt);
-            std::string tab_name() const;
             const canvas::manager& manager() const;
             canvas::manager& manager();
             std::optional<sm::point> cursor_pos() const;

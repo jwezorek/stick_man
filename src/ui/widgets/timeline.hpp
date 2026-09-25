@@ -66,7 +66,6 @@ namespace ui {
     public:
         explicit timeline(QWidget* parent = nullptr);
         void set_rows(int count);
-        void set_row_height(int height);
         void set_items(std::vector<timeline_item> items);
         void set_selected_item(QString id) { selected_ = std::move(id); viewport()->update(); }
         const std::vector<timeline_item>& items() const { return items_; }

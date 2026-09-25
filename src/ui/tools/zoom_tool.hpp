@@ -22,7 +22,6 @@ namespace ui {
 
         public:
             zoom_combobox(QWidget* parent = nullptr);
-            double nth_scale(int n) const;
             void sync_zoom_text(double scale);
             std::vector<int> magnification_levels() const;
 
@@ -42,8 +41,6 @@ namespace ui {
             zoom_combobox* magnify_;
             canvas::manager* canvases_;
 
-            void handleButtonClick(int level);
-            
 
         public:
             zoom();

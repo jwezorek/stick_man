@@ -76,9 +76,6 @@ namespace ui {
     }
 }
 
-double ui::pane::props::nodes::world_coordinate_to_rel(int index, double val) {
-    return val;
-}
 
 ui::pane::props::nodes::nodes(const current_canvas_fn& fn, selection_properties* parent) :
     single_or_multi_props_widget(

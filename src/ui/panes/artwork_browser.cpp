@@ -735,7 +735,6 @@ ui::pane::artwork_browser::artwork_browser(mdl::project& project, canvas::manage
     });
     connect(tabs, &QTabWidget::currentChanged, this, [this] { update_transform_editing(); });
     connect(this, &QDockWidget::visibilityChanged, this, [this] { update_transform_editing(); });
-    connect(&canvases_, &canvas::manager::active_canvas_changed, this, [this] { refresh(); });
     connect(&canvases_, &canvas::manager::selection_changed, this, [this] { refresh(); });
     connect(&project_, &mdl::project::project_changed, this, [this] { refresh(); });
     connect(&project_, &mdl::project::artwork_changed, this, [this](mdl::project&, sm::object_id) { refresh(); });

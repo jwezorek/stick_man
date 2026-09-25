@@ -69,7 +69,6 @@ namespace ui {
 	public:
 		labeled_field(QString lbl, QString val);
 		string_edit* value();
-		void set_label(QString str);
 		void set_value(QString str);
 		void set_color(QColor color);
 	};
@@ -91,7 +90,6 @@ namespace ui {
         void handle_done_editing();
         double to_acceptable_value(double v) const;
         void make_acceptable_value();
-        static std::string format_string(int decimals);
 
         double default_val_;
         int  decimals_;
@@ -189,7 +187,6 @@ namespace ui {
         auto vec = qcollection | std::ranges::to<std::vector>();
         return to_vector_of_type<T>(vec);
     }
-    QColor lerp_colors(const QColor& color1, const QColor& color2, qreal factor);
     QRectF rect_from_circle(QPointF center, double radius);
     void set_arc(
         QGraphicsEllipseItem* gei, QPointF center, double radius,
@@ -206,14 +203,6 @@ namespace ui {
 	double clamp_above(double v, double floor);
 	double clamp_below(double v, double ceiling);
 	double clamp(double v, double floor, double ceiling);
-    std::string get_prefixed_string(
-        const std::string& prefix, const std::string& str, char separator = '-'
-    );
-    std::string make_unique_name(const std::vector<std::string>& used_names,
-        const std::string& prefix);
-    void to_text_file(const std::string& file_path, const std::string& text);
-    std::string query_for_valid_string(QWidget* parent, const std::function<bool(const std::string&)>& predicate,
-        const std::string& title, const std::string& prompt);
     constexpr double k_tolerance = 0.00005;
     std::optional<double> get_unique_val(auto vals, double tolerance = k_tolerance) {
         using namespace std::placeholders;

@@ -51,7 +51,6 @@ namespace ui::canvas {
         void set_active_appearance(const sm::object_id& character, const std::string& appearance);
         std::string preview_state(const sm::object_id& character, const std::string& slot) const;
         void set_preview_state(const sm::object_id& character, const std::string& slot, const std::string& state);
-        void reset_preview_states(const sm::object_id& character);
         void set_selected_slot(const sm::object_id& character, const std::string& slot);
         void clear_selected_slot();
         const std::optional<sprite_selection>& selected_slot() const { return selected_; }
@@ -65,7 +64,6 @@ namespace ui::canvas {
         void set_skeleton_display(skeleton_display display);
         bool show_artwork() const { return show_artwork_; }
         bool show_skeleton() const { return skeleton_display_ != skeleton_display::hidden; }
-        skeleton_display skeleton_display_mode() const { return skeleton_display_; }
         void refresh_guides();
         void set_transform_editing(bool enabled);
         bool transform_editing() const { return transform_editing_; }

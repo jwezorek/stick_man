@@ -20,10 +20,6 @@ namespace mdl {
             return current_ != saved_;
         }
 
-        [[nodiscard]] constexpr revision current_revision() const noexcept {
-            return current_;
-        }
-
         [[nodiscard]] constexpr transition advance() noexcept {
             const transition result{current_, next_++};
             current_ = result.after;

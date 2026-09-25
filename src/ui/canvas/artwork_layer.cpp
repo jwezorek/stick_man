@@ -124,9 +124,6 @@ void ui::canvas::artwork_layer::set_preview_state(const sm::object_id& id, const
     else preview_states_[id][slot] = state;
     scene_.update(); emit preview_changed();
 }
-void ui::canvas::artwork_layer::reset_preview_states(const sm::object_id& id) {
-    cancel_transform(); preview_states_.erase(id); scene_.update(); emit preview_changed();
-}
 std::vector<ui::canvas::artwork_layer::drawable> ui::canvas::artwork_layer::drawables() const {
     std::vector<drawable> result;
     if (!show_artwork_) return result;

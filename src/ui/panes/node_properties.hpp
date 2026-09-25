@@ -15,8 +15,6 @@ namespace ui {
                 labeled_field* name_;
                 node_position_tab* positions_;
 
-                static double world_coordinate_to_rel(int index, double val);
-
             public:
                 nodes(const current_canvas_fn& fn, selection_properties* parent);
 

@@ -22,12 +22,6 @@ namespace ui {
                 void handle_drag(const QPointF& pt);
             };
 
-            class line_rubber_band : public rubber_band, public QGraphicsLineItem {
-            public:
-                line_rubber_band(const QPointF& pt);
-                void handle_drag(const QPointF& pt);
-            };
-
             class arc_rubber_band : public rubber_band, public QGraphicsEllipseItem {
                 double radius_;
                 double theta_;

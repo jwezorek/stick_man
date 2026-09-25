@@ -50,8 +50,4 @@ namespace sm {
     nlohmann::json constraints_to_json(const constraint_map&);
     constraint_map constraints_from_json(const nlohmann::json&);
 
-    // Adapter for the existing world/parent editor. No bone-owned state.
-    std::optional<rot_constraint> editor_rotation_constraint(const bone&);
-    result set_editor_rotation_constraint(bone&, double start, double span, bool parent);
-    void remove_editor_rotation_constraint(bone&);
 }

@@ -275,20 +275,6 @@ namespace {
         canv.set_selection(selected, true);
     }
 
-    std::optional<QRectF> points_to_rect(QPointF pt1, QPointF pt2) {
-        auto width = std::abs(pt1.x() - pt2.x());
-        auto height = std::abs(pt1.y() - pt2.y());
-
-        if (width == 0.0f && height == 0.0f) {
-            return {};
-        }
-        auto left = std::min(pt1.x(), pt2.x());
-        auto bottom = std::min(pt1.y(), pt2.y());
-        return QRectF(
-            QPointF(left, bottom),
-            QSizeF(width, height)
-        );
-    }
 
     void do_ragdoll_rotate(double theta, ui::tool::rotation_state& state) {
         sm::point offset = state.radius() * sm::point(std::cos(theta), std::sin(theta));

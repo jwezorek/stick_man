@@ -51,18 +51,6 @@ namespace {
 		return shared->get();
 	}
 
-	// if the current bone has no predecessor bone, return nil.
-	// otherwise, return the node of the predecessor bone that is not 
-	// the current node i.e. the node that preceded the current node.
-
-	sm::maybe_node_ref pred_node(const fabrik_neighborhood& fn) {
-		if (!fn.prev) {
-			return {};
-		}
-		auto& pred_bone = fn.prev->get();
-		return pred_bone.opposite_node( current_node(fn) );
-	}
-
 	std::unordered_map<sm::bone*, bone_info> build_bone_table(sm::node& j) {
 		std::unordered_map<sm::bone*, bone_info> length_tbl;
 		auto visit_bone = [&length_tbl](sm::bone& b)->sm::visit_result {

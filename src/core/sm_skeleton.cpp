@@ -432,11 +432,6 @@ sm::expected_const_skel sm::topology::skeleton(const std::string& name) const {
     }
     return std::unexpected(sm::result::not_found);
 }
-template<typename T>
-void delete_ptrs_if(std::vector<std::unique_ptr<T>>& vec, std::function<bool(const T&)> predicate) {
-    vec.erase(std::remove_if(vec.begin(), vec.end(),
-        [&](const std::unique_ptr<T>& item) { return predicate(*item); }), vec.end());
-}
 sm::result sm::topology::delete_skeleton(const object_id& id) {
     auto skel_ref = skeleton(id);
     if (!skel_ref) {

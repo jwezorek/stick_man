@@ -36,12 +36,7 @@ namespace ui {
             void clear();
             void center_active_view();
             scene& active_canvas() const;
-            scene* canvas_from_name(const std::string& canv_name);
             void set_drag_mode(drag_mode dm);
-            void set_active_canvas(const scene& c);
-            std::vector<std::string> tab_names() const;
-            std::string tab_name(const scene& canv) const;
-            std::string canvas_name() const;
             void set_canvas_name(const std::string& name);
             auto canvases() {
                 namespace r = std::ranges;
@@ -56,7 +51,6 @@ namespace ui {
                 );
             }
         signals:
-            void active_canvas_changed(ui::canvas::scene& old_canv, ui::canvas::scene& canv);
             void selection_changed(ui::canvas::scene& canv);
             void canvas_refresh(const sm::project& project);
         };

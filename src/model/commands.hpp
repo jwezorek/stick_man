@@ -95,19 +95,6 @@ namespace mdl {
                 const std::function<void(sm::bone&)>& fn
             );
         };
-        template<sm::is_skel_piece T>
-        static command make_rename_command(sm::ref<T> piece, const std::string& new_name) {
-            auto state = std::make_shared<rename_state>(
-                to_handle(skel_piece{piece}), piece->name(), new_name);
-            return {
-                [state](mdl::project& proj) {
-                    proj.rename_aux(state->object, state->new_name);
-                },
-                [state](mdl::project& proj) {
-                    proj.rename_aux(state->object, state->old_name);
-                }
-            };
-        }
         static command make_create_node_command(
             const sm::point& pt, const std::string& node_name);
         static command make_add_bone_command(

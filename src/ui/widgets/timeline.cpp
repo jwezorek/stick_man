@@ -29,7 +29,6 @@ ui::timeline::timeline(QWidget* parent) : QAbstractScrollArea(parent) {
     });
 }
 void ui::timeline::set_rows(int count) { rows_ = qMax(0, count); set_row_head(row_head_); update_scrollbars(); }
-void ui::timeline::set_row_height(int height) { row_height_ = qMax(20, height); update_scrollbars(); }
 void ui::timeline::set_items(std::vector<timeline_item> items) {
     QSet<QString> ids;
     for (const auto& i : items) {

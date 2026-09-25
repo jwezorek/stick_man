@@ -26,17 +26,6 @@ void ui::canvas::item::rect_rubber_band::handle_drag(const QPointF& pt) {
     setRect(rect);
 }
 
-/*------------------------------------------------------------------------------------------------*/
-
-ui::canvas::item::line_rubber_band::line_rubber_band(const QPointF& pt) {
-    setPen(QPen(Qt::black, 2, Qt::DotLine));
-    set_pinned_point(pt);
-}
-
-void ui::canvas::item::line_rubber_band::handle_drag(const QPointF& pt) {
-    QLineF line(pinned_point_, pt);
-    setLine(line);
-}
 
 /*------------------------------------------------------------------------------------------------*/
 

@@ -31,25 +31,6 @@ namespace rv = std::ranges::views;
 
 namespace {
 
-	template <typename T>
-	struct item_for_model;
-
-	template <>
-	struct item_for_model<sm::node> {
-		using type = ui::canvas::item::node;
-	};
-
-	template <>
-	struct item_for_model<sm::bone> {
-		using type = ui::canvas::item::bone;
-	};
-
-	template <>
-	struct item_for_model<sm::skeleton> {
-		using type = ui::canvas::item::skeleton;
-	};
-
-	constexpr int k_treeview_max_hgt = 300;
 	const int k_is_bone_role = Qt::UserRole + 1;
 	const int k_model_role = Qt::UserRole + 2;
     const int k_character_role = Qt::UserRole + 3;
@@ -127,54 +108,6 @@ namespace {
 		sm::visit_nodes_and_bones(skel->root_node(), {}, visit, true);
 	}
 
-	bool is_same_bone_selection(const std::vector<ui::canvas::item::bone*>& canv_sel,
-		const std::vector<QStandardItem*>& tree_sel) {
-		if (canv_sel.size() != tree_sel.size()) {
-			return false;
-		}
-		auto canv_set = canv_sel | rv::transform(
-			[](auto* bi)->QStandardItem* {
-				return bi->treeview_item();
-			}
-		) | r::to<std::unordered_set<QStandardItem*>>();
-
-		auto tree_set = tree_sel | r::to<std::unordered_set<QStandardItem*>>();
-		for (auto* i : canv_set) {
-			if (!tree_set.contains(i)) {
-				return false;
-			}
-		}
-		for (auto* i : tree_set) {
-			if (!canv_set.contains(i)) {
-				return false;
-			}
-		}
-
-		return true;
-	}
-
-	// if the selection is all in one canvas return as is; otherwise, remove all
-	// items that are not on the active canvas.
-
-	std::vector<ui::canvas::item::base*> normalize_selection_per_active_canvas(
-		const std::vector<ui::canvas::item::base*>& itms, const ui::canvas::scene& active_canv) {
-		if (itms.empty()) {
-			return {};
-		}
-		auto* some_canvas = itms.front()->canvas();
-		auto iter = r::find_if(itms,
-			[some_canvas](auto* itm) { return itm->canvas() != some_canvas; }
-		);
-		if (iter == itms.end()) {
-			return itms;
-		}
-		return itms |
-			rv::filter(
-				[&active_canv](ui::canvas::item::base* itm) {
-					return  itm->canvas() == &active_canv;
-				}
-			) | r::to< std::vector<ui::canvas::item::base*>>();
-	}
 
 	void expand_item(QStandardItem* item, QTreeView* treeView) {
 		if (!item || !treeView) {
@@ -294,14 +227,6 @@ void ui::pane::main_skeleton_pane::handle_tree_selection_change(
         }
     }
     sel_canv_items = unique_items | r::to<std::vector<canvas::item::base*>>();
-    sel_canv_items = normalize_selection_per_active_canvas(sel_canv_items, curr_canv);
-
-	if (!sel_canv_items.empty()) {
-		auto& sel_canv = *sel_canv_items.front()->canvas();
-		if (&sel_canv != &curr_canv) {
-			canvases_->set_active_canvas(sel_canv);
-		}
-	}
 
 	canvas().set_selection(sel_canv_items, true);
 	handle_canv_sel_change();

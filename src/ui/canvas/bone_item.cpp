@@ -35,7 +35,6 @@ namespace {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::canvas::item::bone::bone(sm::bone& bone, double scale) :
-        treeview_item_(nullptr),
         has_stick_man_model<ui::canvas::item::bone, sm::bone&>(bone) {
     apply_display_style(scale);
     set_bone_item_pos(
@@ -48,17 +47,6 @@ ui::canvas::item::bone::bone(sm::bone& bone, double scale) :
     setZValue(k_bone_zorder);
 }
 
-ui::canvas::item::node& ui::canvas::item::bone::parent_node_item() const {
-    return std::any_cast<sm::ref<ui::canvas::item::node>>(
-        model_.parent_node().get_user_data()
-    );
-}
-
-ui::canvas::item::node& ui::canvas::item::bone::child_node_item() const {
-    return std::any_cast<sm::ref<ui::canvas::item::node>>(
-        model_.child_node().get_user_data()
-    );
-}
 
 mdl::const_skel_piece ui::canvas::item::bone::to_skeleton_piece() const {
     const auto& bone = model();

@@ -24,14 +24,26 @@ json arm_json() {
     }]})");
 }
 
+const sm::rotation_constraint* rotation_constraint_for(const sm::skeleton& skel, const char* bone_name) {
+    auto bone = skel.get_by_name<sm::bone>(bone_name);
+    if (!bone) return nullptr;
+    for (const auto& [id, constraint] : skel.owner().constraints()) {
+        auto rotation = constraint.rotation();
+        if (rotation && rotation->target_bone == bone->get().id()) return rotation;
+    }
+    return nullptr;
+}
+
 void check_constraints(const sm::skeleton& skel) {
-    auto relative = sm::editor_rotation_constraint(skel.get_by_name<sm::bone>("forearm")->get());
-    require(relative.has_value(), "parent-relative constraint was lost");
-    require(relative->relative_to_parent && relative->start_angle == 0.25 && relative->span_angle == 1.5,
+    auto relative = rotation_constraint_for(skel, "forearm");
+    require(relative, "parent-relative constraint was lost");
+    require(relative->reference.kind == sm::rotation_reference_kind::parent &&
+        relative->allowed.start_angle == 0.25 && relative->allowed.span_angle == 1.5,
         "parent-relative constraint changed");
-    auto absolute = sm::editor_rotation_constraint(skel.get_by_name<sm::bone>("upper arm")->get());
-    require(absolute.has_value() && !absolute->relative_to_parent &&
-        absolute->start_angle == -0.5 && absolute->span_angle == 2.0, "absolute constraint changed");
+    auto absolute = rotation_constraint_for(skel, "upper arm");
+    require(absolute && absolute->reference.kind == sm::rotation_reference_kind::world &&
+        absolute->allowed.start_angle == -0.5 && absolute->allowed.span_angle == 2.0,
+        "absolute constraint changed");
 }
 
 void copying(const std::string& mode) {
@@ -46,9 +58,13 @@ void copying(const std::string& mode) {
     sm::project source_project;
     auto& arm = source_project.copy_skeleton((*source.skeletons().begin()).get()).value().get();
     require((*arm.bones().begin())->name() == "forearm", "fixture must visit child first");
-    require(sm::set_editor_rotation_constraint(arm.get_by_name<sm::bone>("forearm")->get(),0.25, 1.5, true)
-        == sm::result::success, "fixture relative constraint failed");
-    sm::set_editor_rotation_constraint(arm.get_by_name<sm::bone>("upper arm")->get(),-0.5, 2.0, false);
+    auto forearm = arm.get_by_name<sm::bone>("forearm");
+    auto upper_arm = arm.get_by_name<sm::bone>("upper arm");
+    require(forearm && upper_arm, "fixture bones missing");
+    require(source_project.add_rotation_constraint(forearm->get().id(), sm::rotation_reference::parent(), {0.25, 1.5}).has_value(),
+        "fixture relative constraint failed");
+    require(source_project.add_rotation_constraint(upper_arm->get().id(), sm::rotation_reference::world(), {-0.5, 2.0}).has_value(),
+        "fixture absolute constraint failed");
     sm::topology dest;
     if (mode == "copy") {
         require(arm.copy_to(dest).has_value(), "copy failed");
@@ -71,9 +87,6 @@ void copying(const std::string& mode) {
     } else {
         sm::project original;
         require(original.copy_skeleton(arm).has_value(), "project copy failed");
-        // Set constraints on the live source so this tests archive loading independently of copying.
-        auto& live = (*original.topology().skeletons().begin()).get();
-        sm::set_editor_rotation_constraint(live.get_by_name<sm::bone>("forearm")->get(),0.25, 1.5, true);
         auto saved = original.serialize();
         require(saved.has_value(), "archive save failed");
         sm::project loaded;

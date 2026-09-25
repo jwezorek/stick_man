@@ -100,9 +100,6 @@ void ui::canvas::manager::add_new_skeleton(sm::skel_ref skel_ref) {
 
     emit canvas_refresh(project_->core());
 }
-ui::canvas::scene* ui::canvas::manager::canvas_from_name(const std::string& name) {
-    return name == canvas_name() ? &active_canvas() : nullptr;
-}
 
 QGraphicsView& ui::canvas::manager::active_view() const {
     return *static_cast<QGraphicsView*>(widget(0));
@@ -115,15 +112,6 @@ void ui::canvas::manager::center_active_view() {
     active_view().centerOn(0, 0);
 }
 
-std::vector<std::string> ui::canvas::manager::tab_names() const {
-    return { canvas_name() };
-}
-std::string ui::canvas::manager::tab_name(const scene& canv) const {
-    return &canv == &active_canvas() ? canvas_name() : "";
-}
-std::string ui::canvas::manager::canvas_name() const {
-    return tabText(0).toStdString();
-}
 void ui::canvas::manager::set_canvas_name(const std::string& name) {
     setTabText(0, QString::fromStdString(name));
 }
@@ -138,9 +126,6 @@ void ui::canvas::manager::set_contents(mdl::project& model) {
 void ui::canvas::manager::set_drag_mode(drag_mode dm) {
     drag_mode_ = dm;
     active_canvas().set_drag_mode(dm);
-}
-void ui::canvas::manager::set_active_canvas(const scene&) {
-    // There is only one canvas.
 }
 
 void ui::canvas::manager::show_animation_preview(sm::topology* topology) {

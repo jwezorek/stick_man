@@ -52,14 +52,6 @@ namespace {
 		return has_node ? ui::selection_type::node : ui::selection_type::bone;
 	}
 
-	auto to_model_objects(r::input_range auto&& itms) {
-		return itms |
-			rv::transform(
-				[](auto itm)->auto& {
-					return itm->model();
-				}
-		);
-	}
 }
 
 /*------------------------------------------------------------------------------------------------*/

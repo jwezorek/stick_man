@@ -79,9 +79,6 @@ namespace ui {
             return std::any_cast<sm::ref<T>>(model_obj.get_user_data());
         }
 
-        bool has_canvas_item(const auto& model_obj) {
-            return model_obj.get_user_data().has_value();
-        }
 
         // items are a view of canvas_item pointers of some type.
         // returns a view of sm::node, sm::bone, or sm::skeleton pointers. 
@@ -93,15 +90,6 @@ namespace ui {
             );
         }
 
-        // items are a view of canvas_item pointers of some type.
-        // returns a view of sm::node_ref, sm::bone_ref, or sm::skel_ref references. 
-        auto to_model_refs(auto&& items) {
-            return items | std::ranges::views::transform(
-                [](auto* item) {
-                    return sm::ref(item->model());
-                }
-            );
-        }
 
         constexpr auto k_sel_frame_distance = 4.0;
         constexpr auto k_sel_color = QColorConstants::Svg::turquoise;

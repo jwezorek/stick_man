@@ -29,9 +29,6 @@ void ui::pane::abstract_skeleton_pane::connect_canv_cont_handler() {
     );
 }
 
-void ui::pane::abstract_skeleton_pane::disconnect_canv_cont_handler() {
-    disconnect(canv_content_conn_);
-}
 
 void ui::pane::abstract_skeleton_pane::connect_tree_change_handler() {
     auto* model = static_cast<QStandardItemModel*>(skel_tree().model());

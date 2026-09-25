@@ -13,7 +13,6 @@ namespace ui {
                 public has_stick_man_model<bone, sm::bone&>,
                 public QGraphicsPolygonItem {
             private:
-                QStandardItem* treeview_item_;
                 bool wireframe_ = false;
 
                 void apply_display_style(double scale);
@@ -30,8 +29,6 @@ namespace ui {
 
                 bone(sm::bone& bone, double scale);
                 void set_wireframe(bool wireframe);
-                item::node& parent_node_item() const;
-                item::node& child_node_item() const;
             };
 
             Q_DECLARE_METATYPE(bone*);

@@ -61,12 +61,8 @@ namespace {
             );
         }
 
-        void insert_range(auto rng) {
-            for (mdl::const_skel_piece piece : rng) {
-                insert(piece);
-            }
-        }
     };
+
     sm::skeleton* create_skeleton(sm::topology& dest, const std::string& skel_name) {
         auto skel = dest.create_skeleton(skel_name);
         return skel ? &skel->get() : nullptr;

@@ -25,7 +25,6 @@ namespace {
 	const auto k_darker_gridline_color = QColor::fromRgb(180, 180, 180);
     const auto k_dark_gridline_color = QColor::fromRgb(220, 220, 220);
     const auto k_light_gridline_color = QColor::fromRgb(240, 240, 240);
-    constexpr int k_ribbon_height = 35;
     constexpr double k_zoom_base = 1.5;
 
     QGraphicsView::DragMode to_qt_drag_mode(ui::canvas::drag_mode dm) {
@@ -38,11 +37,6 @@ namespace {
                 return QGraphicsView::RubberBandDrag;
         }
         return QGraphicsView::NoDrag;
-    }
-
-    template<typename T>
-    std::vector<ui::canvas::item::base*> to_stick_man_items(const T& collection) {
-        return ui::to_vector_of_type<ui::canvas::item::base*>(collection);
     }
 
     template<typename T>
@@ -716,9 +710,6 @@ std::optional<sm::point> ui::canvas::scene::cursor_pos() const {
     }
 }
 
-std::string ui::canvas::scene::tab_name() const {
-    return manager().tab_name(*this);
-}
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -744,15 +735,6 @@ std::vector<ui::canvas::item::base*> ui::canvas::scene::canvas_items() const {
     return qt_to_vector_of_type<ui::canvas::item::base>( items() );
 }
 
-std::vector<ui::canvas::item::node*> ui::canvas::scene::root_node_items() const {
-    auto nodes = node_items();
-    return nodes |
-        rv::filter(
-            [](auto j)->bool {
-                return !(j->parentItem());
-            }
-        ) | r::to<std::vector<item::node*>>();
-}
 
 std::vector<ui::canvas::item::node*> ui::canvas::scene::node_items() const {
     return qt_to_vector_of_type<item::node>( items());
@@ -766,10 +748,6 @@ std::vector<ui::canvas::item::skeleton*> ui::canvas::scene::skeleton_items() con
     return qt_to_vector_of_type<item::skeleton>( items() );
 }
 
-std::optional<int> ui::canvas::scene::zoom_level() const
-{
-    return zoom_level_;
-}
 
 int ui::canvas::scene::closest_zoom_level() const
 {

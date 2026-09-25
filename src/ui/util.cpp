@@ -12,50 +12,12 @@ namespace r = std::ranges;
 namespace rv = std::ranges::views;
 
 namespace {
-    int first_positive_integer_not_in_set(const std::unordered_set<int>& set) {
-        int n = static_cast<int>(set.size());
-        for (int i = 1; i <= n + 1; i++) {
-            if (!set.contains(i)) {
-                return i;
-            }
-        }
-        return 0;
-    }
-
-    std::optional<int> get_prefixed_number(const std::string& prefix, const std::string& str) {
-        auto num_str = ui::get_prefixed_string(prefix, str);
-        if (num_str.empty()) {
-            return {};
-        }
-        for (auto ch : num_str) {
-            if (!std::isdigit(ch)) {
-                return {};
-            }
-        }
-
-        return std::stoi(num_str);
-    }
-
     int to_sixteenth_of_deg(double theta) {
         return static_cast<int>(
             theta * ((180.0 * 16.0) / std::numbers::pi)
             );
     }
 }
-std::string ui::get_prefixed_string(const std::string& prefix, const std::string& str,
-        char separator) {
-    if (str.size() <= prefix.size()) {
-        return {};
-    }
-    if (str.substr(0, prefix.size()) != prefix) {
-        return {};
-    }
-    if (str.size() < prefix.size() + 2 || str[prefix.size()] != separator) {
-        return {};
-    }
-    auto num_str_sz = str.size() - prefix.size() - 1;
-    return str.substr(prefix.size() + 1, num_str_sz);
-};
 /*------------------------------------------------------------------------------------------------*/
 
 ui::FlowLayout::FlowLayout(QWidget* parent, int margin, int hSpacing, int vSpacing)
@@ -237,9 +199,6 @@ ui::string_edit* ui::labeled_field::value() {
 	return val_;
 }
 
-void ui::labeled_field::set_label(QString str) {
-	lbl_->setText(str);
-}
 
 void ui::labeled_field::set_value(QString str) {
 	val_->setText(str);
@@ -451,23 +410,6 @@ void ui::clear_layout(QLayout* layout, bool deleteWidgets)
         delete item;
     }
 }
-QColor ui::lerp_colors(const QColor& color1, const QColor& color2, double factor) {
-    auto r1 = color1.red();
-    auto g1 = color1.green();
-    auto b1 = color1.blue();
-    auto a1 = color1.alpha();
-
-    auto r2 = color2.red();
-    auto g2 = color2.green();
-    auto b2 = color2.blue();
-    auto a2 = color2.alpha();
-    int red = std::round(r1 + (r2 - r1) * factor);
-    int green = std::round(g1 + (g2 - g1) * factor);
-    int blue = std::round(b1 + (b2 - b1) * factor);
-    int alpha = std::round(a1 + (a2 - a1) * factor);
-
-    return QColor(red, green, blue, alpha);
-}
 
 QRectF ui::rect_from_circle(QPointF center, double radius) {
     auto topleft = center - QPointF(radius, radius);
@@ -631,73 +573,4 @@ void ui::tabbed_values::handle_value_changed(number_edit* num_edit) {
 		}
 	}
 	emit value_changed(field_index);
-}
-std::string ui::make_unique_name(const std::vector<std::string>& used_names,
-        const std::string& prefix) {
-    auto index_set = used_names | rv::transform(
-        [prefix](const auto& str) {
-            return get_prefixed_number(prefix, str);
-        }
-    ) | rv::filter(
-        [](auto maybe_num) {
-            return maybe_num.has_value();
-        }
-    ) | rv::transform(
-        [](auto maybe_num) {
-            return maybe_num.value();
-        }
-    ) | r::to<std::unordered_set<int>>();
-    auto index = first_positive_integer_not_in_set(index_set);
-    return prefix + "-" + std::to_string(index);
-}
-
-void ui::to_text_file(const std::string& file_path, const std::string& text) {
-    std::ofstream outputFile(file_path);
-
-    if (!outputFile.is_open()) {
-        throw std::runtime_error("unable to create file");
-    }
-
-    outputFile << text;
-    outputFile.close();
-}
-std::string ui::query_for_valid_string(QWidget* parent,
-        const std::function<bool(const std::string&)>& predicate,
-        const std::string& title,
-        const std::string& prompt) {
-    QDialog dialog(parent);
-    dialog.setWindowTitle(title.c_str());
-
-    // Create widgets for the dialog
-    QFormLayout layout(&dialog);
-    QLineEdit lineEdit;
-    QPushButton okButton("OK");
-    QPushButton cancelButton("Cancel");
-    // Add widgets to the layout
-    layout.addRow(prompt.c_str(), &lineEdit);
-    layout.addRow(&okButton, &cancelButton);
-    // Connect "OK" button to the slot that checks the predicate
-    QObject::connect(&okButton, &QPushButton::clicked, [&]() {
-        const std::string userInput = lineEdit.text().toStdString();
-        if (predicate(userInput)) {
-            dialog.accept(); // Close the dialog with QDialog::Accepted result
-        }
-        else {
-            // Handle case where the predicate is not satisfied (you can display an error message here)
-        }
-        });
-    // Connect "Cancel" button to reject the dialog
-    QObject::connect(&cancelButton, &QPushButton::clicked, [&]() {
-        dialog.reject(); // Close the dialog with QDialog::Rejected result
-        });
-
-    // Enable/disable "OK" button based on the predicate
-    QObject::connect(&lineEdit, &QLineEdit::textChanged, [&](const QString& text) {
-        okButton.setEnabled(predicate(text.toStdString()));
-        });
-    // Show the dialog and wait for user input
-    const int result = dialog.exec();
-    return (result == QDialog::Accepted) ?
-        lineEdit.text().toStdString() :
-        std::string{};
 }

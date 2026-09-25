@@ -39,15 +39,6 @@ namespace {
     constexpr auto layout_settings_organization = "jwezorek";
     constexpr auto layout_settings_application = "stick_man";
     constexpr auto layout_settings_key = "main_window/state";
-
-    void to_do(const std::string& msg) {
-        QMessageBox msgBox;
-        msgBox.setWindowTitle("TODO");
-        msgBox.setText(msg.c_str());
-        msgBox.setIcon(QMessageBox::Information);
-        msgBox.setStandardButtons(QMessageBox::Ok);
-        msgBox.exec();
-    }
     void setDarkTitleBar(WId window) {
     #ifdef Q_OS_WIN
         BOOL USE_DARK_MODE = true;

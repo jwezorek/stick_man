@@ -13,9 +13,6 @@ namespace {
 
 /*------------------------------------------------------------------------------------------------*/
 
-void ui::tool::zoom::handleButtonClick(int level)
-{
-}
 
 void ui::tool::zoom::do_zoom(double scale) const {
     auto& canv = canvases_->active_canvas();
@@ -94,9 +91,6 @@ ui::tool::zoom_combobox::zoom_combobox(QWidget* parent) : QComboBox(parent) {
     );
 }
 
-double ui::tool::zoom_combobox::nth_scale(int n) const {
-    return scales_[n];
-}
 
 void ui::tool::zoom_combobox::sync_zoom_text(double scale) {
     for (auto canned_scale : scales_) {

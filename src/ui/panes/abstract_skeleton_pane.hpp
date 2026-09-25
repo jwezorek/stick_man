@@ -35,8 +35,6 @@ namespace ui {
             void disconnect_canv_sel_handler();
 
             void connect_canv_cont_handler();
-            void disconnect_canv_cont_handler();
-
             void connect_tree_change_handler();
             void disconnect_tree_change_handler();
 
