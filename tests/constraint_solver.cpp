@@ -1,5 +1,5 @@
 #include "core/sm_constraint_geometry.hpp"
-#include "core/sm_fabrik.hpp"
+#include "core/sm_ik.hpp"
 #include "core/sm_project.hpp"
 #include "core/sm_geometry_batch.hpp"
 #include <numbers>
@@ -33,7 +33,7 @@ void angular_relations(){
  f.limit(x,sm::rotation_reference::world(),{-0.5,1});
  f.limit(x,sm::rotation_reference::world(),{1,0.2});
  auto before=a->world_pos();
- require(sm::perform_fabrik(a,{5,8},p)==sm::result::unsatisfiable_constraints,"empty intersection must fail explicitly");
+ require(sm::perform_ik(a,{5,8},p)==sm::result::unsatisfiable_constraints,"empty intersection must fail explicitly");
  near(a->world_pos(),before,"failed solve changed geometry",1e-9);
 }
 void either_arm_and_pins(){
@@ -41,8 +41,8 @@ void either_arm_and_pins(){
   fixture f;auto p=f.node({0,0}),a=f.node({10,0}),b=f.node({0,10}),unused=f.node({-10,0});
   auto x=f.link(p,a),y=f.link(p,b);f.link(p,unused);f.fan(x,y);
   auto target=driver?sm::point{-10,0}:sm::point{0,10};
-  auto result=sm::perform_fabrik(driver?b:a,target,p);
-  require(result==sm::result::fabrik_target_reached,"pinned fan target not reached");
+  auto result=sm::perform_ik(driver?b:a,target,p);
+  require(result==sm::result::ik_target_reached,"pinned fan target not reached");
   near(a->world_pos(),{0,10},"first fan arm wrong");near(b->world_pos(),{-10,0},"second fan arm wrong");
   near(unused->world_pos(),{-10,0},"unrelated branch across pin moved",1e-9);f.hard();
  }
@@ -51,7 +51,7 @@ void each_node_unpinned(){
  for(int driver=0;driver<3;++driver){
   fixture f;auto p=f.node({0,0}),a=f.node({10,0}),b=f.node({0,10});auto x=f.link(p,a),y=f.link(p,b);f.fan(x,y);
   auto node=driver==0?p:driver==1?a:b;auto target=node->world_pos()+sm::point{3,4};
-  auto status=sm::perform_fabrik(node,target,{});require(status==sm::result::fabrik_target_reached,"free fan target not reached");
+  auto status=sm::perform_ik(node,target,{});require(status==sm::result::ik_target_reached,"free fan target not reached");
   near(node->world_pos(),target,"free fan drag target wrong");f.hard();
  }
 }
@@ -69,8 +69,8 @@ void larger_fan_limits_cycles(){
 }
 void pinned_tips(){
  fixture f;auto p=f.node({0,0}),a=f.node({10,0}),b=f.node({0,10});auto x=f.link(p,a),y=f.link(p,b);f.fan(x,y);
- auto status=sm::perform_fabrik({{p,{3,3}}},{a,b});
- require(status==sm::result::fabrik_converged||status==sm::result::fabrik_target_reached||status==sm::result::fabrik_mixed,"fixed triangle returned invalid failure");
+ auto status=sm::perform_ik({{p,{3,3}}},{a,b});
+ require(status==sm::result::ik_converged||status==sm::result::ik_target_reached||status==sm::result::ik_mixed,"fixed triangle returned invalid failure");
  near(a->world_pos(),{10,0},"first pinned tip moved",1e-8);near(b->world_pos(),{0,10},"second pinned tip moved",1e-8);f.hard();
  sm::constraint_geometry g(f.p.topology());auto fan=*g.fan_for(x.ptr());
  require(g.project_fan(fan,*x,*p,{10,0},true,{{p.ptr(),{0,0}},{a.ptr(),{20,0}}})==sm::result::unsatisfiable_constraints,"impossible fixed radius accepted");
@@ -78,31 +78,31 @@ void pinned_tips(){
 void articulated_fan(){
  fixture f;auto root=f.node({-10,0}),pivot=f.node({0,0}),a=f.node({10,0}),b=f.node({0,10}),tip=f.node({20,0}),other=f.node({0,20});
  f.link(root,pivot);auto x=f.link(pivot,a),y=f.link(pivot,b);f.link(a,tip);f.link(b,other);f.fan(x,y);
- auto status=sm::perform_fabrik(tip,{15,8},root);
- require(status==sm::result::fabrik_target_reached||status==sm::result::fabrik_converged||status==sm::result::fabrik_mixed,"articulated fan solve failed");
+ auto status=sm::perform_ik(tip,{15,8},root);
+ require(status==sm::result::ik_target_reached||status==sm::result::ik_converged||status==sm::result::ik_mixed,"articulated fan solve failed");
  near(root->world_pos(),{-10,0},"articulated root moved",1e-8);f.hard();
  for(auto bone:x->owner().bones())require(std::abs(bone->scaled_length()-10)<0.02,"articulated bone length changed");
 }
 void unrelated_ranges_do_not_block_region(){
  fixture f;auto p=f.node({0,0}),a=f.node({10,0}),q=f.node({30,0}),b=f.node({40,0});auto x=f.link(p,a),y=f.link(q,b);
  f.limit(y,sm::rotation_reference::world(),{pi/2,0});
- require(sm::perform_fabrik(a,{0,10},p)==sm::result::fabrik_target_reached,"unrelated range rejected active solve");
+ require(sm::perform_ik(a,{0,10},p)==sm::result::ik_target_reached,"unrelated range rejected active solve");
  near(b->world_pos(),{40,0},"external skeleton was changed",1e-9);
 }
 void multiple_effectors_and_remote_pins(){
  fixture f;auto p=f.node({0,0}),a=f.node({10,0}),b=f.node({0,10}),tip=f.node({0,20});auto x=f.link(p,a),y=f.link(p,b);f.link(b,tip);f.fan(x,y);
- auto status=sm::perform_fabrik({{a,{0,10}},{b,{-10,0}}},{p});
- require(status==sm::result::fabrik_target_reached,"merged fan effectors missed");f.hard();
+ auto status=sm::perform_ik({{a,{0,10}},{b,{-10,0}}},{p});
+ require(status==sm::result::ik_target_reached,"merged fan effectors missed");f.hard();
  near(a->world_pos(),{0,10},"merged first target wrong");near(b->world_pos(),{-10,0},"merged second target wrong");
  const auto saved=tip->world_pos();
- status=sm::perform_fabrik({{a,{3,9}}},{p,tip});
+ status=sm::perform_ik({{a,{3,9}}},{p,tip});
  near(tip->world_pos(),saved,"remote pin moved",1e-8);near(p->world_pos(),{0,0},"pivot pin moved",1e-8);f.hard();
 }
 void inverse_reference_solve(){
  fixture f;auto p=f.node({0,0}),a=f.node({10,0}),q=f.node({30,0}),b=f.node({40,0});auto x=f.link(p,a),y=f.link(q,b);
  f.limit(x,sm::rotation_reference::bone(y->id()),{0,0});
- auto status=sm::perform_fabrik(b,{30,10},q);
- require(status==sm::result::fabrik_mixed||status==sm::result::fabrik_converged,"inverse solve did not settle");
+ auto status=sm::perform_ik(b,{30,10},q);
+ require(status==sm::result::ik_mixed||status==sm::result::ik_converged,"inverse solve did not settle");
  angle(y->world_rotation(),0,"reference endpoint inverse relation ignored");near(a->world_pos(),{10,0},"external target endpoint moved",1e-9);
 }
 void nonfan_parent_rotation(){
@@ -116,8 +116,8 @@ void nested_fans_remain_exact(){
   fixture f;auto root=f.node({-10,0}),p=f.node({0,0}),a=f.node({10,0}),b=f.node({0,10}),c=f.node({20,0}),d=f.node({10,10});
   f.link(root,p);auto x=f.link(p,a),y=f.link(p,b),z=f.link(a,c),w=f.link(a,d);f.fan(x,y);f.fan(z,w);
   sm::node_ref moving=driver==0?p:driver==1?a:driver==2?b:driver==3?c:d;
-  auto status=sm::perform_fabrik(moving,moving->world_pos()+sm::point{2,3},root);
-  require(status==sm::result::fabrik_target_reached||status==sm::result::fabrik_converged||status==sm::result::fabrik_mixed,"nested fan solve failed");
+  auto status=sm::perform_ik(moving,moving->world_pos()+sm::point{2,3},root);
+  require(status==sm::result::ik_target_reached||status==sm::result::ik_converged||status==sm::result::ik_mixed,"nested fan solve failed");
   f.hard();near(root->world_pos(),{-10,0},"nested root pin moved",1e-9);
  }
 }

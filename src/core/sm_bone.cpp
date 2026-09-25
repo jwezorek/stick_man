@@ -1,7 +1,7 @@
 #include "sm_types.hpp"
 #include "sm_bone.hpp"
 #include "sm_skeleton.hpp"
-#include "sm_fabrik.hpp"
+#include "sm_ik.hpp"
 #include "sm_visit.hpp"
 #include "sm_geometry_batch.hpp"
 #include "sm_constraint_geometry.hpp"
@@ -175,7 +175,7 @@ void sm::node::set_world_pos(const point& pt) {
         for (auto& [id,c] : topology.constraints()) if (auto tri = c.triangle()) {
             auto b = topology.get<bone>(tri->first_bone);
             if (b && &b->get().owner() == &owner()) {
-                const auto status = perform_fabrik(*this,pt,{});
+                const auto status = perform_ik(*this,pt,{});
                 if (status == result::unsatisfiable_constraints || status == result::inconsistent_constraints)
                     throw std::invalid_argument("node move conflicts with constraints");
                 return;

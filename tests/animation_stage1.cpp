@@ -1,7 +1,7 @@
 #include "core/sm_animation.hpp"
 #include "core/sm_skeleton.hpp"
 #include "core/sm_bone.hpp"
-#include "core/sm_fabrik.hpp"
+#include "core/sm_ik.hpp"
 #include "json.hpp"
 
 #include <cmath>
@@ -692,7 +692,7 @@ void manual_translation_continuation(ik_continuation_fixture& f,const sm::ik_tra
     auto solve=[&](double distance) {
         const double fraction=translation.path.length()>0.0 ? distance/translation.path.length() : 0.0;
         const auto target=anchor+frame->vector_to_world(translation.path.evaluate_by_arc_length(fraction));
-        sm::perform_fabrik(std::vector<std::tuple<sm::node_ref,sm::point>>{{*effector,target}},std::vector<sm::node_ref>{*pin});
+        sm::perform_ik(std::vector<std::tuple<sm::node_ref,sm::point>>{{*effector,target}},std::vector<sm::node_ref>{*pin});
     };
     for(std::size_t i=1;i<=full;++i) solve(step*double(i));
     if(!boundary) solve(requested);
@@ -791,7 +791,7 @@ void ik_translation_keeps_incoming_reference_frame_fixed() {
         context.translation_reference_frame->vector_to_world(translation.path.evaluate_by_arc_length(0.9));
     const auto actual=f.topology.get<sm::node>(f.effector_id)->get().world_pos();
     require(sm::distance(expected,actual)<0.01,
-        "IK continuation recomputed a reference frame moved by its own FABRIK solves");
+        "IK continuation recomputed a reference frame moved by its own IK solves");
 }
 
 void ik_rotation_matches_canonical_continuation() {
@@ -820,7 +820,7 @@ void ik_rotation_matches_canonical_continuation() {
     std::size_t full=static_cast<std::size_t>(boundary?std::round(ratio):std::floor(ratio));
     auto solve=[&](double distance) {
         const double theta=initial_theta+distance/radius;
-        sm::perform_fabrik(*effector,origin+radius*sm::point(std::cos(theta),std::sin(theta)),*pivot);
+        sm::perform_ik(*effector,origin+radius*sm::point(std::cos(theta),std::sin(theta)),*pivot);
     };
     for(std::size_t i=1;i<=full;++i) solve(step*double(i));
     if(!boundary) solve(requested);

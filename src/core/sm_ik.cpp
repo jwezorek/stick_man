@@ -16,7 +16,7 @@
 
 #include <nlopt.hpp>
 
-#include "sm_fabrik.hpp"
+#include "sm_ik.hpp"
 #include "sm_angle_set.hpp"
 #include "sm_constraint_geometry.hpp"
 #include "sm_geometry_batch.hpp"
@@ -63,16 +63,16 @@ double lift_near(double angle, double reference) {
     return angle + k_two_pi * std::round((reference - angle) / k_two_pi);
 }
 
-struct fabrik_neighborhood {
+struct ik_neighborhood {
     sm::node& start_node;
     sm::maybe_bone_ref prev;
     sm::bone& current_bone;
 };
 
-sm::node& current_node(const fabrik_neighborhood& neighborhood) {
+sm::node& current_node(const ik_neighborhood& neighborhood) {
     if (!neighborhood.prev) return neighborhood.start_node;
     auto shared = neighborhood.current_bone.shared_node(neighborhood.prev->get());
-    if (!shared) throw std::runtime_error("invalid fabrik neighborhood");
+    if (!shared) throw std::runtime_error("invalid ik neighborhood");
     return shared->get();
 }
 
@@ -82,7 +82,7 @@ struct constraint_failure {
 
 sm::point apply_all_constraints(
     const sm::point& proposed,
-    const fabrik_neighborhood& neighborhood,
+    const ik_neighborhood& neighborhood,
     bool use_constraints,
     double max_delta,
     double old_rotation,
@@ -460,7 +460,7 @@ sm::result build_kinematics(kinematic_model& model) {
     }
 
     if (std::ranges::find(visited, false) != visited.end()) {
-        return sm::result::fabrik_no_solution_found;
+        return sm::result::ik_no_solution_found;
     }
     return sm::result::success;
 }
@@ -717,7 +717,7 @@ bool angle_satisfies(sm::angle_range range, double value) {
 std::optional<candidate> validate_candidate(
     solve_context& context,
     const std::vector<double>& x,
-    const sm::fabrik_options& opts) {
+    const sm::ik_options& opts) {
 
     const auto& model = *context.model;
     if (x.size() != model.variable_count()) return std::nullopt;
@@ -826,7 +826,7 @@ bool candidate_better(const candidate& lhs, const candidate& rhs, double toleran
 }
 
 std::optional<candidate> validate_branch_candidate(
-    solve_context& context, const std::vector<double>& x, const sm::fabrik_options& opts,
+    solve_context& context, const std::vector<double>& x, const sm::ik_options& opts,
     const std::vector<angular_group>& groups, const std::vector<std::size_t>& branch) {
     // An interrupted optimizer may satisfy circular constraints in another lift.
     // A candidate must also belong to the chart this attempt was solving.
@@ -1248,7 +1248,7 @@ sm::result eliminate_rigid_pin_coordinates(kinematic_model& model, solve_context
 
 sm::result configure_model(
     const region& source,
-    const sm::fabrik_options& opts,
+    const sm::ik_options& opts,
     kinematic_model& model,
     solve_context& context) {
 
@@ -1346,7 +1346,7 @@ sm::result configure_model(
     return sm::result::success;
 }
 
-std::optional<candidate> exact_rigid_pose(solve_context& context, const sm::fabrik_options& opts) {
+std::optional<candidate> exact_rigid_pose(solve_context& context, const sm::ik_options& opts) {
     const auto& model = *context.model;
     if (model.mode != translation_mode::effector_anchor || model.angle_count() != 1
         || !model.articulations.empty()) {
@@ -1380,10 +1380,10 @@ std::optional<candidate> exact_rigid_pose(solve_context& context, const sm::fabr
 
 sm::result solve_region(
     const region& source,
-    const sm::fabrik_options& opts,
+    const sm::ik_options& opts,
     std::vector<std::pair<sm::node*, sm::point>>& writes) {
 
-    if (source.effectors.empty()) return sm::result::fabrik_target_reached;
+    if (source.effectors.empty()) return sm::result::ik_target_reached;
 
     kinematic_model model;
     solve_context context;
@@ -1544,7 +1544,7 @@ sm::result solve_region(
         }
     }
 
-    if (!best) return sm::result::fabrik_no_solution_found;
+    if (!best) return sm::result::ik_no_solution_found;
 
     for (std::size_t i = 0; i < model.nodes.size(); ++i) {
         writes.push_back({model.nodes[i], best->positions[i]});
@@ -1553,20 +1553,20 @@ sm::result solve_region(
     const auto reached = std::ranges::count_if(best->target_errors,
         [&](double error) { return error <= opts.tolerance; });
     if (reached == static_cast<std::ptrdiff_t>(best->target_errors.size())) {
-        return sm::result::fabrik_target_reached;
+        return sm::result::ik_target_reached;
     }
-    if (reached != 0) return sm::result::fabrik_mixed;
-    return sm::result::fabrik_converged;
+    if (reached != 0) return sm::result::ik_mixed;
+    return sm::result::ik_converged;
 }
 
-sm::result validate_fabrik_inputs(
+sm::result validate_ik_inputs(
     const std::vector<std::tuple<sm::node_ref, sm::point>>& effectors,
     const std::vector<sm::node_ref>& pins,
-    const sm::fabrik_options& opts) {
+    const sm::ik_options& opts) {
 
-    if (effectors.empty()) return sm::result::fabrik_no_solution_found;
+    if (effectors.empty()) return sm::result::ik_no_solution_found;
     if (opts.max_iterations < 0 || !std::isfinite(opts.tolerance) || opts.tolerance <= 0.0) {
-        return sm::result::fabrik_no_solution_found;
+        return sm::result::ik_no_solution_found;
     }
 
     auto& owner = std::get<0>(effectors.front())->owner();
@@ -1592,7 +1592,7 @@ sm::result normalize_inputs(
     for (const auto& [node, target] : effectors) {
         auto [it, inserted] = target_by_node.emplace(mutable_ptr(node), target);
         if (!inserted && sm::distance(it->second, target) > tolerance) {
-            return sm::result::fabrik_no_solution_found;
+            return sm::result::ik_no_solution_found;
         }
         if (inserted) normalized_effectors.push_back({node, target});
     }
@@ -1676,18 +1676,18 @@ struct pose_restore_guard {
 
 } // namespace
 
-sm::fabrik_options::fabrik_options()
+sm::ik_options::ik_options()
     : max_iterations{k_max_iter},
       tolerance{k_tolerance},
       forw_reaching_constraints{false},
       max_ang_delta{0.0} {}
 
-sm::result sm::perform_fabrik(
+sm::result sm::perform_ik(
     const std::vector<std::tuple<node_ref, point>>& effectors,
     const std::vector<node_ref>& pins,
-    const fabrik_options& opts) {
+    const ik_options& opts) {
 
-    auto validation = validate_fabrik_inputs(effectors, pins, opts);
+    auto validation = validate_ik_inputs(effectors, pins, opts);
     if (validation != result::success) return validation;
 
     std::vector<std::tuple<node_ref, point>> normalized_effectors;
@@ -1701,7 +1701,7 @@ sm::result sm::perform_fabrik(
     for (const auto& [effector, target] : normalized_effectors) {
         if (boundaries.contains(mutable_ptr(effector))
             && distance(effector->world_pos(), target) > opts.tolerance) {
-            return result::fabrik_no_solution_found;
+            return result::ik_no_solution_found;
         }
     }
 
@@ -1725,7 +1725,7 @@ sm::result sm::perform_fabrik(
         if (outcome == result::invalid_constraint
             || outcome == result::inconsistent_constraints
             || outcome == result::unsatisfiable_constraints
-            || outcome == result::fabrik_no_solution_found
+            || outcome == result::ik_no_solution_found
             || outcome == result::out_of_bounds) {
             return outcome;
         }
@@ -1757,21 +1757,21 @@ sm::result sm::perform_fabrik(
     for (const auto& [effector, target] : normalized_effectors) {
         if (distance(effector->world_pos(), target) <= opts.tolerance) ++reached;
     }
-    if (reached == normalized_effectors.size()) return result::fabrik_target_reached;
-    if (reached != 0) return result::fabrik_mixed;
-    return result::fabrik_converged;
+    if (reached == normalized_effectors.size()) return result::ik_target_reached;
+    if (reached != 0) return result::ik_mixed;
+    return result::ik_converged;
 }
 
-sm::result sm::perform_fabrik(
+sm::result sm::perform_ik(
     node_ref effector,
     point effector_target,
     std::optional<sm::node_ref> pin,
-    const fabrik_options& opts) {
+    const ik_options& opts) {
 
     std::vector<std::tuple<sm::node_ref, sm::point>> one_effector{{effector, effector_target}};
     std::vector<sm::node_ref> pinned;
     if (pin) pinned.push_back(*pin);
-    return sm::perform_fabrik(one_effector, pinned, opts);
+    return sm::perform_ik(one_effector, pinned, opts);
 }
 
 double sm::constrain_rotation(sm::bone& bone, double theta) {
@@ -1790,7 +1790,7 @@ sm::point sm::apply_rotation_constraints(
     double max_ang_delta,
     double old_bone_rotation) {
 
-    fabrik_neighborhood neighborhood{start_node, prev, current_bone};
+    ik_neighborhood neighborhood{start_node, prev, current_bone};
     return apply_all_constraints(
         curr_pos,
         neighborhood,

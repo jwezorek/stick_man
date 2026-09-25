@@ -16,7 +16,7 @@
 #include "../../core/sm_skeleton.hpp"
 #include "../../core/sm_types.hpp"
 #include "../../core/sm_visit.hpp"
-#include "../../core/sm_fabrik.hpp"
+#include "../../core/sm_ik.hpp"
 #include <array>
 #include <ranges>
 #include <unordered_map>
@@ -279,7 +279,7 @@ namespace {
     void do_ragdoll_rotate(double theta, ui::tool::rotation_state& state) {
         sm::point offset = state.radius() * sm::point(std::cos(theta), std::sin(theta));
         auto new_loc = state.axis().world_pos() + offset;
-        auto result = sm::perform_fabrik(state.rotating(), new_loc, state.axis());
+        auto result = sm::perform_ik(state.rotating(), new_loc, state.axis());
         //TODO: do something with 'result' here...
     }
 
@@ -394,7 +394,7 @@ namespace {
             }
         ) | r::to<std::vector>();
 
-        auto result = sm::perform_fabrik(effectors, pinned_nodes);
+        auto result = sm::perform_ik(effectors, pinned_nodes);
 
         //TODO: do something with 'result' here...
     }

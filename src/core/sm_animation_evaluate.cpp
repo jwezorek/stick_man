@@ -1,7 +1,7 @@
 #include "sm_animation.hpp"
 #include "sm_geometry_batch.hpp"
 #include "sm_skeleton.hpp"
-#include "sm_fabrik.hpp"
+#include "sm_ik.hpp"
 #include "sm_visit.hpp"
 #include <algorithm>
 #include <cmath>
@@ -385,7 +385,7 @@ sm::animation_evaluation sm::animation_evaluator::evaluate(const animation& anim
                             const double theta=initial_theta+direction*(target_distance/radius);
                             return origin+radius*sm::point(std::cos(theta),std::sin(theta));
                         },
-                        [&](sm::point target) { sm::perform_fabrik(*effector,target,*pivot); });
+                        [&](sm::point target) { sm::perform_ik(*effector,target,*pivot); });
                 }
             },
             [&](const rigid_translation& translation) {
@@ -434,7 +434,7 @@ sm::animation_evaluation sm::animation_evaluator::evaluate(const animation& anim
                             return anchor+frame->vector_to_world(translation.path.evaluate_by_arc_length(fraction));
                         },
                         [&](sm::point target) {
-                            sm::perform_fabrik(std::vector<std::tuple<sm::node_ref,sm::point>>{{*effector,target}},pins);
+                            sm::perform_ik(std::vector<std::tuple<sm::node_ref,sm::point>>{{*effector,target}},pins);
                         });
                 }
             }
