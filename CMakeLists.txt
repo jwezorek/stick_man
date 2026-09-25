@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Boost 1.80 REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(NLopt CONFIG REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
 file(GLOB CORE_SOURCES CONFIGURE_DEPENDS src/core/*.cpp)
@@ -24,6 +25,7 @@ target_include_directories(stick_man_core PUBLIC
 )
 target_compile_definitions(stick_man_core PUBLIC MINIZ_NO_STDIO)
 target_link_libraries(stick_man_core PUBLIC Eigen3::Eigen)
+target_link_libraries(stick_man_core PRIVATE NLopt::nlopt)
 
 add_library(stick_man_model STATIC ${MODEL_SOURCES})
 set_target_properties(stick_man_model PROPERTIES AUTOMOC ON)

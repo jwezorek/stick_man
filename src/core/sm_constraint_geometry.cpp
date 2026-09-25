@@ -112,7 +112,15 @@ result constraint_geometry::validate(double tolerance,bool limits,const std::uno
   for(auto m:f.members)if(std::abs(angular_distance(m.value->world_rotation(),theta+m.offset))>tolerance||
    std::abs(m.value->scaled_length()-m.length)>tolerance)return result::unsatisfiable_constraints;
  }
- if(limits)for(const auto& r:relations_)if((!active||active->contains(r.target)||(r.reference&&active->contains(r.reference)))&&!r.allowed.contains(r.target->world_rotation()-(r.reference?r.reference->world_rotation():0)))return result::unsatisfiable_constraints;
+ if(limits)for(const auto& r:relations_) {
+  if(active&&!active->contains(r.target)&&(!r.reference||!active->contains(r.reference)))continue;
+  const double angle=r.target->world_rotation()-(r.reference?r.reference->world_rotation():0);
+  if(r.allowed.contains(angle))continue;
+  // Use the same numerical angular tolerance as fan validation and the IK
+  // candidate check. Exact interval membership rejects roundoff at a limit.
+  const auto closest=r.allowed.closest_angle(angle);
+  if(!closest||std::abs(angular_distance(angle,*closest))>tolerance)return result::unsatisfiable_constraints;
+ }
  return result::success;
 }
 result rotate_constrained_bone(bone& b,double theta,bool descendants,maybe_node_ref axis) {
