@@ -37,9 +37,9 @@ void multiple_boundaries_and_failure() {
     auto left = f.add({-10, 0}), a = f.add({0, 0}), hand = f.add({10, 10});
     auto b = f.add({20, 0}), right = f.add({30, 0});
     f.link(left, a); f.link(a, hand); f.link(hand, b); f.link(b, right);
-    sm::ik_options opts;
-    opts.max_iterations = 2;
-    sm::perform_ik({{hand, {100, 100}}}, {a, b}, opts);
+    require(sm::perform_ik({{hand, {10, 10}}, {hand, {100, 100}}}, {a, b})
+            == sm::result::ik_no_solution_found,
+        "conflicting targets for one effector were accepted");
     at(a, {0, 0}, "first boundary moved on failure");
     at(b, {20, 0}, "second boundary moved on failure");
     at(left, {-10, 0}, "left region moved on failure");

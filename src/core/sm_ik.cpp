@@ -24,14 +24,14 @@
 
 namespace {
 
-constexpr int k_max_iter = 100;
+constexpr int k_optimizer_evaluation_budget = 800;
 constexpr double k_tolerance = 0.005;
+constexpr double k_max_ang_delta = 0.0;
 constexpr double k_two_pi = 2.0 * std::numbers::pi;
 constexpr double k_angular_feasibility_tolerance = 1e-8;
 constexpr double k_position_feasibility_scale = 1e-8;
 constexpr double k_pose_angle_weight = 0.02;
 constexpr double k_escape_angle = 0.05;
-constexpr int k_evaluations_per_iteration = 8;
 constexpr int k_max_escape_seeds = 4;
 constexpr int k_max_branch_attempts = 4;
 constexpr double k_optimizer_ftol_abs = 1e-7;
@@ -716,8 +716,7 @@ bool angle_satisfies(sm::angle_range range, double value) {
 
 std::optional<candidate> validate_candidate(
     solve_context& context,
-    const std::vector<double>& x,
-    const sm::ik_options& opts) {
+    const std::vector<double>& x) {
 
     const auto& model = *context.model;
     if (x.size() != model.variable_count()) return std::nullopt;
@@ -743,14 +742,14 @@ std::optional<candidate> validate_candidate(
             > std::max(position_tolerance, roundoff)) return std::nullopt;
     }
 
-    const bool max_delta_enabled = std::isfinite(opts.max_ang_delta)
-        && opts.max_ang_delta > 0.0 && opts.max_ang_delta < std::numbers::pi;
+    const bool max_delta_enabled = std::isfinite(k_max_ang_delta)
+        && k_max_ang_delta > 0.0 && k_max_ang_delta < std::numbers::pi;
     if (max_delta_enabled) {
         for (auto* bone : model.bones) {
             const auto coord = model.bone_coordinates.at(bone);
             const double theta = x[coord.variable] + coord.offset;
             if (std::abs(sm::angular_distance(coord.incoming_rotation, theta))
-                > opts.max_ang_delta + k_angular_feasibility_tolerance) return std::nullopt;
+                > k_max_ang_delta + k_angular_feasibility_tolerance) return std::nullopt;
         }
     }
 
@@ -826,7 +825,7 @@ bool candidate_better(const candidate& lhs, const candidate& rhs, double toleran
 }
 
 std::optional<candidate> validate_branch_candidate(
-    solve_context& context, const std::vector<double>& x, const sm::ik_options& opts,
+    solve_context& context, const std::vector<double>& x,
     const std::vector<angular_group>& groups, const std::vector<std::size_t>& branch) {
     // An interrupted optimizer may satisfy circular constraints in another lift.
     // A candidate must also belong to the chart this attempt was solving.
@@ -836,7 +835,7 @@ std::optional<candidate> validate_branch_candidate(
         if (angle < interval.low - k_angular_feasibility_tolerance
             || angle > interval.high + k_angular_feasibility_tolerance) return std::nullopt;
     }
-    return validate_candidate(context, x, opts);
+    return validate_candidate(context, x);
 }
 
 sm::result build_angular_groups(
@@ -1248,7 +1247,6 @@ sm::result eliminate_rigid_pin_coordinates(kinematic_model& model, solve_context
 
 sm::result configure_model(
     const region& source,
-    const sm::ik_options& opts,
     kinematic_model& model,
     solve_context& context) {
 
@@ -1276,7 +1274,7 @@ sm::result configure_model(
                              model.articulations.end());
 
     context.model = &model;
-    context.target_tolerance = opts.tolerance;
+    context.target_tolerance = k_tolerance;
     context.incoming_x.reserve(model.angle_count() + 2);
     for (const auto& variable : model.angle_variables) context.incoming_x.push_back(variable.incoming);
 
@@ -1303,8 +1301,8 @@ sm::result configure_model(
         model.upper_bounds[i] = model.angle_variables[i].incoming + std::numbers::pi;
     }
 
-    const bool max_delta_enabled = std::isfinite(opts.max_ang_delta)
-        && opts.max_ang_delta > 0.0 && opts.max_ang_delta < std::numbers::pi;
+    const bool max_delta_enabled = std::isfinite(k_max_ang_delta)
+        && k_max_ang_delta > 0.0 && k_max_ang_delta < std::numbers::pi;
     if (max_delta_enabled) {
         for (std::size_t i = 0; i < model.angle_variables.size(); ++i) {
             const auto& variable = model.angle_variables[i];
@@ -1314,8 +1312,8 @@ sm::result configure_model(
                 const double member_center = lift_near(
                     variable.members[m]->world_rotation() - variable.offsets[m],
                     variable.incoming);
-                low = std::max(low, member_center - opts.max_ang_delta);
-                high = std::min(high, member_center + opts.max_ang_delta);
+                low = std::max(low, member_center - k_max_ang_delta);
+                high = std::min(high, member_center + k_max_ang_delta);
             }
             if (low > high + k_angular_feasibility_tolerance) return sm::result::unsatisfiable_constraints;
             model.lower_bounds[i] = low;
@@ -1346,7 +1344,7 @@ sm::result configure_model(
     return sm::result::success;
 }
 
-std::optional<candidate> exact_rigid_pose(solve_context& context, const sm::ik_options& opts) {
+std::optional<candidate> exact_rigid_pose(solve_context& context) {
     const auto& model = *context.model;
     if (model.mode != translation_mode::effector_anchor || model.angle_count() != 1
         || !model.articulations.empty()) {
@@ -1375,19 +1373,18 @@ std::optional<candidate> exact_rigid_pose(solve_context& context, const sm::ik_o
     if (exact_x[0] < model.lower_bounds[0] || exact_x[0] > model.upper_bounds[0]) {
         return std::nullopt;
     }
-    return validate_candidate(context, exact_x, opts);
+    return validate_candidate(context, exact_x);
 }
 
 sm::result solve_region(
     const region& source,
-    const sm::ik_options& opts,
     std::vector<std::pair<sm::node*, sm::point>>& writes) {
 
     if (source.effectors.empty()) return sm::result::ik_target_reached;
 
     kinematic_model model;
     solve_context context;
-    auto status = configure_model(source, opts, model, context);
+    auto status = configure_model(source, model, context);
     if (status != sm::result::success) return status;
 
     std::vector<angular_group> angular_groups;
@@ -1395,7 +1392,7 @@ sm::result solve_region(
     if (status != sm::result::success) return status;
 
     std::optional<candidate> best;
-    if (auto initial = validate_candidate(context, context.incoming_x, opts)) best = std::move(*initial);
+    if (auto initial = validate_candidate(context, context.incoming_x)) best = std::move(*initial);
     bool incoming_valid = best.has_value();
     // FK can repair an inconsistent incoming fan. Such a repair is not a
     // continuity anchor: allow every chart when restoring an invalid pose.
@@ -1407,12 +1404,12 @@ sm::result solve_region(
             <= std::max(k_position_feasibility_scale, roundoff);
     }
     std::optional<double> preferred_chart_pose;
-    auto rigid_optimum = opts.max_iterations > 0
-        ? exact_rigid_pose(context, opts) : std::optional<candidate>{};
+    auto rigid_optimum = k_optimizer_evaluation_budget > 0
+        ? exact_rigid_pose(context) : std::optional<candidate>{};
     if (rigid_optimum) best = std::move(*rigid_optimum);
 
-    if (!rigid_optimum && model.variable_count() != 0 && opts.max_iterations > 0) {
-        int remaining_budget = std::max(1, opts.max_iterations) * k_evaluations_per_iteration;
+    if (!rigid_optimum && model.variable_count() != 0 && k_optimizer_evaluation_budget > 0) {
+        int remaining_budget = k_optimizer_evaluation_budget;
         const auto branches = make_branch_selections(angular_groups);
         const auto seeds = make_seeds(model, context.incoming_x);
 
@@ -1431,7 +1428,7 @@ sm::result solve_region(
             auto consider_continuous = [&](const candidate& value) {
                 if (preferred_chart_pose
                     && value.pose_score <= *preferred_chart_pose + k_pose_score_roundoff
-                    && (!continuous_best || candidate_better(value, *continuous_best, opts.tolerance))) {
+                    && (!continuous_best || candidate_better(value, *continuous_best, k_tolerance))) {
                     continuous_best = value;
                 }
             };
@@ -1444,16 +1441,16 @@ sm::result solve_region(
                 && std::ranges::all_of(best->target_errors, [&](double error) {
                     return error <= model.characteristic_length * 0.25;
                 })) {
-                std::vector<double> caps(context.targets.size(), opts.tolerance * 0.5);
+                std::vector<double> caps(context.targets.size(), k_tolerance * 0.5);
                 auto warm_x = context.incoming_x;
                 const int allocation = std::min(80, std::max(1, remaining_budget / 4));
                 const int budget_before = remaining_budget;
                 run_optimizer(context, angular_groups, branch, warm_x,
                               remaining_budget, allocation, true, caps);
-                if (auto warm = validate_branch_candidate(context, warm_x, opts, angular_groups, branch)) {
+                if (auto warm = validate_branch_candidate(context, warm_x, angular_groups, branch)) {
                     consider_continuous(*warm);
                     const bool reached = std::ranges::all_of(warm->target_errors,
-                        [&](double error) { return error <= opts.tolerance; });
+                        [&](double error) { return error <= k_tolerance; });
                     branch_best = std::move(*warm);
                     pose_refined = reached && budget_before - remaining_budget < allocation;
                 }
@@ -1478,9 +1475,9 @@ sm::result solve_region(
                     pose_first,
                     {},
                     &seed_optimizer);
-                if (auto solved = validate_branch_candidate(context, x, opts, angular_groups, branch)) {
+                if (auto solved = validate_branch_candidate(context, x, angular_groups, branch)) {
                     consider_continuous(*solved);
-                    if (!branch_best || candidate_better(*solved, *branch_best, opts.tolerance)) {
+                    if (!branch_best || candidate_better(*solved, *branch_best, k_tolerance)) {
                         branch_best = std::move(*solved);
                         pose_refined = false;
                     }
@@ -1493,10 +1490,10 @@ sm::result solve_region(
                 caps.reserve(branch_best->target_errors.size());
                 for (double error : branch_best->target_errors) {
                     const double preservation_slop = std::max(
-                        opts.tolerance * 0.05,
+                        k_tolerance * 0.05,
                         model.characteristic_length * 1e-7);
-                    caps.push_back(error <= opts.tolerance
-                        ? opts.tolerance * 0.5
+                    caps.push_back(error <= k_tolerance
+                        ? k_tolerance * 0.5
                         : error + preservation_slop);
                 }
                 auto refined_x = branch_best->x;
@@ -1510,7 +1507,7 @@ sm::result solve_region(
                     allocation,
                     true,
                     caps);
-                if (auto refined = validate_branch_candidate(context, refined_x, opts, angular_groups, branch)) {
+                if (auto refined = validate_branch_candidate(context, refined_x, angular_groups, branch)) {
                     bool within_caps = refined->target_errors.size() == caps.size();
                     for (std::size_t i = 0; within_caps && i < caps.size(); ++i) {
                         within_caps = refined->target_errors[i] <= caps[i] + 1e-9;
@@ -1530,7 +1527,7 @@ sm::result solve_region(
             // the unrestricted branch winner. Invalid incoming poses may use
             // any chart to restore feasibility.
             if (preferred_chart_pose) branch_best = std::move(continuous_best);
-            if (branch_best && (!best || candidate_better(*branch_best, *best, opts.tolerance))) {
+            if (branch_best && (!best || candidate_better(*branch_best, *best, k_tolerance))) {
                 best = std::move(*branch_best);
             }
             if (branch_index == 0 && incoming_valid && best) {
@@ -1538,7 +1535,7 @@ sm::result solve_region(
             }
             if (best && branch_index == 0
                 && std::ranges::all_of(best->target_errors,
-                    [&](double error) { return error <= opts.tolerance; })) {
+                    [&](double error) { return error <= k_tolerance; })) {
                 break;
             }
         }
@@ -1551,7 +1548,7 @@ sm::result solve_region(
     }
 
     const auto reached = std::ranges::count_if(best->target_errors,
-        [&](double error) { return error <= opts.tolerance; });
+        [&](double error) { return error <= k_tolerance; });
     if (reached == static_cast<std::ptrdiff_t>(best->target_errors.size())) {
         return sm::result::ik_target_reached;
     }
@@ -1561,14 +1558,9 @@ sm::result solve_region(
 
 sm::result validate_ik_inputs(
     const std::vector<std::tuple<sm::node_ref, sm::point>>& effectors,
-    const std::vector<sm::node_ref>& pins,
-    const sm::ik_options& opts) {
+    const std::vector<sm::node_ref>& pins) {
 
     if (effectors.empty()) return sm::result::ik_no_solution_found;
-    if (opts.max_iterations < 0 || !std::isfinite(opts.tolerance) || opts.tolerance <= 0.0) {
-        return sm::result::ik_no_solution_found;
-    }
-
     auto& owner = std::get<0>(effectors.front())->owner();
     for (const auto& [node, target] : effectors) {
         if (&node->owner() != &owner) return sm::result::cross_skeleton_bone;
@@ -1676,31 +1668,24 @@ struct pose_restore_guard {
 
 } // namespace
 
-sm::ik_options::ik_options()
-    : max_iterations{k_max_iter},
-      tolerance{k_tolerance},
-      forw_reaching_constraints{false},
-      max_ang_delta{0.0} {}
-
 sm::result sm::perform_ik(
     const std::vector<std::tuple<node_ref, point>>& effectors,
-    const std::vector<node_ref>& pins,
-    const ik_options& opts) {
+    const std::vector<node_ref>& pins) {
 
-    auto validation = validate_ik_inputs(effectors, pins, opts);
+    auto validation = validate_ik_inputs(effectors, pins);
     if (validation != result::success) return validation;
 
     std::vector<std::tuple<node_ref, point>> normalized_effectors;
     std::vector<node_ref> normalized_pins;
     validation = normalize_inputs(
-        effectors, pins, opts.tolerance, normalized_effectors, normalized_pins);
+        effectors, pins, k_tolerance, normalized_effectors, normalized_pins);
     if (validation != result::success) return validation;
 
     std::unordered_set<node*> boundaries;
     for (auto pin : normalized_pins) boundaries.insert(mutable_ptr(pin));
     for (const auto& [effector, target] : normalized_effectors) {
         if (boundaries.contains(mutable_ptr(effector))
-            && distance(effector->world_pos(), target) > opts.tolerance) {
+            && distance(effector->world_pos(), target) > k_tolerance) {
             return result::ik_no_solution_found;
         }
     }
@@ -1721,7 +1706,7 @@ sm::result sm::perform_ik(
     std::vector<std::pair<node*, point>> writes;
     for (const auto& component : regions) {
         writes.clear();
-        const auto outcome = solve_region(component, opts, writes);
+        const auto outcome = solve_region(component, writes);
         if (outcome == result::invalid_constraint
             || outcome == result::inconsistent_constraints
             || outcome == result::unsatisfiable_constraints
@@ -1755,7 +1740,7 @@ sm::result sm::perform_ik(
 
     std::size_t reached = 0;
     for (const auto& [effector, target] : normalized_effectors) {
-        if (distance(effector->world_pos(), target) <= opts.tolerance) ++reached;
+        if (distance(effector->world_pos(), target) <= k_tolerance) ++reached;
     }
     if (reached == normalized_effectors.size()) return result::ik_target_reached;
     if (reached != 0) return result::ik_mixed;
@@ -1765,13 +1750,12 @@ sm::result sm::perform_ik(
 sm::result sm::perform_ik(
     node_ref effector,
     point effector_target,
-    std::optional<sm::node_ref> pin,
-    const ik_options& opts) {
+    std::optional<sm::node_ref> pin) {
 
     std::vector<std::tuple<sm::node_ref, sm::point>> one_effector{{effector, effector_target}};
     std::vector<sm::node_ref> pinned;
     if (pin) pinned.push_back(*pin);
-    return sm::perform_ik(one_effector, pinned, opts);
+    return sm::perform_ik(one_effector, pinned);
 }
 
 double sm::constrain_rotation(sm::bone& bone, double theta) {
