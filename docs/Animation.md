@@ -2,27 +2,42 @@
 
 ## Overview
 
-Animation 2.0 models skeletal animation as a sequence of authored poses over a connected region of a skeleton, with solver-assisted interpolation between those poses.
+Animation 2.0 models skeletal animation as a sequence of authored poses over a pose domain (a connected, constraint-closed skeletal region), with solver-assisted interpolation between those poses.
 
 The central authoring object is no longer an action. An animation defines:
 
-- a connected skeletal region that it owns;
+- a pose domain that it owns;
 - a sequence of pose keyframes for that region;
 - a duration and interpolation policy between adjacent poses;
 - optional positional node tracks that constrain motion between poses; and
 - optional artwork-state tracks evaluated on the same animation clock.
 
-At runtime or during editor playback, the system interpolates the skeletal state between adjacent poses, then uses the nonlinear pose solver to find the nearest valid pose satisfying positional targets and the skeleton's persistent constraints.
+At runtime or during editor playback, exact keyframe times use the stored pose directly. Between keyframes, the system interpolates the skeletal state, then uses the nonlinear pose solver to seek positional targets while respecting the skeleton's persistent constraints and favoring the reference pose.
 
 The intended result is a direct-manipulation animation system in which users pose the character at meaningful endpoints and add explicit motion constraints only when the path between those endpoints matters.
 
 ---
 
-## Animation Domain
+## Pose Domains
 
-Every animation owns one connected region of one rooted skeleton.
+Every animation owns one **pose domain** within one rooted skeleton.
 
-The region is defined by the skeletal degrees of freedom that the animation is allowed to author and solve. In the normal case this is a connected set of bones.
+A pose domain is a connected set of skeletal degrees of freedom that is **closed under persistent constraint dependencies**. Given its incoming attachment frame, the domain can be posed and solved without changing any degrees of freedom outside it. Excluded descendants follow their updated attachments while retaining their local poses, unless they are themselves animated.
+
+In the normal case, ownership is expressed as a connected set of bones. Graph connectivity alone is insufficient: persistent constraints that couple skeletal degrees of freedom cannot be split across a domain boundary.
+
+### Domain validity
+
+A valid pose domain obeys these rules:
+
+- **Connected:** its owned bones form one connected region.
+- **Constraint-closed:** all degrees of freedom coupled by a persistent constraint belong to the same domain. Closure includes indirect dependencies through other constraints.
+- **Fixed incoming frame:** the domain inherits its attachment frame; solving the domain cannot modify that frame.
+- **Outgoing attachments:** excluded descendants may follow the domain through forward kinematics (FK). Ordinary parent-child attachment does not itself violate constraint closure.
+
+For example, a rigid triangle cannot be divided between domains. A constraint coupling the rotations of two bones requires the participating degrees of freedom to remain together. An ordinary arm-to-torso attachment may be a domain boundary. A local joint limit measured against the fixed incoming attachment frame does not by itself require ownership of the parent bone; a constraint requiring that parent to participate in the solve does.
+
+A proposed boundary that splits a constraint dependency is invalid. The editor must require a valid domain rather than silently allowing the solver to change unowned degrees of freedom.
 
 A newly created animation defaults to the entire skeleton. Users only need to restrict the region when they want the animation to compose with other animations that control different parts of the character.
 
@@ -42,15 +57,15 @@ An animation cannot span two disconnected rooted skeletons. If a character conta
 
 The animation editor provides an **Edit Animation Region** command.
 
-The default animation region is the entire skeleton. Edit Animation Region enters a temporary mode in which the user can restrict or expand the connected region owned by the animation.
+The default pose domain is the entire skeleton. Edit Animation Region enters a temporary mode in which the user can restrict or expand the pose domain. The resulting domain must satisfy connectivity and constraint closure.
 
-The animation region is persistent animation data and is separate from ordinary editor selection. Once the region has been established, users can freely select individual nodes and bones inside it while authoring poses.
+The pose domain is persistent animation data and is separate from ordinary editor selection. Once the domain has been established, users can freely select individual nodes and bones inside it while authoring poses. References to the animation's region below mean this pose domain.
 
 ---
 
 ## Animation Composition
 
-Animations can be evaluated simultaneously when their owned skeletal regions do not overlap.
+Skeletal animations can compose when their pose domains have disjoint ownership and each domain is constraint-closed. Domains are evaluated in upstream-to-downstream attachment order.
 
 For example:
 
@@ -62,7 +77,9 @@ Composition is based on ownership of skeletal degrees of freedom, not on whether
 
 An upstream animation may move or rotate the attachment point of a downstream animated region. The downstream animation inherits that already-evaluated attachment frame and then applies its own animation relative to it.
 
-Persistent structural constraints may make apparently separate regions mathematically coupled. Animation-domain validation and solver setup must account for any constraint that crosses a proposed region boundary.
+Persistent constraints must not couple owned degrees of freedom across domain boundaries. Apparently separate regions that are coupled by such constraints cannot be independently animated domains.
+
+These rules intentionally restrict composition. For example, a two-arm animation that must own the connecting torso cannot compose with a separate animation owning that same torso. Overlapping-domain blending is outside this design. Disjoint skeletal ownership also does not resolve conflicts between artwork tracks targeting the same property; artwork composition needs its own policy.
 
 ---
 
@@ -79,6 +96,8 @@ This produces two important cases.
 If the animation does not contain the character root, its frame is the current attachment frame supplied by the parent of the animated region.
 
 For example, an arm animation inherits the current shoulder attachment frame after torso or locomotion animation has been evaluated. A hand trajectory authored for that arm therefore moves naturally with upstream body motion.
+
+A pin in that arm animation is fixed relative to this incoming frame, not to the world. It will move with the shoulder. Keeping a hand fixed against a world-space object while the torso moves requires a domain that includes the relevant upstream motion, or a future feature beyond this frame model.
 
 ### Root animation
 
@@ -106,6 +125,12 @@ A pose keyframe stores the state of the animation's owned skeletal region at a p
 
 Pose keyframes represent endpoint poses, not commands that transform one pose into another.
 
+### Exact keyframe evaluation
+
+At an exact keyframe timestamp, the stored pose is applied directly within the current incoming attachment frame. It is not projected through the transition solver, and transition-local paths or pins do not override it. Exactness refers to the domain's stored skeletal state; its world-space placement still inherits upstream animation.
+
+This rule applies equally to playback, scrubbing, and selecting a pose. A disagreement between transition targets and an endpoint pose may cause a discontinuity at the keyframe. That is an accepted tradeoff: the system does not silently alter an authored keyframe to remove the discontinuity.
+
 The user authors a pose by directly manipulating the skeleton on the canvas. The current IK/constraint solver acts as a posing tool and is allowed to change only the degrees of freedom owned by the active animation region.
 
 ### Region-limited manipulation
@@ -117,7 +142,9 @@ While editing an animation pose:
 - excluded subtrees attached to the active region retain their local pose and follow their attachment points normally;
 - upstream bones outside the region do not participate in the solve.
 
-This requires the selection/manipulation tool to support region-limited IK. A dragged node may be solved using only a prescribed connected set of skeletal degrees of freedom rather than allowing IK to propagate through the entire skeleton.
+This requires the selection/manipulation tool to support domain-limited IK. The solver problem can be constructed from only the pose domain, with its incoming attachment frame fixed. An explicit mask parameter is not required; the requirement is that only owned degrees of freedom participate in the solve.
+
+After applying a stored pose or solving an interpolated pose, excluded descendants are updated through FK while preserving their local poses. If a descendant has its own animation, that animation is then evaluated relative to the updated attachment. This is sufficient because valid domain boundaries do not split coupled constraints.
 
 This manipulation primitive is useful independently of animation, but while editing an animation its allowed region is automatically the current animation domain.
 
@@ -142,7 +169,7 @@ The absolute time of a pose is derived from the durations of preceding transitio
 
 ## Pose Interpolation and Constraint Projection
 
-For a time between two pose keyframes, evaluation proceeds in two stages.
+For a time strictly between two pose keyframes, evaluation proceeds in two stages. Exact keyframe timestamps bypass these stages and use the stored pose directly.
 
 ### 1. Reference pose
 
@@ -150,13 +177,15 @@ The system interpolates between the endpoint poses to produce an unconstrained r
 
 Local/articulation angles are interpolated in skeletal space. Root translation and rotation, when owned by the animation, are interpolated separately.
 
+The initial angle-interpolation rule is shortest-path interpolation. Endpoint orientations alone do not encode winding or a full turn: identical endpoint orientations represent no rotation. Additional intermediate poses can describe larger rotations. Explicit turn counts or action-style rotation commands are not part of the initial model.
+
 The transition's easing curve determines the interpolation parameter.
 
 ### 2. Solved pose
 
 The reference pose is then passed to the nonlinear solver.
 
-The solver finds the closest valid pose satisfying:
+The solver seeks the active positional targets while maintaining valid skeletal structure and favoring a pose close to the reference. Its inputs include:
 
 - positional node targets active at that time;
 - persistent node pins where applicable;
@@ -168,7 +197,13 @@ The interpolated pose is therefore a preferred pose rather than a guaranteed fin
 
 The solver's objective should continue to favor solutions close to the incoming/reference pose, so unconstrained parts of the region naturally follow the authored interpolation while constrained parts move only as much as needed to satisfy the active requirements.
 
-Evaluation must remain deterministic so playback, pausing, and scrubbing to the same time produce the same pose.
+### Determinism and continuity
+
+For the same authored data and upstream inputs, evaluation must remain deterministic: playback, pausing, and scrubbing to the same time produce the same pose. Each solve starts from the interpolated reference pose, not the previously displayed frame. Upstream state is likewise evaluated for the requested time.
+
+The initial implementation uses independent solves from these reference poses. It does not require the old action evaluator's continuation machinery. Temporal continuity is a quality to assess in practice, not a guarantee implied by determinism: nearby times can select different solver solutions, and exact keyframes can introduce discontinuities. Additional continuity machinery should be considered only if testing demonstrates a need, while preserving deterministic seeking.
+
+Unreachable targets initially use the existing solver's best-effort behavior and result reporting. A positional target is not a promise of exact reachability, and solver failure must not be treated as a successfully satisfied target. Persistent structural constraints and domain ownership remain requirements; transition targets do not authorize changing them.
 
 ---
 
@@ -269,6 +304,8 @@ Pose A --- 300 ms --- New Pose --- 500 ms --- Pose B
 
 Any positional tracks, pins, or other transition-local data are divided or preserved across the resulting two transitions as appropriate.
 
+Insertion preserves total duration and captures the evaluated pose at the insertion time. It does **not** promise to preserve the surrounding motion. Splitting easing, introducing a new reference-pose endpoint, and solving the resulting transitions can all change the motion before and after the new pose.
+
 A convenient **Insert at Midpoint** operation may also be provided.
 
 ---
@@ -325,6 +362,10 @@ open            half       closed       half        open
 
 The initial implementation can focus on sprite-state changes, while leaving room for additional artwork properties later.
 
+### Timing edits
+
+The policy for artwork keys when skeletal transition durations change is intentionally deferred until the editing workflow can be tried. Keys may remain at absolute times or move with the affected skeletal timing; neither behavior is promised here. Sharing a playback clock does not settle this editing policy.
+
 ---
 
 ## Animation Editor Tabs
@@ -359,7 +400,7 @@ struct animation {
     object_id id;
     std::string name;
 
-    animation_region region;
+    pose_domain domain;
 
     std::vector<pose_keyframe> poses;
     std::vector<pose_transition> transitions;
@@ -393,6 +434,22 @@ Artwork tracks are keyed against the animation's time axis rather than requiring
 
 The saved format should preserve semantic authoring data rather than solver caches or transient editor state.
 
+Core remains responsible for domain validation, evaluation, persistence, and persistent-reference integrity. Editor selection and temporary manipulation state must not supply hidden playback inputs. Existing detached-topology editing and undo infrastructure can continue to support this model.
+
+Changes to rig topology or persistent constraints can invalidate a previously valid domain or pose. Such edits and project loading must validate the resulting animation data; they must not silently retain dangling references or permit a domain to solve across an invalid boundary. The precise repair workflow is an implementation decision.
+
+### Deferred policies
+
+This document does not yet specify:
+
+- loop seams and root-motion accumulation across repeated playback;
+- behavior outside the authored time range;
+- artwork-key retiming after skeletal duration edits and conflicts between composed artwork tracks;
+- conversion or compatibility handling for saved action-based animations;
+- how existing keyframes are initialized or reconciled when their pose domain expands or shrinks.
+
+These policies should be made explicit as the corresponding features are implemented. They do not change the exact-keyframe, domain-ownership, or deterministic-evaluation rules above.
+
 ---
 
 ## Intended Authoring Workflow
@@ -413,9 +470,9 @@ A typical whole-body animation is authored as follows:
 For a composable partial-body animation:
 
 1. Create the animation normally.
-2. Use **Edit Animation Region** to restrict it to a connected skeletal region.
+2. Use **Edit Animation Region** to restrict it to a valid, constraint-closed pose domain.
 3. Author poses exactly as for a whole-body animation.
 4. During posing and playback, solver manipulation is restricted to the animation-owned region.
-5. Compose the animation with other animations whose owned regions do not overlap.
+5. Compose the animation with other animations whose valid pose domains have disjoint ownership, evaluating upstream domains first.
 
 The overall authoring model remains centered on direct manipulation: users create poses by posing the character, and the solver supplies valid constrained motion between those authored states.
