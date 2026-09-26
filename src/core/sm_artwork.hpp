@@ -8,24 +8,29 @@
 #include <unordered_map>
 
 namespace sm {
+
     struct sprite_frame { image_resource image; point registration_origin{}; };
     enum class bone_anchor { root, tip };
+
     struct slot_definition {
         object_id bone;
         bone_anchor anchor = bone_anchor::root;
         std::vector<std::string> states{"default"};
     };
+
     struct sprite_transform {
         point translation{};
         double rotation = 0;
         point scale{1, 1};
     };
+
     using frame_target = std::optional<std::string>;
     struct appearance_slot {
         std::string slot;
         std::map<std::string, frame_target> states{{"default", std::nullopt}};
         sprite_transform transform;
     };
+
     struct appearance { std::vector<appearance_slot> appearance_slots; };
     struct resolved_sprite {
         std::string slot;
@@ -37,12 +42,14 @@ namespace sm {
         // Bone endpoint frame, before appearance and registration transforms.
         matrix bone_transform;
     };
+
     struct packed_frame_region {
         std::string name;
         std::size_t page;
         pixel_rect rect;
         point registration_origin;
     };
+
     struct packed_sprite_page { image_buffer png; int width, height; };
     struct packed_artwork {
         std::vector<packed_sprite_page> pages;

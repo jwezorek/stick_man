@@ -26,6 +26,7 @@ namespace sm {
         object_id action;
         bool operator==(const removed_animation_action&) const = default;
     };
+
     struct topology_edit_effects {
         std::vector<object_id> removed_nodes;
         std::vector<object_id> removed_bones;
@@ -34,6 +35,7 @@ namespace sm {
 
         bool has_animation_cascade() const noexcept { return !removed_animation_actions.empty(); }
     };
+
     struct topology_change {
         std::vector<object_id> removed_skeleton_ids;
         std::vector<object_id> added_skeleton_ids;
@@ -53,6 +55,7 @@ namespace sm {
         std::unordered_map<object_id, std::optional<object_id>> parents;
         std::vector<character_state> characters;
     };
+
     struct replacement_plan {
         membership_state membership;
         std::vector<object_id> deleted_character_ids;
