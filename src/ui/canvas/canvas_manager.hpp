@@ -23,15 +23,15 @@ namespace ui {
             tool::input_handler& inp_handler_;
             drag_mode drag_mode_;
             mdl::project* project_ = nullptr;
-            bool preview_active_ = false;
+            bool animation_session_active_ = false;
             void prepare_to_add_bone(sm::node& u, sm::node& v);
             void add_new_bone(sm::bone& bone);
             void add_new_skeleton(sm::skel_ref skel);
             void set_contents(mdl::project& model);
         public:
             manager(tool::input_handler& inp_handler);
-            void show_animation_preview(sm::topology* topology);
-            bool preview_active() const { return preview_active_; }
+            void show_animation_session(bool active);
+            bool animation_session_active() const { return animation_session_active_; }
             void init(mdl::project& proj);
             void clear();
             void center_active_view();

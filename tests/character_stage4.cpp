@@ -96,7 +96,7 @@ void round_trip_characters() {
     require(saved.has_value(), "character project serialization failed");
 
     const auto semantic = extract_project_json(*saved);
-    require(semantic.at("version").get<double>() == 7.0, "constraint persistence did not bump project version");
+    require(semantic.at("version").get<double>() == 8.0, "project format version is not 8");
     require(semantic.contains("characters") && semantic.at("characters").is_array(),
         "project.json has no character collection");
     require(semantic.at("characters").size() == 2, "project.json lost a character");

@@ -96,7 +96,7 @@ void persistence() {
     sm::detail::package_reader reader(*encoded);
     auto bytes = reader.read("project.json");
     auto semantic = nlohmann::json::parse(bytes);
-    require(semantic["version"] == 7.0, "constraints require a new package version");
+    require(semantic["version"] == 8.0, "Animation V2 Phase 1 requires project format version 8");
     auto prefix = "characters/" + id.to_string() + "/artwork/";
     auto png = reader.read(prefix + "page-0.png");
     auto malformed = [&](auto mutate, bool include_page = true) {

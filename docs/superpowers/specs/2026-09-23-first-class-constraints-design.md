@@ -64,7 +64,7 @@ Public geometry changes operate as validated transactions; raw coordinate assign
 
 Length edits explicitly change that arm's length while retaining signed fan angles and moving its descendants. A constrained tip-position edit becomes a constrained geometry request rather than an unchecked coordinate write. Batch pose/undo restoration validates at the end, avoiding projection after each intermediate node write. Reject incompatible geometric transforms or poses atomically instead of exposing a broken fan. Translation, rotation, and uniform scaling preserve the signed angular invariant; reflection or nonuniform scaling requires validation and may fail.
 
-Audit every `set_world_pos`, `apply`, `rotate_by`, and hierarchy reconstruction call site, including `sm_animation.cpp`, `sm_animation_evaluate.cpp`, model commands, node/bone properties, and `rig_interaction.cpp`.
+Audit every `set_world_pos`, `apply`, `rotate_by`, and hierarchy reconstruction call site, including standalone-pose application, Animation Mode working-topology paths, model commands, node/bone properties, and `rig_interaction.cpp`.
 
 ## Lifecycle, copying, and history
 

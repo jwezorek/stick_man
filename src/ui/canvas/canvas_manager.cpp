@@ -44,7 +44,7 @@ void ui::canvas::manager::init(mdl::project& proj) {
     project_ = &proj;
     connect(&proj, &mdl::project::project_changed, this, [this](mdl::project& model) {
         active_canvas().sync_to_model();
-        if (preview_active_) return;
+        if (animation_session_active_ || model.animation_mode()) return;
         emit canvas_refresh(model.core());
         active_canvas().sync_selection();
     });
@@ -119,7 +119,16 @@ void ui::canvas::manager::set_canvas_name(const std::string& name) {
 void ui::canvas::manager::set_contents(mdl::project& model) {
     active_canvas().set_contents(model);
     active_canvas().sync_to_model();
-    emit canvas_refresh(model.core());
+
+    // canvas_refresh drives the normal project panes (notably the Skeleton pane),
+    // which are backed by the persistent sm::project and expect the canvas to
+    // contain the corresponding persistent character/skeleton items.  During an
+    // Animation Mode session the canvas instead contains a detached working
+    // topology, so publishing a normal project refresh here mixes the two edit
+    // contexts and can make those panes dereference missing/stale canvas items.
+    if (!model.animation_mode())
+        emit canvas_refresh(model.core());
+
     active_canvas().sync_selection();
 }
 
@@ -128,17 +137,10 @@ void ui::canvas::manager::set_drag_mode(drag_mode dm) {
     active_canvas().set_drag_mode(dm);
 }
 
-void ui::canvas::manager::show_animation_preview(sm::topology* topology) {
-    preview_active_ = topology != nullptr;
+void ui::canvas::manager::show_animation_session(bool active) {
+    animation_session_active_ = active;
     auto& scene = active_canvas();
-    scene.clear();
-    scene.artwork().set_preview_topology(topology);
-    if (topology) {
-        for (auto skel : topology->skeletons()) {
-            scene.insert_item(skel.get());
-            for (auto node : skel->nodes()) scene.insert_item(node.get());
-            for (auto bone : skel->bones()) scene.insert_item(bone.get());
-        }
-        scene.sync_to_model();
-    } else set_contents(*project_);
+    scene.artwork().set_preview_topology(active ? &project_->topology() : nullptr);
+    set_contents(*project_);
 }
+

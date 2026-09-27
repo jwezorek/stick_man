@@ -7,7 +7,6 @@
 
 #include "drag_state.hpp"
 #include "select_tool_panel.hpp"
-#include "../../core/sm_animation.hpp"
 
 namespace mdl {
     class project;
@@ -23,25 +22,7 @@ namespace ui {
 
         class rig_interaction {
         public:
-            using authored_action = sm::action_data;
-
-            enum class purpose {
-                edit_project,
-                author_animation
-            };
-
-            struct animation_authoring {
-                sm::object_id character_root_bone;
-                sm::point animation_root_origin{};
-                double animation_root_angle = 0.0;
-                std::function<void(const authored_action&)> begin;
-                std::function<void(const authored_action&)> update;
-                std::function<void(const authored_action&)> complete;
-                std::function<void()> cancel;
-                std::function<void(QString)> reject;
-            };
-
-            explicit rig_interaction(purpose use);
+            rig_interaction() = default;
 
             void init(canvas::manager& canvases, mdl::project& model);
             void activate(canvas::manager& canvases);
@@ -54,18 +35,13 @@ namespace ui {
             void mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event);
 
             QWidget* settings_widget();
-            void set_animation_authoring(std::optional<animation_authoring> authoring);
 
         private:
-            purpose purpose_;
             select_tool_panel* settings_panel_ = nullptr;
             std::optional<drag_state> drag_;
             std::optional<QPointF> click_pt_;
             mdl::project* project_ = nullptr;
             canvas::manager* canvases_ = nullptr;
-            std::optional<animation_authoring> animation_authoring_;
-
-            bool authoring_animation() const;
             bool is_dragging() const;
             void pin_selection();
             void do_dragging(canvas::scene& canv, QPointF pt);
@@ -87,7 +63,6 @@ namespace ui {
             std::optional<translation_state> create_translation_state(
                 canvas::scene& canv, QPointF clicked_pt, const sel_drag_settings& settings) const;
 
-            void cancel_animation_drag(canvas::scene& canv);
         };
     }
 }

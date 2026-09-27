@@ -1,8 +1,7 @@
 #include "selection_tool.hpp"
 
 ui::tool::select::select() :
-    base("selection", "arrow_icon.png", ui::tool::id::selection),
-    interaction_(rig_interaction::purpose::edit_project) {
+    base("selection", "arrow_icon.png", ui::tool::id::selection) {
 }
 
 void ui::tool::select::init(canvas::manager& canvases, mdl::project& model) {

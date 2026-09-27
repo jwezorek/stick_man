@@ -27,7 +27,6 @@ namespace mdl {
         std::function<void(project&)> undo;
         // Only commands with ordinary user failures need to report an outcome.
         std::function<sm::result()> outcome;
-        bool animation_edit = false;
         bool document_edit = true;
         std::optional<sm::object_id> artwork_character;
         history_state::transition history_transition;
@@ -39,18 +38,24 @@ namespace mdl {
         Q_OBJECT
 
         sm::project core_;
-        bool animation_mode_ = false;
-        std::size_t animation_undo_depth_ = 0;
-        std::size_t animation_redo_count_ = 0;
+        struct animation_edit_session {
+            sm::object_id character;
+            sm::object_id animation;
+            sm::topology working_topology;
+            std::stack<command> redo_stack;
+            std::stack<command> undo_stack;
+        };
+        std::optional<animation_edit_session> animation_session_;
         std::stack<command> redo_stack_;
         std::stack<command> undo_stack_;
         history_state history_;
         std::size_t next_node_name_ = 1;
         std::size_t next_bone_name_ = 1;
-        std::function<bool(const sm::topology_edit_effects&)> topology_edit_confirmation_;
         void clear_redo_stack();
+        void clear_session_redo_stack();
         void emit_history_state(bool was_dirty);
         sm::result execute_command(const command& cmd);
+        sm::result execute_session_command(const command& cmd);
         void notify_command_change(const command& cmd);
         void rename_aux(handle id, const std::string& new_name);
         bool can_rename(skel_piece piece, const std::string& new_name);
@@ -63,13 +68,13 @@ namespace mdl {
         std::string next_default_node_name();
         std::string next_default_bone_name();
         void advance_default_name_counters_from_topology();
-        bool confirm_topology_edit(const sm::topology_edit_effects& effects) const;
     public:
         project();
-        void set_topology_edit_confirmation(
-            std::function<bool(const sm::topology_edit_effects&)> confirmation);
-        bool animation_mode() const { return animation_mode_; }
-        void set_animation_mode(bool active);
+        bool animation_mode() const { return animation_session_.has_value(); }
+        sm::result begin_animation_session(sm::object_id character, sm::object_id animation);
+        void end_animation_session();
+        std::optional<sm::object_id> animation_session_character() const;
+        std::optional<sm::object_id> animation_session_animation() const;
         void edit_animation_data(sm::object_id character, const std::function<void(sm::animation_assets&)>& edit);
         void apply_pose(sm::object_id character, sm::object_id pose);
         const sm::project& core() const;
@@ -95,10 +100,8 @@ namespace mdl {
             std::span<const sm::const_skel_ref> skeletons);
         std::expected<sm::object_id, sm::result> make_character(std::span<const sm::const_skel_ref> skeletons);
         std::expected<sm::object_id, sm::result> paste_character(const sm::topology& rig, const std::string& name,
-            const sm::artwork& artwork = {}, sm::object_id character_root_bone = {},
-            const sm::animation_assets& animation_data = {});
+            const sm::artwork& artwork = {}, const sm::animation_assets& animation_data = {});
         sm::result delete_character(const sm::object_id& id);
-        sm::result set_character_root_bone(const sm::object_id& character, const sm::object_id& bone);
         std::expected<sm::object_id, sm::result> add_rotation_constraint(
             sm::object_id target, sm::rotation_reference reference, sm::angle_range allowed,
             std::string name = "Rotation constraint");

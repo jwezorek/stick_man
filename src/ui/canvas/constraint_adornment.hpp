@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../core/sm_project.hpp"
+#include "../../core/sm_skeleton.hpp"
 #include <QGraphicsItem>
 #include <QPointF>
 #include <map>
@@ -28,7 +28,7 @@ public:
     explicit constraint_adornment_layer(scene& owner);
     ~constraint_adornment_layer();
 
-    void sync(const sm::project& project, double scale);
+    void sync(const sm::topology& topology, const sm::constraint_map& constraints, double scale);
     void clear();
     void set_visible(bool visible);
     bool visible() const noexcept { return visible_; }

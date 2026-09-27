@@ -58,8 +58,8 @@ namespace ui {
         using bone_transform = std::function<void(item::bone*)>;
 
         // Canvas-space editing UI that temporarily gets first chance at input before the
-        // active tool. Animation action handles use this now; path/control-point editors
-        // can use the same mechanism later.
+        // active tool. Constraint handles and other editor adornments can share this
+        // mechanism without coupling them to a particular tool.
         class interactive_adornment {
         public:
             virtual bool keyPressEvent(QKeyEvent*) { return false; }
@@ -174,6 +174,7 @@ namespace ui {
             void set_node_pinned(const sm::object_id& id, bool pinned);
             void toggle_node_pinned(const sm::object_id& id);
             void toggle_node_pinned_undoable(const sm::object_id& id);
+            void set_pinned_node_ids(const std::unordered_set<sm::object_id>& ids);
 
             bool constraints_visible() const;
             void set_constraint_tool_active(bool active);

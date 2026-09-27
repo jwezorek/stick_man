@@ -15,7 +15,7 @@ The required outcome is a working, runtime-capable IK implementation using NLopt
    - `src/core/sm_fabrik.hpp` and `sm_fabrik.cpp`
    - `src/core/sm_constraint.hpp`, `sm_constraint_geometry.hpp/.cpp`, and `sm_angle_set.hpp/.cpp`
    - `src/core/sm_geometry_batch.hpp/.cpp`, `sm_bone.cpp`, and `sm_types.hpp`
-   - `src/core/sm_animation_evaluate.cpp` and `src/ui/tools/rig_interaction.cpp`
+   - `src/model/commands.cpp` and `src/ui/tools/rig_interaction.cpp`
    - `tests/fabrik_pins.cpp`, `tests/constraint_solver.cpp`, and relevant animation/direct-edit tests
    - Root and test CMake files and existing build/dependency instructions
 

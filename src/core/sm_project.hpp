@@ -20,20 +20,10 @@ namespace sm {
     using const_project_object = std::variant<const_node_ref, const_bone_ref, const_skel_ref, const_character_ref, const_constraint_ref>;
     using project_buffer = std::vector<std::uint8_t>;
 
-    struct removed_animation_action {
-        object_id character;
-        object_id animation;
-        object_id action;
-        bool operator==(const removed_animation_action&) const = default;
-    };
-
     struct topology_edit_effects {
         std::vector<object_id> removed_nodes;
         std::vector<object_id> removed_bones;
         std::vector<object_id> removed_skeletons;
-        std::vector<removed_animation_action> removed_animation_actions;
-
-        bool has_animation_cascade() const noexcept { return !removed_animation_actions.empty(); }
     };
 
     struct topology_change {
@@ -47,7 +37,6 @@ namespace sm {
     struct character_state {
         object_id id;
         std::string name;
-        object_id character_root_bone;
         sm::artwork artwork;
         animation_assets animation_data;
     };
@@ -90,15 +79,11 @@ namespace sm {
         const mutable_object& get_mutable(const object_id& id) const;
         void detach_skeleton(skeleton& skel);
         void prune_empty_characters();
-        void repair_character_root_bone(character& character);
         topology_edit_effects effects_for_removed_objects(
             std::vector<object_id> nodes,
             std::vector<object_id> bones,
             std::vector<object_id> skeletons) const;
-        static void erase_cascade_actions(animation_assets& assets, const topology_edit_effects& effects);
-        void erase_cascade_actions(const topology_edit_effects& effects);
         void reconcile_character_animation_poses();
-        void assert_animation_references_resolve() const;
 
     public:
         project();
@@ -148,14 +133,12 @@ namespace sm {
             const std::vector<skel_ref>& replacements,
             const std::unordered_set<object_id>& regenerate_ids = {}) const;
         bool has_consistent_membership() const;
-        bool has_valid_animation_references() const;
         result validate_integrity() const noexcept;
 
         expected_const_character create_character(std::span<const const_skel_ref> skeletons);
         result adopt_skeletons(const object_id& character_id, std::span<const const_skel_ref> skeletons);
         result remove_character(const object_id& id);
         expected_const_character character(const object_id& id) const;
-        result set_character_root_bone(const object_id& character_id, const object_id& bone_id);
         animation_assets& animation_data(const object_id& character_id);
         const animation_assets& animation_data(const object_id& character_id) const;
         sm::artwork& artwork(const object_id& character_id);

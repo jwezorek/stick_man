@@ -63,11 +63,6 @@ namespace ui {
 
 }
 
-namespace {
-    ui::tool::id toolbar_tool_id(ui::tool::id id) {
-        return id == ui::tool::id::animate ? ui::tool::id::selection : id;
-    }
-}
 
 ui::pane::tools::tools(QMainWindow* wnd) :
         QToolBar(tr("Tools"), wnd),
@@ -88,7 +83,7 @@ ui::pane::tools::tools(QMainWindow* wnd) :
     }
     connect(&tools_, &tool::manager::current_tool_changed, this, [this](tool::base& current) {
         for (auto* button : findChildren<tool_btn*>()) button->deactivate();
-        if (auto* button = tool_from_id(toolbar_tool_id(current.id()))) button->activate();
+        if (auto* button = tool_from_id(current.id())) button->activate();
     });
 }
 
@@ -105,7 +100,7 @@ void ui::pane::tools::handle_tool_click(canvas::manager& canvases, tool_btn* btn
 
     tool::id current_tool_id = (tools_.has_current_tool()) ?
         tools_.current_tool().id() : tool::id::none;
-    const auto current_toolbar_id = toolbar_tool_id(current_tool_id);
+    const auto current_toolbar_id = current_tool_id;
 
     if (btn->id() == current_toolbar_id) {
         return;
@@ -119,8 +114,6 @@ void ui::pane::tools::handle_tool_click(canvas::manager& canvases, tool_btn* btn
     tools_.set_current_tool(canvases, btn->id() );
 }
 void ui::pane::tools::set_animation_mode(bool active) {
-    if (auto* selection = tool_from_id(tool::id::selection))
-        selection->set_tool_icon(active ? "move_icon.png" : "arrow_icon.png");
     if (auto* node = tool_from_id(tool::id::add_node)) {
         node->set_tool_icon("add_node_icon.png", active ? 0.25 : 1.0);
         node->setEnabled(!active);

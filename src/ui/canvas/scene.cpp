@@ -202,7 +202,7 @@ void ui::canvas::scene::focusOutEvent(QFocusEvent* focusEvent) {
         auto adornment = interactive_adornment_;
         adornment->cancel();
     }
-    if (manager().preview_active()) {
+    if (manager().animation_session_active()) {
         QKeyEvent cancel(QEvent::KeyPress,Qt::Key_Escape,Qt::NoModifier);
         inp_handler_.keyPressEvent(*this,&cancel);
     }
@@ -240,9 +240,10 @@ void ui::canvas::scene::set_zoom_level(int zoom, std::optional<QPointF> pt) {
 
 void ui::canvas::scene::sync_to_model() {
     if (model_) {
-        if (selected_constraint_id_ && !model_->core().constraint_by_id(*selected_constraint_id_))
+        const auto& constraints = model_->topology().constraints();
+        if (selected_constraint_id_ && !constraints.contains(*selected_constraint_id_))
             selected_constraint_id_.reset();
-        constraint_adornments_->sync(model_->core(), scale());
+        constraint_adornments_->sync(model_->topology(), constraints, scale());
         constraint_adornments_->set_visible(constraints_visible());
         constraint_adornments_->set_selected(selected_constraint_id_);
     }
@@ -263,7 +264,8 @@ void ui::canvas::scene::set_contents(mdl::project& model) {
     std::erase_if(pinned_node_ids_, [&](const auto& id) { return !current_node_ids.contains(id); });
 
     clear();
-    for (auto character : model.core().characters()) addItem(new item::character(character.get()));
+    if (!model.animation_mode())
+        for (auto character : model.core().characters()) addItem(new item::character(character.get()));
     for (auto skel_ref : model.topology().skeletons()) {
         const auto& skel = skel_ref.get();
         auto& root = std::get<sm::node_ref>(model.get(skel.root_node().id())).get();
@@ -366,13 +368,18 @@ void ui::canvas::scene::toggle_node_pinned_undoable(const sm::object_id& id) {
         [this, id, before] { set_node_pinned(id, before); });
 }
 
+void ui::canvas::scene::set_pinned_node_ids(const std::unordered_set<sm::object_id>& ids) {
+    pinned_node_ids_ = ids;
+    for (auto* node : node_items()) node->set_pin_visible(pinned_node_ids_.contains(node->model().id()));
+}
+
 bool ui::canvas::scene::constraints_visible() const {
     return constraint_tool_active_ || show_constraints_in_view_;
 }
 
 void ui::canvas::scene::set_constraint_tool_active(bool active) {
     constraint_tool_active_ = active;
-    constraint_adornments_->set_handles_visible(active);
+    constraint_adornments_->set_handles_visible(active && !(model_ && model_->animation_mode()));
     constraint_adornments_->set_visible(constraints_visible());
     if (!active) set_hovered_constraint({});
 }
@@ -383,6 +390,7 @@ void ui::canvas::scene::set_constraints_view_visible(bool visible) {
 }
 
 std::optional<ui::canvas::constraint_hit> ui::canvas::scene::constraint_at(const QPointF& point) const {
+    if (model_ && model_->animation_mode()) return {};
     return constraint_adornments_->hit(point);
 }
 
@@ -404,7 +412,8 @@ void ui::canvas::scene::clear_constraint_selection(bool notify) {
     if (!selected_constraint_id_) return;
     selected_constraint_id_.reset();
     constraint_adornments_->set_selected({});
-    if (notify && !manager().preview_active()) emit manager().selection_changed(*this);
+    if (notify && !manager().animation_session_active() && !(model_ && model_->animation_mode()))
+        emit manager().selection_changed(*this);
 }
 
 void ui::canvas::scene::set_hovered_constraint(std::optional<sm::object_id> id) {
@@ -521,7 +530,8 @@ void ui::canvas::scene::sync_selection() {
         itm->set_selected(selected);
     }
     if (artwork_) artwork_->refresh_guides();
-    if (!manager().preview_active()) emit manager().selection_changed(*this);
+    if (!manager().animation_session_active() && !(model_ && model_->animation_mode()))
+        emit manager().selection_changed(*this);
 }
 
 QGraphicsView& ui::canvas::scene::view() {
@@ -769,7 +779,7 @@ void ui::canvas::scene::keyPressEvent(QKeyEvent* event) {
         auto adornment = interactive_adornment_;
         if (adornment->keyPressEvent(event)) { event->accept(); return; }
     }
-    if (artwork_ && artwork_->transform_editing() && !manager().preview_active()) {
+    if (artwork_ && artwork_->transform_editing() && !manager().animation_session_active()) {
         if (event->key() == Qt::Key_Escape) artwork_->cancel_transform();
         event->accept();
         return;
@@ -782,7 +792,7 @@ void ui::canvas::scene::keyReleaseEvent(QKeyEvent* event) {
         event->accept();
         return;
     }
-    if (artwork_ && artwork_->transform_editing() && !manager().preview_active()) {
+    if (artwork_ && artwork_->transform_editing() && !manager().animation_session_active()) {
         event->accept();
         return;
     }
@@ -804,7 +814,7 @@ void ui::canvas::scene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
         auto adornment = interactive_adornment_;
         if (adornment->mousePressEvent(event)) { event->accept(); return; }
     }
-    if (artwork_ && artwork_->transform_editing() && !manager().preview_active()) {
+    if (artwork_ && artwork_->transform_editing() && !manager().animation_session_active()) {
         if (event->button() == Qt::LeftButton) artwork_->begin_transform(event->scenePos());
         event->accept();
         return;
@@ -822,7 +832,7 @@ void ui::canvas::scene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
         auto adornment = interactive_adornment_;
         if (adornment->mouseMoveEvent(event)) { event->accept(); return; }
     }
-    if (artwork_ && artwork_->transform_editing() && !manager().preview_active()) {
+    if (artwork_ && artwork_->transform_editing() && !manager().animation_session_active()) {
         artwork_->update_transform(event->scenePos());
         event->accept();
         return;
@@ -839,7 +849,7 @@ void ui::canvas::scene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
         auto adornment = interactive_adornment_;
         if (adornment->mouseReleaseEvent(event)) { event->accept(); return; }
     }
-    if (artwork_ && artwork_->transform_editing() && !manager().preview_active()) {
+    if (artwork_ && artwork_->transform_editing() && !manager().animation_session_active()) {
         if (event->button() == Qt::LeftButton) artwork_->end_transform(event->scenePos());
         event->accept();
         return;
@@ -852,7 +862,7 @@ void ui::canvas::scene::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
         event->accept();
         return;
     }
-    if (artwork_ && artwork_->transform_editing() && !manager().preview_active()) {
+    if (artwork_ && artwork_->transform_editing() && !manager().animation_session_active()) {
         event->accept();
         return;
     }

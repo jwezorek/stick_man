@@ -15,7 +15,6 @@ namespace ui {
                 ui::labeled_hyperlink* v_;
                 QWidget* nodes_;
                 rotation_tab* rotation_;
-                QPushButton* character_root_btn_;
 
             public:
                 bones(const current_canvas_fn& fn, selection_properties* parent);

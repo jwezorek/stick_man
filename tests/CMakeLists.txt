@@ -65,54 +65,41 @@ add_executable(appearances appearances.cpp)
 target_link_libraries(appearances PRIVATE stick_man_core)
 add_test(NAME appearances COMMAND $<TARGET_FILE:appearances>)
 
-add_executable(animation_stage1 animation_stage1.cpp)
-add_executable(animation_order animation_order.cpp)
-target_link_libraries(animation_order PRIVATE stick_man_core)
-add_test(NAME animation_order COMMAND $<TARGET_FILE:animation_order>)
+add_executable(animation_v2_phase1 animation_v2_phase1.cpp)
+target_link_libraries(animation_v2_phase1 PRIVATE stick_man_model)
+if(WIN32)
+    add_test(NAME animation_v2_phase1 COMMAND "${CMAKE_COMMAND}" -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        $<TARGET_FILE:animation_v2_phase1>)
+else()
+    add_test(NAME animation_v2_phase1 COMMAND $<TARGET_FILE:animation_v2_phase1>)
+endif()
+
 add_executable(ik_pins ik_pins.cpp)
+target_link_libraries(ik_pins PRIVATE stick_man_core)
+add_test(NAME ik_pins COMMAND $<TARGET_FILE:ik_pins>)
+
 add_executable(constraints constraints.cpp)
 target_link_libraries(constraints PRIVATE stick_man_core)
 add_test(NAME constraints COMMAND $<TARGET_FILE:constraints>)
+
 add_executable(angle_set angle_set.cpp)
 target_link_libraries(angle_set PRIVATE stick_man_core)
 add_test(NAME angle_set COMMAND $<TARGET_FILE:angle_set>)
-target_link_libraries(ik_pins PRIVATE stick_man_core)
-add_test(NAME ik_pins COMMAND $<TARGET_FILE:ik_pins>)
-target_link_libraries(animation_stage1 PRIVATE stick_man_core)
-add_test(NAME animation_stage1 COMMAND $<TARGET_FILE:animation_stage1>)
-add_executable(animation_rotation animation_rotation.cpp)
-target_link_libraries(animation_rotation PRIVATE stick_man_core)
-add_test(NAME animation_rotation COMMAND $<TARGET_FILE:animation_rotation>)
-add_executable(animation_referential_integrity animation_referential_integrity.cpp)
-target_link_libraries(animation_referential_integrity PRIVATE stick_man_model)
-if(WIN32)
-    add_test(NAME animation_referential_integrity COMMAND "${CMAKE_COMMAND}" -E env
-        "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
-        $<TARGET_FILE:animation_referential_integrity>)
-else()
-    add_test(NAME animation_referential_integrity COMMAND $<TARGET_FILE:animation_referential_integrity>)
-endif()
+
 add_executable(animation_ui animation_ui.cpp ${PROJECT_SOURCE_DIR}/src/ui/stick_man.qrc)
 target_link_libraries(animation_ui PRIVATE stick_man_ui)
 set_target_properties(animation_ui PROPERTIES AUTORCC ON)
 add_test(NAME animation_ui COMMAND "${CMAKE_COMMAND}" -E env
     "QT_QPA_PLATFORM=offscreen" "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
     $<TARGET_FILE:animation_ui>)
+set_tests_properties(animation_ui PROPERTIES TIMEOUT 30)
+
 add_executable(constraint_ui constraint_ui.cpp)
 target_link_libraries(constraint_ui PRIVATE stick_man_model)
 add_test(NAME constraint_ui COMMAND "${CMAKE_COMMAND}" -E env
     "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
     $<TARGET_FILE:constraint_ui>)
-add_executable(animation_placement_ui animation_placement_ui.cpp ${PROJECT_SOURCE_DIR}/src/ui/stick_man.qrc)
-target_link_libraries(animation_placement_ui PRIVATE stick_man_ui)
-set_target_properties(animation_placement_ui PROPERTIES AUTORCC ON)
-add_test(NAME animation_placement_ui COMMAND "${CMAKE_COMMAND}" -E env
-    "QT_QPA_PLATFORM=offscreen" "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
-    $<TARGET_FILE:animation_placement_ui>)
-set_tests_properties(animation_placement_ui PROPERTIES TIMEOUT 30)
-add_executable(animation_character_integrity animation_character_integrity.cpp)
-target_link_libraries(animation_character_integrity PRIVATE stick_man_core)
-add_test(NAME animation_character_integrity COMMAND $<TARGET_FILE:animation_character_integrity>)
 
 add_executable(constraint_solver constraint_solver.cpp)
 target_link_libraries(constraint_solver PRIVATE stick_man_core)

@@ -10,14 +10,6 @@
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
 namespace {
-    std::vector<sm::object_id> cascade_characters(const sm::topology_edit_effects& effects) {
-        std::vector<sm::object_id> ids;
-        for (const auto& removed : effects.removed_animation_actions) ids.push_back(removed.character);
-        std::ranges::sort(ids);
-        ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
-        return ids;
-    }
-
     auto find_roots(const std::unordered_set<sm::node*>& node_set) {
         return rv::all(node_set) |
             rv::filter(
@@ -78,8 +70,8 @@ mdl::command mdl::commands::make_create_node_command(
 }
 mdl::commands::add_bone_state::add_bone_state(
         const std::string& name, const handle& u, const handle& v,
-        const sm::topology_edit_effects& effects):
-    bone_name(name), u_hnd(u), v_hnd(v), cascade_characters(::cascade_characters(effects)) {
+        const sm::topology_edit_effects&):
+    bone_name(name), u_hnd(u), v_hnd(v) {
 }
 mdl::command mdl::commands::make_add_bone_command(
         const handle& u_hnd, const handle& v_hnd, const std::string& bone_name,
@@ -95,7 +87,7 @@ mdl::command mdl::commands::make_add_bone_command(
             auto& skel_v = v.owner();
             state->before_constraints = proj.core().constraints();
             state->membership = proj.core().snapshot_membership(
-                {skel_u.id(), skel_v.id()}, state->cascade_characters);
+                {skel_u.id(), skel_v.id()});
             auto new_u = skel_u.copy_to(state->original);
             auto new_v = skel_v.copy_to(state->original);
             if (!new_u || !new_v) {
@@ -138,9 +130,8 @@ mdl::commands::replace_skeleton_state::replace_skeleton_state(
         const std::vector<sm::object_id>& replacees_arg,
         const std::vector<sm::skel_ref>& replacers,
         const std::unordered_set<sm::object_id>& regenerate_ids_arg,
-        const sm::topology_edit_effects& effects):
-    replacee_ids(replacees_arg), regenerate_ids(regenerate_ids_arg),
-    cascade_characters(::cascade_characters(effects)) {
+        const sm::topology_edit_effects&):
+    replacee_ids(replacees_arg), regenerate_ids(regenerate_ids_arg) {
     for (auto skel : replacers) {
         // An insertion (not a replacement) is an editor duplication operation, e.g. paste.
         // Allocate the duplicate IDs once here; redo then restores those same IDs.
@@ -162,7 +153,7 @@ mdl::command mdl::commands::make_replace_skeletons_command(
     return {
         [state](mdl::project& proj) {
             state->before_membership = proj.core().snapshot_membership(
-                state->replacee_ids, state->cascade_characters);
+                state->replacee_ids);
             state->before_constraints = proj.core().constraints();
             if (state->replacees.empty()) {
                 for (const auto& skel_id : state->replacee_ids) {
@@ -186,7 +177,7 @@ mdl::command mdl::commands::make_replace_skeletons_command(
             } else state->after_constraints = proj.core().constraints();
             state->replacement_ids = std::move(change.added_skeleton_ids);
             state->after_membership = proj.core().snapshot_membership(
-                state->replacement_ids, state->cascade_characters);
+                state->replacement_ids);
             // Replacement may remap any object ID to avoid collisions. Retain the
             // actual inserted topology so later commands keep valid handles on redo.
             sm::topology inserted;
@@ -215,7 +206,7 @@ mdl::command mdl::commands::make_replace_skeletons_command(
 mdl::commands::transform_nodes_and_bones_state::transform_nodes_and_bones_state(
         project& proj, const std::vector<handle>& node_hnds,
         const std::function<void(sm::node&)>& fn):
-    transform_nodes{fn}, old_constraints(proj.core().constraints()) {
+    transform_nodes{fn} {
     for (auto hnd : node_hnds) {
         auto& node = commands::resolve<sm::node>(proj, hnd);
         nodes.push_back(hnd);
@@ -229,7 +220,7 @@ mdl::commands::transform_nodes_and_bones_state::transform_nodes_and_bones_state(
         project& proj,
         const std::vector<handle>& bone_hnds,
         const std::function<void(sm::bone&)>& fn):
-    transform_bones{fn}, old_constraints(proj.core().constraints()) {
+    transform_bones{fn} {
     std::unordered_set<sm::node*> node_set;
     for (auto hnd : bone_hnds) {
         auto& bone = commands::resolve<sm::bone>(proj, hnd);
@@ -254,67 +245,59 @@ mdl::command mdl::commands::make_transform_bones_or_nodes_command(
         : std::make_shared<transform_nodes_and_bones_state>(proj, bones, bones_fn);
     return {
         [state](project& proj) {
-            if (state->new_constraints) {
-                sm::geometry_batch batch(proj.core().topology());
+            if (!state->new_node_to_position.empty()) {
+                sm::geometry_batch batch(proj.topology());
                 for (const auto& [handle, point] : state->new_node_to_position)
                     commands::resolve<sm::node>(proj, handle).set_world_pos(point);
-                if (proj.core().restore_constraints(*state->new_constraints) != sm::result::success)
-                    throw std::runtime_error("unable to restore transformed constraints");
-                if (batch.commit() != sm::result::success) throw std::runtime_error("invalid restored geometry");
+                if (batch.commit() != sm::result::success)
+                    throw std::runtime_error("invalid restored geometry");
                 emit proj.refresh_canvas(proj, false);
                 return;
             }
             if (state->transform_nodes) {
-                for (auto node_hnd : state->nodes) {
+                for (auto node_hnd : state->nodes)
                     state->transform_nodes(commands::resolve<sm::node>(proj, node_hnd));
-                }
             } else if (state->transform_bones) {
-                for (auto bone_hnd : state->bones) {
+                for (auto bone_hnd : state->bones)
                     state->transform_bones(commands::resolve<sm::bone>(proj, bone_hnd));
-                }
             } else {
                 throw std::runtime_error("bad call to make_transform_bones_or_nodes_command");
             }
-            state->new_constraints = proj.core().constraints();
             for (const auto& [node_hnd, old_position] : state->old_node_to_position)
                 state->new_node_to_position[node_hnd] = commands::resolve<sm::node>(proj, node_hnd).world_pos();
             emit proj.refresh_canvas(proj, false);
         },
         [state](project& proj) {
-            sm::geometry_batch batch(proj.core().topology());
-            for (const auto& [node_hnd, old_position] : state->old_node_to_position) {
-                auto& node = commands::resolve<sm::node>(proj, node_hnd);
-                node.set_world_pos(old_position);
-            }
-            if (proj.core().restore_constraints(state->old_constraints) != sm::result::success)
-                throw std::runtime_error("unable to restore original constraints");
-            if (batch.commit() != sm::result::success) throw std::runtime_error("invalid restored geometry");
+            sm::geometry_batch batch(proj.topology());
+            for (const auto& [node_hnd, old_position] : state->old_node_to_position)
+                commands::resolve<sm::node>(proj, node_hnd).set_world_pos(old_position);
+            if (batch.commit() != sm::result::success)
+                throw std::runtime_error("invalid restored geometry");
             emit proj.refresh_canvas(proj, false);
         }
     };
 }
 mdl::command mdl::commands::make_transform_node_positions_command(
-        project& proj,
+        project&,
         const std::vector<std::tuple<handle, sm::point>>& old_locs,
         const std::vector<std::tuple<handle, sm::point>>& new_locs) {
     return {
         [new_locs](project& proj) {
-            sm::geometry_batch batch(proj.core().topology());
-            for (const auto& [node_hnd, loc] : new_locs) {
-                auto& node = commands::resolve<sm::node>(proj, node_hnd);
-                node.set_world_pos(loc);
-            }
-            if (batch.commit() != sm::result::success) throw std::runtime_error("invalid restored geometry");
+            sm::geometry_batch batch(proj.topology());
+            for (const auto& [node_hnd, loc] : new_locs)
+                commands::resolve<sm::node>(proj, node_hnd).set_world_pos(loc);
+            if (batch.commit() != sm::result::success)
+                throw std::runtime_error("invalid restored geometry");
             emit proj.refresh_canvas(proj, false);
         },
         [old_locs](project& proj) {
-            sm::geometry_batch batch(proj.core().topology());
-            for (const auto& [node_hnd, loc] : old_locs) {
-                auto& node = commands::resolve<sm::node>(proj, node_hnd);
-                node.set_world_pos(loc);
-            }
-            if (batch.commit() != sm::result::success) throw std::runtime_error("invalid restored geometry");
+            sm::geometry_batch batch(proj.topology());
+            for (const auto& [node_hnd, loc] : old_locs)
+                commands::resolve<sm::node>(proj, node_hnd).set_world_pos(loc);
+            if (batch.commit() != sm::result::success)
+                throw std::runtime_error("invalid restored geometry");
             emit proj.refresh_canvas(proj, false);
         }
     };
 }
+

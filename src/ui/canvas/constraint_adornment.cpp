@@ -189,10 +189,10 @@ void ui::canvas::constraint_adornment_layer::clear() {
     visuals_.clear();
 }
 
-void ui::canvas::constraint_adornment_layer::sync(const sm::project& project, double scale) {
+void ui::canvas::constraint_adornment_layer::sync(
+        const sm::topology& topology, const sm::constraint_map& constraints, double scale) {
     clear();
-    const auto& topology = project.topology();
-    for (const auto& [id, constraint] : project.constraints()) {
+    for (const auto& [id, constraint] : constraints) {
         visual v;
         if (auto rotation = constraint.rotation()) {
             auto target = topology.get<sm::bone>(rotation->target_bone);

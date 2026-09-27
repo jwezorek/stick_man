@@ -3,7 +3,6 @@
 #include "rig_interaction.hpp"
 #include "../../model/selection.hpp"
 #include "select_tool_panel.hpp"
-#include "../animation_action_editor.hpp"
 #include "../panes/skeleton_pane.hpp"
 #include "../util.hpp"
 #include "../canvas/scene.hpp"
@@ -480,11 +479,6 @@ namespace {
     }
 }
 
-ui::tool::rig_interaction::rig_interaction(purpose use) : purpose_(use) {}
-
-bool ui::tool::rig_interaction::authoring_animation() const {
-    return purpose_ == purpose::author_animation;
-}
 void ui::tool::rig_interaction::init(canvas::manager& canvases, mdl::project& model) {
     project_ = &model;
     canvases_ = &canvases;
@@ -572,12 +566,10 @@ std::optional<ui::tool::drag_state> ui::tool::rig_interaction::create_drag_state
     return tbl.at(typ)();
 }
 void  ui::tool::rig_interaction::do_dragging(canvas::scene& canv, QPointF pt) {
-    bool started = false;
     if (!is_dragging()) {
         auto rb_type = kind_of_rubber_band(canv, *click_pt_);
         if (!rb_type) return;
         drag_ = create_drag_state(*rb_type, canv, *click_pt_);
-        started = drag_.has_value();
     }
     if (is_dragging()) {
         drag_->pt = from_qt_pt(pt);
@@ -588,27 +580,8 @@ void  ui::tool::rig_interaction::do_dragging(canvas::scene& canv, QPointF pt) {
             overload{
                 [](std::monostate) {
                 },
-                [&](rotation_state& ri) {
-                    if (started && authoring_animation() && animation_authoring_ && animation_authoring_->begin)
-                        animation_authoring_->begin(animation_editing::authored_action_for(ri));
-                    handle_rotation(canv, pt, ri);
-                    if (authoring_animation() && animation_authoring_ && animation_authoring_->update)
-                        animation_authoring_->update(animation_editing::authored_action_for(ri));
-                },
-                [&](translation_state& ti) {
-                    const auto sample=from_qt_pt(pt);
-                    if(ti.gesture_samples.empty() || sm::distance(ti.gesture_samples.back(),sample)>=0.25)
-                        ti.gesture_samples.push_back(sample);
-                    if(started && authoring_animation() && animation_authoring_) {
-                        if(auto action=animation_editing::authored_action_for(ti); action && animation_authoring_->begin)
-                            animation_authoring_->begin(*action);
-                    }
-                    handle_translation(canv, pt, ti);
-                    if(authoring_animation() && animation_authoring_) {
-                        if(auto action=animation_editing::authored_action_for(ti); action && animation_authoring_->update)
-                            animation_authoring_->update(*action);
-                    }
-                }
+                [&](rotation_state& ri) { handle_rotation(canv, pt, ri); },
+                [&](translation_state& ti) { handle_translation(canv, pt, ti); }
             },
             drag_->extra
         );
@@ -691,25 +664,6 @@ std::optional<ui::tool::translation_state> ui::tool::rig_interaction::create_tra
     for (auto skel : skeletons_from_nodes(selected_nodes)) for (auto node : skel->nodes()) old_locs.emplace_back(node->id(), node->world_pos());
 
     translation_state state{std::move(selected_nodes),std::move(pinned_nodes),anchor,offset,mode,std::move(old_locs)};
-    state.gesture_samples.push_back(from_qt_pt(clicked_pt));
-    if(authoring_animation() && animation_authoring_ && settings_panel_) {
-        const auto authored=settings_panel_->animation_translation();
-        state.path_kind=authored.path; state.reference=authored.reference; state.reference_bone=authored.reference_bone;
-        std::optional<sm::reference_frame> frame;
-        if(state.reference==sm::translation_reference::animation_root) {
-            frame=sm::reference_frame{animation_authoring_->animation_root_origin,animation_authoring_->animation_root_angle};
-        } else {
-            const auto bone_id=state.reference==sm::translation_reference::character_root
-                ? animation_authoring_->character_root_bone : state.reference_bone;
-            auto bones=canv.bone_items();
-            auto found=r::find_if(bones,[&](auto* b){return b->model().id()==bone_id;});
-            if(found==bones.end()) return {};
-            frame=sm::bone_reference_frame(bone_id,(*found)->model().owner().owner());
-        }
-        if(!frame) return {};
-        state.reference_origin=frame->origin;
-        state.reference_angle=frame->angle;
-    }
     return state;
 }
 void ui::tool::rig_interaction::pin_selection() {
@@ -824,40 +778,12 @@ void ui::tool::rig_interaction::handle_click(
     select_topology(canv, {&clicked_item, 1}, shift_down, ctrl_down);
 }
 void ui::tool::rig_interaction::do_rotation_complete(canvas::scene& canv, const rotation_state& ri) {
-    if (authoring_animation()) {
-        if (animation_authoring_ && animation_authoring_->complete) {
-            animation_authoring_->complete(animation_editing::authored_action_for(ri));
-        }
-        else {
-            restore_scene_locations(canv, ri.old_node_locs());
-            canv.sync_to_model();
-        }
-        canv.sync_selection();
-        return;
-    }
     const auto& new_locs = ri.current_node_locs();
-    project_->transform_node_positions(
-        ri.old_node_locs(),
-        new_locs
-    );
+    project_->transform_node_positions(ri.old_node_locs(), new_locs);
     canv.sync_selection();
 }
 
 void ui::tool::rig_interaction::do_translation_complete(canvas::scene& canv, const translation_state& ri) {
-    if (authoring_animation()) {
-        auto authored=animation_editing::authored_action_for(ri);
-        restore_scene_locations(canv, ri.old_locs);
-        canv.sync_to_model();
-        if(!authored) {
-            if(animation_authoring_ && animation_authoring_->reject) animation_authoring_->reject(
-                ri.mode==sel_drag_mode::rubber_band ? "Rubber-band translation is not an animation action; use Rigid or Ragdoll/IK translation."
-                                                    : "IK translation requires exactly one effector node.");
-            return;
-        }
-        if(animation_authoring_ && animation_authoring_->complete) animation_authoring_->complete(*authored);
-        canv.sync_selection();
-        return;
-    }
     node_locs new_locs;
     bool changed = false;
     for (const auto& [id, old_pos] : ri.old_locs) {
@@ -868,6 +794,7 @@ void ui::tool::rig_interaction::do_translation_complete(canvas::scene& canv, con
     if (changed) project_->transform_node_positions(ri.old_locs, new_locs);
     canv.sync_selection();
 }
+
 void ui::tool::rig_interaction::handle_drag_complete(canvas::scene& c, bool shift_down, bool alt_down) {
     switch (drag_->type) {
     case selection_rb:
@@ -888,7 +815,6 @@ void ui::tool::rig_interaction::handle_select_drag(canvas::scene& canv, QRectF r
     select_topology(canv, clicked_items, shift_down, ctrl_down);
 }
 void ui::tool::rig_interaction::deactivate(canvas::manager& canv_mgr) {
-    if (authoring_animation()) cancel_animation_drag(canv_mgr.active_canvas());
     canv_mgr.set_drag_mode(ui::canvas::drag_mode::none);
 }
 
@@ -904,29 +830,4 @@ QWidget* ui::tool::rig_interaction::settings_widget() {
     return settings_panel_;
 }
 
-void ui::tool::rig_interaction::cancel_animation_drag(canvas::scene& canv) {
-    if (drag_) {
-        const node_locs* old = nullptr;
-        if (auto* rotation = std::get_if<rotation_state>(&drag_->extra)) old = &rotation->old_node_locs();
-        if (auto* translation = std::get_if<translation_state>(&drag_->extra)) old = &translation->old_locs;
-        if (old) restore_scene_locations(canv, *old);
-        destroy_rubber_band(canv, drag_->rubber_band);
-        drag_.reset();
-        canv.sync_to_model();
-    }
-    click_pt_.reset();
-    if (animation_authoring_ && animation_authoring_->cancel) animation_authoring_->cancel();
-}
-
-void ui::tool::rig_interaction::set_animation_authoring(std::optional<animation_authoring> authoring) {
-    if (authoring_animation() && animation_authoring_ && canvases_) cancel_animation_drag(canvases_->active_canvas());
-    animation_authoring_ = std::move(authoring);
-}
-
-void ui::tool::rig_interaction::keyPressEvent(canvas::scene& c, QKeyEvent* event) {
-    if (authoring_animation()) {
-        if (event->key() == Qt::Key_Escape) { cancel_animation_drag(c); return; }
-        if (event->matches(QKeySequence::Undo)) { cancel_animation_drag(c); project_->undo(); return; }
-        if (event->matches(QKeySequence::Redo)) { cancel_animation_drag(c); project_->redo(); return; }
-    }
-}
+void ui::tool::rig_interaction::keyPressEvent(canvas::scene&, QKeyEvent*) {}

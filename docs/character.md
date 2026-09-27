@@ -1,10 +1,10 @@
 # `sm::character`: Current Architecture
 
-**Reviewed against the September 22, 2026 source selection**
+**Reviewed for Animation 2.0 Phase 1 — September 26, 2026**
 
 ## 1. Purpose
 
-A character is the stable authored boundary that turns one or more skeleton components into a single animation/artwork object.
+A character is the stable authored boundary that groups one or more skeleton components with the semantic data that belongs to them.
 
 A skeleton is topology. A character is ownership and semantics.
 
@@ -13,12 +13,12 @@ The current character owns:
 ```text
 identity and display name
 rig membership
-character root bone
 artwork / appearances
-poses and animations
+standalone poses
+minimal Animation V2 assets
 ```
 
-Loose skeletons remain valid project objects and are useful while constructing geometry before promoting/adopting it into a character.
+Loose skeletons remain valid project objects and can be promoted/adopted into a character later.
 
 ---
 
@@ -32,131 +32,133 @@ class character {
     std::string name_;
     project& owner_;
     sm::rig rig_;
-    object_id character_root_bone_;
     sm::artwork artwork_;
     animation_assets animation_data_;
 };
 ```
 
-`sm::rig` is a character-owned membership view containing persistent skeleton IDs. It does not duplicate the skeleton geometry.
-
-The authoritative nodes, bones, and skeletons live in `sm::project::topology()`.
-
-This separation is fundamental:
+`sm::rig` stores persistent skeleton IDs. It does not duplicate geometry. The authoritative nodes, bones, constraints, and skeletons live in `sm::project::topology()`.
 
 ```text
 project topology
-    owns nodes/bones/skeletons
+    owns nodes/bones/skeletons/constraints
 
 character
     owns membership + character semantics
 ```
 
+There is no persistent Animation-V1 character-root-bone designation. Animation 2.0 derives an animation's incoming frame from its eventual pose domain and topology rather than from a user-selected action reference frame.
+
 ---
 
 ## 3. Why character and skeleton are separate
 
-A character can legitimately contain multiple disconnected skeletons.
+A character can legitimately contain multiple disconnected skeletons: a conventional body plus detached face controls, floating pieces, or components produced by a structural edit. Therefore one skeleton cannot be used as the user's stable character identity.
 
-Examples include:
-
-- a conventional body plus detached eye/face controls;
-- floating accessories;
-- intentionally disconnected animated pieces;
-- a skeleton split by an edit where both surviving components should remain part of the same character.
-
-Therefore “one skeleton == one character” would make ordinary editing operations change user-level identity.
-
-The character survives changes in the number/connectivity of its member skeletons.
-
----
-
-## 4. Rig membership
-
-`sm::rig` stores the IDs of skeletons owned by the character.
-
-Each owned skeleton also carries a non-owning parent-character relationship back to the character. `project::has_consistent_membership()` checks both directions.
+A character survives changes in the number or connectivity of its member skeletons. `sm::rig` records membership, and each owned skeleton carries a non-owning parent-character relationship back to the character. `project::has_consistent_membership()` validates both directions.
 
 A valid character:
 
 - contains at least one skeleton;
 - contains no duplicate skeleton membership;
-- owns only live skeletons from the project topology;
-- agrees with each member skeleton's parent-character link;
-- has a character root bone that, when non-nil, belongs to that character.
-
-Loose skeletons have no parent character and may later be adopted.
+- owns only live skeletons from the project topology; and
+- agrees with each member skeleton's parent-character link.
 
 ---
 
-## 5. Character root bone
+## 4. Character-owned artwork
 
-A character has a persistent `character_root_bone`.
+Every character owns one `sm::artwork` value containing its logical image resources, semantic slots, appearances, state mappings, and local sprite transforms.
 
-This is a **bone**, not a node.
+Artwork bone references are remapped when a topology replacement deliberately preserves a semantic bone while assigning it a fresh ID. Artwork can also retain an unresolved slot when its referenced bone is removed; rendering simply skips slots that no longer resolve to a bone in the owning character.
 
-The root bone supplies an oriented 2D frame:
+See `Appearances.md` for the full artwork model.
 
-```text
-origin      = root/parent node of the bone
-orientation = root -> tip direction
+---
+
+## 5. Standalone poses
+
+`animation_assets` still owns the built-in Default pose and user-created named poses. These are independent pose assets, not Animation V2 keyframes.
+
+Standalone poses retain their existing behavior:
+
+- Default Pose is initialized from the character rig;
+- named poses can be captured, renamed, updated, applied, duplicated, and deleted;
+- pose node IDs are reconciled when topology membership changes;
+- pose data is serialized with the character; and
+- whole-character clipboard operations remap pose node IDs.
+
+Pose reconciliation follows the current policy:
+
+- Default removes nodes that leave the character and adds newly introduced member nodes at their current positions;
+- named poses remove nodes that leave the character but are not automatically extended when the rig gains new nodes.
+
+A named pose whose node set no longer exactly matches the current rig is therefore incompatible until it is updated or recreated.
+
+Standalone poses have no relationship to animations. There is no animation `base_pose`.
+
+---
+
+## 6. Animation V2 Phase 1 assets
+
+Animation 2.0 Phase 1 deliberately persists only an empty animation identity:
+
+```cpp
+struct animation {
+    object_id id;
+    std::string name;
+};
 ```
 
-Animation uses that designation for two symbolic translation frames:
+An animation currently has no pose domain, keyframes, transitions, evaluator, motion paths, action layers, or serialized frame data. Creating, renaming, duplicating, or deleting an animation is an ordinary persistent project edit.
 
-- **Animation Root** — the root-bone frame in the animation base pose;
-- **Character Root** — the root-bone frame in the currently evaluated intermediate topology.
+The animation collection is omitted from the character's animation JSON when it is empty. When animations exist, only their IDs and names are persisted.
 
-The project repairs the root-bone designation after structural changes if the previous root is removed. Setting the character root is a character-level semantic edit rather than renaming/reidentifying a skeleton.
-
-Because actions refer symbolically to “Animation Root” or “Character Root,” changing the character's designated root bone intentionally changes what those symbolic references mean. A Bone-relative action, by contrast, stores a specific reference-bone ID.
+See `animation.md` for the future Animation 2.0 design. `old_Animation.md` is historical documentation of the removed action-based system only.
 
 ---
 
-## 6. Character-owned artwork
+## 7. Animation Mode editing session
 
-Every character owns one `sm::artwork` value.
+Opening an animation does not edit the persistent character topology directly. The editor model creates an Animation Mode session containing:
 
-That artwork contains:
+```text
+animation asset identity
+character identity
+detached working topology
+session undo stack
+session redo stack
+```
 
-- logical image frames;
-- semantic slot definitions bound to bones;
-- slot state vocabularies;
-- appearances;
-- appearance-slot state mappings;
-- local sprite transforms.
+The working topology is copied from every skeleton in the character's current rig, including its persistent constraints. It begins from the character's current pose; no standalone pose is applied.
 
-Artwork bone references are remapped when a topology replacement deliberately preserves a bone while assigning it a fresh ID.
+For Phase 1 the entire character rig is the temporary poseable region. The ordinary Selection Tool manipulates the detached topology, so the existing rigid and IK posing behavior is reused without a second animation-specific selection implementation.
 
-Artwork can also remain temporarily unresolved when its bound bone disappears. Rendering checks that a slot's bone both exists and belongs to the owning character; unresolved slots are skipped rather than silently rebound.
+The session is intentionally disposable. Temporary node movement and pin changes:
 
-See `Appearances.md` for the full model.
+- never mutate the persistent `sm::project` topology;
+- never enter document undo/redo history;
+- never advance project dirty state;
+- never become keyframes; and
+- are never serialized.
 
----
-
-## 7. Character-owned animation
-
-Every character owns `animation_assets` containing:
-
-- the built-in Default pose;
-- named poses;
-- animations and their actions.
-
-Actions use persistent node/bone/skeleton IDs into the character rig.
-
-Ordinary structural editor operations calculate which actions depend on topology objects that will be removed. Those actions are deleted atomically with the topology edit after editor confirmation, and undo restores them with the rest of the character membership snapshot.
-
-This means normal editor operations do not intentionally leave dangling animation action references.
-
-See `Animation.md` for evaluation and action semantics.
+Saving while Animation Mode is active serializes `sm::project` only, so the scratch pose cannot leak into the project package.
 
 ---
 
-## 8. Structural editing and character stability
+## 8. Session undo/redo and pins
 
-The Core project centralizes operations that can change topology or membership.
+Animation Mode has its own undo and redo stacks. Normal Edit -> Undo/Redo actions route to those stacks while the session is active and return to the unchanged document history when the session ends.
 
-Important operations include:
+Node pins are currently editor/session posing aids. In Animation Mode pin toggles are recorded in the session history and are restored/discarded on exit. They are not persistent constraints or Animation V2 transition pins.
+
+Persistent rotation and rigid-triangle constraints are copied into the detached topology so they continue to influence IK, but constraint creation, editing, deletion, and adornment dragging are disabled in Animation Mode.
+
+---
+
+## 9. Structural editing and character stability
+
+Core centralizes topology/membership operations such as:
 
 ```text
 create/delete skeleton
@@ -166,221 +168,84 @@ plan/preview replacement
 create character
 adopt skeletons
 remove character
-set character root bone
 restore membership
 ```
 
-`replace_skeletons()` is the major structural transaction boundary used by editor operations. It stages/validates replacements before erasing live topology, then restores character membership metadata around the replacement.
-
-A `membership_state` snapshot can include:
+`replace_skeletons()` is the principal structural transaction boundary. A `membership_state` snapshot contains:
 
 ```text
 character ID/name
-character root bone
 artwork
-animation assets
+standalone pose + minimal animation assets
 skeleton -> parent-character membership
 ```
 
-That snapshot makes topology edits and undo semantic rather than merely geometric.
-
----
-
-## 9. Deletion, splits, and merges
-
-### 9.1 Deleting topology
-
-When a structural edit removes persistent node/bone/skeleton identities, Core calculates `topology_edit_effects`.
-
-For animation, dependent actions are removed rather than retained with dangling IDs.
-
-Artwork has different semantics: an artwork slot whose bone no longer resolves may remain as an unresolved authored binding and is skipped at render time.
-
-### 9.2 Splitting skeletons
-
-Deleting a bone can turn one skeleton into multiple skeletons. This does not inherently destroy the character because the character's rig may own multiple components.
-
-### 9.3 Merging skeletons
-
-Creating a bone can merge previously separate skeleton components. The project owns the membership bookkeeping and action-dependency effects associated with disappearing skeleton IDs.
-
-Character identity is therefore not tied to one particular skeleton object surviving forever.
+Structural changes reconcile standalone poses before committing. Animation V2 Phase 1 assets contain no topology references, so no animation dependency cascade or retargeting is required.
 
 ---
 
 ## 10. Identity and naming
 
-Persistent structural references use `sm::object_id`.
+Persistent structural references use `sm::object_id`. Node, bone, skeleton, and character names are display labels rather than structural identity.
 
-Node, bone, skeleton, and character display names are labels rather than structural identity.
-
-`project::rename()` is a generic cosmetic rename operation across named project entities supported by the project's object lookup.
-
-Artwork introduces its own intentional semantic string namespaces (frame names, slot names, appearance names, state names). Those are character-local artwork semantics, not substitutes for topology object identity.
+`project::rename()` remains a generic cosmetic rename operation across named project objects. Artwork maintains its own intentional semantic string namespaces, such as frame, slot, appearance, and state names.
 
 ---
 
 ## 11. Mutable access boundary
 
-The project intentionally limits generic mutable object lookup to nodes and bones. Aggregate objects are exposed through const lookup/membership APIs instead of handing callers arbitrary mutable topology/character references.
+Generic mutable project lookup exposes nodes and bones only. Aggregate project objects are reached through const lookup or purpose-specific APIs.
 
-There are still direct character-data mutation accessors:
+Character semantic data still has focused mutable Core accessors:
 
 ```cpp
 animation_assets& project::animation_data(character_id);
 artwork& project::artwork(character_id);
 ```
 
-The editor model wraps ordinary animation/artwork changes in undoable snapshot-style edit commands, but Core itself does not make those mutable references transactional.
+The editor model wraps ordinary changes to these values in undoable replacement commands rather than mutating them directly in normal UI workflows.
 
-The editor model does not mutate those references in place during ordinary UI edits: it copies the semantic value, applies the requested edit, validates the candidate when appropriate, and records an undoable replacement command.
-
----
-
-## 12. Editor character workflow
-
-The editor supports both loose skeleton construction and character-centric authoring.
-
-A typical workflow is:
-
-```text
-construct one or more loose skeletons
-        ->
-Make Character / adopt skeletons
-        ->
-choose/repair character root bone
-        ->
-author artwork and appearances
-        ->
-capture poses
-        ->
-author animations
-```
-
-Character selection is visually distinct from raw skeleton editing, and character-owned panes such as Artwork and Animation operate against this stable boundary.
+The Animation Mode working topology is a separate model-layer edit context. Its node/bone lookup resolves against the detached topology while the session is active.
 
 ---
 
-## 13. Cut, copy, and paste
+## 12. Cut, copy, and paste
 
-Whole-character clipboard copy/paste is self-contained at the character level.
+Whole-character copy/paste remains self-contained. It preserves:
 
-Current copy/paste preserves:
+- character name (with a copy suffix on paste);
+- all member topology and persistent constraints;
+- artwork and image resources;
+- Default and named poses; and
+- minimal Animation V2 assets.
 
-- the character name (with a `copy`/`copy N` suffix on paste);
-- all member topology;
-- the character root bone;
-- artwork, appearances, and image/frame resources;
-- the Default and named poses;
-- animations, layers, actions, motion paths, pins, and action timing/easing data.
+Pasted topology receives fresh IDs. One old-to-new topology-ID map is used to remap artwork bone bindings and pose node-position keys. Empty Animation V2 assets contain no topology references and therefore require no topology remapping.
 
-The clipboard embeds a temporary serialized Core package for the character-owned resources so the editor does not need to copy packed image resources manually.
-
-On paste, the new character and all topology objects receive fresh identities. A single old-to-new topology-ID map is then used to:
-
-- remap artwork bone bindings;
-- remap the character root bone;
-- remap every pose node-position key;
-- remap every persistent node/bone/skeleton reference stored by animation actions.
-
-`remap_animation_assets()` uses the same exhaustive persistent-reference visitor that dependency discovery uses. Pose/animation/action IDs themselves are preserved inside the copied animation assets; only topology references are rewritten.
-
-When paste applies a spatial translation rather than using Paste in Place, the copied pose positions are transformed by that same translation so animation base/named poses remain spatially aligned with the pasted rig.
-
-The complete character paste is one undoable command; redo restores the same pasted character identity. Ordinary non-character topology copy/paste continues to create loose skeleton geometry rather than implicitly adopting it into the currently selected character.
+When paste applies a spatial translation, copied standalone pose node positions are transformed by the same translation so they stay aligned with the pasted rig.
 
 ---
 
-## 14. Persistence
+## 13. Persistence and integrity
 
-Characters are serialized by Core inside the `.stickman` packaged project.
+Characters are serialized by Core inside the `.stickman` packaged project. Project format version 8 intentionally removes Animation V1 persistence.
 
-The current project JSON format version is 6. The loader also contains compatibility paths for versions 4 and 5.
-
-Current character semantic persistence includes:
+Character semantic persistence currently includes:
 
 - character ID and name;
 - member skeleton IDs;
-- character root bone;
-- artwork metadata/resources;
-- animation data.
+- artwork metadata/resources; and
+- animation data containing standalone poses plus optional minimal Animation V2 IDs/names.
 
-Topology remains a project-level structure rather than being duplicated inside each character record.
+Topology remains project-level rather than duplicated in character records.
 
-Core owns package/JSON/image serialization so the Qt editor and runtime consumers do not need separate persistence implementations.
-
----
-
-## 15. Character-level integrity
-
-The current character/project boundary enforces several semantic invariants:
-
-- global persistent IDs, rather than display names, carry structural identity;
-- generic mutable project lookup is limited to node/bone editing;
-- character membership is bidirectional and validated;
-- a character may own multiple disconnected skeletons;
-- the character root is an explicit persistent bone designation;
-- topology replacement is planned and semantically validated before live mutation;
-- undo snapshots character membership together with artwork and animation assets;
-- artwork bone IDs are remapped when a preserved semantic bone receives a fresh ID;
-- animation actions whose dependencies are truly removed are identified centrally and deleted atomically with the topology edit;
-- animation pose membership is reconciled after supported structural/membership edits;
-- animation validation is scoped to the owning character rig;
-- whole-character copy/paste remaps both artwork and animation references;
-- Core package persistence includes both character artwork and animation data.
-
-`project::validate_integrity()` combines object-index uniqueness, membership consistency, and character-scoped animation validation.
+`project::validate_integrity()` combines project-wide ID uniqueness, constraint validation, membership consistency, and character-scoped standalone-pose validation. Animation V2 Phase 1 has no topology-bearing animation data to validate beyond asset identity uniqueness.
 
 ---
 
-## 16. Rig changes, poses, and animation integrity
+## 14. Design principle
 
-Character membership can change without changing the character's user-level identity, so the project normalizes animation state as part of structural transactions.
+The current architecture is:
 
-### 16.1 Pose reconciliation
+> **Topology owns persistent skeletal geometry; a character owns the stable semantic boundary over one or more topology components; Animation Mode owns a temporary detached posing context.**
 
-`reconcile_animation_poses()` applies the current membership policy:
-
-- Default removes nodes that no longer belong to the character;
-- Default adds newly introduced member nodes at their current world positions;
-- retained Default entries keep their existing authored positions;
-- named poses drop nodes that no longer belong to the character;
-- named poses are not automatically extended when new member nodes are introduced.
-
-Because pose compatibility is an exact node-set comparison, a named pose may therefore become incomplete when the rig grows. Applying such a pose or using it as an Animation Mode base pose is rejected until it is updated/recreated. This is current authored-pose behavior rather than a dangling-reference condition.
-
-### 16.2 Character-scoped animation validation
-
-`animation_assets::validate(topology, rig_skeletons, character_root_bone)` requires pose/action topology references to resolve inside the owning character rig. It also checks same-skeleton IK constraints, character-root requirements, and reference-frame ordering.
-
-`mdl::project::edit_animation_data()` validates a copied candidate before committing it as an undoable edit. Structural operations validate a detached candidate character/topology state before committing live changes.
-
-Changing `character_root_bone` is also validated before commit because Character Root references and their ordering constraints are defined in terms of that designation.
-
-### 16.3 Structural deletion and action cascades
-
-Before an edit removes persistent topology identities, Core computes `topology_edit_effects`. Any action whose active persistent dependency is being removed is included in the semantic cascade and removed atomically with the topology edit. Undo restores the topology and affected animation data together.
-
-No heuristic retargeting is performed.
-
----
-
-## 17. Design principle
-
-The current architecture can be summarized as:
-
-> **Topology owns geometry and persistent structural objects; a character owns the stable semantic boundary over one or more topology components.**
-
-The character is therefore the right home for:
-
-```text
-rig membership
-root-frame semantics
-artwork / appearances
-poses
-animations
-```
-
-while nodes, bones, and skeleton connectivity remain in the project topology.
-
-The current project, artwork, animation, clipboard, and undo implementations all rely on that division: topology supplies structural geometry; the character supplies persistent semantic ownership over it.
+That division lets ordinary project editing, standalone poses, artwork authoring, and future Animation 2.0 data share the character boundary without letting temporary frame posing mutate the persistent project.

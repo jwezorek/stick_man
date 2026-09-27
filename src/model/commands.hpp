@@ -46,7 +46,6 @@ namespace mdl {
             sm::result status = sm::result::success;
             sm::object_id merged;
             std::optional<sm::object_id> bone_id;
-            std::vector<sm::object_id> cascade_characters;
             add_bone_state(const std::string& bone_name,
                 const handle& u_hnd,
                 const handle& v_hnd,
@@ -68,7 +67,6 @@ namespace mdl {
             std::optional<sm::constraint_map> after_constraints;
             sm::result status = sm::result::success;
             std::unordered_set<sm::object_id> regenerate_ids;
-            std::vector<sm::object_id> cascade_characters;
             replace_skeleton_state(
                 const std::vector<sm::object_id>& replacees,
                 const std::vector<sm::skel_ref>& replacements,
@@ -81,8 +79,6 @@ namespace mdl {
             std::vector<handle> nodes;
             std::vector<handle> bones;
             handle_table<sm::point> old_node_to_position;
-            sm::constraint_map old_constraints;
-            std::optional<sm::constraint_map> new_constraints;
             handle_table<sm::point> new_node_to_position;
             transform_nodes_and_bones_state(
                 project& proj,

@@ -3,7 +3,6 @@
 #include <memory>
 #include "../../model/handle.hpp"
 #include "../../core/sm_types.hpp"
-#include "../../core/sm_animation.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -72,12 +71,6 @@ namespace ui {
             sm::point anchor_offset;
             sel_drag_mode mode;
             node_locs old_locs;
-            std::vector<sm::point> gesture_samples;
-            sm::motion_path_kind path_kind = sm::motion_path_kind::straight;
-            sm::translation_reference reference = sm::translation_reference::animation_root;
-            sm::object_id reference_bone;
-            sm::point reference_origin{};
-            double reference_angle = 0.0;
         };
 
         enum rubber_band_type {

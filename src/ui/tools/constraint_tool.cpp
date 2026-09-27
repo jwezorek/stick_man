@@ -59,7 +59,9 @@ sm::rotation_reference_kind ui::tool::constraint::current_reference_kind() const
 }
 
 void ui::tool::constraint::update_settings_state() {
-    const bool rotation = current_operation() == operation::rotation;
+    const bool session = model_ && model_->animation_mode();
+    const bool rotation = !session && current_operation() == operation::rotation;
+    if (operation_) operation_->setEnabled(!session);
     reference_->setEnabled(rotation);
     reference_label_->setEnabled(rotation);
 }
@@ -131,6 +133,21 @@ void ui::tool::constraint::init(canvas::manager& canvases, mdl::project& model) 
         clear_pending();
         drag_.reset();
     });
+    update_settings_state();
+}
+
+void ui::tool::constraint::set_animation_mode(bool active) {
+    if (!settings_) return;
+    if (canvases_) {
+        if (drag_) cancel_drag(canvases_->active_canvas());
+        clear_triangle_sweep();
+        clear_pending();
+        for (auto* canv : canvases_->canvases()) {
+            canv->set_hovered_constraint({});
+            canv->clear_constraint_selection();
+        }
+    }
+    if (active) operation_->setCurrentIndex(int(operation::select));
     update_settings_state();
 }
 
@@ -369,6 +386,7 @@ void ui::tool::constraint::mousePressEvent(canvas::scene& canv, QGraphicsSceneMo
     // Node clicks always mean pin/unpin for the constraint tool.  Give nodes
     // priority over any constraint adornment that happens to overlap them.
     if (dynamic_cast<canvas::item::node*>(item)) return;
+    if (model_ && model_->animation_mode()) return;
 
     if (auto hit = canv.constraint_at(event->scenePos())) {
         clear_triangle_sweep();
@@ -453,6 +471,7 @@ void ui::tool::constraint::finish_drag(canvas::scene& canv) {
 }
 
 void ui::tool::constraint::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
+    if (model_ && model_->animation_mode()) { canv.set_hovered_constraint({}); return; }
     if (drag_) {
         update_drag(canv, event->scenePos());
         return;
@@ -505,6 +524,7 @@ void ui::tool::constraint::mouseReleaseEvent(canvas::scene& canv, QGraphicsScene
         canv.toggle_node_pinned_undoable(node->model().id());
         return;
     }
+    if (model_ && model_->animation_mode()) return;
     auto* bone = dynamic_cast<canvas::item::bone*>(item);
     if (!bone) return;
 

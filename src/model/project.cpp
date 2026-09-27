@@ -48,6 +48,9 @@ namespace {
 }
 /*------------------------------------------------------------------------------------------------*/
 void mdl::project::clear_redo_stack() { redo_stack_ = {}; }
+void mdl::project::clear_session_redo_stack() {
+    if (animation_session_) animation_session_->redo_stack = {};
+}
 void mdl::project::emit_history_state(bool was_dirty) {
     emit refresh_undo_redo_state(can_redo(), can_undo());
     const bool dirty = is_dirty();
@@ -60,35 +63,36 @@ void mdl::project::notify_command_change(const command& cmd) {
         emit project_changed(*this);
 }
 sm::result mdl::project::execute_command(const command& cmd) {
-    if (animation_mode_ && !cmd.animation_edit) return sm::result::invalid_membership;
+    if (animation_session_) return sm::result::invalid_membership;
     const bool was_dirty = is_dirty();
     command stored = cmd;
     stored.redo(*this);
     if (stored.outcome && stored.outcome() != sm::result::success) return stored.outcome();
     clear_redo_stack();
-    animation_redo_count_ = 0;
     if (stored.document_edit) stored.history_transition = history_.advance();
     undo_stack_.push(stored);
     emit_history_state(was_dirty);
     notify_command_change(stored);
     return sm::result::success;
 }
+sm::result mdl::project::execute_session_command(const command& cmd) {
+    if (!animation_session_) return sm::result::invalid_membership;
+    command stored = cmd;
+    stored.document_edit = false;
+    stored.redo(*this);
+    if (stored.outcome && stored.outcome() != sm::result::success) return stored.outcome();
+    clear_session_redo_stack();
+    animation_session_->undo_stack.push(std::move(stored));
+    emit refresh_undo_redo_state(can_redo(), can_undo());
+    return sm::result::success;
+}
 
 mdl::project::project() {}
-
-void mdl::project::set_topology_edit_confirmation(
-        std::function<bool(const sm::topology_edit_effects&)> confirmation) {
-    topology_edit_confirmation_ = std::move(confirmation);
-}
-
-bool mdl::project::confirm_topology_edit(const sm::topology_edit_effects& effects) const {
-    return !effects.has_animation_cascade() || !topology_edit_confirmation_ || topology_edit_confirmation_(effects);
-}
 
 const sm::project& mdl::project::core() const { return core_; }
 sm::project& mdl::project::core() { return core_; }
 void mdl::project::edit_artwork(const sm::object_id& id, const std::function<void(sm::artwork&)>& edit) {
-    if (animation_mode_) return;
+    if (animation_mode()) return;
     auto before = core_.artwork(id);
     auto after = before;
     edit(after);
@@ -99,24 +103,37 @@ void mdl::project::edit_artwork(const sm::object_id& id, const std::function<voi
     cmd.artwork_character = id;
     execute_command(cmd);
 }
-const sm::topology& mdl::project::topology() const { return core_.topology(); }
+const sm::topology& mdl::project::topology() const {
+    return animation_session_ ? animation_session_->working_topology : core_.topology();
+}
 
 mdl::model_object mdl::project::get(const sm::object_id& id) {
+    if (animation_session_) {
+        if (auto node = animation_session_->working_topology.get<sm::node>(id)) return *node;
+        if (auto bone = animation_session_->working_topology.get<sm::bone>(id)) return *bone;
+        throw std::runtime_error("animation session object ID not found");
+    }
     return core_.get(id);
 }
 
 mdl::const_model_object mdl::project::get(const sm::object_id& id) const {
+    if (animation_session_) {
+        const auto& working = std::as_const(animation_session_->working_topology);
+        if (auto node = working.get<sm::node>(id)) return sm::const_node_ref(std::as_const(node->get()));
+        if (auto bone = working.get<sm::bone>(id)) return sm::const_bone_ref(std::as_const(bone->get()));
+        if (auto skel = working.skeleton(id)) return *skel;
+        if (auto it = working.constraints().find(id); it != working.constraints().end())
+            return sm::const_constraint_ref(std::as_const(it->second));
+    }
     return core_.get(id);
 }
 
 void mdl::project::clear() {
+    animation_session_.reset();
     core_.clear();
     redo_stack_ = {};
     undo_stack_ = {};
     history_.reset_clean();
-    animation_mode_ = false;
-    animation_undo_depth_ = 0;
-    animation_redo_count_ = 0;
     next_node_name_ = 1;
     next_bone_name_ = 1;
 }
@@ -145,7 +162,13 @@ void mdl::project::advance_default_name_counters_from_topology() {
     }
 }
 void mdl::project::undo() {
-    if (!can_undo()) {
+    if (!can_undo()) return;
+    if (animation_session_) {
+        auto cmd = animation_session_->undo_stack.top();
+        animation_session_->undo_stack.pop();
+        cmd.undo(*this);
+        animation_session_->redo_stack.push(std::move(cmd));
+        emit refresh_undo_redo_state(can_redo(), can_undo());
         return;
     }
     const bool was_dirty = is_dirty();
@@ -154,21 +177,25 @@ void mdl::project::undo() {
     cmd.undo(*this);
     if (cmd.document_edit) history_.undo(cmd.history_transition);
     redo_stack_.push(cmd);
-    if (animation_mode_) ++animation_redo_count_;
     emit_history_state(was_dirty);
     notify_command_change(cmd);
 }
 sm::result mdl::project::redo() {
-    if (!can_redo()) {
+    if (!can_redo()) return sm::result::success;
+    if (animation_session_) {
+        auto cmd = animation_session_->redo_stack.top();
+        cmd.redo(*this);
+        if (cmd.outcome && cmd.outcome() != sm::result::success) return cmd.outcome();
+        animation_session_->redo_stack.pop();
+        animation_session_->undo_stack.push(std::move(cmd));
+        emit refresh_undo_redo_state(can_redo(), can_undo());
         return sm::result::success;
     }
     const bool was_dirty = is_dirty();
     auto cmd = redo_stack_.top();
-    if (animation_mode_ && !cmd.animation_edit) return sm::result::invalid_membership;
     cmd.redo(*this);
     if (cmd.outcome && cmd.outcome() != sm::result::success) return cmd.outcome();
     redo_stack_.pop();
-    if (animation_mode_) --animation_redo_count_;
     if (cmd.document_edit) history_.redo(cmd.history_transition);
     undo_stack_.push(cmd);
     emit_history_state(was_dirty);
@@ -176,11 +203,10 @@ sm::result mdl::project::redo() {
     return sm::result::success;
 }
 bool mdl::project::can_undo() const {
-    return !undo_stack_.empty() && (!animation_mode_ ||
-        (undo_stack_.size() > animation_undo_depth_ && undo_stack_.top().animation_edit));
+    return animation_session_ ? !animation_session_->undo_stack.empty() : !undo_stack_.empty();
 }
 bool mdl::project::can_redo() const {
-    return !redo_stack_.empty() && (!animation_mode_ || (animation_redo_count_ > 0 && redo_stack_.top().animation_edit));
+    return animation_session_ ? !animation_session_->redo_stack.empty() : !redo_stack_.empty();
 }
 bool mdl::project::is_dirty() const noexcept {
     return history_.dirty();
@@ -214,8 +240,7 @@ sm::project_result mdl::project::deserialize_result(std::span<const std::uint8_t
     redo_stack_ = {};
     undo_stack_ = {};
     history_.reset_clean();
-    animation_undo_depth_ = 0;
-    animation_redo_count_ = 0;
+    animation_session_.reset();
     next_node_name_ = 1;
     next_bone_name_ = 1;
     advance_default_name_counters_from_topology();
@@ -224,7 +249,7 @@ sm::project_result mdl::project::deserialize_result(std::span<const std::uint8_t
     return sm::project_result::success;
 }
 bool mdl::project::deserialize(std::span<const std::uint8_t> buffer) {
-    if (animation_mode_) return false;
+    if (animation_mode()) return false;
     return deserialize_result(buffer) == sm::project_result::success;
 }
 sm::result mdl::project::add_bone(const handle& u, const handle& v) {
@@ -232,7 +257,6 @@ sm::result mdl::project::add_bone(const handle& u, const handle& v) {
     auto& node_v = commands::resolve<sm::node>(*this, v);
     auto preview = core_.preview_create_bone(node_u, node_v);
     if (!preview) return preview.error();
-    if (!confirm_topology_edit(*preview)) return sm::result::cancelled;
     return execute_command(commands::make_add_bone_command(
         u, v, next_default_bone_name(), *preview));
 }
@@ -270,7 +294,7 @@ sm::result mdl::project::adopt_skeletons(const sm::object_id& character_id,
     });
 }
 void mdl::project::add_new_skeleton_root(sm::point loc) {
-    if (animation_mode_) return;
+    if (animation_mode()) return;
     execute_command(commands::make_create_node_command(loc, next_default_node_name()));
 }
 std::expected<sm::object_id, sm::result> mdl::project::make_character(
@@ -315,7 +339,7 @@ std::expected<sm::object_id, sm::result> mdl::project::make_character(
 
 std::expected<sm::object_id, sm::result> mdl::project::paste_character(
         const sm::topology& rig, const std::string& name, const sm::artwork& artwork,
-        sm::object_id character_root_bone, const sm::animation_assets& animation_data) {
+        const sm::animation_assets& animation_data) {
     if (rig.empty()) return std::unexpected(sm::result::empty_character);
     struct state_type {
         sm::topology topology;
@@ -342,9 +366,7 @@ std::expected<sm::object_id, sm::result> mdl::project::paste_character(
     copied_artwork.remap_bones(remap);
     auto copied_animation_data = animation_data;
     sm::remap_animation_assets(copied_animation_data, remap);
-    if(auto it=remap.find(character_root_bone);it!=remap.end()) character_root_bone=it->second;
-    else character_root_bone={};
-    state->membership.characters.push_back({state->character, copied_name, character_root_bone,
+    state->membership.characters.push_back({state->character, copied_name,
         std::move(copied_artwork), std::move(copied_animation_data)});
     for (auto skel : rig.skeletons()) {
         auto copy = skel->copy_to(state->topology, remap);
@@ -383,26 +405,6 @@ sm::result mdl::project::delete_character(const sm::object_id& id) {
     // the empty character and snapshots both identity and membership for undo.
     return replace_skeletons(character->get().rig().skeleton_ids(), {});
 }
-
-sm::result mdl::project::set_character_root_bone(const sm::object_id& character_id,const sm::object_id& bone_id) {
-    auto character=core_.character(character_id);
-    if(!character) return character.error();
-    const auto before=character->get().character_root_bone();
-    if(before==bone_id) return sm::result::success;
-    struct state_type { sm::result status=sm::result::success; };
-    auto state=std::make_shared<state_type>();
-    return execute_command({
-        [state,character_id,bone_id](project& proj) {
-            state->status=proj.core_.set_character_root_bone(character_id,bone_id);
-        },
-        [before,character_id](project& proj) {
-            if(proj.core_.set_character_root_bone(character_id,before)!=sm::result::success)
-                throw std::runtime_error("unable to restore character root bone");
-        },
-        [state] { return state->status; }
-    });
-}
-
 
 std::expected<sm::object_id, sm::result> mdl::project::add_rotation_constraint(
         sm::object_id target, sm::rotation_reference reference, sm::angle_range allowed,
@@ -506,12 +508,9 @@ void mdl::project::record_transient_edit(std::function<void()> redo, std::functi
         [redo = std::move(redo)](project&) { redo(); },
         [undo = std::move(undo)](project&) { undo(); }
     };
-    // Pins are editor/session state, but they remain editable while Animation
-    // Mode is active.  Mark the command as animation-compatible while keeping
-    // it out of the document dirty-history bookkeeping.
-    cmd.animation_edit = true;
     cmd.document_edit = false;
-    execute_command(cmd);
+    if (animation_session_) execute_session_command(cmd);
+    else execute_command(cmd);
 }
 
 bool mdl::project::rename(const sm::object_id& id, const std::string& new_name) {
@@ -544,15 +543,18 @@ bool mdl::project::rename(skel_piece piece, const std::string& new_name) {
 }
 void mdl::project::transform(const std::vector<handle>& nodes,
         const std::function<void(sm::node&)>& fn) {
-    execute_command(commands::make_transform_bones_or_nodes_command(*this, nodes, {}, fn, {}));
+    auto cmd = commands::make_transform_bones_or_nodes_command(*this, nodes, {}, fn, {});
+    if (animation_session_) execute_session_command(cmd); else execute_command(cmd);
 }
 void mdl::project::transform(const std::vector<handle>& bones,
         const std::function<void(sm::bone&)>& fn) {
-    execute_command(commands::make_transform_bones_or_nodes_command(*this, {}, bones, {}, fn));
+    auto cmd = commands::make_transform_bones_or_nodes_command(*this, {}, bones, {}, fn);
+    if (animation_session_) execute_session_command(cmd); else execute_command(cmd);
 }
 void mdl::project::transform_node_positions(
         const node_locs& old_locs, const node_locs& new_locs) {
-    execute_command(commands::make_transform_node_positions_command(*this, old_locs, new_locs));
+    auto cmd = commands::make_transform_node_positions_command(*this, old_locs, new_locs);
+    if (animation_session_) execute_session_command(cmd); else execute_command(cmd);
 }
 sm::topology_change mdl::project::replace_skeletons_aux(
         const std::vector<sm::object_id>& replacees,
@@ -571,7 +573,6 @@ sm::result mdl::project::replace_skeletons(
         const std::unordered_set<sm::object_id>& regenerate_ids) {
     auto preview = core_.preview_replace_skeletons(replacees, replacements, regenerate_ids);
     if (!preview) return preview.error();
-    if (!confirm_topology_edit(*preview)) return sm::result::cancelled;
     return execute_command(commands::make_replace_skeletons_command(
         replacees, replacements, regenerate_ids, *preview));
 }
@@ -580,24 +581,52 @@ bool mdl::identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2) {
     return mdl::to_handle(p1) == mdl::to_handle(p2);
 }
 
-void mdl::project::set_animation_mode(bool active) {
-    if (active && !animation_mode_) animation_undo_depth_ = undo_stack_.size();
-    if (active && !animation_mode_) animation_redo_count_ = 0;
-    animation_mode_ = active;
+sm::result mdl::project::begin_animation_session(sm::object_id character_id, sm::object_id animation_id) {
+    if (animation_session_) return sm::result::invalid_membership;
+    auto character = core_.character(character_id);
+    if (!character) return character.error();
+    if (!character->get().animation_data().find_animation(animation_id)) return sm::result::not_found;
+
+    animation_edit_session session;
+    session.character = character_id;
+    session.animation = animation_id;
+    for (auto skel : character->get().rig().skeletons()) {
+        auto copied = skel->copy_to(session.working_topology);
+        if (!copied) return copied.error();
+        copied->get().clear_user_data();
+        for (auto node : copied->get().nodes()) node->clear_user_data();
+        for (auto bone : copied->get().bones()) bone->clear_user_data();
+    }
+    animation_session_ = std::move(session);
+    emit refresh_undo_redo_state(false, false);
+    emit refresh_canvas(*this, true);
+    return sm::result::success;
+}
+void mdl::project::end_animation_session() {
+    if (!animation_session_) return;
+    animation_session_.reset();
     emit refresh_undo_redo_state(can_redo(), can_undo());
+    emit refresh_canvas(*this, true);
+}
+std::optional<sm::object_id> mdl::project::animation_session_character() const {
+    if (!animation_session_) return {};
+    return animation_session_->character;
+}
+std::optional<sm::object_id> mdl::project::animation_session_animation() const {
+    if (!animation_session_) return {};
+    return animation_session_->animation;
 }
 void mdl::project::edit_animation_data(sm::object_id id, const std::function<void(sm::animation_assets&)>& edit) {
     auto before = core_.animation_data(id), after = before;
     edit(after);
     const auto character = core_.character(id);
     if (!character) throw std::invalid_argument("Missing character");
-    after.validate(core_.topology(), character->get().rig().skeleton_ids(),
-        character->get().character_root_bone());
+    after.validate(core_.topology(), character->get().rig().skeleton_ids());
     execute_command({[id, after](project& p) { p.core_.animation_data(id) = after; },
-        [id, before](project& p) { p.core_.animation_data(id) = before; }, {}, true});
+        [id, before](project& p) { p.core_.animation_data(id) = before; }});
 }
 void mdl::project::apply_pose(sm::object_id character, sm::object_id id) {
-    if (animation_mode_) return;
+    if (animation_mode()) return;
     const auto& c = core_.character(character).value().get();
     const auto* pose = c.animation_data().find_pose(id);
     if (!pose || !sm::pose_compatible(*pose, topology(), c.rig().skeleton_ids()))

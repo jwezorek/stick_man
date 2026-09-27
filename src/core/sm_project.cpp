@@ -21,16 +21,7 @@ namespace {
     template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 
     constexpr std::string_view project_json_name = "project.json";
-    constexpr double project_json_version = 7.0;
-
-    sm::object_id default_character_root_bone(
-            const sm::topology& topology,const std::vector<sm::object_id>& skeletons) {
-        if(skeletons.empty()) return {};
-        auto skeleton=topology.skeleton(skeletons.front());
-        if(!skeleton) return {};
-        const auto root_bones=skeleton->get().root_node().child_bones();
-        return root_bones.empty() ? sm::object_id{} : root_bones.front()->id();
-    }
+    constexpr double project_json_version = 8.0;
 
     template<typename Object>
     sm::object_id object_id_of(const Object& object) {
@@ -85,25 +76,12 @@ namespace {
     struct integrity_character_state {
         sm::object_id id;
         std::vector<sm::object_id> skeletons;
-        sm::object_id character_root_bone;
         sm::animation_assets animation_data;
     };
 
     using integrity_character_table = std::unordered_map<sm::object_id, integrity_character_state>;
 
-    bool bone_belongs_to_rig(const sm::topology& topology, sm::object_id bone_id,
-            const std::vector<sm::object_id>& skeletons) {
-        if (bone_id.is_nil()) return false;
-        auto bone = topology.get<sm::bone>(bone_id);
-        return bone && std::ranges::find(skeletons, bone->get().owner().id()) != skeletons.end();
-    }
-
     void normalize_character_state(integrity_character_state& state, const sm::topology& topology) {
-        if (!state.character_root_bone.is_nil() &&
-            !bone_belongs_to_rig(topology, state.character_root_bone, state.skeletons))
-            state.character_root_bone = {};
-        if (state.character_root_bone.is_nil())
-            state.character_root_bone = default_character_root_bone(topology, state.skeletons);
         sm::initialize_animation_assets(state.animation_data, topology, state.skeletons);
         sm::reconcile_animation_poses(state.animation_data, topology, state.skeletons);
     }
@@ -117,10 +95,7 @@ namespace {
                 for (const auto sid : state.skeletons)
                     if (!seen.insert(sid).second || !topology.skeleton(sid))
                         return sm::result::invalid_membership;
-                if (!state.character_root_bone.is_nil() &&
-                    !bone_belongs_to_rig(topology, state.character_root_bone, state.skeletons))
-                    return sm::result::invalid_membership;
-                state.animation_data.validate(topology, state.skeletons, state.character_root_bone);
+                state.animation_data.validate(topology, state.skeletons);
             }
         } catch (const std::invalid_argument&) {
             return sm::result::invalid_animation;
@@ -134,7 +109,7 @@ namespace {
         integrity_character_table states;
         for (auto character : project.characters())
             states.emplace(character->id(), integrity_character_state{character->id(),
-                character->rig().skeleton_ids(), character->character_root_bone(), character->animation_data()});
+                character->rig().skeleton_ids(), character->animation_data()});
         return states;
     }
 
@@ -235,9 +210,8 @@ sm::expected_skel sm::project::copy_skeleton(
 }
 
 sm::result sm::project::delete_skeleton(const object_id& id) {
-    // Deletion is the zero-replacement case of the same staged structural edit.
-    // Keeping one path guarantees action cascades, pose reconciliation and semantic
-    // animation validation all occur before live state is committed.
+    // Deletion is the zero-replacement case of the same staged structural edit so
+    // membership, pose reconciliation and semantic validation stay transactional.
     return replace_skeletons({id}, {}).status;
 }
 
@@ -254,11 +228,6 @@ void sm::project::prune_empty_characters() {
     invalidate_object_index();
 }
 
-void sm::project::repair_character_root_bone(sm::character& character) {
-    if (bone_belongs_to_rig(topology_, character.character_root_bone(), character.rig().skeleton_ids())) return;
-    character.set_character_root_bone(default_character_root_bone(topology_, character.rig().skeleton_ids()));
-}
-
 sm::topology_edit_effects sm::project::effects_for_removed_objects(
         std::vector<object_id> nodes,
         std::vector<object_id> bones,
@@ -270,67 +239,7 @@ sm::topology_edit_effects sm::project::effects_for_removed_objects(
     normalize(nodes);
     normalize(bones);
     normalize(skeletons);
-
-    topology_edit_effects effects{std::move(nodes), std::move(bones), std::move(skeletons), {}};
-    const std::unordered_set<object_id> removed_nodes(effects.removed_nodes.begin(), effects.removed_nodes.end());
-    const std::unordered_set<object_id> removed_bones(effects.removed_bones.begin(), effects.removed_bones.end());
-    const std::unordered_set<object_id> removed_skeletons(effects.removed_skeletons.begin(), effects.removed_skeletons.end());
-
-    auto removed = [&](const animation_dependency& dependency) {
-        switch (dependency.kind) {
-        case animation_dependency_kind::node: return removed_nodes.contains(dependency.id);
-        case animation_dependency_kind::bone: return removed_bones.contains(dependency.id);
-        case animation_dependency_kind::skeleton: return removed_skeletons.contains(dependency.id);
-        }
-        return false;
-    };
-
-    for (const auto& [character_id, character] : characters_) {
-        for (const auto& animation : character->animation_data().animations) {
-            for (const auto& layer : animation.layers) for (const auto& action : layer.actions) {
-                const auto dependencies = animation_action_dependencies(action);
-                if (std::ranges::any_of(dependencies, removed))
-                    effects.removed_animation_actions.push_back({character_id, animation.id, action.id});
-            }
-        }
-    }
-    std::ranges::sort(effects.removed_animation_actions, [](const auto& a, const auto& b) {
-        if (a.character != b.character) return a.character < b.character;
-        if (a.animation != b.animation) return a.animation < b.animation;
-        return a.action < b.action;
-    });
-    return effects;
-}
-
-void sm::project::erase_cascade_actions(animation_assets& assets, const topology_edit_effects& effects) {
-    const std::unordered_set<object_id> removed_nodes(effects.removed_nodes.begin(), effects.removed_nodes.end());
-    const std::unordered_set<object_id> removed_bones(effects.removed_bones.begin(), effects.removed_bones.end());
-    const std::unordered_set<object_id> removed_skeletons(effects.removed_skeletons.begin(), effects.removed_skeletons.end());
-    auto invalid = [&](const animation_action& action) {
-        for (const auto& dependency : animation_action_dependencies(action)) {
-            switch (dependency.kind) {
-            case animation_dependency_kind::node:
-                if (removed_nodes.contains(dependency.id)) return true;
-                break;
-            case animation_dependency_kind::bone:
-                if (removed_bones.contains(dependency.id)) return true;
-                break;
-            case animation_dependency_kind::skeleton:
-                if (removed_skeletons.contains(dependency.id)) return true;
-                break;
-            }
-        }
-        return false;
-    };
-    for (auto& animation : assets.animations)
-        for (auto& layer : animation.layers)
-            std::erase_if(layer.actions, invalid);
-}
-
-void sm::project::erase_cascade_actions(const topology_edit_effects& effects) {
-    if (!effects.has_animation_cascade()) return;
-    for (auto& [id, character] : characters_)
-        erase_cascade_actions(character->animation_data_, effects);
+    return {std::move(nodes), std::move(bones), std::move(skeletons)};
 }
 
 void sm::project::reconcile_character_animation_poses() {
@@ -345,7 +254,7 @@ sm::result sm::project::validate_integrity() const noexcept {
     try {
         for (const auto& [id, character] : characters_)
             character->animation_data().validate(
-                topology_, character->rig().skeleton_ids(), character->character_root_bone());
+                topology_, character->rig().skeleton_ids());
     } catch (const std::invalid_argument&) {
         return result::invalid_animation;
     } catch (...) {
@@ -354,13 +263,6 @@ sm::result sm::project::validate_integrity() const noexcept {
     return result::success;
 }
 
-bool sm::project::has_valid_animation_references() const {
-    return validate_integrity() == result::success;
-}
-
-void sm::project::assert_animation_references_resolve() const {
-    assert(validate_integrity() == result::success);
-}
 
 sm::result sm::project::can_create_bone(const node& u, const node& v) const {
     if (&u.owner().owner() != &topology_ || &v.owner().owner() != &topology_)
@@ -417,8 +319,6 @@ sm::expected_bone sm::project::create_bone(
 
     candidate_topology.prune_constraints();
     auto candidate_characters = snapshot_character_states(*this);
-    for (auto& [candidate_id, state] : candidate_characters)
-        erase_cascade_actions(state.animation_data, effects);
     if (parent) {
         auto& state = candidate_characters.at(parent->get().id());
         std::erase(state.skeletons, removed_id);
@@ -442,16 +342,13 @@ sm::expected_bone sm::project::create_bone(
         auto& merged = created->get().owner();
         if (!character.rig_.contains(merged.id())) character.rig_.add_skeleton(merged.id());
         merged.set_parent_character(character);
-        repair_character_root_bone(character);
     }
     invalidate_object_index();
     if (!ensure_object_index()) {
         throw std::runtime_error("creating bone produced duplicate object IDs");
     }
-    erase_cascade_actions(effects);
     reconcile_character_animation_poses();
     assert(has_consistent_membership());
-    assert_animation_references_resolve();
     return created;
 }
 
@@ -552,8 +449,6 @@ sm::topology_change sm::project::replace_skeletons(
             return failed;
         }
         // Artwork follows surviving bones when replacement assigns fresh IDs.
-        // Animation action references are deliberately not remapped here: the replacement
-        // plan has already removed any action whose persistent dependency is losing identity.
         const auto parent = plan->membership.parents.at(replacement->id());
         if (parent) {
             std::unordered_map<object_id, object_id> bone_remap;
@@ -561,17 +456,14 @@ sm::topology_change sm::project::replace_skeletons(
                 if (auto it = id_remap.find(bone->id()); it != id_remap.end()) bone_remap.emplace(*it);
             for (auto& state : plan->membership.characters) if (state.id == *parent) {
                 state.artwork.remap_bones(bone_remap);
-                if(auto it=bone_remap.find(state.character_root_bone);it!=bone_remap.end())
-                    state.character_root_bone=it->second;
             }
         }
         change.added_skeleton_ids.push_back(copied->get().id());
         staged_parents.emplace(copied->get().id(), plan->membership.parents.at(replacement->id()));
     }
 
-    // Assemble the complete post-edit topology and character state off to the side.
-    // This catches semantic changes (write scopes/reference ordering, cross-rig references,
-    // root-frame validity) even when every persistent object ID survives the edit.
+    // Assemble the complete post-edit topology and character state off to the side so
+    // membership and standalone-pose invariants are validated before live state changes.
     sm::topology candidate_topology;
     if (candidate_topology.from_json(topology_.to_json()) != result::success) {
         change.status = result::unknown_error;
@@ -601,11 +493,8 @@ sm::topology_change sm::project::replace_skeletons(
         for (const auto& removed_id : replacees) std::erase(state.skeletons, removed_id);
     for (const auto& saved : plan->membership.characters) {
         auto [it, inserted] = candidate_characters.try_emplace(saved.id, integrity_character_state{
-            saved.id, {}, saved.character_root_bone, saved.animation_data});
-        if (!inserted) {
-            it->second.character_root_bone = saved.character_root_bone;
-            it->second.animation_data = saved.animation_data;
-        }
+            saved.id, {}, saved.animation_data});
+        if (!inserted) it->second.animation_data = saved.animation_data;
     }
     for (const auto& [sid, parent] : staged_parents) if (parent) {
         auto it = candidate_characters.find(*parent);
@@ -616,8 +505,6 @@ sm::topology_change sm::project::replace_skeletons(
         if (std::ranges::find(it->second.skeletons, sid) == it->second.skeletons.end())
             it->second.skeletons.push_back(sid);
     }
-    for (auto& [candidate_id, state] : candidate_characters)
-        erase_cascade_actions(state.animation_data, change.effects);
     remove_empty_character_states(candidate_characters);
     for (auto& [candidate_id, state] : candidate_characters)
         normalize_character_state(state, candidate_topology);
@@ -636,8 +523,7 @@ sm::topology_change sm::project::replace_skeletons(
     }
     for (const auto& state : plan->membership.characters) {
         if (!characters_.contains(state.id)) characters_.emplace(state.id,
-            sm::character::make_unique(*this, state.id, state.name, sm::rig(*this), state.character_root_bone));
-        characters_.at(state.id)->character_root_bone_ = state.character_root_bone;
+            sm::character::make_unique(*this, state.id, state.name, sm::rig(*this)));
         characters_.at(state.id)->artwork_ = state.artwork;
         characters_.at(state.id)->animation_data_ = state.animation_data;
     }
@@ -653,12 +539,10 @@ sm::topology_change sm::project::replace_skeletons(
     }
     prune_empty_characters();
     for (auto& [id, c] : characters_) {
-        repair_character_root_bone(*c);
         initialize_animation_assets(c->animation_data_, topology_, c->rig().skeleton_ids());
     }
     reconcile_character_animation_poses();
     assert(has_consistent_membership());
-    assert_animation_references_resolve();
     return change;
 }
 
@@ -672,13 +556,13 @@ sm::membership_state sm::project::snapshot_membership(
         auto parent = skel->get().parent_character();
         state.parents[id] = parent ? std::optional(parent->get().id()) : std::nullopt;
         if (parent && seen.insert(parent->get().id()).second)
-            state.characters.push_back({parent->get().id(), parent->get().name(), parent->get().character_root_bone(),
+            state.characters.push_back({parent->get().id(), parent->get().name(),
                 parent->get().artwork(), parent->get().animation_data()});
     }
     for (const auto& id : extra_characters) {
         auto it = characters_.find(id);
         if (it != characters_.end() && seen.insert(id).second)
-            state.characters.push_back({it->second->id(), it->second->name(), it->second->character_root_bone(),
+            state.characters.push_back({it->second->id(), it->second->name(),
                 it->second->artwork(), it->second->animation_data()});
     }
     return state;
@@ -692,7 +576,7 @@ sm::result sm::project::restore_membership(const membership_state& state) {
         if (!metadata.insert(c.id).second) return result::invalid_membership;
         if (!characters_.contains(c.id)) {
             if (objects_.contains(c.id)) return result::duplicate_id;
-            prepared.emplace(c.id, sm::character::make_unique(*this, c.id, c.name, sm::rig(*this), c.character_root_bone));
+            prepared.emplace(c.id, sm::character::make_unique(*this, c.id, c.name, sm::rig(*this)));
             prepared.at(c.id)->artwork_ = c.artwork;
             prepared.at(c.id)->animation_data_ = c.animation_data;
         }
@@ -706,11 +590,8 @@ sm::result sm::project::restore_membership(const membership_state& state) {
     auto candidate_characters = snapshot_character_states(*this);
     for (const auto& saved : state.characters) {
         auto [it, inserted] = candidate_characters.try_emplace(saved.id, integrity_character_state{
-            saved.id, {}, saved.character_root_bone, saved.animation_data});
-        if (!inserted) {
-            it->second.character_root_bone = saved.character_root_bone;
-            it->second.animation_data = saved.animation_data;
-        }
+            saved.id, {}, saved.animation_data});
+        if (!inserted) it->second.animation_data = saved.animation_data;
     }
     for (const auto& [sid, parent] : state.parents) {
         for (auto& [candidate_id, candidate] : candidate_characters) std::erase(candidate.skeletons, sid);
@@ -727,7 +608,6 @@ sm::result sm::project::restore_membership(const membership_state& state) {
     for (const auto& saved : state.characters) {
         auto& c = *characters_.at(saved.id);
         c.name_ = saved.name;
-        c.character_root_bone_ = saved.character_root_bone;
         c.artwork_ = saved.artwork;
         c.animation_data_ = saved.animation_data;
     }
@@ -739,12 +619,10 @@ sm::result sm::project::restore_membership(const membership_state& state) {
     }
     prune_empty_characters();
     for (auto& [id, c] : characters_) {
-        repair_character_root_bone(*c);
         initialize_animation_assets(c->animation_data_, topology_, c->rig().skeleton_ids());
     }
     reconcile_character_animation_poses();
     assert(has_consistent_membership());
-    assert_animation_references_resolve();
     return result::success;
 }
 
@@ -831,19 +709,6 @@ std::expected<sm::replacement_plan, sm::result> sm::project::plan_replacement(
     plan.effects = effects_for_removed_objects(
         std::move(removed_nodes), std::move(removed_bones), std::move(removed_skeletons));
 
-    // A malformed cross-character action can still reference an object owned by a
-    // different character. Preserve atomic undo for that case too by snapshotting
-    // every character whose action is part of the semantic cascade.
-    for (const auto& removed_action : plan.effects.removed_animation_actions) {
-        if (metadata.insert(removed_action.character).second) {
-            const auto& c = *characters_.at(removed_action.character);
-            plan.membership.characters.push_back({c.id(), c.name(), c.character_root_bone(),
-                c.artwork(), c.animation_data()});
-        }
-    }
-    for (auto& state : plan.membership.characters)
-        erase_cascade_actions(state.animation_data, plan.effects);
-
     for (const auto& id : affected_characters) {
         const auto& rig = characters_.at(id)->rig();
         bool survives = std::ranges::any_of(rig.skeleton_ids(), [&](const auto& sid) { return !removed.contains(sid); });
@@ -870,12 +735,6 @@ bool sm::project::has_consistent_membership() const {
             auto s = topology_.skeleton(sid);
             if (!seen.insert(sid).second || !s || !s->get().parent_character() ||
                 &s->get().parent_character()->get() != c.get()) return false;
-        }
-        if(!c->character_root_bone().is_nil()) {
-            auto bone=topology_.get<sm::bone>(c->character_root_bone());
-            if(!bone) return false;
-            auto parent=bone->get().owner().parent_character();
-            if(!parent || &parent->get()!=c.get()) return false;
         }
     }
     for (auto s : topology_.skeletons()) {
@@ -913,10 +772,8 @@ sm::result sm::project::adopt_skeletons(const object_id& id, std::span<const con
         it->second->rig_.add_skeleton(skel->id());
         live->get().set_parent_character(*it->second);
     }
-    repair_character_root_bone(*it->second);
     reconcile_character_animation_poses();
     assert(has_consistent_membership());
-    assert_animation_references_resolve();
     return result::success;
 }
 
@@ -960,10 +817,8 @@ sm::expected_const_character sm::project::create_character(std::span<const const
     for (auto skel : validated) {
         rig.add_skeleton(skel->id());
     }
-    const auto root_bone=default_character_root_bone(topology_,rig.skeleton_ids());
-
     auto name = "character-" + std::to_string(next_character_name_);
-    auto created = sm::character::make_unique(*this, id, std::move(name), std::move(rig), root_bone);
+    auto created = sm::character::make_unique(*this, id, std::move(name), std::move(rig));
     auto* created_ptr = created.get();
     auto [it, inserted] = characters_.emplace(id, std::move(created));
     if (!inserted) {
@@ -1012,28 +867,6 @@ sm::expected_const_character sm::project::character(const object_id& id) const {
         return std::unexpected(result::not_found);
     }
     return const_character_ref(std::as_const(*it->second));
-}
-
-sm::result sm::project::set_character_root_bone(const object_id& character_id,const object_id& bone_id) {
-    auto character_it=characters_.find(character_id);
-    if(character_it==characters_.end()) return result::not_found;
-    auto& character = *character_it->second;
-    if (!bone_id.is_nil()) {
-        auto bone=topology_.get<sm::bone>(bone_id);
-        if(!bone) return result::not_found;
-        if (!bone_belongs_to_rig(topology_, bone_id, character.rig().skeleton_ids()))
-            return result::invalid_membership;
-    }
-
-    // Root changes alter Character Root reference frames and therefore can alter
-    // animation ordering validity. Validate the proposed root before committing it.
-    try {
-        character.animation_data().validate(topology_, character.rig().skeleton_ids(), bone_id);
-    } catch (const std::invalid_argument&) {
-        return result::invalid_animation;
-    }
-    character.set_character_root_bone(bone_id);
-    return result::success;
 }
 
 const sm::project::mutable_object& sm::project::get_mutable(const object_id& id) const {
@@ -1118,8 +951,8 @@ std::expected<sm::project_buffer, sm::project_result> sm::project::serialize() c
             auto art = detail::write_artwork(character->artwork(),
                 "characters/" + character->id().to_string() + "/artwork/", package);
             characters.push_back({{"id", character->id().to_string()}, {"name", character->name()},
-                {"skeletons", std::move(skeletons)}, {"root_bone", character->character_root_bone().to_string()},
-                {"artwork", std::move(art)}, {"animation_data", animation_assets_to_json(character->animation_data())}});
+                {"skeletons", std::move(skeletons)}, {"artwork", std::move(art)},
+                {"animation_data", animation_assets_to_json(character->animation_data())}});
         }
         auto topology_json = topology_.to_json();
         topology_json.erase("constraints");
@@ -1206,22 +1039,8 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
                 rig.add_skeleton(skeleton_id);
             }
 
-            object_id character_root_bone;
-            if(version==project_json_version) {
-                auto parsed_root=object_id::from_string(entry.at("root_bone").get<std::string>());
-                if(!parsed_root) return project_result::invalid_project_json;
-                character_root_bone=*parsed_root;
-            } else {
-                character_root_bone=default_character_root_bone(new_topology,rig.skeleton_ids());
-            }
-            if(!character_root_bone.is_nil()) {
-                auto root_bone=new_topology.get<sm::bone>(character_root_bone);
-                if(!root_bone || !rig_members.contains(root_bone->get().owner().id()))
-                    return project_result::invalid_project_json;
-            }
-
             auto character = sm::character::make_unique(
-                *this, character_id, name, std::move(rig), character_root_bone);
+                *this, character_id, name, std::move(rig));
             if (version == project_json_version && !entry.contains("artwork")) return project_result::invalid_artwork;
             if (entry.contains("artwork")) {
                 try { character->artwork_ = detail::read_artwork(entry.at("artwork"),
@@ -1250,7 +1069,7 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
 
         for (const auto& [id, character] : new_characters)
             character->animation_data().validate(
-                new_topology, character->rig().skeleton_ids(), character->character_root_bone());
+                new_topology, character->rig().skeleton_ids());
     }
     catch (...) {
         return project_result::invalid_project_json;

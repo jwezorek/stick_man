@@ -359,9 +359,9 @@ The rig remains the reference geometry for artwork transforms. Editing a sprite'
 
 ## 11. Topology changes and unresolved slots
 
-Artwork handles destructive topology changes differently from animation actions.
+Artwork handles destructive topology changes differently from standalone poses.
 
-Animation actions with deleted persistent dependencies are removed because keeping an action that cannot evaluate would violate the ordinary-editor referential-integrity invariant.
+Standalone pose node memberships are reconciled with character topology changes. Animation V2 Phase 1 assets contain only an ID and name, so they have no topology dependencies to repair or cascade.
 
 Artwork slot definitions, however, may remain with a bone ID that no longer resolves to the character. `project::slot_resolved()` checks both:
 
@@ -402,7 +402,7 @@ Bone existence/ownership is checked at the project resolution boundary rather th
 
 Artwork is stored inside the Core-owned `.stickman` packaged project.
 
-Project format version 6 writes character artwork metadata into `project.json` and character-specific PNG sprite pages into the package.
+Project format version 8 writes character artwork metadata into `project.json` and character-specific PNG sprite pages into the package.
 
 The current resource model does **not** use a separate atlas JSON file per page. Page names and frame rectangles are represented directly by the artwork JSON in the semantic project document.
 
@@ -462,8 +462,8 @@ The clipboard payload stores the selected character's topology separately and em
 - the pasted character receives a fresh character ID;
 - every skeleton, node, and bone receives a fresh topology ID;
 - artwork bone bindings are remapped through that old-to-new ID table;
-- the character root bone is remapped through the same table;
-- animation pose/action topology references are remapped by `remap_animation_assets()`;
+- standalone pose node-position keys are remapped through the same table;
+- minimal Animation V2 assets require no topology remapping because they currently contain only identity and name;
 - if the paste operation applies a spatial offset, stored pose node positions are transformed by the same paste matrix;
 - image/frame resources are recovered through Core package deserialization rather than through editor-specific atlas handling.
 
@@ -473,16 +473,9 @@ The pasted character's name receives a `copy`/`copy N` suffix, and the complete 
 
 ## 15. Semantic states and animation
 
-Semantic slot states currently belong to artwork authoring/preview state rather than to `action_data`.
+Semantic slot states currently belong to artwork authoring/preview state.
 
-The Artwork Browser/canvas can choose a preview state for a slot and resolve that state through the active appearance, but the four implemented animation actions affect rig geometry only. Playback does not currently change:
-
-- a slot's semantic state;
-- the active appearance;
-- an appearance-slot transform; or
-- a frame registration origin.
-
-This is independent of skeletal animation preview: while an animation is playing or scrubbed, the currently selected artwork state/appearance is still resolved against the evaluated detached rig topology, so the sprites follow the animated bones correctly.
+Animation V2 Phase 1 has no playback, artwork keys, or persistent skeletal keyframes. While Animation Mode is active, the current artwork state/appearance is resolved against the detached working topology so sprites follow temporary posing. The Artwork tab in the Animation Editor is only a visual shell for later artwork/property tracks.
 
 ---
 

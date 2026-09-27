@@ -91,7 +91,7 @@ public:
 ui::pane::props::bones::bones(const current_canvas_fn& fn, selection_properties* parent) :
     single_or_multi_props_widget(fn, parent, "selected bones"),
     length_(nullptr), name_(nullptr), u_(nullptr), v_(nullptr), nodes_(nullptr),
-    rotation_(nullptr), character_root_btn_(nullptr) {}
+    rotation_(nullptr) {}
 
 void ui::pane::props::bones::populate(mdl::project& proj) {
     layout_->addWidget(name_ = new ui::labeled_field("   name", ""));
@@ -111,19 +111,6 @@ void ui::pane::props::bones::populate(mdl::project& proj) {
 
     layout_->addWidget(length_ = new ui::labeled_numeric_val("length", 0.0, 0.0, 1500.0));
     layout_->addWidget(rotation_ = new rotation_tab(get_current_canv_));
-
-    character_root_btn_ = new QPushButton("Set as Character Root Bone");
-    layout_->addWidget(character_root_btn_);
-
-    connect(character_root_btn_, &QPushButton::clicked, this, [this, &proj] {
-        auto bones = get_current_canv_().selected_bones();
-        if (bones.size() != 1) return;
-        auto& bone = bones.front()->model();
-        auto parent = bone.owner().parent_character();
-        if (!parent) return;
-        if (proj.set_character_root_bone(parent->get().id(), bone.id()) == sm::result::success)
-            set_selection_single(get_current_canv_());
-    });
 
     connect(&proj, &mdl::project::name_changed,
         [this](mdl::const_skel_piece piece, const std::string& new_name) {
@@ -154,16 +141,12 @@ void ui::pane::props::bones::set_selection_common(const ui::canvas::scene& canv)
 }
 
 void ui::pane::props::bones::set_selection_multi(const ui::canvas::scene&) {
-    name_->hide(); nodes_->hide(); character_root_btn_->hide(); rotation_->lock_to_primary_tab();
+    name_->hide(); nodes_->hide(); rotation_->lock_to_primary_tab();
 }
 
 void ui::pane::props::bones::set_selection_single(const ui::canvas::scene& canv) {
-    name_->show(); nodes_->show(); character_root_btn_->show(); rotation_->unlock();
+    name_->show(); nodes_->show(); rotation_->unlock();
     auto& bone = canv.selected_bones().front()->model();
-    auto parent = bone.owner().parent_character();
-    character_root_btn_->setEnabled(parent.has_value());
-    character_root_btn_->setText(parent && parent->get().character_root_bone() == bone.id()
-        ? "Character Root Bone (current)" : "Set as Character Root Bone");
     name_->set_value(bone.name().c_str());
     u_->hyperlink()->setText(bone.parent_node().name().c_str());
     v_->hyperlink()->setText(bone.child_node().name().c_str());

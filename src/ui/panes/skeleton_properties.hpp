@@ -19,7 +19,6 @@ namespace ui {
             class character : public props_box {
                 QLineEdit* name_;
                 QLabel* count_;
-                QComboBox* root_bone_;
                 QScrollArea* skeletons_;
             public:
                 character(const current_canvas_fn& fn, selection_properties* parent);

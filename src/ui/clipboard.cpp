@@ -287,8 +287,6 @@ namespace {
                 }
                 auto copied = resources.create_character(members);
                 if (!copied) return {};
-                if (resources.set_character_root_bone(copied->get().id(), character->model().character_root_bone()) != sm::result::success)
-                    return {};
                 resources.artwork(copied->get().id()) = character->model().artwork();
                 resources.animation_data(copied->get().id()) = character->model().animation_data();
                 auto encoded = resources.serialize();
@@ -367,7 +365,6 @@ namespace {
         if (character) {
             sm::artwork artwork;
             sm::animation_assets animation_data;
-            sm::object_id character_root_bone;
             if (payload.contains("artwork_package")) {
                 if (!payload["artwork_package"].is_string()) return;
                 auto encoded = QByteArray::fromBase64(QByteArray::fromStdString(payload["artwork_package"].get<std::string>()),
@@ -378,14 +375,13 @@ namespace {
                 const auto copied_character=*resources.characters().begin();
                 artwork = copied_character->artwork();
                 animation_data = copied_character->animation_data();
-                character_root_bone = copied_character->character_root_bone();
             }
             if (dest_mat) {
                 for (auto& pose : animation_data.poses)
                     for (auto& [id, pt] : pose.node_positions) pt = sm::transform(pt, *dest_mat);
             }
             auto pasted = project.paste_character(clipboard_topology, payload["name"].get<std::string>(),
-                artwork, character_root_bone, animation_data);
+                artwork, animation_data);
             if (!pasted) QMessageBox::warning(&main_wnd, "Paste Character", "Cannot paste this character.");
             return;
         }
@@ -410,6 +406,7 @@ namespace {
 }
 
 void ui::clipboard::cut(stick_man& main_wnd) {
+    if (main_wnd.project().animation_mode()) return;
     cut_or_copy(main_wnd, true);
 }
 
@@ -417,6 +414,7 @@ void ui::clipboard::copy(stick_man& main_wnd) {
     cut_or_copy(main_wnd, false);
 }
 void ui::clipboard::paste(stick_man& main_wnd, bool in_place) {
+    if (main_wnd.project().animation_mode()) return;
     QClipboard* clipboard = QApplication::clipboard();
     const QMimeData* mimeData = clipboard->mimeData();
     if (mimeData->hasFormat(k_stickman_mime_type)) {
@@ -426,6 +424,7 @@ void ui::clipboard::paste(stick_man& main_wnd, bool in_place) {
 }
 
 void ui::clipboard::del(stick_man& main_wnd) {
+    if (main_wnd.project().animation_mode()) return;
     auto& canv = main_wnd.canvases().active_canvas();
     if (auto constraint_id = canv.selected_constraint_id()) {
         if (main_wnd.project().remove_constraint(*constraint_id) == sm::result::success) {

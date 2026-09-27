@@ -99,17 +99,6 @@ ui::stick_man::stick_man(QWidget* parent) :
     center_layout->addWidget(canvases_ = new canvas::manager(tool_mgr_));
     setCentralWidget(center);
     update_window_title();
-    project_.set_topology_edit_confirmation([this](const sm::topology_edit_effects& effects) {
-        const auto count = effects.removed_animation_actions.size();
-        const auto message = count == 1
-            ? QStringLiteral(
-                "This edit will also delete 1 animation action that depends on a node, bone, or skeleton being removed.\n\nContinue?")
-            : QStringLiteral(
-                "This edit will also delete %1 animation actions that depend on nodes, bones, or skeletons being removed.\n\nContinue?")
-                .arg(count);
-        return QMessageBox::question(this, QStringLiteral("Delete Animation Actions"), message,
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes;
-    });
     canvases_->init(project_);
 
     auto* artwork_browser = new pane::artwork_browser(project_, *canvases_, this);
@@ -382,6 +371,7 @@ void ui::stick_man::insert_edit_menu() {
     redo_action_->setShortcut(QKeySequence::Redo);
     connect(redo_action_, &QAction::triggered, this, &stick_man::do_redo);
     QAction* cut_action = new QAction("Cut", this);
+    cut_action->setObjectName("edit_cut");
     cut_action->setShortcut(QKeySequence::Cut);
     connect(cut_action, &QAction::triggered,
         [this]() {clipboard::cut(*this); });
@@ -390,14 +380,17 @@ void ui::stick_man::insert_edit_menu() {
     connect(copy_action, &QAction::triggered,
         [this]() {clipboard::copy(*this); });
     QAction* paste_action = new QAction("Paste", this);
+    paste_action->setObjectName("edit_paste");
     paste_action->setShortcut(QKeySequence::Paste);
     connect(paste_action, &QAction::triggered,
         [this]() {clipboard::paste(*this, false); });
     QAction* paste_in_place_action = new QAction("Paste in place", this);
+    paste_in_place_action->setObjectName("edit_paste_in_place");
     paste_in_place_action->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
     connect(paste_in_place_action, &QAction::triggered,
         [this]() {clipboard::paste(*this, true); });
     QAction* delete_action = new QAction("Delete", this);
+    delete_action->setObjectName("edit_delete");
     delete_action->setShortcut(QKeySequence::Delete);
     connect(delete_action, &QAction::triggered,
         [this]() {clipboard::del(*this); });

@@ -65,6 +65,7 @@ public:
     void mouseMoveEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
     void mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
     QWidget* settings_widget() override;
+    void set_animation_mode(bool active);
 };
 
 } // namespace ui::tool
