@@ -130,6 +130,55 @@ int main(int argc, char** argv) {
         add->click();
         const auto second = model.animation_session_keyframe();
         require(second.has_value() && *second != *first, "second keyframe missing");
+        auto* play = editor->findChild<QToolButton*>("animation_transport_play");
+        auto* start = editor->findChild<QToolButton*>("animation_transport_start");
+        auto* time = editor->findChild<QLabel*>("animation_time_display");
+        require(play && play->isEnabled() && start && start->isEnabled(),
+            "Pose Strip transport is not enabled for timed animation");
+        const auto playback_canvas_before = scene_image(scene);
+        const auto playback_model_before = model.serialize();
+        play->click();
+        QThread::msleep(100); // A blocked event loop must not lose elapsed time.
+        app.processEvents();
+        require(time && time->text() != "0:00.000", "playback clock did not advance");
+        play->click();
+        const auto paused_time = time->text();
+        QThread::msleep(50);
+        app.processEvents();
+        require(time->text() == paused_time, "paused playback advanced");
+        require(model.animation_session_keyframe() == second,
+            "playback changed editing selection");
+        require(same_image(playback_canvas_before, scene_image(scene)),
+            "Pose Strip playback changed the canvas");
+        require(model.serialize() == playback_model_before,
+            "transient playback state leaked into serialization");
+        start->click();
+        require(time->text() == "0:00.000", "return to start did not reset time");
+        const auto first_current_image = strip->grab().toImage();
+        auto* end = editor->findChild<QToolButton*>("animation_transport_end");
+        end->click();
+        require(time->text() == "0:00.400" && play->text() == "Play",
+            "end transport did not stop at true final time");
+        require(!same_image(first_current_image, strip->grab().toImage()),
+            "current-pose/playhead presentation did not change at final pose");
+        play->click();
+        require(play->text() == "Pause", "Play at end did not restart");
+        model.select_animation_keyframe(*first);
+        model.rename_animation_keyframe(std::string("Standing"));
+        require(play->text() == "Pause", "selection or rename stopped playback");
+        duplicate->click();
+        require(play->text() == "Play" && time->text() == "0:00.000",
+            "structural insertion did not reset playback");
+        model.undo();
+        model.select_animation_keyframe(*second);
+        start->click();
+        play->click();
+        QThread::msleep(450);
+        app.processEvents();
+        require(time->text() == "0:00.400" && play->text() == "Play",
+            "playback did not stop cleanly at final pose");
+        require(model.animation_session_keyframe() == second,
+            "final playback pose overwrote editing selection");
         const sm::point pose2{45, 30};
         model.transform_node_positions({{n1, pose1}}, {{n1, pose2}});
 
@@ -192,6 +241,50 @@ int main(int argc, char** argv) {
             artwork_only.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied)),
             "combined preview did not add skeleton to partially skinned artwork");
 
+        for (int i = 0; i < 6; ++i) add->click();
+        auto* source = model.core().animation_data(character_id).find_animation(animation_id);
+        source->transitions[0].duration_seconds = 0.35;
+        source->transitions[1].duration_seconds = 0.15;
+        source->transitions[2].duration_seconds = 0.8;
+        source->keyframes[1].name = "Anticipation";
+        source->keyframes[2].name = "Jump";
+        source->keyframes[3].name = "Landing";
+        model.select_animation_keyframe(source->keyframes[1].id);
+        app.processEvents();
+        auto* scroll = editor->findChild<QScrollArea*>("pose_strip_scroll");
+        require(scroll->horizontalScrollBar()->maximum() > 0, "long animation was compressed to viewport");
+        end->click();
+        require(scroll->horizontalScrollBar()->value() > 0, "final playback pose was left offscreen");
+        start->click();
+        require(scroll->horizontalScrollBar()->value() == 0, "start did not reveal the first pose");
+        play->click();
+        QThread::msleep(80);
+        app.processEvents();
+        play->click();
+        const auto capture = qEnvironmentVariable("STICK_MAN_TEST_CAPTURE");
+        if (!capture.isEmpty()) require(editor->grab().save(capture), "UI capture failed");
+
+        play->click();
+        source->transitions[0].duration_seconds = 0.6;
+        model.animation_preview_changed();
+        require(time->text() == "0:00.000" && play->text() == "Play",
+            "duration edit did not reset playback");
+        play->click();
+        std::swap(source->keyframes[0], source->keyframes[1]);
+        model.animation_preview_changed();
+        require(time->text() == "0:00.000" && play->text() == "Play",
+            "reordering did not reset playback");
+        play->click();
+        remove->click();
+        require(time->text() == "0:00.000" && play->text() == "Play",
+            "deletion did not reset playback");
+        play->click();
+        browser->leave_animation();
+        require(time->text() == "0:00.000" && !play->isEnabled(),
+            "leaving animation did not clear playback");
+        require(browser->open_animation(character_id, animation_id), "reopen after playback failed");
+        require(time->text() == "0:00.000" && play->text() == "Play",
+            "reopened animation retained transient playback state");
         browser->leave_animation();
         std::cout << "PASS Animation V2 Phase 2 UI\n";
         return 0;

@@ -5,18 +5,17 @@
 #include "../../model/project.hpp"
 #include <QMouseEvent>
 #include <QPainter>
+#include <QHelpEvent>
+#include <QToolTip>
 #include <algorithm>
 #include <array>
 #include <map>
 #include <stdexcept>
 #include <string>
+#include <cmath>
+#include <charconv>
 
 namespace {
-constexpr int card_width = 150;
-constexpr int card_height = 116;
-constexpr int gap = 12;
-constexpr int margin = 10;
-
 QTransform qt_matrix(const sm::matrix& m) {
     return {m(0, 0), m(1, 0), m(0, 1), m(1, 1), m(0, 2), m(1, 2)};
 }
@@ -65,13 +64,38 @@ void ui::pose_strip::set_context(mdl::project* project, canvas::manager* canvase
     canvases_ = canvases;
     character_ = character;
     animation_ = animation;
+    playback_time_ = 0;
     refresh();
 }
 
-void ui::pose_strip::refresh() {
+bool ui::pose_strip::refresh() {
+    const sm::animation* animation = nullptr;
+    if (project_) {
+        auto character = project_->core().character(character_);
+        if (character) animation = character->get().animation_data().find_animation(animation_);
+    }
+    pose_strip_layout next(animation);
+    const bool timing_changed = !layout_.same_timing(next);
+    layout_ = std::move(next);
+    if (timing_changed) playback_time_ = 0;
     thumbnails_.clear();
+    setMinimumWidth(int(std::ceil(layout_.width)));
     updateGeometry();
     update();
+    return timing_changed;
+}
+
+void ui::pose_strip::set_playback_time(double seconds) {
+    const auto previous = layout_.at_time(playback_time_);
+    playback_time_ = seconds;
+    update();
+    if (const auto position = layout_.at_time(seconds)) {
+        auto focus = QRectF(position->x, 10, 1, 116);
+        if (!previous || previous->current_pose != position->current_pose || seconds == 0) {
+            focus = focus.united(layout_.cards[position->current_pose].rect);
+        }
+        emit playback_focus_changed(focus);
+    }
 }
 
 QPixmap ui::pose_strip::render_preview(sm::object_id id) {
@@ -85,22 +109,7 @@ QPixmap ui::pose_strip::render_preview(sm::object_id id) {
 }
 
 QSize ui::pose_strip::minimumSizeHint() const {
-    if (!project_) return {300, 130};
-
-    auto character = project_->core().character(character_);
-    auto* animation = character ?
-        character->get().animation_data().find_animation(animation_) : nullptr;
-    const auto count = animation ? animation->keyframes.size() : std::size_t{};
-    return {int(margin * 2 + count * (card_width + gap)), 136};
-}
-
-QRect ui::pose_strip::card_rect(std::size_t index) const {
-    return {
-        margin + int(index) * (card_width + gap),
-        margin,
-        card_width,
-        card_height
-    };
+    return {int(std::ceil(layout_.width)), pose_strip_layout::height};
 }
 
 QPixmap ui::pose_strip::thumbnail(const sm::pose_keyframe& keyframe) {
@@ -270,24 +279,85 @@ void ui::pose_strip::paintEvent(QPaintEvent*) {
         return;
     }
 
+    painter.setRenderHint(QPainter::Antialiasing);
+    for (const auto& transition : layout_.transitions) {
+        painter.setPen(palette().mid().color());
+        painter.setBrush(palette().alternateBase());
+        painter.drawRect(transition.rect);
+        const auto label = transition_duration_label(transition.duration);
+        if (painter.fontMetrics().horizontalAdvance(label) + 12 <= transition.rect.width()) {
+            painter.setPen(palette().text().color());
+            painter.drawText(transition.rect, Qt::AlignCenter, label);
+        }
+    }
+
     const auto selected = project_->animation_session_keyframe();
+    const auto position = layout_.at_time(playback_time_);
+    const auto accent = palette().link().color();
     for (std::size_t i = 0; i < animation->keyframes.size(); ++i) {
         const auto& keyframe = animation->keyframes[i];
-        const auto card = card_rect(i);
+        const auto card = layout_.cards[i].rect;
         const bool is_selected = selected && *selected == keyframe.id;
+        const bool is_current = position && position->current_pose == i;
 
         painter.setPen(QPen(is_selected ? palette().highlight().color() :
             palette().mid().color(), is_selected ? 3 : 1));
         painter.setBrush(palette().window());
         painter.drawRoundedRect(card, 5, 5);
-        painter.drawPixmap(card.x() + 7, card.y() + 7, thumbnail(keyframe));
+        if (is_current) {
+            auto tint = accent;
+            tint.setAlpha(35);
+            painter.setPen(QPen(accent, 2));
+            painter.setBrush(tint);
+            painter.drawRoundedRect(card.adjusted(4, 4, -4, -4), 3, 3);
+            painter.fillRect(QRectF(card.x() + 8, card.y() + 5, card.width() - 16, 3), accent);
+        }
+        painter.drawPixmap(QPointF(card.x() + 7, card.y() + 7), thumbnail(keyframe));
 
         painter.setPen(palette().text().color());
-        const QString label = keyframe.name ? QString::fromStdString(*keyframe.name) :
-            tr("Pose %1").arg(i + 1);
-        painter.drawText(QRect(card.x() + 6, card.bottom() - 23, card.width() - 12, 19),
+        const auto label = painter.fontMetrics().elidedText(pose_keyframe_label(*animation, i),
+            Qt::ElideRight, int(card.width() - 16));
+        painter.drawText(QRectF(card.x() + 8, card.bottom() - 23, card.width() - 16, 19),
             Qt::AlignCenter, label);
     }
+    if (position) {
+        painter.setPen(QPen(accent, 2));
+        painter.drawLine(QPointF(position->x, 5), QPointF(position->x, 131));
+    }
+}
+
+bool ui::pose_strip::event(QEvent* event) {
+    if (event->type() == QEvent::ToolTip) {
+        auto* help = static_cast<QHelpEvent*>(event);
+        for (const auto& transition : layout_.transitions) {
+            if (transition.rect.contains(help->pos())) {
+                char duration[64];
+                const auto result = std::to_chars(std::begin(duration), std::end(duration),
+                    transition.duration);
+                QToolTip::showText(help->globalPos(), tr("%1 s").arg(
+                    QString::fromLatin1(duration, result.ptr - duration)), this);
+                return true;
+            }
+        }
+        if (project_) {
+            auto character = project_->core().character(character_);
+            const auto* animation = character ?
+                character->get().animation_data().find_animation(animation_) : nullptr;
+            for (std::size_t i = 0; animation && i < layout_.cards.size(); ++i) {
+                const auto& card = layout_.cards[i];
+                if (card.rect.contains(help->pos())) {
+                    QToolTip::showText(help->globalPos(), tr("%1\nReached at %2 s")
+                        .arg(pose_keyframe_label(*animation, i))
+                        .arg(QString::number(card.time, 'g', 12)), this);
+                    return true;
+                }
+            }
+        }
+        QToolTip::hideText();
+        event->ignore();
+        return true;
+    }
+    return QWidget::event(event);
 }
 
 void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
@@ -299,7 +369,7 @@ void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
     if (!animation) return;
 
     for (std::size_t i = 0; i < animation->keyframes.size(); ++i) {
-        if (card_rect(i).contains(event->pos())) {
+        if (layout_.cards[i].rect.contains(event->pos())) {
             emit keyframe_selected(animation->keyframes[i].id);
             return;
         }

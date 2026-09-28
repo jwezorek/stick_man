@@ -1,9 +1,11 @@
 #include "animation_editor.hpp"
+#include "../animation_playback.hpp"
 #include "../canvas/canvas_manager.hpp"
 #include "../widgets/pose_strip.hpp"
 #include "../widgets/timeline.hpp"
 #include "../../model/project.hpp"
 #include <QtWidgets>
+#include <cmath>
 
 ui::pane::animation_editor::animation_editor(QWidget* parent) :
     QDockWidget(tr("Animation Editor"), parent) {
@@ -22,9 +24,12 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
         transport->addWidget(button);
         return button;
     };
-    make_transport(QStringLiteral("|<"), "animation_transport_start");
-    make_transport(QStringLiteral("Play"), "animation_transport_play");
-    make_transport(QStringLiteral(">|"), "animation_transport_end");
+    start_ = make_transport(QStringLiteral("|<"), "animation_transport_start");
+    play_ = make_transport(tr("Play"), "animation_transport_play");
+    end_ = make_transport(QStringLiteral(">|"), "animation_transport_end");
+    start_->setToolTip(tr("Stop and return to first pose"));
+    end_->setToolTip(tr("Go to final pose"));
+    play_->setToolTip(tr("Play / pause Pose Strip timing"));
 
     time_display_ = new QLabel(QStringLiteral("0:00.000"), content);
     time_display_->setObjectName("animation_time_display");
@@ -77,6 +82,34 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
     pose_scroll->setWidget(pose_strip_);
     tabs_->addTab(pose_scroll, tr("Poses"));
 
+    playback_ = new animation_playback(this);
+    connect(play_, &QToolButton::clicked, this, [this] {
+        if (playback_->playing()) playback_->pause();
+        else playback_->play();
+    });
+    connect(start_, &QToolButton::clicked, playback_, &animation_playback::stop);
+    connect(end_, &QToolButton::clicked, playback_, &animation_playback::go_to_end);
+    connect(playback_, &animation_playback::playing_changed, this, [this](bool playing) {
+        play_->setText(playing ? tr("Pause") : tr("Play"));
+    });
+    connect(playback_, &animation_playback::time_changed,
+        pose_strip_, &pose_strip::set_playback_time);
+    connect(playback_, &animation_playback::time_changed, this, [this](double seconds) {
+        const auto ms = qRound64(std::fmod(seconds, 60.0) * 1000);
+        const double minutes = std::floor(seconds / 60.0) + ms / 60000;
+        time_display_->setText(QStringLiteral("%1:%2.%3")
+            .arg(QString::number(minutes, 'f', 0))
+            .arg((ms / 1000) % 60, 2, 10, QLatin1Char('0'))
+            .arg(ms % 1000, 3, 10, QLatin1Char('0')));
+    });
+    connect(pose_strip_, &pose_strip::playback_focus_changed, this,
+        [pose_scroll](QRectF region) {
+            if (pose_scroll->horizontalScrollBar()->isSliderDown()) return;
+            // Reveal only the clipped edge; never continually center the playhead.
+            pose_scroll->ensureVisible(qRound(region.left()), qRound(region.center().y()), 16, 0);
+            pose_scroll->ensureVisible(qRound(region.right()), qRound(region.center().y()), 16, 0);
+        });
+
     artwork_timeline_ = new timeline(tabs_);
     artwork_timeline_->setObjectName("artwork_timeline");
     artwork_timeline_->set_rows(0);
@@ -108,6 +141,7 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
 
 void ui::pane::animation_editor::begin(mdl::project& project, canvas::manager& canvases,
         sm::object_id character, sm::object_id animation) {
+    end();
     project_ = &project;
     canvases_ = &canvases;
     character_ = character;
@@ -116,18 +150,26 @@ void ui::pane::animation_editor::begin(mdl::project& project, canvas::manager& c
     previous_pose_->setChecked(project.show_previous_pose());
 
     connect(&project, &mdl::project::animation_keyframe_selected, this,
-        [this](sm::object_id) { refresh(); }, Qt::UniqueConnection);
+        &animation_editor::refresh, Qt::UniqueConnection);
     connect(&project, &mdl::project::animation_preview_changed, this,
         &animation_editor::refresh, Qt::UniqueConnection);
     connect(&project, &mdl::project::project_changed, this,
-        [this](mdl::project&) { refresh(); }, Qt::UniqueConnection);
+        &animation_editor::refresh, Qt::UniqueConnection);
+    connect(&project, &QObject::destroyed, this, [this] {
+        project_ = nullptr;
+        end();
+    });
 
     refresh();
+    auto owner = project.core().character(character_);
+    const auto* source = owner ? owner->get().animation_data().find_animation(animation_) : nullptr;
+    playback_->set_duration(source ? source->duration_seconds() : 0);
     show();
     raise();
 }
 
 void ui::pane::animation_editor::end() {
+    playback_->set_duration(0);
     if (project_) {
         disconnect(project_, nullptr, this, nullptr);
     }
@@ -136,11 +178,24 @@ void ui::pane::animation_editor::end() {
     character_ = {};
     animation_ = {};
     pose_strip_->set_context(nullptr, nullptr, {}, {});
+    play_->setEnabled(false);
+    start_->setEnabled(false);
+    end_->setEnabled(false);
     hide();
 }
 
 void ui::pane::animation_editor::refresh() {
-    pose_strip_->refresh();
+    const bool timing_changed = pose_strip_->refresh();
+    const sm::animation* animation = nullptr;
+    if (project_) {
+        auto owner = project_->core().character(character_);
+        if (owner) animation = owner->get().animation_data().find_animation(animation_);
+    }
+    if (timing_changed) playback_->set_duration(animation ? animation->duration_seconds() : 0);
+    const bool has_poses = animation && !animation->keyframes.empty();
+    play_->setEnabled(has_poses && animation->duration_seconds() > 0);
+    start_->setEnabled(has_poses);
+    end_->setEnabled(has_poses);
     const bool has_selection = project_ && project_->animation_session_keyframe().has_value();
     duplicate_->setEnabled(has_selection);
     rename_->setEnabled(has_selection);

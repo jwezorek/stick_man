@@ -113,6 +113,13 @@ add_test(NAME animation_v2_phase2_ui COMMAND "${CMAKE_COMMAND}" -E env
     $<TARGET_FILE:animation_v2_phase2_ui>)
 set_tests_properties(animation_v2_phase2_ui PROPERTIES TIMEOUT 30)
 
+add_executable(animation_v2_phase25 animation_v2_phase25.cpp)
+target_link_libraries(animation_v2_phase25 PRIVATE stick_man_ui)
+add_test(NAME animation_v2_phase25 COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+    $<TARGET_FILE:animation_v2_phase25>)
+set_tests_properties(animation_v2_phase25 PROPERTIES TIMEOUT 30)
+
 add_executable(constraint_ui constraint_ui.cpp)
 target_link_libraries(constraint_ui PRIVATE stick_man_model)
 add_test(NAME constraint_ui COMMAND "${CMAKE_COMMAND}" -E env

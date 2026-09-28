@@ -48,6 +48,7 @@ namespace sm {
         pose_keyframe* find_keyframe(object_id id);
         std::optional<std::size_t> keyframe_index(object_id id) const;
         void reconcile_transitions();
+        double duration_seconds() const;
     };
 
     struct animation_assets {

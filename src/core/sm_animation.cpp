@@ -58,6 +58,12 @@ void sm::animation::reconcile_transitions() {
     transitions.resize(wanted);
 }
 
+double sm::animation::duration_seconds() const {
+    double result = 0;
+    for (const auto& transition : transitions) result += transition.duration_seconds;
+    return result;
+}
+
 void sm::animation_assets::validate() const {
     if (!find_pose(default_pose)) {
         throw std::invalid_argument("Missing Default pose");
@@ -106,6 +112,9 @@ void sm::animation_assets::validate() const {
                     !std::isfinite(transition.duration_seconds)) {
                 throw std::invalid_argument("Invalid transition duration");
             }
+        }
+        if (!std::isfinite(a.duration_seconds())) {
+            throw std::invalid_argument("Animation total duration is not finite");
         }
     }
 }

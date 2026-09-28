@@ -6,12 +6,14 @@ namespace mdl { class project; }
 namespace ui {
     class timeline;
     class pose_strip;
+    class animation_playback;
     namespace canvas { class manager; }
 }
 class QLabel;
 class QTabWidget;
 class QPushButton;
 class QCheckBox;
+class QToolButton;
 
 namespace ui::pane {
 class animation_editor : public QDockWidget {
@@ -35,6 +37,10 @@ private:
     QPushButton* rename_ = nullptr;
     QPushButton* delete_ = nullptr;
     QCheckBox* previous_pose_ = nullptr;
+    animation_playback* playback_ = nullptr;
+    QToolButton* play_ = nullptr;
+    QToolButton* start_ = nullptr;
+    QToolButton* end_ = nullptr;
 
     void refresh();
     void rename_selected();
