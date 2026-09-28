@@ -52,6 +52,7 @@ namespace mdl {
         };
         std::optional<animation_edit_session> animation_session_;
         std::unique_ptr<sm::topology> playback_topology_;
+        std::unordered_set<sm::object_id> playback_pinned_node_ids_;
         animation_display_status playback_status_ = animation_display_status::editing;
         std::optional<sm::result> playback_error_;
         bool show_previous_pose_ = false;
@@ -93,6 +94,8 @@ namespace mdl {
         std::optional<sm::object_id> animation_session_character() const;
         std::optional<sm::object_id> animation_session_animation() const;
         std::optional<sm::object_id> animation_session_keyframe() const;
+        std::unordered_set<sm::object_id> animation_session_pinned_nodes() const;
+        sm::result set_animation_keyframe_node_pinned(sm::object_id node, bool pinned);
         sm::result select_animation_keyframe(sm::object_id keyframe);
         sm::result add_animation_keyframe();
         sm::result duplicate_animation_keyframe();

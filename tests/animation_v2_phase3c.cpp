@@ -87,7 +87,6 @@ void endpoints() {
     p.exit_animation_preview();
     for (auto* node : scene.node_items()) if (node->model().id() == tid) selected_item = node;
     scene.set_selection(selected_item, true);
-    scene.set_node_pinned(tid, true);
     p.set_show_previous_pose(true);
     editor->preview_time(1);
     near(displayed(scene, rid).x, 10);
@@ -99,7 +98,7 @@ void endpoints() {
     editor->preview_time(1);
     require(p.display_topology().to_json() == at_one, "preview depends on sample history");
     require(strip->render_preview(a.keyframes[0].id).cacheKey() == thumb.cacheKey(), "preview invalidated thumbnails");
-    require(p.show_previous_pose() && scene.is_node_pinned(tid), "preview lost ghost preference or pins");
+    require(p.show_previous_pose(), "preview lost ghost preference");
     p.transform(std::vector<mdl::handle>{rid}, [](sm::node& n) { n.set_world_pos({500,500}); });
     p.transform(std::vector<mdl::handle>{b->id()}, [](sm::bone& b) { b.set_length(100); });
     p.transform_node_positions({{rid,{0,0}}}, {{rid,{500,500}}});
@@ -186,6 +185,57 @@ void endpoints() {
     p.new_document();
     require(!p.animation_mode() && !p.animation_preview_active() && !clock->playing(), "new project left preview callbacks");
     QApplication::processEvents();
+}
+
+void playback_uses_outgoing_keyframe_pins() {
+    ui::stick_man window;
+    auto& p = window.project();
+    auto& core = p.core();
+    auto root = core.create_skeleton({0, 0}).root_node();
+    auto tip = core.create_skeleton({10, 0}).root_node();
+    auto bone = core.create_bone("bone", root, tip).value();
+    const auto rid = root->id(), tid = tip->id();
+    auto cid = p.make_character(std::vector<sm::const_skel_ref>{root->owner()}).value();
+    const auto rig = core.character(cid)->get().rig().skeleton_ids();
+
+    sm::animation a;
+    a.name = "pins";
+    a.keyframes.resize(3);
+    for (auto& key : a.keyframes) key.pose = sm::capture_skeletal_pose(core.topology(), rig);
+    a.keyframes[0].pinned_nodes.insert(tid);
+    a.keyframes[1].pose.root_positions[rid] = {10, 0};
+    a.keyframes[1].pose.bone_rotations[bone->id()] = std::numbers::pi / 2;
+    a.keyframes[2].pose.root_positions[rid] = {20, 0};
+    a.keyframes[2].pose.bone_rotations[bone->id()] = 0;
+    a.reconcile_transitions();
+    for (auto& transition : a.transitions) transition.duration_seconds = 2;
+    p.edit_animation_data(cid, [&](auto& data) { data.animations.push_back(a); });
+    p.mark_saved();
+
+    auto* browser = window.findChild<ui::pane::animation*>();
+    require(browser->open_animation(cid, a.id), "open pin animation");
+    auto* editor = window.findChild<ui::pane::animation_editor*>();
+    auto& scene = window.canvases().active_canvas();
+
+    editor->preview_time(1.0);
+    require(scene.is_node_pinned(tid), "outgoing source pin was not displayed during transition");
+    near(displayed(scene, tid).x, 10.0, 0.006);
+    near(displayed(scene, tid).y, 0.0, 0.006);
+
+    editor->preview_time(2.0);
+    require(!scene.is_node_pinned(tid), "destination unpin did not take effect at exact keyframe");
+    near(displayed(scene, rid).x, 10.0);
+    near(displayed(scene, tid).x, 10.0);
+    near(displayed(scene, tid).y, 10.0);
+
+    editor->preview_time(3.0);
+    require(!scene.is_node_pinned(tid), "destination unpin did not govern the next transition");
+    near(displayed(scene, rid).x, 15.0);
+    near(displayed(scene, tid).x, 15.0 + 10.0 / std::sqrt(2.0), 1e-6);
+    near(displayed(scene, tid).y, 10.0 / std::sqrt(2.0), 1e-6);
+
+    browser->leave_animation();
+    require(!p.is_dirty(), "playback-only pin sampling marked project dirty");
 }
 
 void constrained_multiroot_artwork_and_failures() {
@@ -328,7 +378,7 @@ void model_destruction_detaches_views() {
 }
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
-    try { endpoints(); constrained_multiroot_artwork_and_failures(); model_destruction_detaches_views(); std::cout << "PASS Animation V2 Phase 3C\n"; return 0; }
+    try { endpoints(); playback_uses_outgoing_keyframe_pins(); constrained_multiroot_artwork_and_failures(); model_destruction_detaches_views(); std::cout << "PASS Animation V2 Phase 3C\n"; return 0; }
     catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }
 

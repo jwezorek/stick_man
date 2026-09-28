@@ -35,6 +35,9 @@ void validate_animation(const sm::animation& a, std::unordered_set<sm::object_id
                 throw std::invalid_argument("Invalid keyframe rotation");
             }
         }
+        for (const auto id : keyframe.pinned_nodes) {
+            if (id.is_nil()) throw std::invalid_argument("Invalid keyframe pin");
+        }
     }
     for (const auto& transition : a.transitions) {
         add_asset_id(ids, transition.id);
@@ -208,6 +211,12 @@ void sm::animation_assets::validate(const topology& topology,
         for (const auto& keyframe : a.keyframes) {
             if (!skeletal_pose_compatible(keyframe.pose, topology, rig_skeletons)) {
                 throw std::invalid_argument("Animation keyframe does not match the character rig");
+            }
+            for (const auto id : keyframe.pinned_nodes) {
+                auto node = topology.get<sm::node>(id);
+                if (!node || !rig.contains(node->get().owner().id())) {
+                    throw std::invalid_argument("Animation keyframe pin is outside the character rig");
+                }
             }
         }
     }
@@ -387,6 +396,14 @@ void sm::remap_animation_assets(animation_assets& assets,
                 }
             }
             keyframe.pose.bone_rotations = std::move(bones);
+
+            std::unordered_set<object_id> pins;
+            for (const auto old_id : keyframe.pinned_nodes) {
+                if (!pins.insert(remap_id(old_id)).second) {
+                    throw std::invalid_argument("Keyframe remap produced duplicate pin IDs");
+                }
+            }
+            keyframe.pinned_nodes = std::move(pins);
         }
     }
 }

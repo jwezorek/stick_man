@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <span>
 #include <variant>
@@ -30,6 +31,10 @@ namespace sm {
         object_id id = object_id::generate();
         std::optional<std::string> name;
         skeletal_pose pose;
+        // Pins are authored state of this keyframe. They constrain only the
+        // transition leaving this keyframe; the destination keyframe owns the
+        // pin state for the following transition.
+        std::unordered_set<object_id> pinned_nodes;
     };
 
     struct pose_transition {
@@ -102,13 +107,20 @@ namespace sm {
     struct constrained_pose_sample {
         skeletal_pose pose;
         std::variant<reference_keyframe, reference_transition> location;
+        // At a key this is that key's pin state. In an interior sample it is
+        // the source keyframe's pin state, which governs the outgoing interval.
+        std::unordered_set<object_id> pinned_nodes;
     };
     using constrained_pose_result = std::expected<std::optional<constrained_pose_sample>, result>;
 
-    // Full-rig, stateless persistent-constraint sampling; no model writes or pins.
+    // Full-rig, stateless persistent-constraint sampling; no model writes.
+    // Keyframe pins are positional constraints on interior samples: the pin set
+    // from the transition's source keyframe is held at its source-key position.
+    // Pins on the destination keyframe begin governing the next transition.
     // The explicit skeleton IDs identify the entire rig in the supplied topology.
-    // Lengths/scales are frozen from that topology's geometry at entry. All roots
-    // remain exactly as sampled. A constraint crossing the rig boundary (in either
+    // Lengths/scales are frozen from that topology's geometry at entry. Unpinned
+    // roots remain exactly as sampled; a pinned root remains at its source-key
+    // position. A constraint crossing the rig boundary (in either
     // direction) is unsupported: invalid_membership, never an expanded solve.
     // Timing/interpolation comes exclusively from sample_reference_pose. Empty is
     // a successful nullopt; malformed animation/time is invalid_animation. Missing,

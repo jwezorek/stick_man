@@ -1908,6 +1908,95 @@ std::expected<sm::skeletal_pose, sm::result> project_animation_reference(
     return std::move(*best);
 }
 
+std::expected<sm::skeletal_pose, sm::result> apply_transition_pins(
+    const sm::pose_keyframe& from, const sm::skeletal_pose& candidate,
+    animation_geometry& geometry) {
+
+    if (from.pinned_nodes.empty()) return candidate;
+
+    // A source keyframe is itself an exact authored pose. If it cannot be
+    // reconstructed under the persistent constraints, the outgoing transition
+    // cannot use its node positions as pin targets.
+    if (auto status = geometry.validate(from.pose); status != sm::result::success)
+        return std::unexpected(status);
+
+    std::vector<sm::object_id> pin_ids(from.pinned_nodes.begin(), from.pinned_nodes.end());
+    std::ranges::sort(pin_ids);
+    std::map<sm::object_id, sm::point> targets;
+    try {
+        sm::apply_skeletal_pose(from.pose, geometry.topology, geometry.skeletons);
+    } catch (const std::invalid_argument&) {
+        return std::unexpected(sm::result::unsatisfiable_constraints);
+    }
+    for (auto id : pin_ids) {
+        auto node = geometry.topology.get<sm::node>(id);
+        if (!node) return std::unexpected(sm::result::invalid_membership);
+        targets.emplace(id, node->get().world_pos());
+    }
+
+    auto pinned_pose = candidate;
+    // Root pins are pure translation constraints in skeletal-pose space. Apply
+    // them before the IK pass so subsequent non-root pins can use them as hard
+    // anchors.
+    for (auto id : pin_ids) {
+        auto node = geometry.topology.get<sm::node>(id);
+        if (!node) return std::unexpected(sm::result::invalid_membership);
+        if (!node->get().parent_bone()) {
+            auto root = pinned_pose.root_positions.find(id);
+            if (root == pinned_pose.root_positions.end())
+                return std::unexpected(sm::result::invalid_membership);
+            root->second = targets.at(id);
+        }
+    }
+
+    try {
+        sm::apply_skeletal_pose(pinned_pose, geometry.topology, geometry.skeletons);
+    } catch (const std::invalid_argument&) {
+        return std::unexpected(sm::result::unsatisfiable_constraints);
+    }
+
+    std::map<sm::object_id, std::vector<sm::object_id>> pins_by_skeleton;
+    for (auto id : pin_ids) {
+        auto node = geometry.topology.get<sm::node>(id);
+        if (!node) return std::unexpected(sm::result::invalid_membership);
+        pins_by_skeleton[node->get().owner().id()].push_back(id);
+    }
+
+    for (auto& [skeleton_id, ids] : pins_by_skeleton) {
+        auto skeleton = geometry.topology.skeleton(skeleton_id);
+        if (!skeleton) return std::unexpected(sm::result::invalid_membership);
+        // Animation root motion remains authored/interpolated unless the root
+        // itself is pinned. Holding the current root while solving a non-root
+        // pin prevents the interactive IK solver from satisfying a planted foot
+        // by translating the whole skeleton.
+        std::vector<sm::node_ref> fixed{skeleton->get().root_node()};
+        for (auto id : ids) {
+            auto node = geometry.topology.get<sm::node>(id);
+            if (!node) return std::unexpected(sm::result::invalid_membership);
+            if (!node->get().parent_bone()) continue;
+
+            const std::vector<std::tuple<sm::node_ref, sm::point>> effectors{
+                {*node, targets.at(id)}};
+            const auto outcome = sm::perform_ik(effectors, fixed);
+            if (outcome != sm::result::ik_target_reached
+                && sm::distance(node->get().world_pos(), targets.at(id)) > k_tolerance) {
+                if (outcome == sm::result::invalid_constraint
+                    || outcome == sm::result::inconsistent_constraints
+                    || outcome == sm::result::unsatisfiable_constraints
+                    || outcome == sm::result::out_of_bounds)
+                    return std::unexpected(outcome);
+                return std::unexpected(sm::result::ik_no_solution_found);
+            }
+            fixed.push_back(*node);
+        }
+    }
+
+    auto result = sm::capture_skeletal_pose(geometry.topology, geometry.skeletons);
+    if (auto status = geometry.validate(result); status != sm::result::success)
+        return std::unexpected(status);
+    return result;
+}
+
 struct pose_restore_guard {
     std::vector<std::pair<sm::node*, sm::point>> saved;
     bool committed = false;
@@ -1932,16 +2021,47 @@ sm::constrained_pose_result sm::sample_constrained_pose(const animation& animati
     animation_geometry geometry;
     if (auto status = prepare_animation_geometry(topology, rig_skeletons, reference->pose, geometry);
         status != result::success) return std::unexpected(status);
+    const std::unordered_set<object_id> rig_ids(rig_skeletons.begin(), rig_skeletons.end());
+    for (const auto& keyframe : animation.keyframes) {
+        for (auto id : keyframe.pinned_nodes) {
+            auto node = topology.get<sm::node>(id);
+            if (!node || !rig_ids.contains(node->get().owner().id()))
+                return std::unexpected(result::invalid_membership);
+        }
+    }
+
+    const pose_keyframe* active_keyframe = nullptr;
+    const bool interior = std::holds_alternative<reference_transition>(reference->location);
+    if (interior) {
+        active_keyframe = animation.find_keyframe(
+            std::get<reference_transition>(reference->location).from_keyframe_id);
+    } else {
+        active_keyframe = animation.find_keyframe(
+            std::get<reference_keyframe>(reference->location).keyframe_id);
+    }
+    if (!active_keyframe) return std::unexpected(result::invalid_animation);
+
     std::map<object_id, double> world;
     const auto feasibility = geometry.validate(reference->pose, &world);
-    if (feasibility == result::success)
-        return constrained_pose_sample{std::move(reference->pose), reference->location};
-    if (std::holds_alternative<reference_keyframe>(reference->location)
-        || feasibility != result::unsatisfiable_constraints)
-        return std::unexpected(feasibility);
-    auto projected = project_animation_reference(reference->pose, world, geometry);
-    if (!projected) return std::unexpected(projected.error());
-    return constrained_pose_sample{std::move(*projected), reference->location};
+    skeletal_pose pose;
+    if (feasibility == result::success) {
+        pose = std::move(reference->pose);
+    } else {
+        if (!interior || feasibility != result::unsatisfiable_constraints)
+            return std::unexpected(feasibility);
+        auto projected = project_animation_reference(reference->pose, world, geometry);
+        if (!projected) return std::unexpected(projected.error());
+        pose = std::move(*projected);
+    }
+
+    // Pins are outgoing-key state. Exact keys retain their stored pose; only
+    // interior samples of the transition are adjusted to hold source-key pins.
+    if (interior && !active_keyframe->pinned_nodes.empty()) {
+        auto pinned = apply_transition_pins(*active_keyframe, pose, geometry);
+        if (!pinned) return std::unexpected(pinned.error());
+        pose = std::move(*pinned);
+    }
+    return constrained_pose_sample{std::move(pose), reference->location, active_keyframe->pinned_nodes};
 }
 
 sm::result sm::perform_ik(

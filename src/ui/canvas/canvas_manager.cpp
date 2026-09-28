@@ -106,6 +106,8 @@ void ui::canvas::manager::init(mdl::project& proj) {
             }
             else {
                 active_canvas().sync_to_model();
+                if (model.animation_mode())
+                    active_canvas().set_pinned_node_ids(model.animation_session_pinned_nodes());
             }
         }
     );
@@ -163,6 +165,8 @@ void ui::canvas::manager::set_canvas_name(const std::string& name) {
 void ui::canvas::manager::set_contents(mdl::project& model) {
     active_canvas().set_contents(model);
     active_canvas().sync_to_model();
+    if (model.animation_mode())
+        active_canvas().set_pinned_node_ids(model.animation_session_pinned_nodes());
 
     // canvas_refresh drives the normal project panes (notably the Skeleton pane),
     // which are backed by the persistent sm::project and expect the canvas to

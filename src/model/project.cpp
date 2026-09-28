@@ -743,6 +743,48 @@ std::optional<sm::object_id> mdl::project::animation_session_keyframe() const {
     return animation_session_->selected_keyframe;
 }
 
+std::unordered_set<sm::object_id> mdl::project::animation_session_pinned_nodes() const {
+    if (!animation_session_) return {};
+    if (animation_preview_active()) return playback_pinned_node_ids_;
+    if (!animation_session_->selected_keyframe) return {};
+    const auto* animation = core_.animation_data(animation_session_->character).find_animation(
+        animation_session_->animation);
+    const auto* keyframe = animation ? animation->find_keyframe(*animation_session_->selected_keyframe) : nullptr;
+    return keyframe ? keyframe->pinned_nodes : std::unordered_set<sm::object_id>{};
+}
+
+sm::result mdl::project::set_animation_keyframe_node_pinned(sm::object_id node_id, bool pinned) {
+    if (!animation_session_ || !animation_session_->selected_keyframe) return sm::result::not_found;
+    if (!animation_session_->working_topology.get<sm::node>(node_id)) return sm::result::invalid_membership;
+
+    const auto character_id = animation_session_->character;
+    const auto animation_id = animation_session_->animation;
+    const auto keyframe_id = *animation_session_->selected_keyframe;
+    auto* animation = core_.animation_data(character_id).find_animation(animation_id);
+    auto* keyframe = animation ? animation->find_keyframe(keyframe_id) : nullptr;
+    if (!keyframe) return sm::result::not_found;
+    const bool before = keyframe->pinned_nodes.contains(node_id);
+    if (before == pinned) return sm::result::success;
+
+    auto apply = [character_id, animation_id, keyframe_id, node_id](project& p, bool value) {
+        auto* animation = p.core_.animation_data(character_id).find_animation(animation_id);
+        auto* keyframe = animation ? animation->find_keyframe(keyframe_id) : nullptr;
+        if (!keyframe) throw std::runtime_error("animation keyframe missing during pin edit");
+        if (value) keyframe->pinned_nodes.insert(node_id);
+        else keyframe->pinned_nodes.erase(node_id);
+        p.animation_session_->selected_keyframe = keyframe_id;
+        emit p.animation_preview_changed();
+        emit p.refresh_canvas(p, false);
+    };
+
+    command cmd{
+        [apply, pinned](project& p) { apply(p, pinned); },
+        [apply, before](project& p) { apply(p, before); }
+    };
+    cmd.animation_edit = true;
+    return execute_session_command(cmd);
+}
+
 sm::result mdl::project::select_animation_keyframe(sm::object_id keyframe_id) {
     exit_animation_preview();
     if (!animation_session_) return sm::result::invalid_membership;
@@ -775,6 +817,7 @@ sm::result mdl::project::add_animation_keyframe() {
     sm::pose_keyframe keyframe;
     keyframe.pose = after.keyframes.empty() ?
         sm::capture_skeletal_pose(topology(), skeletons) : after.keyframes.back().pose;
+    if (!after.keyframes.empty()) keyframe.pinned_nodes = after.keyframes.back().pinned_nodes;
     const auto keyframe_id = keyframe.id;
     after.keyframes.push_back(std::move(keyframe));
     after.reconcile_transitions();

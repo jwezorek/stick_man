@@ -98,6 +98,36 @@ void keyframe_operations_and_frame_aware_undo() {
         "authored Animation Mode edits did not dirty document on session commit");
 }
 
+void keyframe_pin_ownership_and_undo() {
+    fixture f;
+    require(f.project.begin_animation_session(f.character, f.animation) == sm::result::success, "begin failed");
+    require(f.project.add_animation_keyframe() == sm::result::success, "first key failed");
+    const auto first = *f.project.animation_session_keyframe();
+
+    require(f.project.set_animation_keyframe_node_pinned(f.root, true) == sm::result::success, "pin failed");
+    require(f.anim().find_keyframe(first)->pinned_nodes.contains(f.root), "pin was not stored on first keyframe");
+
+    require(f.project.add_animation_keyframe() == sm::result::success, "second key failed");
+    const auto second = *f.project.animation_session_keyframe();
+    require(f.anim().find_keyframe(second)->pinned_nodes.contains(f.root), "new keyframe did not inherit pin state");
+
+    require(f.project.set_animation_keyframe_node_pinned(f.root, false) == sm::result::success, "unpin failed");
+    require(!f.anim().find_keyframe(second)->pinned_nodes.contains(f.root), "unpin did not affect second keyframe");
+    require(f.anim().find_keyframe(first)->pinned_nodes.contains(f.root), "unpin leaked backward to first keyframe");
+
+    f.project.undo();
+    require(f.project.animation_session_keyframe() == second &&
+        f.anim().find_keyframe(second)->pinned_nodes.contains(f.root), "pin undo did not restore second keyframe state");
+    require(f.project.redo() == sm::result::success &&
+        !f.anim().find_keyframe(second)->pinned_nodes.contains(f.root), "pin redo failed");
+
+    require(f.project.select_animation_keyframe(first) == sm::result::success, "select first failed");
+    require(f.project.animation_session_pinned_nodes().contains(f.root), "selected first keyframe pins not exposed");
+    require(f.project.select_animation_keyframe(second) == sm::result::success, "select second failed");
+    require(!f.project.animation_session_pinned_nodes().contains(f.root), "selected second keyframe pins not exposed");
+    f.project.end_animation_session();
+}
+
 void persistence_validation_and_remap() {
     fixture f;
     require(f.project.begin_animation_session(f.character, f.animation) == sm::result::success,
@@ -105,6 +135,7 @@ void persistence_validation_and_remap() {
     require(f.project.add_animation_keyframe() == sm::result::success, "key failed");
 
     const auto keyframe_id = *f.project.animation_session_keyframe();
+    require(f.project.set_animation_keyframe_node_pinned(f.root, true) == sm::result::success, "pin failed");
     require(f.project.rename_animation_keyframe(std::string("Contact")) == sm::result::success,
         "rename failed");
 
@@ -119,6 +150,7 @@ void persistence_validation_and_remap() {
     require(animation->keyframes[0].id == keyframe_id && animation->keyframes[0].name &&
         *animation->keyframes[0].name == "Contact",
         "keyframe identity/name did not round trip");
+    require(animation->keyframes[0].pinned_nodes.contains(f.root), "keyframe pins did not round trip");
 
     auto assets = f.project.core().animation_data(f.character);
     const auto new_root = sm::object_id::generate();
@@ -126,6 +158,8 @@ void persistence_validation_and_remap() {
     auto* remapped = assets.find_animation(f.animation);
     require(remapped->keyframes[0].pose.root_positions.contains(new_root),
         "keyframe root reference was not remapped");
+    require(remapped->keyframes[0].pinned_nodes.contains(new_root) &&
+        !remapped->keyframes[0].pinned_nodes.contains(f.root), "keyframe pin was not remapped");
 
     f.project.end_animation_session();
 }
@@ -158,6 +192,7 @@ void duplicate_and_empty_sequence() {
 int main() {
     try {
         keyframe_operations_and_frame_aware_undo();
+        keyframe_pin_ownership_and_undo();
         persistence_validation_and_remap();
         duplicate_and_empty_sequence();
         std::cout << "PASS Animation V2 Phase 2 core/model\n";

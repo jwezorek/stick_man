@@ -63,6 +63,7 @@ struct fixture {
         for (std::size_t i = 0; i < a.keyframes.size(); ++i) {
             require(a.keyframes[i].id == authored.keyframes[i].id &&
                 a.keyframes[i].name == authored.keyframes[i].name, "key identity/name mutation");
+            require(a.keyframes[i].pinned_nodes == authored.keyframes[i].pinned_nodes, "key pin mutation");
             same_pose(a.keyframes[i].pose, authored.keyframes[i].pose);
         }
         for (std::size_t i = 0; i < a.transitions.size(); ++i)
@@ -129,6 +130,49 @@ void timing_and_exactness() {
     failed(f.sample(malformed, 0), sm::result::invalid_animation);
     require(f.project.topology().to_json() == before, "timing mutated topology");
 }
+void source_keyframe_pins_govern_outgoing_transition() {
+    fixture f;
+    auto root = f.node({0, 0}), knee = f.node({10, 0}), foot = f.node({20, 0});
+    auto upper = f.link(root, knee), lower = f.link(knee, foot);
+    auto a = f.sequence();
+    const auto rid = root->id(), fid = foot->id();
+
+    a.keyframes[0].pinned_nodes.insert(fid);
+    a.keyframes[1].pinned_nodes.insert(rid);
+    a.keyframes[1].pose.root_positions[rid] = {10, 0};
+    a.keyframes[1].pose.bone_rotations[upper->id()] = std::numbers::pi / 2;
+    a.keyframes[1].pose.bone_rotations[lower->id()] = -std::numbers::pi / 2;
+    a.keyframes[2].pose.root_positions[rid] = {30, 0};
+    a.keyframes[2].pose.bone_rotations[upper->id()] = 0;
+    a.keyframes[2].pose.bone_rotations[lower->id()] = 0;
+
+    auto world_position = [&](const sm::skeletal_pose& pose, sm::object_id id) {
+        sm::topology copy;
+        for (auto sid : f.rig) require(f.project.topology().skeleton(sid)->get().copy_to(copy).has_value(), "copy");
+        sm::apply_skeletal_pose(pose, copy, f.rig);
+        return copy.get<sm::node>(id)->get().world_pos();
+    };
+
+    auto first_mid = success(f.sample(a, 1.0));
+    require(first_mid.pinned_nodes.contains(fid) && !first_mid.pinned_nodes.contains(rid),
+        "first transition did not use source keyframe pins");
+    const auto planted_foot = world_position(first_mid.pose, fid);
+    near(planted_foot.x, 20.0, 0.006);
+    near(planted_foot.y, 0.0, 0.006);
+
+    auto exact_second = success(f.sample(a, 2.0));
+    same_pose(exact_second.pose, a.keyframes[1].pose);
+    require(exact_second.pinned_nodes.contains(rid) && !exact_second.pinned_nodes.contains(fid),
+        "exact keyframe did not switch to its own pin state");
+
+    auto second_mid = success(f.sample(a, 3.5));
+    require(second_mid.pinned_nodes.contains(rid) && !second_mid.pinned_nodes.contains(fid),
+        "second transition did not use second keyframe pins");
+    const auto planted_root = world_position(second_mid.pose, rid);
+    near(planted_root.x, 10.0);
+    near(planted_root.y, 0.0);
+}
+
 void world_projection_and_failures() {
     fixture f;
     auto root = f.node({0, 0}), tip = f.node({10, 0}); auto b = f.link(root, tip);
@@ -362,6 +406,7 @@ void edge_cases_and_failure_isolation() {
 int main() {
     try {
         timing_and_exactness();
+        source_keyframe_pins_govern_outgoing_transition();
         world_projection_and_failures();
         parent_and_coupled_relations();
         coupled_equality_cycle();

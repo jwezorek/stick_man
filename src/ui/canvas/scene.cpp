@@ -412,6 +412,10 @@ void ui::canvas::scene::toggle_node_pinned_undoable(const sm::object_id& id) {
     if (!model_) { toggle_node_pinned(id); return; }
     const bool before = is_node_pinned(id);
     const bool after = !before;
+    if (model_->animation_mode()) {
+        model_->set_animation_keyframe_node_pinned(id, after);
+        return;
+    }
     model_->record_transient_edit(
         [this, id, after] { set_node_pinned(id, after); },
         [this, id, before] { set_node_pinned(id, before); });

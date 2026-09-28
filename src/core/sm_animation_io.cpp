@@ -1,5 +1,6 @@
 #include "sm_animation.hpp"
 #include "json.hpp"
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
@@ -94,6 +95,12 @@ nlohmann::json sm::animation_assets_to_json(const animation_assets& assets) {
                     if (keyframe.name) {
                         keyframe_json["name"] = *keyframe.name;
                     }
+                    if (!keyframe.pinned_nodes.empty()) {
+                        std::vector<object_id> pins(keyframe.pinned_nodes.begin(), keyframe.pinned_nodes.end());
+                        std::ranges::sort(pins);
+                        keyframe_json["pinned_nodes"] = json::array();
+                        for (auto pin : pins) keyframe_json["pinned_nodes"].push_back(pin.to_string());
+                    }
                     animation_json["keyframes"].push_back(std::move(keyframe_json));
                 }
 
@@ -141,6 +148,13 @@ sm::animation_assets sm::animation_assets_from_json(const nlohmann::json& j) {
                         keyframe.name = keyframe_value.at("name").get<std::string>();
                     }
                     keyframe.pose = read_skeletal_pose(keyframe_value.at("pose"));
+                    if (keyframe_value.contains("pinned_nodes")) {
+                        for (const auto& pin_value : keyframe_value.at("pinned_nodes")) {
+                            if (!keyframe.pinned_nodes.insert(id(pin_value)).second) {
+                                throw std::invalid_argument("Duplicate keyframe pin");
+                            }
+                        }
+                    }
                     a.keyframes.push_back(std::move(keyframe));
                 }
 

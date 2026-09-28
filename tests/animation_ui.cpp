@@ -111,11 +111,8 @@ int main(int argc, char** argv) {
 
         require(!canvas.is_node_pinned(root_id), "unexpected initial pin state");
         canvas.toggle_node_pinned_undoable(root_id);
-        require(canvas.is_node_pinned(root_id), "session pin toggle failed");
-        model.undo();
-        require(!canvas.is_node_pinned(root_id), "session undo did not undo pin toggle");
-        require(model.redo() == sm::result::success && canvas.is_node_pinned(root_id),
-            "session redo did not redo pin toggle");
+        require(!canvas.is_node_pinned(root_id),
+            "Animation Mode allowed pin state without an edited keyframe owner");
 
         browser->leave_animation();
         app.processEvents();
