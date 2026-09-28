@@ -97,6 +97,38 @@ namespace sm {
     std::optional<reference_pose_sample> sample_reference_pose(
         const animation& animation, double time_seconds);
 
+    // Unlike a reference_pose_sample, this is returned only after feasibility
+    // validation. The location distinguishes exact stored keys from interiors.
+    struct constrained_pose_sample {
+        skeletal_pose pose;
+        std::variant<reference_keyframe, reference_transition> location;
+    };
+    using constrained_pose_result = std::expected<std::optional<constrained_pose_sample>, result>;
+
+    // Full-rig, stateless persistent-constraint sampling; no model writes or pins.
+    // The explicit skeleton IDs identify the entire rig in the supplied topology.
+    // Lengths/scales are frozen from that topology's geometry at entry. All roots
+    // remain exactly as sampled. A constraint crossing the rig boundary (in either
+    // direction) is unsupported: invalid_membership, never an expanded solve.
+    // Timing/interpolation comes exclusively from sample_reference_pose. Empty is
+    // a successful nullopt; malformed animation/time is invalid_animation. Missing,
+    // duplicate or incompatible rig membership is invalid_membership; nonfinite or
+    // degenerate rig geometry is out_of_bounds. Invalid constraint definitions keep
+    // their Core status. Infeasible exact keys and proven empty angular intersections
+    // are unsatisfiable_constraints. Exhausted/numerically failed projection is
+    // ik_no_solution_found (not a proof of global infeasibility). No error has a pose.
+    // Exact keys bypass optimization and retain every stored scalar. Feasible
+    // references pass through. Otherwise bounded deterministic SLSQP minimizes the
+    // equally weighted mean squared circular chord distance of LOCAL bone angles:
+    // mean(2*(1-cos(local-reference))). No position objective or regularization.
+    // This is a local projection, not a guaranteed global nearest pose. Candidates
+    // are independently reconstructed/validated in detached transactional geometry:
+    // 1e-8 radians for angular/fan feasibility and 1e-8 relative length tolerance.
+    // Reconstructed lengths must be positive and finite. Unrepresentable FK
+    // fails. No invalid reference/candidate is committed, including on exact keys.
+    constrained_pose_result sample_constrained_pose(const animation& animation,
+        double time_seconds, const topology& topology, std::span<const object_id> rig_skeletons);
+
     pose capture_pose(const topology& topology, const std::vector<object_id>& skeletons, std::string name);
     skeletal_pose capture_skeletal_pose(const topology& topology, std::span<const object_id> skeletons);
     void apply_skeletal_pose(const skeletal_pose& pose, const topology& topology,

@@ -17,6 +17,7 @@
 #include <nlopt.hpp>
 
 #include "sm_ik.hpp"
+#include "sm_animation.hpp"
 #include "sm_angle_set.hpp"
 #include "sm_constraint_geometry.hpp"
 #include "sm_geometry_batch.hpp"
@@ -1656,6 +1657,257 @@ std::vector<region> discover_regions(
     return regions;
 }
 
+// Animation uses the same reduced fan coordinates, circular charts, affine
+// constraints and SLSQP backend as IK, but deliberately has no interactive pose
+// objective, positional targets, translation variables or continuation state.
+struct animation_angle_term {
+    linear_key key;
+    double offset;
+};
+
+double animation_angle_objective(const std::vector<double>& x,
+    std::vector<double>& gradient, void* opaque) {
+    const auto& terms = *static_cast<const std::vector<animation_angle_term>*>(opaque);
+    if (!gradient.empty()) std::fill(gradient.begin(), gradient.end(), 0.0);
+    const double weight = 1.0 / std::max<std::size_t>(terms.size(), 1);
+    double score = 0;
+    for (const auto& term : terms) {
+        const double delta = linear_value(term.key, x) + term.offset;
+        score += weight * 2.0 * (1.0 - std::cos(delta));
+        if (!gradient.empty()) for (auto [i, coefficient] : term.key.terms)
+            gradient[i] += weight * 2.0 * std::sin(delta) * coefficient;
+    }
+    return score;
+}
+
+// This scratch topology preserves IDs and is never exposed to the caller. Every
+// check rolls back, even on success: lengths always come from the entry geometry,
+// never from an invalid reference or a previous solver candidate.
+struct animation_geometry {
+    sm::topology topology;
+    std::vector<sm::object_id> skeletons;
+    std::map<sm::object_id, double> lengths;
+
+    sm::result validate(const sm::skeletal_pose& pose,
+        std::map<sm::object_id, double>* world_rotations = nullptr) {
+        sm::geometry_batch transaction(topology);
+        for (auto id : skeletons) {
+            auto& root = topology.skeleton(id)->get().root_node();
+            root.set_world_pos(pose.root_positions.at(root.id()));
+            std::vector<std::pair<sm::node*, double>> pending{{&root, 0.0}};
+            while (!pending.empty()) {
+                auto [node, parent_angle] = pending.back();
+                pending.pop_back();
+                auto children = node->child_bones();
+                std::ranges::sort(children, [](auto a, auto b) { return a->id() < b->id(); });
+                for (auto b : children) {
+                    const double angle = sm::normalize_angle(parent_angle
+                        + sm::normalize_angle(pose.bone_rotations.at(b->id())));
+                    if (world_rotations) (*world_rotations)[b->id()] = angle;
+                    const double length = lengths.at(b->id());
+                    const auto p = node->world_pos();
+                    const auto q = p + sm::point{length * std::cos(angle), length * std::sin(angle)};
+                    if (!finite(q)) return sm::result::out_of_bounds;
+                    // A coordinate-scaled tolerance can exceed the whole bone
+                    // at large origins. Require relative length fidelity instead.
+                    const double reconstructed_length = sm::distance(p, q);
+                    if (!std::isfinite(reconstructed_length) || reconstructed_length <= 0
+                        || std::abs(reconstructed_length - length) > 1e-8 * length
+                        || std::abs(sm::angular_distance(angle, sm::angle_from_u_to_v(p, q)))
+                            > k_angular_feasibility_tolerance)
+                        return sm::result::out_of_bounds;
+                    b->child_node().set_world_pos(q);
+                    pending.push_back({&b->child_node(), angle});
+                }
+            }
+        }
+        // Lengths were checked against the immutable entry snapshot above. Build
+        // Core's geometry validator here so its fan length snapshots do not add
+        // a conflicting absolute tolerance to those relative length checks.
+        // Authoritative angular checks include the stored signed fan orientation.
+        // Do not commit even a valid sample: this is only a validation transaction.
+        return sm::constraint_geometry(topology).validate(k_angular_feasibility_tolerance);
+    }
+};
+
+sm::result prepare_animation_geometry(const sm::topology& source,
+    std::span<const sm::object_id> skeletons, const sm::skeletal_pose& reference,
+    animation_geometry& scratch) {
+    scratch.skeletons.assign(skeletons.begin(), skeletons.end());
+    std::ranges::sort(scratch.skeletons);
+    if (scratch.skeletons.empty()
+        || std::adjacent_find(scratch.skeletons.begin(), scratch.skeletons.end()) != scratch.skeletons.end())
+        return sm::result::invalid_membership;
+    std::set<sm::object_id> bones;
+    for (auto id : scratch.skeletons) {
+        auto s = source.skeleton(id);
+        if (!s || s->get().empty()) return sm::result::invalid_membership;
+        for (auto n : s->get().nodes()) if (!finite(n->world_pos())) return sm::result::out_of_bounds;
+        for (auto b : s->get().bones()) {
+            const auto length = b->scaled_length();
+            if (!std::isfinite(length) || length <= 0 || !std::isfinite(b->length()) || b->length() <= 0)
+                return sm::result::out_of_bounds;
+            bones.insert(b->id());
+            scratch.lengths.emplace(b->id(), length);
+        }
+    }
+    if (!sm::skeletal_pose_compatible(reference, source, scratch.skeletons))
+        return sm::result::invalid_membership;
+    if (auto status = sm::validate_constraints(source, source.constraints()); status != sm::result::success)
+        return status;
+    for (const auto& [id, constraint] : source.constraints()) {
+        if (const auto* r = constraint.rotation()) {
+            if (r->reference.kind == sm::rotation_reference_kind::bone
+                && bones.contains(r->target_bone) != bones.contains(r->reference.bone_id))
+                return sm::result::invalid_membership;
+        } else if (const auto* t = constraint.triangle()) {
+            if (bones.contains(t->first_bone) != bones.contains(t->second_bone))
+                return sm::result::invalid_membership;
+        }
+    }
+    for (auto id : scratch.skeletons) {
+        auto copied = source.skeleton(id)->get().copy_to(scratch.topology);
+        if (!copied) return copied.error();
+    }
+    return sm::result::success;
+}
+
+// SLSQP requires independent equality rows. Keep a stable subset of the original
+// angular rows; Gaussian elimination is used only to detect dependence and an
+// inconsistent chart. Every original relation is still validated on candidates.
+bool independent_animation_chart(const std::vector<angular_group>& groups,
+    const std::vector<std::size_t>& branch, std::size_t dimension,
+    std::vector<angular_group>& independent) {
+    std::map<std::size_t, std::vector<double>> basis;
+    for (std::size_t i = 0; i < groups.size(); ++i) {
+        const auto interval = groups[i].choices[branch[i]];
+        if (std::abs(interval.high - interval.low) <= k_angular_feasibility_tolerance) {
+            std::vector<double> row(dimension + 1, 0.0);
+            for (auto [j, coefficient] : groups[i].key.terms) row[j] = coefficient;
+            row.back() = 0.5 * (interval.low + interval.high);
+            for (const auto& [pivot, previous] : basis) {
+                const double scale = row[pivot];
+                for (std::size_t j = pivot; j <= dimension; ++j) row[j] -= scale * previous[j];
+            }
+            std::size_t pivot = 0;
+            while (pivot < dimension && std::abs(row[pivot]) <= 1e-12) ++pivot;
+            if (pivot == dimension) {
+                if (std::abs(row.back()) > k_angular_feasibility_tolerance) return false;
+                continue;
+            }
+            const double scale = row[pivot];
+            for (auto& value : row) value /= scale;
+            basis.emplace(pivot, std::move(row));
+        }
+        auto group = groups[i];
+        group.choices = {interval};
+        independent.push_back(std::move(group));
+    }
+    return true;
+}
+
+std::expected<sm::skeletal_pose, sm::result> project_animation_reference(
+    const sm::skeletal_pose& reference, const std::map<sm::object_id, double>& world,
+    animation_geometry& geometry) {
+    kinematic_model model;
+    model.topology = &geometry.topology;
+    model.mode = translation_mode::pin_anchor; // angles only; no root variables
+    for (auto s : geometry.topology.skeletons())
+        for (auto b : s->bones()) model.bones.push_back(const_cast<sm::bone*>(b.ptr()));
+    std::ranges::sort(model.bones, bone_id_less);
+    if (auto status = build_angle_variables(model); status != sm::result::success)
+        return std::unexpected(status);
+
+    std::vector<double> incoming;
+    for (auto& variable : model.angle_variables) {
+        // Stable-ID fan representative chooses the reduced reference coordinate.
+        variable.incoming = world.at(variable.members.front()->id()) - variable.offsets.front();
+        incoming.push_back(variable.incoming);
+        model.lower_bounds.push_back(variable.incoming - std::numbers::pi);
+        model.upper_bounds.push_back(variable.incoming + std::numbers::pi);
+    }
+    std::vector<animation_angle_term> terms;
+    for (auto* b : model.bones) {
+        const auto coord = model.bone_coordinates.at(b);
+        std::map<std::size_t, int> coefficients{{coord.variable, 1}};
+        double offset = coord.offset - sm::normalize_angle(reference.bone_rotations.at(b->id()));
+        if (auto parent = b->parent_bone()) {
+            const auto p = model.bone_coordinates.at(parent->ptr());
+            --coefficients[p.variable];
+            offset -= p.offset;
+        }
+        linear_key key;
+        for (auto [i, coefficient] : coefficients) if (coefficient) key.terms.emplace_back(i, coefficient);
+        terms.push_back({std::move(key), offset});
+    }
+    std::vector<angular_group> groups;
+    if (auto status = build_angular_groups(model, incoming, groups); status != sm::result::success)
+        return std::unexpected(status);
+
+    std::optional<sm::skeletal_pose> best;
+    double best_score = std::numeric_limits<double>::infinity();
+    auto consider = [&](const std::vector<double>& x) {
+        if (!std::ranges::all_of(x, [](double v) { return std::isfinite(v); })) return;
+        auto pose = reference;
+        for (auto* b : model.bones) {
+            const auto coord = model.bone_coordinates.at(b);
+            double local = x[coord.variable] + coord.offset;
+            if (auto parent = b->parent_bone()) {
+                const auto p = model.bone_coordinates.at(parent->ptr());
+                local -= x[p.variable] + p.offset;
+            }
+            pose.bone_rotations.at(b->id()) = sm::normalize_angle(local);
+        }
+        if (geometry.validate(pose) != sm::result::success) return;
+        std::vector<double> unused;
+        const double score = animation_angle_objective(x, unused, &terms);
+        // Stable first-wins ties avoid changes from insignificant score roundoff.
+        if (!best || score < best_score - k_pose_score_roundoff) {
+            best = std::move(pose);
+            best_score = score;
+        }
+    };
+    consider(incoming);
+    const auto branches = make_branch_selections(groups);
+    const auto seeds = make_seeds(model, incoming);
+    // At most four charts x four seeds x 50 evaluations = 800 evaluations.
+    // No wall-clock budget, random seed or prior sample participates.
+    for (const auto& branch : branches) {
+        std::vector<angular_group> independent;
+        if (!independent_animation_chart(groups, branch, incoming.size(), independent)) continue;
+        const std::vector<std::size_t> selection(independent.size(), 0);
+        for (const auto& seed : seeds) {
+            if (incoming.empty()) continue;
+            auto x = seed;
+            optimizer_constraints storage;
+            storage.affine.reserve(groups.size() * 2);
+            solve_context context;
+            context.model = &model;
+            try {
+                nlopt::opt optimizer(nlopt::LD_SLSQP, static_cast<unsigned>(incoming.size()));
+                optimizer.set_lower_bounds(model.lower_bounds);
+                optimizer.set_upper_bounds(model.upper_bounds);
+                optimizer.set_min_objective(animation_angle_objective, &terms);
+                optimizer.set_ftol_abs(1e-12);
+                optimizer.set_xtol_abs(1e-9);
+                optimizer.set_maxeval(k_optimizer_evaluation_budget / (k_max_branch_attempts * k_max_escape_seeds));
+                add_hard_constraints(optimizer, context, independent, selection, storage);
+                double score = 0;
+                optimizer.optimize(x, score);
+            } catch (const nlopt::roundoff_limited&) {
+                // Termination is not acceptance: even interrupted candidates must
+                // independently satisfy the Core geometry checks below.
+            } catch (const nlopt::forced_stop&) {
+            } catch (const std::exception&) {
+                continue;
+            }
+            consider(x);
+        }
+    }
+    if (!best) return std::unexpected(sm::result::ik_no_solution_found);
+    return std::move(*best);
+}
+
 struct pose_restore_guard {
     std::vector<std::pair<sm::node*, sm::point>> saved;
     bool committed = false;
@@ -1667,6 +1919,30 @@ struct pose_restore_guard {
 };
 
 } // namespace
+
+sm::constrained_pose_result sm::sample_constrained_pose(const animation& animation,
+    double time_seconds, const sm::topology& topology, std::span<const object_id> rig_skeletons) {
+    std::optional<reference_pose_sample> reference;
+    try {
+        reference = sample_reference_pose(animation, time_seconds);
+    } catch (const std::invalid_argument&) {
+        return std::unexpected(result::invalid_animation);
+    }
+    if (!reference) return std::optional<constrained_pose_sample>{};
+    animation_geometry geometry;
+    if (auto status = prepare_animation_geometry(topology, rig_skeletons, reference->pose, geometry);
+        status != result::success) return std::unexpected(status);
+    std::map<object_id, double> world;
+    const auto feasibility = geometry.validate(reference->pose, &world);
+    if (feasibility == result::success)
+        return constrained_pose_sample{std::move(reference->pose), reference->location};
+    if (std::holds_alternative<reference_keyframe>(reference->location)
+        || feasibility != result::unsatisfiable_constraints)
+        return std::unexpected(feasibility);
+    auto projected = project_animation_reference(reference->pose, world, geometry);
+    if (!projected) return std::unexpected(projected.error());
+    return constrained_pose_sample{std::move(*projected), reference->location};
+}
 
 sm::result sm::perform_ik(
     const std::vector<std::tuple<node_ref, point>>& effectors,

@@ -479,9 +479,9 @@ The overall authoring model remains centered on direct manipulation: users creat
 
 ---
 
-## Implementation Status — Animation V2 Phase 3A
+## Implementation Status — Animation V2 Phase 3B
 
-Phase 2 implements persistent skeletal pose keyframes and static Pose Strip authoring. [Phase 2.5](animation-phase25.md) adds Pose Strip timing and transport. Phase 3A adds deterministic Core **reference pose** sampling only. The canvas still shows the selected editing pose; playback does not apply samples to it. The **Solved pose** stage, paths/pins, easing authoring, playhead insertion, and canvas animation remain future work.
+Phase 2 implements persistent skeletal pose keyframes and static Pose Strip authoring. [Phase 2.5](animation-phase25.md) adds Pose Strip timing and transport. Phase 3A adds deterministic Core **reference pose** sampling. Phase 3B adds the first bounded **Solved pose** stage: persistent angular and rigid-triangle constraint projection, with fixed reference roots and rig lengths. The canvas still shows the selected editing pose; playback does not call the new sampler or apply samples. Positional targets, paths/pins, domains, artwork evaluation, easing authoring, playhead insertion, and the remaining animation design are deferred.
 
 Retained authoring behavior:
 
@@ -547,3 +547,93 @@ exact and adjacent endpoints, wrap and half-turn angles, multiple roots/bones,
 history/insertion-order independence, malformed input, source immutability, and
 serialization round trips. Existing Phase 2/2.5 authoring and canvas-isolation
 tests remain in place.
+
+### Phase 3B constrained sampling contract
+
+`sm::sample_constrained_pose(animation, time_seconds, topology, rig_skeletons)`
+is a stateless, Qt-independent Core API. The topology and explicit full-rig
+skeleton IDs supply authoritative geometry and persistent constraints. The
+result is `expected<optional<constrained_pose_sample>, result>`: successful empty
+sequences contain no sample; only independently validated poses have a
+`constrained_pose_sample`. Its keyframe/transition location retains Phase 3A's
+stable IDs and progress. A `reference_pose_sample` is a different type and is
+never implicitly promoted to a valid constrained pose.
+
+The API calls `sample_reference_pose` for all timing, clamping, exact timestamp,
+and interpolation behavior. Exact keys bypass optimization, validate against
+the supplied rig and persistent constraints, and return the original stored
+scalars, including non-normalized angles. Incompatible or infeasible keys fail;
+they are never repaired. Unconstrained and already-feasible interior references
+also pass through unchanged. Empty sequences require no rig validation.
+
+For an infeasible interior reference, the implementation reuses IK's reduced
+rigid-fan coordinates, circular angular constraint charts, affine constraint
+callbacks, and NLopt SLSQP backend. World, parent, and bone-relative rotation
+limits are solved together. Coupled bone references can move both participating
+bones; rigid fans retain their stored signed offsets and handedness. Independent
+equality rows are selected deterministically for SLSQP so consistent coupled
+cycles do not introduce singular redundant rows. Validation still checks every
+original relation. The interactive IK path and its objectives are unchanged.
+
+The animation objective is the equal-per-bone mean of
+`2 * (1 - cos(local_angle - reference_local_angle))`. Root-bone local angles are
+world-relative; other local angles subtract the parent orientation. Equivalent
+orientations have equivalent cost. Fan members each contribute a term. There
+is no positional objective, hard node target, or additional regularization.
+This bounded local optimizer does **not** guarantee a global nearest pose.
+All reference root entries are preserved exactly, including multi-root rigs;
+there are no translation variables. Effective bone lengths are snapshotted from
+the input topology before any candidate is reconstructed, preserving its scale.
+
+Each invocation starts from the requested reference, with stable-ID bone,
+constraint, traversal, and rig ordering. A fan's smallest-ID bone chooses its
+initial reduced coordinate. Each variable is bounded to that initial angle
+plus/minus pi. Up to four deterministic circular charts and four deterministic
+seeds receive at most 50 SLSQP evaluations each (800 total); there are no clocks,
+randomness, history inputs, or caches. SLSQP uses absolute objective tolerance
+`1e-12` and angular step tolerance `1e-9`. Valid candidates compete by the stated
+objective; score differences within `1e-12` retain the first candidate.
+
+Reference/candidate reconstruction happens only inside an uncommitted geometry
+transaction on an ID-preserving detached rig copy. Every validation transaction
+rolls back, even on success. `constraint_geometry::validate` independently checks
+rotation limits and rigid fans with `1e-8` radian angular tolerance. Before that
+check, all reconstructed bone lengths must be finite, positive, and within
+`1e-8` relative tolerance of the immutable entry lengths. This relative check
+rejects collapse/distortion at large origins rather than allowing a coordinate
+roundoff allowance to exceed the bone itself. Core's fan validator is constructed
+after these length checks; its fan snapshots therefore do not impose a second,
+conflicting absolute length tolerance. Reconstructed directions must agree within `1e-8`
+radians and all coordinates must be finite. Unrepresentable FK fails instead of
+returning collapsed or distorted geometry. Optimizer termination alone never
+establishes success. No invalid reference/candidate is committed, and caller
+topology, constraints, assets, IDs, names, durations, and serialization are never
+modified. Public pose application, node setters, and batch validation are not
+weakened.
+
+Constraint dependencies crossing the supplied rig boundary are unsupported and
+return `invalid_membership`, including an outside target referencing an inside
+bone. Relations wholly outside the rig do not participate. Explicitly including
+both skeletons permits coupled multi-root solving. Editor pins are never read.
+
+Failure policies use existing Core statuses and contain no valid-pose payload:
+
+- Malformed animation data or nonfinite requested time: `invalid_animation`.
+- Missing/duplicate/empty rig skeletons, pose/rig ID mismatch, or a cross-rig
+  constraint dependency: `invalid_membership`.
+- Nonfinite or degenerate rig geometry, or unrepresentable FK: `out_of_bounds`.
+- Invalid constraint definitions retain the authoritative Core validation status,
+  such as `invalid_constraint`, `no_parent`, or `inconsistent_constraints`.
+- An infeasible exact key or a proven empty angular intersection:
+  `unsatisfiable_constraints`. For an exact key this describes the stored pose;
+  another pose may still be feasible.
+- No independently feasible candidate within the bounded solve:
+  `ik_no_solution_found`. This includes numerical/nonconvergence failures and
+  potentially infeasible coupled systems not proven infeasible by preprocessing;
+  it does not assert global infeasibility.
+
+Core regression coverage in `animation_v2_phase3b` exercises timing and exact
+scalars, endpoint rejection, angular projection and coupled cycles, signed rigid
+triangles, fixed lengths and multiple roots, external dependency rejection,
+failure isolation, sampling-history and insertion-order independence, and
+serialization round trips. Phase 2.5 remains the user-visible playback boundary.
