@@ -57,7 +57,9 @@ void ui::canvas::item::node::set_pin_visible(bool visible) {
 void ui::canvas::item::node::set_lock_visible(bool visible, const QString& tooltip) {
     if (!lock_ && visible) {
         lock_ = new QGraphicsPathItem(this);
-        lock_->setBrush(Qt::NoBrush);
+        // The badge overlaps nearby bones. An opaque interior keeps its black
+        // outline readable against their fill as well as the canvas background.
+        lock_->setBrush(Qt::white);
         lock_->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
         lock_->setAcceptedMouseButtons(Qt::NoButton);
     }

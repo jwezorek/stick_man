@@ -4,6 +4,7 @@
 #include "ui/widgets/pose_strip.hpp"
 #include "ui/widgets/timeline.hpp"
 #include "ui/canvas/canvas_manager.hpp"
+#include "ui/canvas/node_item.hpp"
 #include "ui/tools/tool_manager.hpp"
 #include "ui/tools/constraint_tool.hpp"
 
@@ -23,11 +24,80 @@ QPushButton* tool_button(ui::stick_man& window, const QString& tooltip) {
         if (button->toolTip() == tooltip) return button;
     return nullptr;
 }
+
+void lock_on_existing_frame(QApplication& app) {
+    ui::stick_man window;
+    window.resize(1200, 800);
+    window.show();
+    app.processEvents();
+    auto& model = window.project();
+    const auto add_node = [&](sm::point pos) {
+        model.add_new_skeleton_root(pos);
+        for (auto skel : model.topology().skeletons())
+            if (skel->root_node().world_pos() == pos) return skel->root_node().id();
+        throw std::runtime_error("missing fixture node");
+    };
+    const auto hip = add_node({0, 100});
+    const auto ankle = add_node({0, 0});
+    const auto toe = add_node({50, 0});
+    require(model.add_bone(hip, ankle) == sm::result::success, "create leg");
+    require(model.add_bone(ankle, toe) == sm::result::success, "create foot");
+    auto skel = *model.topology().skeletons().begin();
+    const auto character = model.make_character(std::vector<sm::const_skel_ref>{skel}).value();
+    sm::animation animation;
+    const auto animation_id = animation.id;
+    model.edit_animation_data(character, [&](auto& data) { data.animations.push_back(animation); });
+    auto* browser = window.findChild<ui::pane::animation*>();
+    require(browser->open_animation(character, animation_id), "open fixture animation");
+    require(model.add_animation_keyframe() == sm::result::success, "add first frame");
+    const auto first = *model.animation_session_keyframe();
+    require(model.add_animation_keyframe() == sm::result::success, "add second frame");
+    const auto second = *model.animation_session_keyframe();
+    require(model.select_animation_keyframe(first) == sm::result::success, "select source frame");
+    auto& canvases = window.canvases();
+    auto& canvas = canvases.active_canvas();
+    window.tool_mgr().set_current_tool(canvases, ui::tool::id::constraint);
+    auto& tool = window.tool_mgr().current_tool();
+    QGraphicsSceneMouseEvent press(QEvent::GraphicsSceneMousePress);
+    press.setScenePos({0, 0}); press.setButton(Qt::LeftButton); press.setButtons(Qt::LeftButton);
+    tool.mousePressEvent(canvas, &press);
+    QGraphicsSceneMouseEvent release(QEvent::GraphicsSceneMouseRelease);
+    release.setScenePos({0, 0}); release.setButton(Qt::LeftButton);
+    tool.mouseReleaseEvent(canvas, &release);
+    require(model.animation_session_pinned_nodes().contains(ankle), "constraint tool did not pin ankle");
+    window.tool_mgr().set_current_tool(canvases, ui::tool::id::selection);
+    require(model.select_animation_keyframe(second) == sm::result::success, "select destination frame");
+    require(canvas.is_node_pinned(ankle), "existing destination frame lost ankle lock");
+    canvas.views().first()->centerOn(0, 25);
+    app.processEvents();
+    QGraphicsPathItem* lock = nullptr;
+    for (auto* node : canvas.node_items()) {
+        if (node->model().id() != ankle) continue;
+        for (auto* child : node->childItems())
+            if (auto* path = dynamic_cast<QGraphicsPathItem*>(child); path && path->isVisible()) lock = path;
+    }
+    require(lock != nullptr, "locked ankle has no lock graphic");
+    auto* viewport = canvas.views().first()->viewport();
+    const auto with_lock = viewport->grab().toImage();
+    lock->hide();
+    const auto without_lock = viewport->grab().toImage();
+    lock->show();
+    // A black outline alone disappears into the filled foot bone. The badge
+    // must contribute a contrasting light interior, independent of the bone.
+    int contrasting_pixels = 0;
+    for (int y = 0; y < with_lock.height(); ++y)
+        for (int x = 0; x < with_lock.width(); ++x)
+            if (qGray(with_lock.pixel(x, y)) > qGray(without_lock.pixel(x, y)) + 128)
+                ++contrasting_pixels;
+    require(contrasting_pixels >= 20, "lock indicator disappears over a dark bone");
+    browser->leave_animation();
+}
 }
 
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     try {
+        lock_on_existing_frame(app);
         ui::stick_man window;
         window.resize(1200, 800);
         window.show();
@@ -116,11 +186,46 @@ int main(int argc, char** argv) {
 
         require(model.add_animation_keyframe() == sm::result::success, "create first frame");
         const auto first_frame = *model.animation_session_keyframe();
-        canvas.toggle_node_pinned_undoable(root_id);
         require(model.add_animation_keyframe() == sm::result::success, "create second frame");
         const auto second_frame = *model.animation_session_keyframe();
+        auto* strip = editor->findChild<ui::pose_strip*>();
+        const auto select_card = [&](std::size_t index) {
+            const auto* source = model.core().animation_data(character_id).find_animation(animation_id);
+            const auto pos = ui::pose_strip_layout(source).cards[index].rect.center();
+            QMouseEvent press(QEvent::MouseButtonPress, pos, strip->mapToGlobal(pos.toPoint()),
+                Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(strip, &press);
+            QMouseEvent release(QEvent::MouseButtonRelease, pos, strip->mapToGlobal(pos.toPoint()),
+                Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(strip, &release);
+            app.processEvents();
+        };
+        select_card(0);
+        auto& selection_tool = window.tool_mgr().current_tool();
+        QGraphicsSceneMouseEvent pin_press(QEvent::GraphicsSceneMousePress);
+        pin_press.setScenePos({moved.x, moved.y});
+        pin_press.setButton(Qt::LeftButton);
+        pin_press.setButtons(Qt::LeftButton);
+        pin_press.setModifiers(Qt::AltModifier);
+        selection_tool.mousePressEvent(canvas, &pin_press);
+        QGraphicsSceneMouseEvent pin_release(QEvent::GraphicsSceneMouseRelease);
+        pin_release.setScenePos({moved.x, moved.y});
+        pin_release.setButton(Qt::LeftButton);
+        pin_release.setModifiers(Qt::AltModifier);
+        selection_tool.mouseReleaseEvent(canvas, &pin_release);
+        require(model.animation_session_pinned_nodes().contains(root_id), "Alt-click did not pin frame 1");
+        select_card(1);
         require(model.animation_session_incoming_locked_nodes().contains(root_id),
             "frame 1 pin must lock frame 2");
+        bool visible_lock = false;
+        for (auto* node : canvas.node_items()) {
+            if (node->model().id() != root_id) continue;
+            for (auto* child : node->childItems())
+                if (dynamic_cast<QGraphicsPathItem*>(child) && child->isVisible()) visible_lock = true;
+        }
+        require(visible_lock, "frame 2 must display a lock after pinning existing frame 1");
+        // Frame 2 was created before frame 1 was pinned, so it has no outgoing pin yet.
+        canvas.toggle_node_pinned_undoable(root_id);
         canvas.toggle_node_pinned_undoable(root_id);
         require(!model.animation_session_pinned_nodes().contains(root_id), "frame 2 unpin failed");
         require(canvas.is_node_pinned(root_id), "unpin must preserve frame 2 incoming movement lock");
