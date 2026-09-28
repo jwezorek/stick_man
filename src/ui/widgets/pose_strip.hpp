@@ -19,15 +19,20 @@ public:
         sm::object_id character, sm::object_id animation);
     bool refresh();
     void set_playback_time(double seconds);
+    void set_selected_transition(std::optional<sm::object_id> id);
     QPixmap render_preview(sm::object_id keyframe);
     QSize minimumSizeHint() const override;
 signals:
     void keyframe_selected(sm::object_id id);
+    void transition_selected(sm::object_id id);
+    void scrub_requested(double seconds);
     void playback_focus_changed(QRectF region);
 protected:
     bool event(QEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
 private:
     mdl::project* project_ = nullptr;
     canvas::manager* canvases_ = nullptr;
@@ -41,6 +46,8 @@ private:
 
     pose_strip_layout layout_;
     double playback_time_ = 0;
+    std::optional<sm::object_id> selected_transition_;
+    bool scrubbing_ = false;
     QPixmap thumbnail(const sm::pose_keyframe& keyframe);
 };
 }

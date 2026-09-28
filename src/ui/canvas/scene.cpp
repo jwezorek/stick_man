@@ -388,7 +388,7 @@ const std::unordered_set<sm::object_id>& ui::canvas::scene::pinned_node_ids() co
 }
 
 bool ui::canvas::scene::is_node_pinned(const sm::object_id& id) const {
-    return pinned_node_ids_.contains(id);
+    return pinned_node_ids_.contains(id) || incoming_locked_node_ids_.contains(id);
 }
 
 void ui::canvas::scene::set_node_pinned(const sm::object_id& id, bool pinned) {
@@ -424,6 +424,20 @@ void ui::canvas::scene::toggle_node_pinned_undoable(const sm::object_id& id) {
 void ui::canvas::scene::set_pinned_node_ids(const std::unordered_set<sm::object_id>& ids) {
     pinned_node_ids_ = ids;
     for (auto* node : node_items()) node->set_pin_visible(pinned_node_ids_.contains(node->model().id()));
+}
+
+void ui::canvas::scene::set_incoming_locked_node_ids(const std::unordered_set<sm::object_id>& ids) {
+    incoming_locked_node_ids_ = ids;
+    for (auto* node : node_items()) {
+        const auto id = node->model().id();
+        QString tip;
+        if (incoming_locked_node_ids_.contains(id) && model_) {
+            const auto source = model_->animation_session_incoming_lock_source_label(id);
+            tip = source ? tr("Position locked by %1. Unpin this node in %1 to move it here.")
+                .arg(QString::fromStdString(*source)) : tr("Position locked by previous pose.");
+        }
+        node->set_lock_visible(incoming_locked_node_ids_.contains(id), tip);
+    }
 }
 
 bool ui::canvas::scene::constraints_visible() const {
@@ -480,7 +494,8 @@ bool ui::canvas::scene::is_status_line_visible() const {
 ui::canvas::item::node* ui::canvas::scene::insert_item(sm::node& node) {
 	ui::canvas::item::node* ni;
 	addItem(ni = new item::node(node, scale()));
-    ni->set_pin_visible(is_node_pinned(node.id()));
+    ni->set_pin_visible(pinned_node_ids_.contains(node.id()));
+    ni->set_lock_visible(incoming_locked_node_ids_.contains(node.id()));
 	return ni;
 }
 

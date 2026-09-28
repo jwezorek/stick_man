@@ -2,6 +2,7 @@
 #include <QObject>
 #include <QWidget>
 #include <algorithm>
+#include <cmath>
 
 ui::pose_strip_layout::pose_strip_layout(const sm::animation* animation, double card_width) {
     if (!animation || animation->keyframes.empty()) return;
@@ -19,13 +20,13 @@ ui::pose_strip_layout::pose_strip_layout(const sm::animation* animation, double 
     double x = margin;
     double time = 0;
     for (std::size_t i = 0; i < animation->keyframes.size(); ++i) {
-        cards.push_back({animation->keyframes[i].id, {x, margin, card_width, 116}, time});
+        cards.push_back({animation->keyframes[i].id, {x, 22, card_width, 104}, time});
         x += card_width;
         if (i < animation->transitions.size()) {
             const auto& source = animation->transitions[i];
             const double w = std::max(minimum_transition_width,
                 source.duration_seconds * scale);
-            transitions.push_back({source.id, {x, 49, w, 38}, time, source.duration_seconds});
+            transitions.push_back({source.id, {x, 55, w, 38}, time, source.duration_seconds});
             x += w;
             time += source.duration_seconds;
         }
@@ -45,6 +46,28 @@ std::optional<ui::pose_strip_layout::position> ui::pose_strip_layout::at_time(do
         x = t.rect.left() + t.rect.width() * ((seconds - t.start) / t.duration);
     }
     return position{index, x, seconds == cards[index].time};
+}
+
+std::optional<double> ui::pose_strip_layout::time_at_x(double x) const {
+    if (cards.empty() || !std::isfinite(x)) return {};
+    if (x <= cards.front().rect.left()) return cards.front().time;
+    for (std::size_t i = 0; i < cards.size(); ++i) {
+        if (cards[i].rect.contains(QPointF(x, cards[i].rect.center().y())) ||
+                (x >= cards[i].rect.left() && x <= cards[i].rect.right())) {
+            // Collapsed timestamps use the same last-key convention as sampling.
+            auto j = i;
+            while (j + 1 < cards.size() && cards[j + 1].time == cards[i].time) ++j;
+            return cards[j].time;
+        }
+        if (i < transitions.size()) {
+            const auto& t = transitions[i];
+            if (x >= t.rect.left() && x <= t.rect.right()) {
+                const double u = std::clamp((x - t.rect.left()) / t.rect.width(), 0.0, 1.0);
+                return t.start + u * t.duration;
+            }
+        }
+    }
+    return cards.back().time;
 }
 
 bool ui::pose_strip_layout::same_timing(const pose_strip_layout& other) const {

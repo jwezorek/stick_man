@@ -145,3 +145,15 @@ add_test(NAME constraint_ui COMMAND "${CMAKE_COMMAND}" -E env
 add_executable(constraint_solver constraint_solver.cpp)
 target_link_libraries(constraint_solver PRIVATE stick_man_core)
 add_test(NAME constraint_solver COMMAND $<TARGET_FILE:constraint_solver>)
+
+add_executable(animation_v2_phase4 animation_v2_phase4.cpp)
+target_link_libraries(animation_v2_phase4 PRIVATE stick_man_ui)
+if(WIN32)
+    add_test(NAME animation_v2_phase4 COMMAND "${CMAKE_COMMAND}" -E env
+        "QT_QPA_PLATFORM=offscreen" "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        $<TARGET_FILE:animation_v2_phase4>)
+else()
+    add_test(NAME animation_v2_phase4 COMMAND "${CMAKE_COMMAND}" -E env
+        "QT_QPA_PLATFORM=offscreen" $<TARGET_FILE:animation_v2_phase4>)
+endif()
+set_tests_properties(animation_v2_phase4 PROPERTIES TIMEOUT 60)

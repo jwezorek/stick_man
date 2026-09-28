@@ -129,7 +129,7 @@ Pose keyframes represent endpoint poses, not commands that transform one pose in
 
 At an exact keyframe timestamp, the stored pose is applied directly within the current incoming attachment frame. It is not projected through the transition solver, and transition-local paths or pins do not override it. Exactness refers to the domain's stored skeletal state; its world-space placement still inherits upstream animation.
 
-This rule applies equally to playback, scrubbing, and selecting a pose. A disagreement between transition targets and an endpoint pose may cause a discontinuity at the keyframe. That is an accepted tradeoff: the system does not silently alter an authored keyframe to remove the discontinuity.
+This rule applies equally to playback, scrubbing, and selecting a pose. Exact keys still use their stored scalars and are never silently projected or repaired. For authored pins, however, Phase 4 adds a stricter endpoint invariant: a node pinned by a source keyframe must occupy the same world position in the immediately following keyframe. Editor operations that would break that equality are rejected atomically. Legacy mismatches are reported and their interval is not presented as a valid continuous pinned preview; the stored keyframe itself is still left untouched.
 
 The user authors a pose by directly manipulating the skeleton on the canvas. The current IK/constraint solver acts as a posing tool and is allowed to change only the degrees of freedom owned by the active animation region.
 
@@ -481,7 +481,7 @@ The overall authoring model remains centered on direct manipulation: users creat
 
 ## Implementation Status — Animation V2 Phase 3C
 
-Phase 2 implements persistent skeletal pose keyframes and static Pose Strip authoring. [Phase 2.5](animation-phase25.md) adds Pose Strip timing and transport. Phase 3A adds deterministic Core **reference pose** sampling. Phase 3B adds the first bounded **Solved pose** stage: persistent angular and rigid-triangle constraint projection, with fixed reference roots and rig lengths. Phase 3C connects `sample_constrained_pose` to the existing transport: the canvas and Pose Strip preview the same absolute animation time. The canvas preview is read-only and isolated from selected-keyframe editing and persistent project geometry. Positional targets, animation paths/pins, tracks, domains, composition, artwork-state evaluation, easing authoring, scrubbing, playhead insertion, looping, root-motion accumulation, asynchronous evaluation, and solver caches remain deferred. There are no schema changes or saved evaluated poses.
+Phase 2 implements persistent skeletal pose keyframes and static Pose Strip authoring. [Phase 2.5](animation-phase25.md) adds Pose Strip timing and transport. Phase 3A adds deterministic Core **reference pose** sampling. Phase 3B adds the first bounded **Solved pose** stage: persistent angular and rigid-triangle constraint projection, with fixed reference roots and rig lengths. Phase 3C connects `sample_constrained_pose` to the existing transport: the canvas and Pose Strip preview the same absolute animation time. Phase 4 adds authoritative seeking/scrubbing, transition-duration editing, interior constrained-pose insertion, and the endpoint contract for persistent outgoing pins/incoming locks. The canvas preview remains read-only and isolated from selected-keyframe editing and persistent project geometry. Moving positional paths, pose domains, composition, artwork-state evaluation, easing authoring, looping, root-motion accumulation, asynchronous evaluation, and solver caches remain deferred. There are no Phase 4 schema migrations or saved evaluated poses.
 
 Retained authoring behavior:
 
@@ -697,3 +697,56 @@ and model/view teardown. Deterministic checks use the editor's absolute-time
 preview entry point; the existing Phase 2.5 and UI tests separately cover the real
 elapsed clock, pause/resume, endpoints, completion, restart, and highlighting.
 The Phase 3A/3B sampler tests are unchanged.
+
+
+## Implementation Status — Animation V2 Phase 4
+
+Phase 4 makes the transport the single user-facing animation clock. `animation_playback::seek`
+accepts absolute finite time, clamps it to the clip, pauses advancement, and publishes the requested
+time exactly once; nonfinite seeks leave transport state unchanged. Scrub gestures, the time label,
+Pose Strip playhead, and constrained canvas preview all flow through this operation. Scrubbing is
+read-only even at exact key times and never selects a pose, captures geometry, changes pins, creates
+history, or dirties the project. The Pose Strip has a dedicated scrub ruler above the cards. Its
+reusable inverse layout mapping treats card pixels as their exact key time and only transition pixels
+as elapsed animation time, including minimum-width transitions and the existing last-key-at-collapsed-
+timestamp rule.
+
+Transitions are selectable by stable transition ID independently of pose editing selection. The
+editor exposes the selected transition duration in seconds. A completed duration edit is one
+animation-session command: only positive finite values whose resulting total duration is finite are
+accepted, no-ops create no history, and undo/redo restore the exact value and ID. As with other timing
+changes, the transport stops/resets and preview is left; no pose is implicitly retimed.
+
+Pins now have two distinct meanings at a keyframe. The keyframe's own `pinned_nodes` are its
+**outgoing pins** and continue to govern the following transition. The previous keyframe's
+`pinned_nodes` are derived **incoming position locks**. The first pose has no incoming locks. Incoming
+locks are shown with a small lock glyph offset from the node while outgoing pins retain the black
+circle, so both can be visible independently. The lock tooltip names the source pose and directs the
+user to remove the pin there. Incoming locks participate in interaction pinning so direct and indirect
+IK manipulation cannot move the locked node.
+
+The authoring invariant is strict: for every outgoing pin, the source and destination world positions
+must agree within `1e-8`, matching the solver's positional precision. Enabling a pin with mismatched
+endpoints is rejected. Pose edits and adjacency-changing Add, Duplicate, Delete, and Insert operations
+are validated before they enter session history; a rejected pose edit restores the previous geometry
+and does not advance undo/dirty state. The editor never propagates motion into neighboring poses,
+snaps endpoints, drops pins, or weakens constraints to make an edit fit. Removing the source pin is
+always permitted so legacy inconsistent data can be repaired manually. Existing files are not mutated
+on load; if an inconsistent legacy pinned interval is sampled in its interior, constrained sampling
+returns `invalid_animation` rather than displaying it as a continuous pinned transition. Exact-key
+sampling still preserves authored scalars and performs no silent repair.
+
+**Insert Pose** is separate from Add Pose and is available only at a successful preview time strictly
+inside one transition. The model independently verifies the request, calls `sample_constrained_pose`
+against the authoritative persistent rig, and stores that evaluated result as a fresh keyframe. The
+inserted key inherits the source key's outgoing pins, so those pins govern both split intervals. The
+original transition ID remains on the first segment, a fresh transition ID is allocated once for the
+second, the two positive finite durations sum to the original duration, and unrelated records are
+unchanged. Insertion is one atomic session command; success selects the inserted pose for editing,
+undo restores the original transition and previous editing selection, and redo restores the same
+keyframe/transition identities rather than generating new ones.
+
+Phase 4 deliberately does not add easing, moving target paths, pose domains, animation composition,
+animated artwork state, looping, root-motion accumulation, asynchronous sampling, caches, or a new
+solver. Linear interpolation remains the reference trajectory. The serialized transition duration and
+existing `pinned_nodes` field are reused unchanged, so no file-format migration is required.

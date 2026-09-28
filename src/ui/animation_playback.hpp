@@ -13,6 +13,9 @@ public:
     void set_duration(double seconds);
     void play();
     void pause();
+    // Absolute seek: reject nonfinite values; clamp finite values to the clip.
+    // Seeking always pauses and publishes exactly one requested-time update.
+    bool seek(double seconds);
     // Stop at the last published time without emitting a tick (failure/edit exit).
     void hold();
     void stop();

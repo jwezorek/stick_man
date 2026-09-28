@@ -32,8 +32,8 @@ void operator delete(void* memory, std::size_t) noexcept { std::free(memory); }
 
 namespace {
 void require(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
-void near(double a, double b) {
-    if (std::abs(a-b) >= 1e-6) throw std::runtime_error("coordinate: " + std::to_string(a) + " expected " + std::to_string(b));
+void near(double a, double b, double tolerance = 1e-6) {
+    if (std::abs(a-b) >= tolerance) throw std::runtime_error("coordinate: " + std::to_string(a) + " expected " + std::to_string(b));
 }
 sm::point displayed(ui::canvas::scene& scene, sm::object_id id) {
     for (auto* n : scene.node_items()) if (n->model().id() == id) return n->model().world_pos();
@@ -191,8 +191,8 @@ void playback_uses_outgoing_keyframe_pins() {
     ui::stick_man window;
     auto& p = window.project();
     auto& core = p.core();
-    auto root = core.create_skeleton({0, 0}).root_node();
-    auto tip = core.create_skeleton({10, 0}).root_node();
+    sm::node_ref root = core.create_skeleton({0, 0}).root_node();
+    sm::node_ref tip = core.create_skeleton({10, 0}).root_node();
     auto bone = core.create_bone("bone", root, tip).value();
     const auto rid = root->id(), tid = tip->id();
     auto cid = p.make_character(std::vector<sm::const_skel_ref>{root->owner()}).value();
@@ -203,8 +203,8 @@ void playback_uses_outgoing_keyframe_pins() {
     a.keyframes.resize(3);
     for (auto& key : a.keyframes) key.pose = sm::capture_skeletal_pose(core.topology(), rig);
     a.keyframes[0].pinned_nodes.insert(tid);
-    a.keyframes[1].pose.root_positions[rid] = {10, 0};
-    a.keyframes[1].pose.bone_rotations[bone->id()] = std::numbers::pi / 2;
+    // Phase 4 requires a source pin to match the destination endpoint.
+    // Keep the first pinned interval stationary; the next interval is unpinned.
     a.keyframes[2].pose.root_positions[rid] = {20, 0};
     a.keyframes[2].pose.bone_rotations[bone->id()] = 0;
     a.reconcile_transitions();
@@ -224,15 +224,17 @@ void playback_uses_outgoing_keyframe_pins() {
 
     editor->preview_time(2.0);
     require(!scene.is_node_pinned(tid), "destination unpin did not take effect at exact keyframe");
-    near(displayed(scene, rid).x, 10.0);
+    near(displayed(scene, rid).x, 0.0);
+    near(displayed(scene, rid).y, 0.0);
     near(displayed(scene, tid).x, 10.0);
-    near(displayed(scene, tid).y, 10.0);
+    near(displayed(scene, tid).y, 0.0);
 
     editor->preview_time(3.0);
     require(!scene.is_node_pinned(tid), "destination unpin did not govern the next transition");
-    near(displayed(scene, rid).x, 15.0);
-    near(displayed(scene, tid).x, 15.0 + 10.0 / std::sqrt(2.0), 1e-6);
-    near(displayed(scene, tid).y, 10.0 / std::sqrt(2.0), 1e-6);
+    near(displayed(scene, rid).x, 10.0);
+    near(displayed(scene, rid).y, 0.0);
+    near(displayed(scene, tid).x, 20.0, 1e-6);
+    near(displayed(scene, tid).y, 0.0, 1e-6);
 
     browser->leave_animation();
     require(!p.is_dirty(), "playback-only pin sampling marked project dirty");

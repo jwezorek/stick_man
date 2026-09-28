@@ -2041,6 +2041,34 @@ sm::constrained_pose_result sm::sample_constrained_pose(const animation& animati
     }
     if (!active_keyframe) return std::unexpected(result::invalid_animation);
 
+    // Phase 4 authoring invariant: a source pin must reach the destination at
+    // exactly the same world position. Legacy files are not mutated on load, but
+    // their inconsistent interval is not presented as a valid continuous preview.
+    if (interior && !active_keyframe->pinned_nodes.empty()) {
+        const auto tr = std::get<reference_transition>(reference->location);
+        const auto* destination = animation.find_keyframe(tr.to_keyframe_id);
+        if (!destination) return std::unexpected(result::invalid_animation);
+        try {
+            sm::topology from_topology, to_topology;
+            for (auto sid : rig_skeletons) {
+                auto source = topology.skeleton(sid);
+                if (!source || !source->get().copy_to(from_topology) || !source->get().copy_to(to_topology))
+                    return std::unexpected(result::invalid_membership);
+            }
+            apply_skeletal_pose(active_keyframe->pose, from_topology, rig_skeletons);
+            apply_skeletal_pose(destination->pose, to_topology, rig_skeletons);
+            for (auto id : active_keyframe->pinned_nodes) {
+                auto a = from_topology.get<sm::node>(id);
+                auto b = to_topology.get<sm::node>(id);
+                if (!a || !b) return std::unexpected(result::invalid_membership);
+                if (sm::distance(a->get().world_pos(), b->get().world_pos()) > 1e-8)
+                    return std::unexpected(result::invalid_animation);
+            }
+        } catch (...) {
+            return std::unexpected(result::invalid_animation);
+        }
+    }
+
     std::map<object_id, double> world;
     const auto feasibility = geometry.validate(reference->pose, &world);
     skeletal_pose pose;

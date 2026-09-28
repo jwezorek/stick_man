@@ -90,12 +90,18 @@ void ui::pose_strip::set_playback_time(double seconds) {
     playback_time_ = seconds;
     update();
     if (const auto position = layout_.at_time(seconds)) {
-        auto focus = QRectF(position->x, 10, 1, 116);
+        auto focus = QRectF(position->x, 4, 1, 122);
         if (!previous || previous->current_pose != position->current_pose || seconds == 0) {
             focus = focus.united(layout_.cards[position->current_pose].rect);
         }
         emit playback_focus_changed(focus);
     }
+}
+
+void ui::pose_strip::set_selected_transition(std::optional<sm::object_id> id) {
+    if (selected_transition_ == id) return;
+    selected_transition_ = id;
+    update();
 }
 
 QPixmap ui::pose_strip::render_preview(sm::object_id id) {
@@ -280,8 +286,14 @@ void ui::pose_strip::paintEvent(QPaintEvent*) {
     }
 
     painter.setRenderHint(QPainter::Antialiasing);
+    // Dedicated scrub ruler: cards are deliberately below this lane.
+    painter.setPen(palette().mid().color());
+    painter.drawLine(QPointF(10, 12), QPointF(std::max(10.0, layout_.width - 10), 12));
+
     for (const auto& transition : layout_.transitions) {
-        painter.setPen(palette().mid().color());
+        const bool selected_transition = selected_transition_ && *selected_transition_ == transition.id;
+        painter.setPen(QPen(selected_transition ? palette().highlight().color() : palette().mid().color(),
+            selected_transition ? 3 : 1));
         painter.setBrush(palette().alternateBase());
         painter.drawRect(transition.rect);
         const auto label = transition_duration_label(transition.duration);
@@ -361,17 +373,39 @@ bool ui::pose_strip::event(QEvent* event) {
 }
 
 void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
-    if (!project_) return;
+    if (!project_ || event->button() != Qt::LeftButton) return;
 
     auto character = project_->core().character(character_);
     auto* animation = character ?
         character->get().animation_data().find_animation(animation_) : nullptr;
     if (!animation) return;
 
+    if (event->position().y() <= 20.0) {
+        scrubbing_ = true;
+        if (auto time = layout_.time_at_x(event->position().x())) emit scrub_requested(*time);
+        return;
+    }
     for (std::size_t i = 0; i < animation->keyframes.size(); ++i) {
-        if (layout_.cards[i].rect.contains(event->pos())) {
+        if (layout_.cards[i].rect.contains(event->position())) {
             emit keyframe_selected(animation->keyframes[i].id);
             return;
         }
     }
+    for (const auto& transition : layout_.transitions) {
+        if (transition.rect.contains(event->position())) {
+            emit transition_selected(transition.id);
+            return;
+        }
+    }
+}
+
+void ui::pose_strip::mouseMoveEvent(QMouseEvent* event) {
+    if (!scrubbing_) return;
+    if (auto time = layout_.time_at_x(event->position().x())) emit scrub_requested(*time);
+}
+
+void ui::pose_strip::mouseReleaseEvent(QMouseEvent* event) {
+    if (!scrubbing_ || event->button() != Qt::LeftButton) return;
+    if (auto time = layout_.time_at_x(event->position().x())) emit scrub_requested(*time);
+    scrubbing_ = false;
 }

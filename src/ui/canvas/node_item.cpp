@@ -54,6 +54,25 @@ void ui::canvas::item::node::set_pin_visible(bool visible) {
     pin_visible_ = visible;
 }
 
+void ui::canvas::item::node::set_lock_visible(bool visible, const QString& tooltip) {
+    if (!lock_ && visible) {
+        lock_ = new QGraphicsPathItem(this);
+        lock_->setBrush(Qt::NoBrush);
+        lock_->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+        lock_->setAcceptedMouseButtons(Qt::NoButton);
+    }
+    if (!lock_) return;
+    if (!visible) { lock_->hide(); return; }
+    QPainterPath path;
+    path.addRoundedRect(QRectF(7, -2, 8, 7), 1, 1);
+    path.moveTo(9, -2);
+    path.arcTo(QRectF(9, -7, 4, 8), 0, 180);
+    lock_->setPath(path);
+    lock_->setPen(QPen(Qt::black, 1.4));
+    lock_->setToolTip(tooltip);
+    lock_->show();
+}
+
 bool ui::canvas::item::node::pin_visible() const {
     return pin_visible_;
 }

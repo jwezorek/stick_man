@@ -33,6 +33,18 @@ void ui::animation_playback::tick() {
     emit time_changed(time_);
 }
 
+
+bool ui::animation_playback::seek(double seconds) {
+    if (!std::isfinite(seconds)) return false;
+    const bool was_playing = playing();
+    timer_.stop();
+    if (was_playing) emit playing_changed(false);
+    time_ = std::clamp(seconds, 0.0, duration_);
+    anchor_ = time_;
+    emit time_changed(time_);
+    return true;
+}
+
 void ui::animation_playback::pause() {
     if (!playing()) return;
     tick();

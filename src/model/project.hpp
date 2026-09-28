@@ -95,6 +95,10 @@ namespace mdl {
         std::optional<sm::object_id> animation_session_animation() const;
         std::optional<sm::object_id> animation_session_keyframe() const;
         std::unordered_set<sm::object_id> animation_session_pinned_nodes() const;
+        std::unordered_set<sm::object_id> animation_session_incoming_locked_nodes() const;
+        std::optional<std::string> animation_session_incoming_lock_source_label(sm::object_id node) const;
+        sm::result set_animation_transition_duration(sm::object_id transition, double seconds);
+        sm::result insert_animation_keyframe(double seconds);
         sm::result set_animation_keyframe_node_pinned(sm::object_id node, bool pinned);
         sm::result select_animation_keyframe(sm::object_id keyframe);
         sm::result add_animation_keyframe();
@@ -169,6 +173,7 @@ namespace mdl {
         void refresh_canvas(project& model, bool clear);
         void animation_keyframe_selected(sm::object_id keyframe);
         void animation_preview_changed();
+        void animation_authoring_error(const QString& message);
         void name_changed(const_skel_piece piece, const std::string& new_name);
         void project_changed(project& model);
         void artwork_changed(project& model, sm::object_id character);

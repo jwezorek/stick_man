@@ -31,6 +31,9 @@ public:
     double width = 300;
     static constexpr int height = 136;
     std::optional<position> at_time(double seconds) const;
+    // Inverse presentation mapping. Card pixels map to their exact key time;
+    // transition pixels map linearly across that transition.
+    std::optional<double> time_at_x(double x) const;
     bool same_timing(const pose_strip_layout& other) const;
 };
 

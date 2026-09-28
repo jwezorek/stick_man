@@ -88,6 +88,7 @@ namespace ui {
             QString status_line_;
             selection_set selection_;
             std::unordered_set<sm::object_id> pinned_node_ids_;
+            std::unordered_set<sm::object_id> incoming_locked_node_ids_;
             mdl::project* model_ = nullptr;
             bool constraint_tool_active_ = false;
             bool show_constraints_in_view_ = true;
@@ -175,6 +176,7 @@ namespace ui {
             void toggle_node_pinned(const sm::object_id& id);
             void toggle_node_pinned_undoable(const sm::object_id& id);
             void set_pinned_node_ids(const std::unordered_set<sm::object_id>& ids);
+            void set_incoming_locked_node_ids(const std::unordered_set<sm::object_id>& ids);
 
             bool constraints_visible() const;
             void set_constraint_tool_active(bool active);
