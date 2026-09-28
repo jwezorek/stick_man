@@ -1,6 +1,6 @@
 # `sm::character`: Current Architecture
 
-**Reviewed for Animation 2.0 Phase 1 — September 26, 2026**
+**Reviewed for Animation 2.0 Phase 2 — September 27, 2026**
 
 ## 1. Purpose
 
@@ -99,60 +99,68 @@ Standalone poses have no relationship to animations. There is no animation `base
 
 ---
 
-## 6. Animation V2 Phase 1 assets
+## 6. Animation V2 Phase 2 assets
 
-Animation 2.0 Phase 1 deliberately persists only an empty animation identity:
+Animation 2.0 Phase 2 extends the persistent animation asset with authored skeletal keyframes and minimal transition bookkeeping:
 
 ```cpp
 struct animation {
     object_id id;
     std::string name;
+    std::vector<pose_keyframe> keyframes;
+    std::vector<pose_transition> transitions;
 };
 ```
 
-An animation currently has no pose domain, keyframes, transitions, evaluator, motion paths, action layers, or serialized frame data. Creating, renaming, duplicating, or deleting an animation is an ordinary persistent project edit.
+Each `pose_keyframe` has a stable ID, an optional display name, and skeletal pose state. Animation keyframes are deliberately separate from standalone named-pose assets. Standalone poses retain their existing world-node representation; animation keyframes store root translations plus local bone rotations so they represent authored skeletal state rather than commands from the removed action system.
 
-The animation collection is omitted from the character's animation JSON when it is empty. When animations exist, only their IDs and names are persisted.
+Unnamed keyframes are displayed as `Pose N` according to their current order. That generated label is editor presentation and is not serialized. Transition records are currently limited to persistent identity and default duration, with exactly one transition between adjacent keyframes. Interpolation, transition solving, positional tracks, and playback remain unimplemented.
 
-See `animation.md` for the future Animation 2.0 design. `old_Animation.md` is historical documentation of the removed action-based system only.
+Phase 1 project data remains compatible: an animation serialized with only `id` and `name` loads as an empty keyframe sequence.
+
+See `animation.md` for the Animation 2.0 semantics and Phase 2 implementation status. `old_Animation.md` remains historical documentation of the removed action-based system only.
 
 ---
 
 ## 7. Animation Mode editing session
 
-Opening an animation does not edit the persistent character topology directly. The editor model creates an Animation Mode session containing:
+Opening an animation still edits a detached working topology rather than the persistent character topology. Phase 2 adds derived keyframe selection plus persistent animation-data authoring to that session:
 
 ```text
 animation asset identity
 character identity
 detached working topology
+selected keyframe ID (editor/session state)
 session undo stack
 session redo stack
+original animation-data snapshot
 ```
 
-The working topology is copied from every skeleton in the character's current rig, including its persistent constraints. It begins from the character's current pose; no standalone pose is applied.
+The working topology is copied from every skeleton in the character's current rig, including its persistent constraints. For the current Phase 2 implementation, the full character rig remains the poseable region; restricted pose-domain editing is still deferred. When an animation already has keyframes, entering Animation Mode selects and displays the first stored pose directly. An empty animation begins from the character's current pose until the user chooses **Add Pose**.
 
-For Phase 1 the entire character rig is the temporary poseable region. The ordinary Selection Tool manipulates the detached topology, so the existing rigid and IK posing behavior is reused without a second animation-specific selection implementation.
+Keyframe selection is presentation/session state and is never serialized. Selecting a keyframe applies its exact stored skeletal pose to the detached topology without interpolation or transition evaluation. Loading a keyframe for display does not itself create an undo entry or record a pose edit.
 
-The session is intentionally disposable. Temporary node movement and pin changes:
+Canvas manipulation of a selected keyframe is undoable in the session stack and captures the resulting complete skeletal state back into that keyframe. Commands target the owning character, animation, and keyframe by stable IDs, so undo/redo remains frame-aware even if selection changes after the edit. Undo/redo of a pose edit reselects the affected keyframe so the result is visible.
 
-- never mutate the persistent `sm::project` topology;
-- never enter document undo/redo history;
-- never advance project dirty state;
-- never become keyframes; and
-- are never serialized.
+Keyframe creation, duplication, rename, and deletion are likewise session commands. Deleting the final remaining keyframe is valid. Undo of deletion restores the original keyframe identity, sequence position, content, and affected transition records.
 
-Saving while Animation Mode is active serializes `sm::project` only, so the scratch pose cannot leak into the project package.
+Persistent keyframe data is part of `sm::project` and therefore serializes even while Animation Mode is active. The detached working topology, selection, thumbnails, previous-pose ghost, and other rendering caches remain nonpersistent editor state.
+
+When Animation Mode ends, authored animation-data changes are committed to ordinary document history as one document edit. The pre-existing document undo/redo stacks remain isolated from the per-session stack while Animation Mode is active.
 
 ---
 
-## 8. Session undo/redo and pins
+## 8. Session undo/redo, pins, thumbnails, and ghosting
 
-Animation Mode has its own undo and redo stacks. Normal Edit -> Undo/Redo actions route to those stacks while the session is active and return to the unchanged document history when the session ends.
+Animation Mode continues to have its own undo and redo stacks. Normal Edit -> Undo/Redo actions route to those stacks while the session is active and return to document history when the session ends.
 
-Node pins are currently editor/session posing aids. In Animation Mode pin toggles are recorded in the session history and are restored/discarded on exit. They are not persistent constraints or Animation V2 transition pins.
+Node pins remain editor/session posing aids. In Animation Mode pin toggles are recorded in session history and are restored/discarded on exit. They are not persistent constraints or Animation V2 transition pins.
 
 Persistent rotation and rigid-triangle constraints are copied into the detached topology so they continue to influence IK, but constraint creation, editing, deletion, and adornment dragging are disabled in Animation Mode.
+
+The Pose Strip renders each keyframe from a temporary posed topology rather than by capturing the live canvas. This keeps previews independent of canvas zoom, selection, handles, and current editing state. Artwork is resolved against each temporary skeletal pose using the character's current artwork state. Preview framing is shared across the strip; bone visibility follows the animation editor's current view settings, with bones forced on for unskinned characters.
+
+The optional **Show previous pose** setting is editor-only. The immediately preceding keyframe is rendered as a faint noninteractive skeleton beneath the selected pose, with no wraparound at the first keyframe.
 
 ---
 
@@ -180,7 +188,7 @@ standalone pose + minimal animation assets
 skeleton -> parent-character membership
 ```
 
-Structural changes reconcile standalone poses before committing. Animation V2 Phase 1 assets contain no topology references, so no animation dependency cascade or retargeting is required.
+Structural changes reconcile standalone poses before committing. Animation V2 Phase 2 keyframes contain persistent root-node and bone references. Integrity validation rejects animation data that no longer matches the owning character rig rather than retaining dangling references. Automatic keyframe retargeting for arbitrary topology edits is not part of Phase 2.
 
 ---
 
@@ -238,7 +246,7 @@ Character semantic persistence currently includes:
 
 Topology remains project-level rather than duplicated in character records.
 
-`project::validate_integrity()` combines project-wide ID uniqueness, constraint validation, membership consistency, and character-scoped standalone-pose validation. Animation V2 Phase 1 has no topology-bearing animation data to validate beyond asset identity uniqueness.
+`project::validate_integrity()` combines project-wide structural ID uniqueness, constraint validation, membership consistency, standalone-pose validation, and Animation V2 keyframe validation. Keyframes must refer only to the owning character rig and must contain the complete root/bone state expected by the current Phase 2 full-rig pose domain.
 
 ---
 

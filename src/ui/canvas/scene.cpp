@@ -158,6 +158,54 @@ void ui::canvas::scene::drawBackground(QPainter* painter, const QRectF& dirty_re
 
     draw_grid_lines(painter, rect, k_grid_line_spacing);
     if (artwork_) artwork_->paint(*painter);
+
+    // Animation V2 previous-pose onion skin. This is derived presentation only:
+    // it is rendered from a temporary topology and never becomes selectable.
+    if (model_ && model_->animation_mode() && model_->show_previous_pose()) {
+        auto cid = model_->animation_session_character();
+        auto aid = model_->animation_session_animation();
+        auto kid = model_->animation_session_keyframe();
+        if (cid && aid && kid) {
+            auto character = model_->core().character(*cid);
+            auto* animation = character ? character->get().animation_data().find_animation(*aid) : nullptr;
+            auto index = animation ? animation->keyframe_index(*kid) : std::optional<std::size_t>{};
+            if (character && animation && index && *index > 0) {
+                sm::topology ghost;
+                bool copied = true;
+                for (auto skel : character->get().rig().skeletons()) {
+                    if (!skel->copy_to(ghost)) {
+                        copied = false;
+                        break;
+                    }
+                }
+                if (copied) {
+                    try {
+                        sm::apply_skeletal_pose(animation->keyframes[*index - 1].pose, ghost,
+                            character->get().rig().skeleton_ids());
+                        painter->save();
+                        QPen pen(QColor(80, 170, 220, 90), 2.0 / std::max(0.001, scale()));
+                        pen.setCosmetic(false);
+                        painter->setPen(pen);
+                        painter->setBrush(QColor(80, 170, 220, 80));
+                        for (auto skel : ghost.skeletons()) {
+                            for (auto bone : skel->bones()) {
+                                auto [u, v] = bone->line_segment();
+                                painter->drawLine(QPointF(u.x, u.y), QPointF(v.x, v.y));
+                            }
+                            const double radius = 2.5 / std::max(0.001, scale());
+                            for (auto node : skel->nodes()) {
+                                painter->drawEllipse(QPointF(node->world_x(), node->world_y()),
+                                    radius, radius);
+                            }
+                        }
+                        painter->restore();
+                    } catch (...) {
+                        // Invalid preview data is surfaced by Core validation.
+                    }
+                }
+            }
+        }
+    }
 }
 
 QRect client_rectangle(const QGraphicsView* view) {

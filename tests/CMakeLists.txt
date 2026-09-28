@@ -75,6 +75,16 @@ else()
     add_test(NAME animation_v2_phase1 COMMAND $<TARGET_FILE:animation_v2_phase1>)
 endif()
 
+add_executable(animation_v2_phase2 animation_v2_phase2.cpp)
+target_link_libraries(animation_v2_phase2 PRIVATE stick_man_model)
+if(WIN32)
+    add_test(NAME animation_v2_phase2 COMMAND "${CMAKE_COMMAND}" -E env
+        "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+        $<TARGET_FILE:animation_v2_phase2>)
+else()
+    add_test(NAME animation_v2_phase2 COMMAND $<TARGET_FILE:animation_v2_phase2>)
+endif()
+
 add_executable(ik_pins ik_pins.cpp)
 target_link_libraries(ik_pins PRIVATE stick_man_core)
 add_test(NAME ik_pins COMMAND $<TARGET_FILE:ik_pins>)
@@ -94,6 +104,14 @@ add_test(NAME animation_ui COMMAND "${CMAKE_COMMAND}" -E env
     "QT_QPA_PLATFORM=offscreen" "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
     $<TARGET_FILE:animation_ui>)
 set_tests_properties(animation_ui PROPERTIES TIMEOUT 30)
+
+add_executable(animation_v2_phase2_ui animation_v2_phase2_ui.cpp ${PROJECT_SOURCE_DIR}/src/ui/stick_man.qrc)
+target_link_libraries(animation_v2_phase2_ui PRIVATE stick_man_ui)
+set_target_properties(animation_v2_phase2_ui PROPERTIES AUTORCC ON)
+add_test(NAME animation_v2_phase2_ui COMMAND "${CMAKE_COMMAND}" -E env
+    "QT_QPA_PLATFORM=offscreen" "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+    $<TARGET_FILE:animation_v2_phase2_ui>)
+set_tests_properties(animation_v2_phase2_ui PROPERTIES TIMEOUT 30)
 
 add_executable(constraint_ui constraint_ui.cpp)
 target_link_libraries(constraint_ui PRIVATE stick_man_model)

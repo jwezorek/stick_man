@@ -361,7 +361,7 @@ The rig remains the reference geometry for artwork transforms. Editing a sprite'
 
 Artwork handles destructive topology changes differently from standalone poses.
 
-Standalone pose node memberships are reconciled with character topology changes. Animation V2 Phase 1 assets contain only an ID and name, so they have no topology dependencies to repair or cascade.
+Standalone pose node memberships are reconciled with character topology changes. Animation V2 Phase 2 keyframes persist local skeletal pose references; validation therefore requires every keyframe to remain compatible with its owning character rig, and whole-character ID remapping updates those references.
 
 Artwork slot definitions, however, may remain with a bone ID that no longer resolves to the character. `project::slot_resolved()` checks both:
 
@@ -475,7 +475,7 @@ The pasted character's name receives a `copy`/`copy N` suffix, and the complete 
 
 Semantic slot states currently belong to artwork authoring/preview state.
 
-Animation V2 Phase 1 has no playback, artwork keys, or persistent skeletal keyframes. While Animation Mode is active, the current artwork state/appearance is resolved against the detached working topology so sprites follow temporary posing. The Artwork tab in the Animation Editor is only a visual shell for later artwork/property tracks.
+Animation V2 Phase 2 persists skeletal keyframes but still has no interpolation, playback, or artwork keys. Pose Strip previews resolve the character’s current artwork state/appearance against each stored keyframe on a temporary topology, while the live Animation Mode canvas resolves artwork against the detached working topology. The Artwork tab in the Animation Editor remains a visual shell for later artwork/property tracks.
 
 ---
 

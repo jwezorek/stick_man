@@ -1,6 +1,7 @@
 #include "project.hpp"
 #include "commands.hpp"
 #include "../core/sm_project.hpp"
+#include "../core/sm_geometry_batch.hpp"
 #include <charconv>
 #include <algorithm>
 #include <system_error>
@@ -77,13 +78,16 @@ sm::result mdl::project::execute_command(const command& cmd) {
 }
 sm::result mdl::project::execute_session_command(const command& cmd) {
     if (!animation_session_) return sm::result::invalid_membership;
+    const bool was_dirty = is_dirty();
     command stored = cmd;
     stored.document_edit = false;
     stored.redo(*this);
     if (stored.outcome && stored.outcome() != sm::result::success) return stored.outcome();
     clear_session_redo_stack();
+    if (stored.animation_edit) ++animation_session_->authored_depth;
     animation_session_->undo_stack.push(std::move(stored));
     emit refresh_undo_redo_state(can_redo(), can_undo());
+    if (was_dirty != is_dirty()) emit dirty_changed(is_dirty());
     return sm::result::success;
 }
 
@@ -164,11 +168,14 @@ void mdl::project::advance_default_name_counters_from_topology() {
 void mdl::project::undo() {
     if (!can_undo()) return;
     if (animation_session_) {
+        const bool was_dirty = is_dirty();
         auto cmd = animation_session_->undo_stack.top();
         animation_session_->undo_stack.pop();
         cmd.undo(*this);
+        if (cmd.animation_edit && animation_session_->authored_depth > 0) --animation_session_->authored_depth;
         animation_session_->redo_stack.push(std::move(cmd));
         emit refresh_undo_redo_state(can_redo(), can_undo());
+        if (was_dirty != is_dirty()) emit dirty_changed(is_dirty());
         return;
     }
     const bool was_dirty = is_dirty();
@@ -183,12 +190,15 @@ void mdl::project::undo() {
 sm::result mdl::project::redo() {
     if (!can_redo()) return sm::result::success;
     if (animation_session_) {
+        const bool was_dirty = is_dirty();
         auto cmd = animation_session_->redo_stack.top();
         cmd.redo(*this);
         if (cmd.outcome && cmd.outcome() != sm::result::success) return cmd.outcome();
         animation_session_->redo_stack.pop();
+        if (cmd.animation_edit) ++animation_session_->authored_depth;
         animation_session_->undo_stack.push(std::move(cmd));
         emit refresh_undo_redo_state(can_redo(), can_undo());
+        if (was_dirty != is_dirty()) emit dirty_changed(is_dirty());
         return sm::result::success;
     }
     const bool was_dirty = is_dirty();
@@ -209,7 +219,7 @@ bool mdl::project::can_redo() const {
     return animation_session_ ? !animation_session_->redo_stack.empty() : !redo_stack_.empty();
 }
 bool mdl::project::is_dirty() const noexcept {
-    return history_.dirty();
+    return history_.dirty() || (animation_session_ && animation_session_->authored_depth != 0);
 }
 void mdl::project::mark_saved() {
     const bool was_dirty = is_dirty();
@@ -553,8 +563,69 @@ void mdl::project::transform(const std::vector<handle>& bones,
 }
 void mdl::project::transform_node_positions(
         const node_locs& old_locs, const node_locs& new_locs) {
-    auto cmd = commands::make_transform_node_positions_command(*this, old_locs, new_locs);
-    if (animation_session_) execute_session_command(cmd); else execute_command(cmd);
+    if (!animation_session_ || !animation_session_->selected_keyframe) {
+        auto cmd = commands::make_transform_node_positions_command(*this, old_locs, new_locs);
+        if (animation_session_) execute_session_command(cmd); else execute_command(cmd);
+        return;
+    }
+
+    const auto character_id = animation_session_->character;
+    const auto animation_id = animation_session_->animation;
+    const auto keyframe_id = *animation_session_->selected_keyframe;
+    const auto skeletons = core_.character(character_id)->get().rig().skeleton_ids();
+    auto* animation = core_.animation_data(character_id).find_animation(animation_id);
+    auto* keyframe = animation ? animation->find_keyframe(keyframe_id) : nullptr;
+    if (!keyframe) {
+        throw std::runtime_error("selected animation keyframe is missing");
+    }
+    const auto before_pose = keyframe->pose;
+
+    auto after_pose = std::make_shared<std::optional<sm::skeletal_pose>>();
+    command cmd;
+    cmd.redo = [character_id, animation_id, keyframe_id, new_locs,
+            skeletons, after_pose](project& proj) {
+        auto* animation = proj.core_.animation_data(character_id).find_animation(animation_id);
+        auto* keyframe = animation ? animation->find_keyframe(keyframe_id) : nullptr;
+        if (!keyframe) {
+            throw std::runtime_error("animation keyframe missing during pose edit");
+        }
+
+        if (!*after_pose) {
+            sm::geometry_batch batch(proj.topology());
+            for (const auto& [node_hnd, loc] : new_locs) {
+                commands::resolve<sm::node>(proj, node_hnd).set_world_pos(loc);
+            }
+            if (batch.commit() != sm::result::success) {
+                throw std::runtime_error("invalid restored geometry");
+            }
+            *after_pose = sm::capture_skeletal_pose(proj.topology(), skeletons);
+        } else {
+            sm::apply_skeletal_pose(**after_pose, proj.topology(), skeletons);
+        }
+
+        keyframe->pose = **after_pose;
+        proj.animation_session_->selected_keyframe = keyframe_id;
+        emit proj.animation_keyframe_selected(keyframe_id);
+        emit proj.animation_preview_changed();
+        emit proj.refresh_canvas(proj, false);
+    };
+    cmd.animation_edit = true;
+    cmd.undo = [character_id, animation_id, keyframe_id,
+            before_pose, skeletons](project& proj) {
+        auto* animation = proj.core_.animation_data(character_id).find_animation(animation_id);
+        auto* keyframe = animation ? animation->find_keyframe(keyframe_id) : nullptr;
+        if (!keyframe) {
+            throw std::runtime_error("animation keyframe missing during pose undo");
+        }
+
+        keyframe->pose = before_pose;
+        sm::apply_skeletal_pose(before_pose, proj.topology(), skeletons);
+        proj.animation_session_->selected_keyframe = keyframe_id;
+        emit proj.animation_keyframe_selected(keyframe_id);
+        emit proj.animation_preview_changed();
+        emit proj.refresh_canvas(proj, false);
+    };
+    execute_session_command(cmd);
 }
 sm::topology_change mdl::project::replace_skeletons_aux(
         const std::vector<sm::object_id>& replacees,
@@ -585,11 +656,13 @@ sm::result mdl::project::begin_animation_session(sm::object_id character_id, sm:
     if (animation_session_) return sm::result::invalid_membership;
     auto character = core_.character(character_id);
     if (!character) return character.error();
-    if (!character->get().animation_data().find_animation(animation_id)) return sm::result::not_found;
+    auto* source_animation = character->get().animation_data().find_animation(animation_id);
+    if (!source_animation) return sm::result::not_found;
 
     animation_edit_session session;
     session.character = character_id;
     session.animation = animation_id;
+    session.original_animation_data = character->get().animation_data();
     for (auto skel : character->get().rig().skeletons()) {
         auto copied = skel->copy_to(session.working_topology);
         if (!copied) return copied.error();
@@ -597,16 +670,35 @@ sm::result mdl::project::begin_animation_session(sm::object_id character_id, sm:
         for (auto node : copied->get().nodes()) node->clear_user_data();
         for (auto bone : copied->get().bones()) bone->clear_user_data();
     }
+    if (!source_animation->keyframes.empty()) session.selected_keyframe = source_animation->keyframes.front().id;
     animation_session_ = std::move(session);
+    if (animation_session_->selected_keyframe) {
+        const auto* a = core_.animation_data(character_id).find_animation(animation_id);
+        sm::apply_skeletal_pose(a->find_keyframe(*animation_session_->selected_keyframe)->pose,
+            animation_session_->working_topology, character->get().rig().skeleton_ids());
+    }
     emit refresh_undo_redo_state(false, false);
     emit refresh_canvas(*this, true);
+    if (animation_session_->selected_keyframe) emit animation_keyframe_selected(*animation_session_->selected_keyframe);
     return sm::result::success;
 }
 void mdl::project::end_animation_session() {
     if (!animation_session_) return;
+    const auto character_id = animation_session_->character;
+    const auto before = animation_session_->original_animation_data;
+    const auto after = core_.animation_data(character_id);
+    const bool changed = animation_session_->authored_depth != 0;
     animation_session_.reset();
-    emit refresh_undo_redo_state(can_redo(), can_undo());
-    emit refresh_canvas(*this, true);
+    if (changed) {
+        command cmd{
+            [character_id, after](project& p) { p.core_.animation_data(character_id) = after; },
+            [character_id, before](project& p) { p.core_.animation_data(character_id) = before; }
+        };
+        execute_command(cmd);
+    } else {
+        emit refresh_undo_redo_state(can_redo(), can_undo());
+        emit refresh_canvas(*this, true);
+    }
 }
 std::optional<sm::object_id> mdl::project::animation_session_character() const {
     if (!animation_session_) return {};
@@ -616,6 +708,244 @@ std::optional<sm::object_id> mdl::project::animation_session_animation() const {
     if (!animation_session_) return {};
     return animation_session_->animation;
 }
+std::optional<sm::object_id> mdl::project::animation_session_keyframe() const {
+    if (!animation_session_) return {};
+    return animation_session_->selected_keyframe;
+}
+
+sm::result mdl::project::select_animation_keyframe(sm::object_id keyframe_id) {
+    if (!animation_session_) return sm::result::invalid_membership;
+    auto character = core_.character(animation_session_->character);
+    if (!character) return character.error();
+    auto* a = core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
+    auto* k = a ? a->find_keyframe(keyframe_id) : nullptr;
+    if (!k) return sm::result::not_found;
+    sm::apply_skeletal_pose(k->pose, animation_session_->working_topology, character->get().rig().skeleton_ids());
+    animation_session_->selected_keyframe = keyframe_id;
+    emit animation_keyframe_selected(keyframe_id);
+    emit refresh_canvas(*this, false);
+    emit animation_preview_changed();
+    return sm::result::success;
+}
+
+sm::result mdl::project::add_animation_keyframe() {
+    if (!animation_session_) return sm::result::invalid_membership;
+
+    const auto character_id = animation_session_->character;
+    const auto animation_id = animation_session_->animation;
+    auto* animation = core_.animation_data(character_id).find_animation(animation_id);
+    if (!animation) return sm::result::not_found;
+
+    const auto skeletons = core_.character(character_id)->get().rig().skeleton_ids();
+    const auto before = *animation;
+    auto after = before;
+
+    sm::pose_keyframe keyframe;
+    keyframe.pose = after.keyframes.empty() ?
+        sm::capture_skeletal_pose(topology(), skeletons) : after.keyframes.back().pose;
+    const auto keyframe_id = keyframe.id;
+    after.keyframes.push_back(std::move(keyframe));
+    after.reconcile_transitions();
+
+    auto apply = [character_id, animation_id, keyframe_id, skeletons](
+            project& p, const sm::animation& value) {
+        auto* target = p.core_.animation_data(character_id).find_animation(animation_id);
+        if (!target) throw std::runtime_error("animation missing");
+
+        *target = value;
+        p.animation_session_->selected_keyframe = keyframe_id;
+        sm::apply_skeletal_pose(target->find_keyframe(keyframe_id)->pose,
+            p.topology(), skeletons);
+        emit p.animation_keyframe_selected(keyframe_id);
+        emit p.animation_preview_changed();
+        emit p.refresh_canvas(p, false);
+    };
+
+    command cmd;
+    cmd.redo = [after, apply](project& p) {
+        apply(p, after);
+    };
+    cmd.animation_edit = true;
+    cmd.undo = [before, character_id, animation_id, skeletons](project& p) {
+        auto* target = p.core_.animation_data(character_id).find_animation(animation_id);
+        if (!target) throw std::runtime_error("animation missing");
+        *target = before;
+
+        if (!before.keyframes.empty()) {
+            const auto previous_id = before.keyframes.back().id;
+            p.animation_session_->selected_keyframe = previous_id;
+            sm::apply_skeletal_pose(before.keyframes.back().pose, p.topology(), skeletons);
+            emit p.animation_keyframe_selected(previous_id);
+        } else {
+            p.animation_session_->selected_keyframe.reset();
+        }
+        emit p.animation_preview_changed();
+        emit p.refresh_canvas(p, false);
+    };
+    return execute_session_command(cmd);
+}
+
+sm::result mdl::project::duplicate_animation_keyframe() {
+    if (!animation_session_ || !animation_session_->selected_keyframe) {
+        return sm::result::not_found;
+    }
+
+    const auto character_id = animation_session_->character;
+    const auto animation_id = animation_session_->animation;
+    const auto selected_id = *animation_session_->selected_keyframe;
+    auto* animation = core_.animation_data(character_id).find_animation(animation_id);
+    if (!animation) return sm::result::not_found;
+
+    auto index = animation->keyframe_index(selected_id);
+    if (!index) return sm::result::not_found;
+
+    const auto before = *animation;
+    auto after = before;
+    auto copy = after.keyframes[*index];
+    copy.id = sm::object_id::generate();
+    const auto copy_id = copy.id;
+    after.keyframes.insert(after.keyframes.begin() + *index + 1, std::move(copy));
+
+    if (*index < after.transitions.size()) {
+        after.transitions.insert(after.transitions.begin() + *index, sm::pose_transition{});
+    } else {
+        after.transitions.emplace_back();
+    }
+
+    const auto skeletons = core_.character(character_id)->get().rig().skeleton_ids();
+    command cmd{
+        [character_id, animation_id, copy_id, after, skeletons](project& p) {
+            auto* target = p.core_.animation_data(character_id).find_animation(animation_id);
+            if (!target) throw std::runtime_error("animation missing");
+            *target = after;
+            p.animation_session_->selected_keyframe = copy_id;
+            sm::apply_skeletal_pose(target->find_keyframe(copy_id)->pose,
+                p.topology(), skeletons);
+            emit p.animation_keyframe_selected(copy_id);
+            emit p.animation_preview_changed();
+            emit p.refresh_canvas(p, false);
+        },
+        [character_id, animation_id, selected_id, before, skeletons](project& p) {
+            auto* target = p.core_.animation_data(character_id).find_animation(animation_id);
+            if (!target) throw std::runtime_error("animation missing");
+            *target = before;
+            p.animation_session_->selected_keyframe = selected_id;
+            sm::apply_skeletal_pose(target->find_keyframe(selected_id)->pose,
+                p.topology(), skeletons);
+            emit p.animation_keyframe_selected(selected_id);
+            emit p.animation_preview_changed();
+            emit p.refresh_canvas(p, false);
+        }
+    };
+    cmd.animation_edit = true;
+    return execute_session_command(cmd);
+}
+
+sm::result mdl::project::rename_animation_keyframe(const std::optional<std::string>& name) {
+    if (!animation_session_ || !animation_session_->selected_keyframe) {
+        return sm::result::not_found;
+    }
+
+    const auto character_id = animation_session_->character;
+    const auto animation_id = animation_session_->animation;
+    const auto keyframe_id = *animation_session_->selected_keyframe;
+    auto* animation = core_.animation_data(character_id).find_animation(animation_id);
+    auto* keyframe = animation ? animation->find_keyframe(keyframe_id) : nullptr;
+    if (!keyframe) return sm::result::not_found;
+
+    const auto old_name = keyframe->name;
+    command cmd{
+        [character_id, animation_id, keyframe_id, name](project& p) {
+            auto* target = p.core_.animation_data(character_id).find_animation(animation_id);
+            if (!target) throw std::runtime_error("animation missing");
+            auto* keyframe = target->find_keyframe(keyframe_id);
+            if (!keyframe) throw std::runtime_error("animation keyframe missing");
+            keyframe->name = name;
+            p.animation_session_->selected_keyframe = keyframe_id;
+            emit p.animation_keyframe_selected(keyframe_id);
+            emit p.animation_preview_changed();
+        },
+        [character_id, animation_id, keyframe_id, old_name](project& p) {
+            auto* target = p.core_.animation_data(character_id).find_animation(animation_id);
+            if (!target) throw std::runtime_error("animation missing");
+            auto* keyframe = target->find_keyframe(keyframe_id);
+            if (!keyframe) throw std::runtime_error("animation keyframe missing");
+            keyframe->name = old_name;
+            p.animation_session_->selected_keyframe = keyframe_id;
+            emit p.animation_keyframe_selected(keyframe_id);
+            emit p.animation_preview_changed();
+        }
+    };
+    cmd.animation_edit = true;
+    return execute_session_command(cmd);
+}
+
+sm::result mdl::project::delete_animation_keyframe() {
+    if (!animation_session_ || !animation_session_->selected_keyframe) {
+        return sm::result::not_found;
+    }
+
+    const auto character_id = animation_session_->character;
+    const auto animation_id = animation_session_->animation;
+    const auto keyframe_id = *animation_session_->selected_keyframe;
+    auto* animation = core_.animation_data(character_id).find_animation(animation_id);
+    if (!animation) return sm::result::not_found;
+
+    auto index = animation->keyframe_index(keyframe_id);
+    if (!index) return sm::result::not_found;
+
+    const auto before = *animation;
+    auto after = before;
+    after.keyframes.erase(after.keyframes.begin() + *index);
+    if (!after.transitions.empty()) {
+        const auto transition_index = *index == 0 ? std::size_t{0} : *index - 1;
+        after.transitions.erase(after.transitions.begin() +
+            std::min(transition_index, after.transitions.size() - 1));
+    }
+
+    std::optional<sm::object_id> next;
+    if (!after.keyframes.empty()) {
+        next = after.keyframes[std::min(*index, after.keyframes.size() - 1)].id;
+    }
+
+    const auto skeletons = core_.character(character_id)->get().rig().skeleton_ids();
+    command cmd{
+        [character_id, animation_id, after, next, skeletons](project& p) {
+            auto* target = p.core_.animation_data(character_id).find_animation(animation_id);
+            if (!target) throw std::runtime_error("animation missing");
+            *target = after;
+            p.animation_session_->selected_keyframe = next;
+            if (next) {
+                sm::apply_skeletal_pose(target->find_keyframe(*next)->pose,
+                    p.topology(), skeletons);
+                emit p.animation_keyframe_selected(*next);
+            }
+            emit p.animation_preview_changed();
+            emit p.refresh_canvas(p, false);
+        },
+        [character_id, animation_id, before, keyframe_id, skeletons](project& p) {
+            auto* target = p.core_.animation_data(character_id).find_animation(animation_id);
+            if (!target) throw std::runtime_error("animation missing");
+            *target = before;
+            p.animation_session_->selected_keyframe = keyframe_id;
+            sm::apply_skeletal_pose(target->find_keyframe(keyframe_id)->pose,
+                p.topology(), skeletons);
+            emit p.animation_keyframe_selected(keyframe_id);
+            emit p.animation_preview_changed();
+            emit p.refresh_canvas(p, false);
+        }
+    };
+    cmd.animation_edit = true;
+    return execute_session_command(cmd);
+}
+
+void mdl::project::set_show_previous_pose(bool show) {
+    if (show_previous_pose_ == show) return;
+    show_previous_pose_ = show;
+    emit animation_preview_changed();
+    emit refresh_canvas(*this, false);
+}
+
 void mdl::project::edit_animation_data(sm::object_id id, const std::function<void(sm::animation_assets&)>& edit) {
     auto before = core_.animation_data(id), after = before;
     edit(after);

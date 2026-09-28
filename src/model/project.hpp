@@ -28,6 +28,7 @@ namespace mdl {
         // Only commands with ordinary user failures need to report an outcome.
         std::function<sm::result()> outcome;
         bool document_edit = true;
+        bool animation_edit = false;
         std::optional<sm::object_id> artwork_character;
         history_state::transition history_transition;
     };
@@ -42,10 +43,14 @@ namespace mdl {
             sm::object_id character;
             sm::object_id animation;
             sm::topology working_topology;
+            sm::animation_assets original_animation_data;
+            std::optional<sm::object_id> selected_keyframe;
+            std::size_t authored_depth = 0;
             std::stack<command> redo_stack;
             std::stack<command> undo_stack;
         };
         std::optional<animation_edit_session> animation_session_;
+        bool show_previous_pose_ = false;
         std::stack<command> redo_stack_;
         std::stack<command> undo_stack_;
         history_state history_;
@@ -75,6 +80,14 @@ namespace mdl {
         void end_animation_session();
         std::optional<sm::object_id> animation_session_character() const;
         std::optional<sm::object_id> animation_session_animation() const;
+        std::optional<sm::object_id> animation_session_keyframe() const;
+        sm::result select_animation_keyframe(sm::object_id keyframe);
+        sm::result add_animation_keyframe();
+        sm::result duplicate_animation_keyframe();
+        sm::result rename_animation_keyframe(const std::optional<std::string>& name);
+        sm::result delete_animation_keyframe();
+        bool show_previous_pose() const noexcept { return show_previous_pose_; }
+        void set_show_previous_pose(bool show);
         void edit_animation_data(sm::object_id character, const std::function<void(sm::animation_assets&)>& edit);
         void apply_pose(sm::object_id character, sm::object_id pose);
         const sm::project& core() const;
@@ -132,6 +145,8 @@ namespace mdl {
         void new_project_opened(project& model);
         void new_skeleton_added(sm::skel_ref skel);
         void refresh_canvas(project& model, bool clear);
+        void animation_keyframe_selected(sm::object_id keyframe);
+        void animation_preview_changed();
         void name_changed(const_skel_piece piece, const std::string& new_name);
         void project_changed(project& model);
         void artwork_changed(project& model, sm::object_id character);

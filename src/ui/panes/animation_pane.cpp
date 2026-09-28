@@ -274,6 +274,12 @@ void ui::pane::animation::duplicate_current() {
         if (k == ::animation) {
             auto copy = *data.find_animation(id);
             copy.id = created; copy.name += " copy";
+            for (auto& keyframe : copy.keyframes) {
+                keyframe.id = sm::object_id::generate();
+            }
+            for (auto& transition : copy.transitions) {
+                transition.id = sm::object_id::generate();
+            }
             data.animations.push_back(std::move(copy));
         } else {
             auto copy = *data.find_pose(id);
@@ -381,7 +387,7 @@ bool ui::pane::animation::open_animation(sm::object_id cid, sm::object_id aid) {
     banner_label_->setText(QString("Animation Mode — %1 / %2")
         .arg(QString::fromStdString(c->get().name()), QString::fromStdString(a->name)));
     banner_->show();
-    editor_->begin();
+    editor_->begin(*project_, *canvases_, cid, aid);
     refresh();
     if (auto* item = find_asset(aid)) {
         tree_->setCurrentItem(item);
@@ -393,9 +399,15 @@ bool ui::pane::animation::open_animation(sm::object_id cid, sm::object_id aid) {
 void ui::pane::animation::leave_animation() {
     if (active_animation_.is_nil()) return;
     editor_->end();
-    // Clear renderer pointers to the detached topology before destroying the session.
-    canvases_->show_animation_session(false);
+
+    // Animation canvas items and artwork preview state point into the detached
+    // working topology.  Destroy those view-side references first, then destroy
+    // the model session, and only then rebuild the canvas from the persistent
+    // project topology.
+    canvases_->detach_animation_session_view();
     if (project_->animation_mode()) project_->end_animation_session();
+    canvases_->show_animation_session(false);
+
     for (auto& [scene, pins] : pins_before_) if (scene) scene->set_pinned_node_ids(pins);
     pins_before_.clear();
 

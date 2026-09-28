@@ -476,3 +476,26 @@ For a composable partial-body animation:
 5. Compose the animation with other animations whose valid pose domains have disjoint ownership, evaluating upstream domains first.
 
 The overall authoring model remains centered on direct manipulation: users create poses by posing the character, and the solver supplies valid constrained motion between those authored states.
+
+---
+
+## Implementation Status — Animation V2 Phase 2
+
+Phase 2 implements persistent skeletal pose keyframes and the first functional Pose Strip. It deliberately stops at static keyframe authoring; interpolation, transition solving, path/pin authoring, playhead insertion, and animated playback remain later phases.
+
+Implemented behavior:
+
+- Each animation owns an ordered sequence of persistent `pose_keyframe` objects with stable IDs and optional names.
+- Unnamed keyframes are displayed positionally as `Pose 1`, `Pose 2`, and so on; those generated labels are not persisted.
+- Animation keyframes use a skeletal pose representation distinct from standalone named-pose assets. The stored state consists of root-node translations plus local bone rotations, so keyframes are endpoint skeletal state rather than old action-system commands or world-node snapshots.
+- The current Phase 2 editor still authors the character's full rig. The pose-domain rules in this document remain authoritative; restricted-domain editing via **Edit Pose Domain** is not enabled yet. Consequently the current implementation is the root/full-rig case of the incoming-frame model.
+- One transition record is retained between every adjacent pair of keyframes. Phase 2 persists transition identity and default duration only so insertion/deletion/undo keep the sequence structurally consistent; transition authoring and evaluation are not implemented yet.
+- Selecting a keyframe applies its stored skeletal pose directly to the detached Animation Mode topology. No interpolation, transition projection, or playback evaluation occurs.
+- Canvas posing of the selected keyframe is captured back into that keyframe through Animation Mode undo commands. Commands identify the owning character/animation/keyframe by stable IDs, so undo after selecting another card restores and selects the frame that was actually edited.
+- **Add Pose** captures the current working pose for an empty animation; otherwise it appends a copy of the final keyframe. **Duplicate** inserts a copy after the selected keyframe with a new ID. Rename may set or clear the optional name. Delete supports the final remaining keyframe and selects the next keyframe when possible, otherwise the previous one.
+- Pose Strip thumbnails are rendered from temporary posed topologies rather than screenshots of the live canvas. They use a common framing/scale, resolve current character artwork against each stored skeletal pose, honor artwork/bone visibility, and force bones on when no artwork is available.
+- **Show previous pose** is editor-only state. When enabled, the preceding authored keyframe is drawn as a faint skeleton beneath the selected pose. It does not wrap from the first keyframe and does not participate in hit testing, selection, solving, or constraints.
+- Keyframes, transition records, names, and skeletal pose data round-trip through project persistence. Phase 1 animations containing only `id` and `name` remain valid and load as animations with an empty keyframe sequence.
+- Whole-character skeletal-ID remapping updates keyframe root-node and bone references. Thumbnail caches, ghost state, and selection remain derived editor state and are never serialized.
+
+Animation Mode keeps its separate per-session undo stack. Persistent keyframe authoring is committed to document history as one document edit when Animation Mode ends, while individual keyframe operations remain independently undoable/redoable inside the session.

@@ -2,26 +2,52 @@
 #include "sm_types.hpp"
 #include "sm_object_id.hpp"
 #include "json_fwd.hpp"
+#include <cstddef>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 #include <span>
 
 namespace sm {
-    // Animation V2 is deliberately empty in Phase 1.  Skeletal frame/keyframe
-    // data belongs to later phases; the persistent asset currently has identity
-    // and a user-visible name only.
-    struct animation {
-        object_id id = object_id::generate();
-        std::string name;
-    };
-
-    // Standalone named poses are independent project assets.  They are not
-    // animation keyframes and remain useful outside Animation Mode.
+    // Standalone named poses are independent project assets. They intentionally
+    // retain their original world-node representation and are not animation keys.
     struct pose {
         object_id id = object_id::generate();
         std::string name;
         std::unordered_map<object_id, point> node_positions;
+    };
+
+    // Animation V2 keyframes store skeletal state in rig-local terms. Root node
+    // translations are relative to the animation's incoming frame; bone values
+    // are local rotations (root bones use the incoming frame as their parent).
+    struct skeletal_pose {
+        std::unordered_map<object_id, point> root_positions;
+        std::unordered_map<object_id, double> bone_rotations;
+    };
+
+    struct pose_keyframe {
+        object_id id = object_id::generate();
+        std::optional<std::string> name;
+        skeletal_pose pose;
+    };
+
+    struct pose_transition {
+        object_id id = object_id::generate();
+        double duration_seconds = 0.4;
+    };
+
+    struct animation {
+        object_id id = object_id::generate();
+        std::string name;
+        std::vector<pose_keyframe> keyframes;
+        // Invariant: transitions.size() == max(keyframes.size() - 1, 0).
+        std::vector<pose_transition> transitions;
+
+        const pose_keyframe* find_keyframe(object_id id) const;
+        pose_keyframe* find_keyframe(object_id id);
+        std::optional<std::size_t> keyframe_index(object_id id) const;
+        void reconcile_transitions();
     };
 
     struct animation_assets {
@@ -31,11 +57,17 @@ namespace sm {
 
         const pose* find_pose(object_id id) const;
         const animation* find_animation(object_id id) const;
+        animation* find_animation(object_id id);
         void validate() const;
         void validate(const topology& topology, std::span<const object_id> rig_skeletons) const;
     };
 
     pose capture_pose(const topology& topology, const std::vector<object_id>& skeletons, std::string name);
+    skeletal_pose capture_skeletal_pose(const topology& topology, std::span<const object_id> skeletons);
+    void apply_skeletal_pose(const skeletal_pose& pose, const topology& topology,
+        std::span<const object_id> skeletons);
+    bool skeletal_pose_compatible(const skeletal_pose& pose, const topology& topology,
+        std::span<const object_id> skeletons);
     void initialize_animation_assets(animation_assets& assets, const topology& topology,
         const std::vector<object_id>& skeletons);
     void reconcile_animation_poses(animation_assets& assets, const topology& topology,

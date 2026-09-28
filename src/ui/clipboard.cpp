@@ -379,6 +379,13 @@ namespace {
             if (dest_mat) {
                 for (auto& pose : animation_data.poses)
                     for (auto& [id, pt] : pose.node_positions) pt = sm::transform(pt, *dest_mat);
+                for (auto& animation : animation_data.animations) {
+                    for (auto& keyframe : animation.keyframes) {
+                        for (auto& [id, pt] : keyframe.pose.root_positions) {
+                            pt = sm::transform(pt, *dest_mat);
+                        }
+                    }
+                }
             }
             auto pasted = project.paste_character(clipboard_topology, payload["name"].get<std::string>(),
                 artwork, animation_data);

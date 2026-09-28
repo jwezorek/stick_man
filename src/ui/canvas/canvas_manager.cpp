@@ -43,8 +43,12 @@ ui::canvas::manager::manager(tool::input_handler& inp_handler) :
 void ui::canvas::manager::init(mdl::project& proj) {
     project_ = &proj;
     connect(&proj, &mdl::project::project_changed, this, [this](mdl::project& model) {
-        active_canvas().sync_to_model();
+        // The animation canvas is backed by a detached working topology.  Do not
+        // touch its items in response to ordinary project notifications; the
+        // animation-specific refresh_canvas signal owns those updates.  This is
+        // also important while the detached topology is being torn down.
         if (animation_session_active_ || model.animation_mode()) return;
+        active_canvas().sync_to_model();
         emit canvas_refresh(model.core());
         active_canvas().sync_selection();
     });
@@ -142,5 +146,18 @@ void ui::canvas::manager::show_animation_session(bool active) {
     auto& scene = active_canvas();
     scene.artwork().set_preview_topology(active ? &project_->topology() : nullptr);
     set_contents(*project_);
+}
+
+void ui::canvas::manager::detach_animation_session_view() {
+    if (!animation_session_active_) return;
+
+    // Canvas items in Animation Mode directly reference the session's detached
+    // working topology, and the artwork layer may also hold that topology as its
+    // preview source.  Drop every such reference before mdl::project destroys
+    // the animation session.  Keep animation_session_active_ true until the
+    // persistent project view is installed by show_animation_session(false).
+    auto& scene = active_canvas();
+    scene.artwork().set_preview_topology(nullptr);
+    scene.clear();
 }
 

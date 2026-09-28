@@ -31,6 +31,7 @@ namespace ui {
         public:
             manager(tool::input_handler& inp_handler);
             void show_animation_session(bool active);
+            void detach_animation_session_view();
             bool animation_session_active() const { return animation_session_active_; }
             void init(mdl::project& proj);
             void clear();
