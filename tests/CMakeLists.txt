@@ -85,6 +85,10 @@ else()
     add_test(NAME animation_v2_phase2 COMMAND $<TARGET_FILE:animation_v2_phase2>)
 endif()
 
+add_executable(animation_v2_phase3a animation_v2_phase3a.cpp)
+target_link_libraries(animation_v2_phase3a PRIVATE stick_man_core)
+add_test(NAME animation_v2_phase3a COMMAND $<TARGET_FILE:animation_v2_phase3a>)
+
 add_executable(ik_pins ik_pins.cpp)
 target_link_libraries(ik_pins PRIVATE stick_man_core)
 add_test(NAME ik_pins COMMAND $<TARGET_FILE:ik_pins>)

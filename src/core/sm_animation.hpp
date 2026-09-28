@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <vector>
 #include <span>
+#include <variant>
 
 namespace sm {
     // Standalone named poses are independent project assets. They intentionally
@@ -18,9 +19,8 @@ namespace sm {
         std::unordered_map<object_id, point> node_positions;
     };
 
-    // Animation V2 keyframes store skeletal state in rig-local terms. Root node
-    // translations are relative to the animation's incoming frame; bone values
-    // are local rotations (root bones use the incoming frame as their parent).
+    // Current full-rig capture stores root-node world positions and local bone
+    // rotations in radians. Incoming-frame/domain conversion is not implemented.
     struct skeletal_pose {
         std::unordered_map<object_id, point> root_positions;
         std::unordered_map<object_id, double> bone_rotations;
@@ -62,6 +62,40 @@ namespace sm {
         void validate() const;
         void validate(const topology& topology, std::span<const object_id> rig_skeletons) const;
     };
+
+    struct reference_keyframe {
+        object_id keyframe_id;
+    };
+
+    struct reference_transition {
+        object_id transition_id;
+        object_id from_keyframe_id;
+        object_id to_keyframe_id;
+        double progress;
+    };
+
+    struct reference_pose_sample {
+        skeletal_pose pose;
+        std::variant<reference_keyframe, reference_transition> location;
+    };
+
+    // Stateless, Qt-independent reference sampling; never applies or solves a pose.
+    // An interior reference may violate persistent constraints.
+    // Empty sequences return nullopt. Finite times clamp to the authored range;
+    // a single keyframe is returned for every finite time. Cumulative double
+    // timestamps use exact equality (no epsilon); stored endpoint scalars are copied.
+    // If floating-point addition collapses timestamps, the last keyframe at that
+    // timestamp wins, matching Pose Strip timing.
+    // Interior roots use component-wise linear interpolation. Angles normalize
+    // endpoints, use angular_distance's shortest signed arc, then normalize the
+    // result. Half-turn ties follow the sign of the normalized endpoint difference
+    // (+pi or -pi). Equivalent orientations encode no full turn; progress is linear.
+    // Throws std::invalid_argument for nonfinite time, invalid local asset IDs,
+    // malformed timing, nonfinite pose values or differing root/bone ID sets
+    // anywhere in the sequence, even when sampling an exact/clamped endpoint.
+    // Project/load validation remains responsible for topology and rig integrity.
+    std::optional<reference_pose_sample> sample_reference_pose(
+        const animation& animation, double time_seconds);
 
     pose capture_pose(const topology& topology, const std::vector<object_id>& skeletons, std::string name);
     skeletal_pose capture_skeletal_pose(const topology& topology, std::span<const object_id> skeletons);

@@ -479,17 +479,17 @@ The overall authoring model remains centered on direct manipulation: users creat
 
 ---
 
-## Implementation Status — Animation V2 Phase 2
+## Implementation Status — Animation V2 Phase 3A
 
-Phase 2 implements persistent skeletal pose keyframes and the first functional Pose Strip. It deliberately stops at static keyframe authoring; interpolation, transition solving, path/pin authoring, playhead insertion, and animated playback remain later phases.
+Phase 2 implements persistent skeletal pose keyframes and static Pose Strip authoring. [Phase 2.5](animation-phase25.md) adds Pose Strip timing and transport. Phase 3A adds deterministic Core **reference pose** sampling only. The canvas still shows the selected editing pose; playback does not apply samples to it. The **Solved pose** stage, paths/pins, easing authoring, playhead insertion, and canvas animation remain future work.
 
-Implemented behavior:
+Retained authoring behavior:
 
 - Each animation owns an ordered sequence of persistent `pose_keyframe` objects with stable IDs and optional names.
 - Unnamed keyframes are displayed positionally as `Pose 1`, `Pose 2`, and so on; those generated labels are not persisted.
 - Animation keyframes use a skeletal pose representation distinct from standalone named-pose assets. The stored state consists of root-node translations plus local bone rotations, so keyframes are endpoint skeletal state rather than old action-system commands or world-node snapshots.
-- The current Phase 2 editor still authors the character's full rig. The pose-domain rules in this document remain authoritative; restricted-domain editing via **Edit Pose Domain** is not enabled yet. Consequently the current implementation is the root/full-rig case of the incoming-frame model.
-- One transition record is retained between every adjacent pair of keyframes. Phase 2 persists transition identity and default duration only so insertion/deletion/undo keep the sequence structurally consistent; transition authoring and evaluation are not implemented yet.
+- The current editor authors the character's full rig: capture stores each root node's world position and each bone's local rotation in radians. Existing assets can have several root entries. The incoming-frame and single-skeleton pose-domain design above remains future work; this phase does not migrate or reinterpret that data.
+- One transition record is retained between every adjacent pair of keyframes. Transition identity and duration persist so insertion/deletion/undo keep the sequence structurally consistent. Core sampling uses those durations; transition editing UI is not implemented yet.
 - Selecting a keyframe applies its stored skeletal pose directly to the detached Animation Mode topology. No interpolation, transition projection, or playback evaluation occurs.
 - Canvas posing of the selected keyframe is captured back into that keyframe through Animation Mode undo commands. Commands identify the owning character/animation/keyframe by stable IDs, so undo after selecting another card restores and selects the frame that was actually edited.
 - **Add Pose** captures the current working pose for an empty animation; otherwise it appends a copy of the final keyframe. **Duplicate** inserts a copy after the selected keyframe with a new ID. Rename may set or clear the optional name. Delete supports the final remaining keyframe and selects the next keyframe when possible, otherwise the previous one.
@@ -499,3 +499,51 @@ Implemented behavior:
 - Whole-character skeletal-ID remapping updates keyframe root-node and bone references. Thumbnail caches, ghost state, and selection remain derived editor state and are never serialized.
 
 Animation Mode keeps its separate per-session undo stack. Persistent keyframe authoring is committed to document history as one document edit when Animation Mode ends, while individual keyframe operations remain independently undoable/redoable inside the session.
+
+### Phase 3A reference sampling contract
+
+`sm::sample_reference_pose(const animation&, double time_seconds)` returns an
+optional `reference_pose_sample`: a copied `skeletal_pose` and tagged location.
+`reference_keyframe` identifies the reached keyframe; `reference_transition`
+identifies the transition, both endpoint keyframes, and linear normalized progress.
+It has no Qt, clock, topology, selection, or previous-sample inputs. Sampling
+creates no persistent IDs, undo commands, or project writes.
+
+- Empty sequences return no sample as a normal outcome. A single keyframe is
+  returned for every finite time. Finite times outside the sequence clamp to the
+  first/final keyframe. Nonfinite requested times throw `std::invalid_argument`,
+  including for empty sequences. Clamping is this API's initial local policy,
+  not a decision about future looping or root-motion accumulation.
+- Keyframe times are cumulative transition-duration sums in sequence order,
+  using the same `double` arithmetic as Core total duration and Pose Strip timing.
+  Exact equality returns stored scalars directly, including non-normalized angles;
+  there is no snapping epsilon. If floating-point addition collapses timestamps,
+  the last keyframe at that timestamp wins, as in the Pose Strip.
+- Strictly inside a transition, `u = (time - start) / duration`. Every root
+  position component interpolates linearly by stable ID. Every local bone angle
+  normalizes its endpoints with `normalize_angle`, follows `angular_distance`'s
+  shortest signed arc, and normalizes the interior result to `[-pi, pi]`.
+  At an exact half-turn the signed normalized endpoint difference decides the
+  direction: `0 -> pi` travels positively, `0 -> -pi` negatively (with reversed
+  directions on the return paths). Equivalent orientations imply no full turn;
+  only floating-point roundoff can remain. No winding, easing, lengths, or scales
+  are interpolated.
+- Before returning any sample, shared existing local animation checks reject
+  malformed transition counts, nonpositive/nonfinite durations, nonfinite total
+  duration, nil/duplicate asset IDs, nil skeletal references, and nonfinite pose
+  values. Sampling also requires identical root and bone ID sets throughout the
+  sequence. All these failures throw `std::invalid_argument`, including when the
+  requested time would select an exact/clamped endpoint. Project/load validation
+  remains authoritative for rig membership and topology integrity.
+
+An interior **reference pose may violate persistent constraints**. It is not a
+finished constraint-valid animation evaluation, and this API neither solves nor
+applies it to a topology. Existing constraint enforcement remains unchanged.
+No sampling is connected to `time_changed`; Phase 2.5 canvas isolation remains
+the user-visible playback boundary.
+
+Core regression coverage in `animation_v2_phase3a` includes cumulative timing,
+exact and adjacent endpoints, wrap and half-turn angles, multiple roots/bones,
+history/insertion-order independence, malformed input, source immutability, and
+serialization round trips. Existing Phase 2/2.5 authoring and canvas-isolation
+tests remain in place.

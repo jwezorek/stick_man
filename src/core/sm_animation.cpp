@@ -8,6 +8,52 @@
 #include <unordered_map>
 #include <unordered_set>
 
+namespace {
+void add_asset_id(std::unordered_set<sm::object_id>& ids, sm::object_id id) {
+    if (id.is_nil() || !ids.insert(id).second) {
+        throw std::invalid_argument("Duplicate animation asset ID");
+    }
+}
+
+// Shared local checks for project/load validation and standalone sampling.
+// The caller supplies the ID scope (all assets, or just this animation).
+void validate_animation(const sm::animation& a, std::unordered_set<sm::object_id>& ids) {
+    add_asset_id(ids, a.id);
+    const auto wanted = a.keyframes.empty() ? std::size_t{} : a.keyframes.size() - 1;
+    if (a.transitions.size() != wanted) {
+        throw std::invalid_argument("Animation transition count does not match keyframes");
+    }
+    for (const auto& keyframe : a.keyframes) {
+        add_asset_id(ids, keyframe.id);
+        for (const auto& [id, pt] : keyframe.pose.root_positions) {
+            if (id.is_nil() || !std::isfinite(pt.x) || !std::isfinite(pt.y)) {
+                throw std::invalid_argument("Invalid keyframe root position");
+            }
+        }
+        for (const auto& [id, angle] : keyframe.pose.bone_rotations) {
+            if (id.is_nil() || !std::isfinite(angle)) {
+                throw std::invalid_argument("Invalid keyframe rotation");
+            }
+        }
+    }
+    for (const auto& transition : a.transitions) {
+        add_asset_id(ids, transition.id);
+        if (!(transition.duration_seconds > 0.0) ||
+                !std::isfinite(transition.duration_seconds)) {
+            throw std::invalid_argument("Invalid transition duration");
+        }
+    }
+    if (!std::isfinite(a.duration_seconds())) {
+        throw std::invalid_argument("Animation total duration is not finite");
+    }
+}
+
+bool same_ids(const auto& a, const auto& b) {
+    return a.size() == b.size() && std::all_of(a.begin(), a.end(),
+        [&](const auto& entry) { return b.contains(entry.first); });
+}
+}
+
 const sm::pose* sm::animation_assets::find_pose(object_id id) const {
     for (const auto& p : poses) {
         if (p.id == id) return &p;
@@ -64,20 +110,68 @@ double sm::animation::duration_seconds() const {
     return result;
 }
 
+std::optional<sm::reference_pose_sample> sm::sample_reference_pose(
+        const animation& animation, double time_seconds) {
+    if (!std::isfinite(time_seconds)) {
+        throw std::invalid_argument("Reference pose time is not finite");
+    }
+    std::unordered_set<object_id> ids;
+    validate_animation(animation, ids);
+    if (animation.keyframes.empty()) return {};
+
+    const auto& first = animation.keyframes.front().pose;
+    for (const auto& keyframe : animation.keyframes) {
+        if (!same_ids(first.root_positions, keyframe.pose.root_positions) ||
+                !same_ids(first.bone_rotations, keyframe.pose.bone_rotations)) {
+            throw std::invalid_argument("Reference pose keyframe ID sets do not match");
+        }
+    }
+
+    const auto exact = [&](std::size_t index) -> reference_pose_sample {
+        const auto& keyframe = animation.keyframes[index];
+        return {keyframe.pose, reference_keyframe{keyframe.id}};
+    };
+    const double time = std::clamp(time_seconds, 0.0, animation.duration_seconds());
+    double start = 0;
+    for (std::size_t i = 0; i < animation.transitions.size(); ++i) {
+        const auto& transition = animation.transitions[i];
+        const double end = start + transition.duration_seconds;
+        if (time < end) {
+            if (time == start) return exact(i);
+            const auto& from = animation.keyframes[i];
+            const auto& to = animation.keyframes[i + 1];
+            const double u = (time - start) / transition.duration_seconds;
+            skeletal_pose pose;
+            for (const auto& [id, position] : from.pose.root_positions) {
+                const auto& target = to.pose.root_positions.at(id);
+                // std::lerp avoids overflow in target - position for finite endpoints.
+                pose.root_positions.emplace(id, point{
+                    std::lerp(position.x, target.x, u), std::lerp(position.y, target.y, u)});
+            }
+            for (const auto& [id, angle] : from.pose.bone_rotations) {
+                // Normalize before subtraction so even extreme finite angles cannot
+                // overflow angular_distance. Exact endpoints never take this path.
+                const double source = normalize_angle(angle);
+                const double target = normalize_angle(to.pose.bone_rotations.at(id));
+                pose.bone_rotations.emplace(id,
+                    normalize_angle(source + u * angular_distance(source, target)));
+            }
+            return reference_pose_sample{std::move(pose), reference_transition{
+                transition.id, from.id, to.id, u}};
+        }
+        start = end;
+    }
+    return exact(animation.keyframes.size() - 1);
+}
+
 void sm::animation_assets::validate() const {
     if (!find_pose(default_pose)) {
         throw std::invalid_argument("Missing Default pose");
     }
 
     std::unordered_set<object_id> ids;
-    auto add = [&](object_id id) {
-        if (id.is_nil() || !ids.insert(id).second) {
-            throw std::invalid_argument("Duplicate animation asset ID");
-        }
-    };
-
     for (const auto& p : poses) {
-        add(p.id);
+        add_asset_id(ids, p.id);
         for (const auto& [id, pt] : p.node_positions) {
             if (id.is_nil() || !std::isfinite(pt.x) || !std::isfinite(pt.y)) {
                 throw std::invalid_argument("Invalid pose position");
@@ -86,36 +180,7 @@ void sm::animation_assets::validate() const {
     }
 
     for (const auto& a : animations) {
-        add(a.id);
-        const auto wanted = a.keyframes.empty() ? std::size_t{} : a.keyframes.size() - 1;
-        if (a.transitions.size() != wanted) {
-            throw std::invalid_argument("Animation transition count does not match keyframes");
-        }
-
-        for (const auto& keyframe : a.keyframes) {
-            add(keyframe.id);
-            for (const auto& [id, pt] : keyframe.pose.root_positions) {
-                if (id.is_nil() || !std::isfinite(pt.x) || !std::isfinite(pt.y)) {
-                    throw std::invalid_argument("Invalid keyframe root position");
-                }
-            }
-            for (const auto& [id, angle] : keyframe.pose.bone_rotations) {
-                if (id.is_nil() || !std::isfinite(angle)) {
-                    throw std::invalid_argument("Invalid keyframe rotation");
-                }
-            }
-        }
-
-        for (const auto& transition : a.transitions) {
-            add(transition.id);
-            if (!(transition.duration_seconds > 0.0) ||
-                    !std::isfinite(transition.duration_seconds)) {
-                throw std::invalid_argument("Invalid transition duration");
-            }
-        }
-        if (!std::isfinite(a.duration_seconds())) {
-            throw std::invalid_argument("Animation total duration is not finite");
-        }
+        validate_animation(a, ids);
     }
 }
 
