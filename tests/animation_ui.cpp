@@ -114,6 +114,42 @@ int main(int argc, char** argv) {
         require(!canvas.is_node_pinned(root_id),
             "Animation Mode allowed pin state without an edited keyframe owner");
 
+        require(model.add_animation_keyframe() == sm::result::success, "create first frame");
+        const auto first_frame = *model.animation_session_keyframe();
+        canvas.toggle_node_pinned_undoable(root_id);
+        require(model.add_animation_keyframe() == sm::result::success, "create second frame");
+        const auto second_frame = *model.animation_session_keyframe();
+        require(model.animation_session_incoming_locked_nodes().contains(root_id),
+            "frame 1 pin must lock frame 2");
+        canvas.toggle_node_pinned_undoable(root_id);
+        require(!model.animation_session_pinned_nodes().contains(root_id), "frame 2 unpin failed");
+        require(canvas.is_node_pinned(root_id), "unpin must preserve frame 2 incoming movement lock");
+        model.transform_node_positions({{root_id, moved}}, {{root_id, {100, 110}}});
+        require(model.topology().get<sm::node>(root_id)->get().world_pos() == moved,
+            "unpinning frame 2 must not allow moving its locked node");
+
+        // A lock from frame 1 must not prevent toggling frame 2's outgoing pin back on.
+        canvas.toggle_node_pinned_undoable(root_id);
+        require(model.animation_session_pinned_nodes().contains(root_id), "locked node could not be re-pinned");
+        model.undo();
+        require(!model.animation_session_pinned_nodes().contains(root_id), "re-pin undo failed");
+        require(model.redo() == sm::result::success, "re-pin redo failed");
+        require(model.animation_session_pinned_nodes().contains(root_id), "re-pin redo lost pin");
+        canvas.toggle_node_pinned_undoable(root_id);
+        require(model.add_animation_keyframe() == sm::result::success, "create third frame");
+        const auto third_frame = *model.animation_session_keyframe();
+        require(!model.animation_session_incoming_locked_nodes().contains(root_id) &&
+            !canvas.is_node_pinned(root_id), "frame 2 unpin must release frame 3");
+        model.transform_node_positions({{root_id, moved}}, {{root_id, {100, 110}}});
+        require(model.topology().get<sm::node>(root_id)->get().world_pos() == sm::point{100, 110},
+            "released frame 3 node could not move");
+        require(model.select_animation_keyframe(first_frame) == sm::result::success, "select first frame");
+        require(model.animation_session_pinned_nodes().contains(root_id), "unpin leaked into frame 1");
+        require(model.select_animation_keyframe(second_frame) == sm::result::success, "select second frame");
+        require(canvas.is_node_pinned(root_id) && !model.animation_session_pinned_nodes().contains(root_id),
+            "frame 2 did not retain its incoming lock and outgoing unpin");
+        require(model.select_animation_keyframe(third_frame) == sm::result::success, "select third frame");
+
         browser->leave_animation();
         app.processEvents();
         require(!model.animation_mode(), "Animation Mode did not exit");

@@ -404,13 +404,15 @@ void ui::canvas::scene::set_node_pinned(const sm::object_id& id, bool pinned) {
 }
 
 void ui::canvas::scene::toggle_node_pinned(const sm::object_id& id) {
-    set_node_pinned(id, !is_node_pinned(id));
+    set_node_pinned(id, !pinned_node_ids_.contains(id));
 }
 
 void ui::canvas::scene::toggle_node_pinned_undoable(const sm::object_id& id) {
     if (model_ && model_->animation_preview_active()) return;
     if (!model_) { toggle_node_pinned(id); return; }
-    const bool before = is_node_pinned(id);
+    // Incoming locks constrain this pose; only its authored pin controls the
+    // next pose. Toggling that pin must not read or remove the incoming lock.
+    const bool before = pinned_node_ids_.contains(id);
     const bool after = !before;
     if (model_->animation_mode()) {
         model_->set_animation_keyframe_node_pinned(id, after);
