@@ -479,9 +479,9 @@ The overall authoring model remains centered on direct manipulation: users creat
 
 ---
 
-## Implementation Status — Animation V2 Phase 3B
+## Implementation Status — Animation V2 Phase 3C
 
-Phase 2 implements persistent skeletal pose keyframes and static Pose Strip authoring. [Phase 2.5](animation-phase25.md) adds Pose Strip timing and transport. Phase 3A adds deterministic Core **reference pose** sampling. Phase 3B adds the first bounded **Solved pose** stage: persistent angular and rigid-triangle constraint projection, with fixed reference roots and rig lengths. The canvas still shows the selected editing pose; playback does not call the new sampler or apply samples. Positional targets, paths/pins, domains, artwork evaluation, easing authoring, playhead insertion, and the remaining animation design are deferred.
+Phase 2 implements persistent skeletal pose keyframes and static Pose Strip authoring. [Phase 2.5](animation-phase25.md) adds Pose Strip timing and transport. Phase 3A adds deterministic Core **reference pose** sampling. Phase 3B adds the first bounded **Solved pose** stage: persistent angular and rigid-triangle constraint projection, with fixed reference roots and rig lengths. Phase 3C connects `sample_constrained_pose` to the existing transport: the canvas and Pose Strip preview the same absolute animation time. The canvas preview is read-only and isolated from selected-keyframe editing and persistent project geometry. Positional targets, animation paths/pins, tracks, domains, composition, artwork-state evaluation, easing authoring, scrubbing, playhead insertion, looping, root-motion accumulation, asynchronous evaluation, and solver caches remain deferred. There are no schema changes or saved evaluated poses.
 
 Retained authoring behavior:
 
@@ -539,14 +539,16 @@ creates no persistent IDs, undo commands, or project writes.
 An interior **reference pose may violate persistent constraints**. It is not a
 finished constraint-valid animation evaluation, and this API neither solves nor
 applies it to a topology. Existing constraint enforcement remains unchanged.
-No sampling is connected to `time_changed`; Phase 2.5 canvas isolation remains
-the user-visible playback boundary.
+Phase 3A alone did not connect sampling to `time_changed`. Phase 3C now supersedes
+Phase 2.5's canvas-isolation boundary using the constrained sampler, not this
+unconstrained reference sampler.
 
 Core regression coverage in `animation_v2_phase3a` includes cumulative timing,
 exact and adjacent endpoints, wrap and half-turn angles, multiple roots/bones,
 history/insertion-order independence, malformed input, source immutability, and
-serialization round trips. Existing Phase 2/2.5 authoring and canvas-isolation
-tests remain in place.
+serialization round trips. Phase 2/2.5 authoring protections remain in place;
+Phase 3C replaces the obsolete stationary-canvas expectation with separate
+displayed-geometry and editing/persistent-geometry assertions.
 
 ### Phase 3B constrained sampling contract
 
@@ -636,4 +638,62 @@ Core regression coverage in `animation_v2_phase3b` exercises timing and exact
 scalars, endpoint rejection, angular projection and coupled cycles, signed rigid
 triangles, fixed lengths and multiple roots, external dependency rejection,
 failure isolation, sampling-history and insertion-order independence, and
-serialization round trips. Phase 2.5 remains the user-visible playback boundary.
+serialization round trips. Phase 3C adds the user-visible playback integration
+below without changing these sampling contracts.
+
+### Phase 3C read-only canvas preview
+
+- Entering Animation Mode initially shows the selected editing keyframe. Clock
+  initialization and rendering refresh do not enter preview. Play explicitly
+  enters preview and evaluates the current transport time immediately; subsequent
+  monotonic-clock updates sample absolute time synchronously, with no frame queue.
+- Pause and natural completion hold the last successful sample. Play resumes,
+  or restarts from zero at the end. First/end stop advancement and preview their
+  endpoints without selecting cards. Single-keyframe Play previews the one pose
+  without starting a timer; an empty sequence is a normal no-preview result.
+- Selecting a Pose Strip card pauses and exits preview, then uses the existing
+  editing flow. Playback highlighting never changes the editing selection border.
+  Returning to editing preserves transport time; structural/timing changes retain
+  the existing stop/reset rule. Switching animations and leaving/reentering
+  Animation Mode clear preview and reset the transport.
+- `mdl::project::topology()` and `get()` retain their editing meaning. Rendering
+  uses `display_topology()`, backed during playback by a separate ID-preserving
+  topology. Each sample uses the persistent authoring rig as its immutable input
+  for that call, including lengths, scales, and persistent constraints. No previous
+  display sample is an evaluation input. Transient editor pins are never sampled.
+- A candidate is copied and reconstructed before publication; Core constraint
+  validation must succeed. Exact-key stored scalars remain untouched (only the
+  rendering copy reduces rotations for numerical precision). Detached skeleton
+  copies preserve rest lengths as well as effective lengths, so bone scales and
+  static bone-bound artwork keep their existing appearance. No artwork-state
+  animation is evaluated. Thumbnails still render stored keyframes and their
+  caches are not refreshed by timer ticks.
+- Display changes detach canvas items, constraint guides, and artwork topology
+  references before destroying the old topology. Editing canvas selection is
+  saved by skeletal ID and restored on exit. Pending gestures are cancelled before
+  replacement. Model reset/destruction explicitly detaches dependents; no scene
+  item is allowed to outlive its backing geometry.
+- Preview blocks geometry gestures and property transform commands. Pan/zoom
+  remain available. Add, Duplicate, Rename, Delete, and undo/redo exit preview
+  through model entry points before executing against authored editing state.
+  Preview creates no pose-capture callbacks, history entries, dirty state, or
+  serialization writes; prior authoring edits still commit normally on session
+  exit. The previous-pose ghost is suppressed during preview without changing its
+  preference, and transient pins survive returning to editing.
+- Sampling/reconstruction failures stop advancement without recursively sampling
+  another time, discard the preview, and restore the editing view. A nonmodal
+  editor label explicitly identifies failure and says the editing pose is shown.
+  Model status distinguishes editing, empty, sampled, sampling failure, and display
+  reconstruction failure, retaining the Core error where available. Failure does
+  not retry automatically; explicit editing/transport actions or successful
+  preview clear/update the indication. The failed reference/candidate is never
+  displayed as a successful evaluated pose.
+
+`animation_v2_phase3c` verifies deterministic interior/exact display coordinates,
+constrained rigid-fan and multi-root geometry, scales, history-independent sampling,
+read-only input, authoring/undo isolation, static artwork and thumbnail stability,
+empty/single sequences, sampling failure, allocation failure during reconstruction,
+and model/view teardown. Deterministic checks use the editor's absolute-time
+preview entry point; the existing Phase 2.5 and UI tests separately cover the real
+elapsed clock, pause/resume, endpoints, completion, restart, and highlighting.
+The Phase 3A/3B sampler tests are unchanged.

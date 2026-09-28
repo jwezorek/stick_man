@@ -23,6 +23,9 @@ public:
     void begin(mdl::project& project, canvas::manager& canvases,
         sm::object_id character, sm::object_id animation);
     void end();
+    ~animation_editor() override;
+    // Deterministic absolute-time evaluation, also used by transport updates.
+    void preview_time(double seconds);
 private:
     mdl::project* project_ = nullptr;
     canvas::manager* canvases_ = nullptr;
@@ -32,6 +35,8 @@ private:
     pose_strip* pose_strip_ = nullptr;
     timeline* artwork_timeline_ = nullptr;
     QLabel* time_display_ = nullptr;
+    QLabel* preview_status_ = nullptr;
+    bool preview_requested_ = false;
     QPushButton* add_pose_ = nullptr;
     QPushButton* duplicate_ = nullptr;
     QPushButton* rename_ = nullptr;
@@ -43,6 +48,7 @@ private:
     QToolButton* end_ = nullptr;
 
     void refresh();
+    void update_preview_status();
     void rename_selected();
 };
 }

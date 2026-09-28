@@ -5,7 +5,7 @@
 
 namespace ui {
 // Editor-only transport clock. It has no reference to the model or any canvas.
-// Future evaluation can subscribe to time_changed without changing strip timing.
+// Evaluation subscribes to time_changed without changing strip timing.
 class animation_playback : public QObject {
     Q_OBJECT
 public:
@@ -13,6 +13,8 @@ public:
     void set_duration(double seconds);
     void play();
     void pause();
+    // Stop at the last published time without emitting a tick (failure/edit exit).
+    void hold();
     void stop();
     void go_to_end();
     double time() const { return time_; }

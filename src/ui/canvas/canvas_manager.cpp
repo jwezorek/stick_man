@@ -2,6 +2,7 @@
 #include "canvas_manager.hpp"
 #include "canvas_item.hpp"
 #include "skel_item.hpp"
+#include "../tools/tool.hpp"
 #include <ranges>
 #include <stdexcept>
 
@@ -42,6 +43,45 @@ ui::canvas::manager::manager(tool::input_handler& inp_handler) :
 }
 void ui::canvas::manager::init(mdl::project& proj) {
     project_ = &proj;
+    connect(&proj, &mdl::project::model_about_to_be_destroyed, this, [this] {
+        auto& scene = active_canvas();
+        scene.model_ = nullptr;
+        delete scene.artwork_;
+        scene.artwork_ = nullptr;
+        project_ = nullptr;
+        animation_session_active_ = false;
+    });
+    connect(&proj, &mdl::project::animation_display_changing, this, [this](bool preview) {
+        auto& scene = active_canvas();
+        QKeyEvent cancel(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+        inp_handler_.keyPressEvent(scene, &cancel);
+        if (preview && !project_->animation_preview_active()) {
+            editing_selection_.clear();
+            for (auto* item : scene.selection())
+                editing_selection_.push_back(mdl::to_handle(item->to_skeleton_piece()));
+        }
+        scene.artwork().set_preview_topology(nullptr);
+        scene.clear();
+    });
+    connect(&proj, &mdl::project::animation_display_changed, this, [this] {
+        auto& scene = active_canvas();
+        scene.artwork().set_preview_topology(&project_->display_topology());
+        set_contents(*project_);
+        if (!project_->animation_preview_active()) {
+            for (auto* item : scene.canvas_items())
+                if (r::find(editing_selection_, mdl::to_handle(item->to_skeleton_piece())) != editing_selection_.end())
+                    scene.add_to_selection(item);
+            editing_selection_.clear();
+            scene.sync_selection();
+        }
+    });
+    connect(&proj, &mdl::project::topology_about_to_reset, this, [this] {
+        QKeyEvent cancel(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+        inp_handler_.keyPressEvent(active_canvas(), &cancel);
+        active_canvas().artwork().set_preview_topology(nullptr);
+        active_canvas().clear();
+        editing_selection_.clear();
+    });
     connect(&proj, &mdl::project::project_changed, this, [this](mdl::project& model) {
         // The animation canvas is backed by a detached working topology.  Do not
         // touch its items in response to ordinary project notifications; the
@@ -60,7 +100,7 @@ void ui::canvas::manager::init(mdl::project& proj) {
     connect(&proj, &mdl::project::new_skeleton_added, this, &manager::add_new_skeleton);
     connect(&proj, &mdl::project::new_project_opened, this, &manager::set_contents);
     connect(&proj, &mdl::project::refresh_canvas,
-        [this](mdl::project& model, bool clear) {
+        this, [this](mdl::project& model, bool clear) {
             if (clear) {
                 set_contents(model);
             }
@@ -144,7 +184,7 @@ void ui::canvas::manager::set_drag_mode(drag_mode dm) {
 void ui::canvas::manager::show_animation_session(bool active) {
     animation_session_active_ = active;
     auto& scene = active_canvas();
-    scene.artwork().set_preview_topology(active ? &project_->topology() : nullptr);
+    scene.artwork().set_preview_topology(active ? &project_->display_topology() : nullptr);
     set_contents(*project_);
 }
 
@@ -160,4 +200,3 @@ void ui::canvas::manager::detach_animation_session_view() {
     scene.artwork().set_preview_topology(nullptr);
     scene.clear();
 }
-

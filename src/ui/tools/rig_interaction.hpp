@@ -40,7 +40,7 @@ namespace ui {
             select_tool_panel* settings_panel_ = nullptr;
             std::optional<drag_state> drag_;
             std::optional<QPointF> click_pt_;
-            mdl::project* project_ = nullptr;
+            QPointer<mdl::project> project_;
             canvas::manager* canvases_ = nullptr;
             bool is_dragging() const;
             void pin_selection();

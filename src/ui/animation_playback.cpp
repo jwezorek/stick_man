@@ -42,6 +42,12 @@ void ui::animation_playback::pause() {
     }
 }
 
+void ui::animation_playback::hold() {
+    const bool was_playing = playing();
+    timer_.stop();
+    if (was_playing) emit playing_changed(false);
+}
+
 void ui::animation_playback::stop() {
     const bool was_playing = playing();
     timer_.stop();

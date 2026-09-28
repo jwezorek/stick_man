@@ -78,6 +78,7 @@ sm::result mdl::project::execute_command(const command& cmd) {
 }
 sm::result mdl::project::execute_session_command(const command& cmd) {
     if (!animation_session_) return sm::result::invalid_membership;
+    exit_animation_preview();
     const bool was_dirty = is_dirty();
     command stored = cmd;
     stored.document_edit = false;
@@ -91,7 +92,19 @@ sm::result mdl::project::execute_session_command(const command& cmd) {
     return sm::result::success;
 }
 
-mdl::project::project() {}
+mdl::project::project() {
+    // These are authoring notifications. Rendering-only refresh_canvas never
+    // invalidates a held sample or restarts the clock.
+    connect(this, &project::animation_preview_changed, this, &project::exit_animation_preview);
+    connect(this, &project::project_changed, this, [this] {
+        if (animation_preview_active()) exit_animation_preview();
+    });
+}
+mdl::project::~project() {
+    emit animation_session_ending();
+    emit topology_about_to_reset();
+    emit model_about_to_be_destroyed();
+}
 
 const sm::project& mdl::project::core() const { return core_; }
 sm::project& mdl::project::core() { return core_; }
@@ -133,6 +146,9 @@ mdl::const_model_object mdl::project::get(const sm::object_id& id) const {
 }
 
 void mdl::project::clear() {
+    exit_animation_preview();
+    emit animation_session_ending();
+    emit topology_about_to_reset();
     animation_session_.reset();
     core_.clear();
     redo_stack_ = {};
@@ -166,6 +182,7 @@ void mdl::project::advance_default_name_counters_from_topology() {
     }
 }
 void mdl::project::undo() {
+    exit_animation_preview();
     if (!can_undo()) return;
     if (animation_session_) {
         const bool was_dirty = is_dirty();
@@ -188,6 +205,7 @@ void mdl::project::undo() {
     notify_command_change(cmd);
 }
 sm::result mdl::project::redo() {
+    exit_animation_preview();
     if (!can_redo()) return sm::result::success;
     if (animation_session_) {
         const bool was_dirty = is_dirty();
@@ -240,6 +258,12 @@ sm::project_result mdl::project::validate_serialized(std::span<const std::uint8_
     return candidate.deserialize(buffer);
 }
 sm::project_result mdl::project::deserialize_result(std::span<const std::uint8_t> buffer) {
+    // Validate before detaching the live view; malformed input leaves it intact.
+    const auto validation = validate_serialized(buffer);
+    if (validation != sm::project_result::success) return validation;
+    exit_animation_preview();
+    emit animation_session_ending();
+    emit topology_about_to_reset();
     const bool was_dirty = is_dirty();
     // Core deserialization is transactional: it builds a staged project and only
     // commits to core_ after the entire package has validated successfully.
@@ -553,16 +577,19 @@ bool mdl::project::rename(skel_piece piece, const std::string& new_name) {
 }
 void mdl::project::transform(const std::vector<handle>& nodes,
         const std::function<void(sm::node&)>& fn) {
+    if (animation_preview_active()) return;
     auto cmd = commands::make_transform_bones_or_nodes_command(*this, nodes, {}, fn, {});
     if (animation_session_) execute_session_command(cmd); else execute_command(cmd);
 }
 void mdl::project::transform(const std::vector<handle>& bones,
         const std::function<void(sm::bone&)>& fn) {
+    if (animation_preview_active()) return;
     auto cmd = commands::make_transform_bones_or_nodes_command(*this, {}, bones, {}, fn);
     if (animation_session_) execute_session_command(cmd); else execute_command(cmd);
 }
 void mdl::project::transform_node_positions(
         const node_locs& old_locs, const node_locs& new_locs) {
+    if (animation_preview_active()) return;
     if (!animation_session_ || !animation_session_->selected_keyframe) {
         auto cmd = commands::make_transform_node_positions_command(*this, old_locs, new_locs);
         if (animation_session_) execute_session_command(cmd); else execute_command(cmd);
@@ -684,6 +711,9 @@ sm::result mdl::project::begin_animation_session(sm::object_id character_id, sm:
 }
 void mdl::project::end_animation_session() {
     if (!animation_session_) return;
+    exit_animation_preview();
+    emit animation_session_ending();
+    emit topology_about_to_reset();
     const auto character_id = animation_session_->character;
     const auto before = animation_session_->original_animation_data;
     const auto after = core_.animation_data(character_id);
@@ -714,6 +744,7 @@ std::optional<sm::object_id> mdl::project::animation_session_keyframe() const {
 }
 
 sm::result mdl::project::select_animation_keyframe(sm::object_id keyframe_id) {
+    exit_animation_preview();
     if (!animation_session_) return sm::result::invalid_membership;
     auto character = core_.character(animation_session_->character);
     if (!character) return character.error();
@@ -729,6 +760,7 @@ sm::result mdl::project::select_animation_keyframe(sm::object_id keyframe_id) {
 }
 
 sm::result mdl::project::add_animation_keyframe() {
+    exit_animation_preview();
     if (!animation_session_) return sm::result::invalid_membership;
 
     const auto character_id = animation_session_->character;
@@ -786,6 +818,7 @@ sm::result mdl::project::add_animation_keyframe() {
 }
 
 sm::result mdl::project::duplicate_animation_keyframe() {
+    exit_animation_preview();
     if (!animation_session_ || !animation_session_->selected_keyframe) {
         return sm::result::not_found;
     }
@@ -842,6 +875,7 @@ sm::result mdl::project::duplicate_animation_keyframe() {
 }
 
 sm::result mdl::project::rename_animation_keyframe(const std::optional<std::string>& name) {
+    exit_animation_preview();
     if (!animation_session_ || !animation_session_->selected_keyframe) {
         return sm::result::not_found;
     }
@@ -881,6 +915,7 @@ sm::result mdl::project::rename_animation_keyframe(const std::optional<std::stri
 }
 
 sm::result mdl::project::delete_animation_keyframe() {
+    exit_animation_preview();
     if (!animation_session_ || !animation_session_->selected_keyframe) {
         return sm::result::not_found;
     }
@@ -942,7 +977,6 @@ sm::result mdl::project::delete_animation_keyframe() {
 void mdl::project::set_show_previous_pose(bool show) {
     if (show_previous_pose_ == show) return;
     show_previous_pose_ = show;
-    emit animation_preview_changed();
     emit refresh_canvas(*this, false);
 }
 

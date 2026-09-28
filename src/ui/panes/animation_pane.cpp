@@ -339,9 +339,16 @@ void ui::pane::animation::context_menu(QPoint point) {
 }
 
 bool ui::pane::animation::open_animation(sm::object_id cid, sm::object_id aid) {
-    if (!project_ || !active_animation_.is_nil()) return false;
+    if (!project_) return false;
     auto c = project_->core().character(cid); if (!c) return false;
     auto* a = c->get().animation_data().find_animation(aid); if (!a) return false;
+    if (!active_animation_.is_nil()) {
+        if (active_character_ == cid && active_animation_ == aid) return true;
+        leave_animation();
+        // Committing the old session may replace its animation asset storage.
+        c = project_->core().character(cid);
+        a = c->get().animation_data().find_animation(aid);
+    }
 
     pins_before_.clear();
     for (auto* scene : canvases_->canvases())

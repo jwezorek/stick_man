@@ -128,6 +128,14 @@ add_test(NAME animation_v2_phase25 COMMAND "${CMAKE_COMMAND}" -E env
     $<TARGET_FILE:animation_v2_phase25>)
 set_tests_properties(animation_v2_phase25 PROPERTIES TIMEOUT 30)
 
+add_executable(animation_v2_phase3c animation_v2_phase3c.cpp ${PROJECT_SOURCE_DIR}/src/ui/stick_man.qrc)
+target_link_libraries(animation_v2_phase3c PRIVATE stick_man_ui)
+set_target_properties(animation_v2_phase3c PROPERTIES AUTORCC ON)
+add_test(NAME animation_v2_phase3c COMMAND "${CMAKE_COMMAND}" -E env
+    "QT_QPA_PLATFORM=offscreen" "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}"
+    $<TARGET_FILE:animation_v2_phase3c>)
+set_tests_properties(animation_v2_phase3c PROPERTIES TIMEOUT 60)
+
 add_executable(constraint_ui constraint_ui.cpp)
 target_link_libraries(constraint_ui PRIVATE stick_man_model)
 add_test(NAME constraint_ui COMMAND "${CMAKE_COMMAND}" -E env

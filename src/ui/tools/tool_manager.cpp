@@ -31,44 +31,49 @@ void ui::tool::manager::init(canvas::manager& canvases, mdl::project& model) {
     }
 }
 
+bool ui::tool::manager::input_allowed() const {
+    return project_ && has_current_tool() && (!project_->animation_preview_active() ||
+        current_tool().id() == id::pan || current_tool().id() == id::zoom);
+}
+
 void ui::tool::manager::keyPressEvent(ui::canvas::scene& c, QKeyEvent* event) {
-    if (has_current_tool()) {
+    if (input_allowed()) {
         current_tool().keyPressEvent(c, event);
     }
 }
 
 void ui::tool::manager::keyReleaseEvent(ui::canvas::scene& c, QKeyEvent* event) {
-    if (has_current_tool()) {
+    if (input_allowed()) {
         current_tool().keyReleaseEvent(c, event);
     }
 }
 
 void ui::tool::manager::mousePressEvent(ui::canvas::scene& c, QGraphicsSceneMouseEvent* event) {
-    if (has_current_tool()) {
+    if (input_allowed()) {
         current_tool().mousePressEvent(c, event);
     }
 }
 
 void ui::tool::manager::mouseMoveEvent(ui::canvas::scene& c, QGraphicsSceneMouseEvent* event) {
-    if (has_current_tool()) {
+    if (input_allowed()) {
         current_tool().mouseMoveEvent(c, event);
     }
 }
 
 void ui::tool::manager::mouseReleaseEvent(ui::canvas::scene& c, QGraphicsSceneMouseEvent* event) {
-    if (has_current_tool()) {
+    if (input_allowed()) {
         current_tool().mouseReleaseEvent(c, event);
     }
 }
 
 void ui::tool::manager::mouseDoubleClickEvent(ui::canvas::scene& c, QGraphicsSceneMouseEvent* event) {
-    if (has_current_tool()) {
+    if (input_allowed()) {
         current_tool().mouseDoubleClickEvent(c, event);
     }
 }
 
 void ui::tool::manager::wheelEvent(ui::canvas::scene& c, QGraphicsSceneWheelEvent* event) {
-    if (has_current_tool()) {
+    if (input_allowed()) {
         current_tool().wheelEvent(c, event);
     }
 }

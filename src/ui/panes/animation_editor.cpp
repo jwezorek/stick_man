@@ -29,12 +29,15 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
     end_ = make_transport(QStringLiteral(">|"), "animation_transport_end");
     start_->setToolTip(tr("Stop and return to first pose"));
     end_->setToolTip(tr("Go to final pose"));
-    play_->setToolTip(tr("Play / pause Pose Strip timing"));
+    play_->setToolTip(tr("Play / pause skeletal preview"));
 
     time_display_ = new QLabel(QStringLiteral("0:00.000"), content);
     time_display_->setObjectName("animation_time_display");
     transport->addSpacing(8);
     transport->addWidget(time_display_);
+    preview_status_ = new QLabel(content);
+    preview_status_->setObjectName("animation_preview_status");
+    transport->addWidget(preview_status_);
     transport->addStretch();
     outer->addLayout(transport);
 
@@ -85,10 +88,22 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
     playback_ = new animation_playback(this);
     connect(play_, &QToolButton::clicked, this, [this] {
         if (playback_->playing()) playback_->pause();
-        else playback_->play();
+        else {
+            preview_requested_ = true;
+            if (playback_->duration() > 0) playback_->play();
+            else preview_time(0);
+        }
     });
-    connect(start_, &QToolButton::clicked, playback_, &animation_playback::stop);
-    connect(end_, &QToolButton::clicked, playback_, &animation_playback::go_to_end);
+    connect(start_, &QToolButton::clicked, this, [this] {
+        preview_requested_ = false;
+        playback_->stop();
+        preview_time(playback_->time());
+    });
+    connect(end_, &QToolButton::clicked, this, [this] {
+        preview_requested_ = false;
+        playback_->go_to_end();
+        preview_time(playback_->time());
+    });
     connect(playback_, &animation_playback::playing_changed, this, [this](bool playing) {
         play_->setText(playing ? tr("Pause") : tr("Play"));
     });
@@ -101,6 +116,7 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
             .arg(QString::number(minutes, 'f', 0))
             .arg((ms / 1000) % 60, 2, 10, QLatin1Char('0'))
             .arg(ms % 1000, 3, 10, QLatin1Char('0')));
+        if (preview_requested_) preview_time(seconds);
     });
     connect(pose_strip_, &pose_strip::playback_focus_changed, this,
         [pose_scroll](QRectF region) {
@@ -155,6 +171,13 @@ void ui::pane::animation_editor::begin(mdl::project& project, canvas::manager& c
         &animation_editor::refresh, Qt::UniqueConnection);
     connect(&project, &mdl::project::project_changed, this,
         &animation_editor::refresh, Qt::UniqueConnection);
+    connect(&project, &mdl::project::animation_editing_requested, this, [this] {
+        preview_requested_ = false;
+        playback_->hold();
+    });
+    connect(&project, &mdl::project::animation_display_status_changed,
+        this, &animation_editor::update_preview_status);
+    connect(&project, &mdl::project::animation_session_ending, this, &animation_editor::end);
     connect(&project, &QObject::destroyed, this, [this] {
         project_ = nullptr;
         end();
@@ -169,6 +192,8 @@ void ui::pane::animation_editor::begin(mdl::project& project, canvas::manager& c
 }
 
 void ui::pane::animation_editor::end() {
+    preview_requested_ = false;
+    if (project_) project_->exit_animation_preview();
     playback_->set_duration(0);
     if (project_) {
         disconnect(project_, nullptr, this, nullptr);
@@ -184,6 +209,25 @@ void ui::pane::animation_editor::end() {
     hide();
 }
 
+ui::pane::animation_editor::~animation_editor() { end(); }
+
+void ui::pane::animation_editor::preview_time(double seconds) {
+    if (!project_) return;
+    preview_requested_ = true;
+    project_->preview_animation_time(seconds);
+}
+
+void ui::pane::animation_editor::update_preview_status() {
+    if (!project_) { preview_status_->clear(); return; }
+    switch (project_->preview_status()) {
+    case mdl::animation_display_status::sampled: preview_status_->setText(tr("Playback preview (read-only)")); break;
+    case mdl::animation_display_status::sampling_failed: preview_status_->setText(tr("Preview failed: cannot solve pose. Showing editing pose.")); break;
+    case mdl::animation_display_status::reconstruction_failed: preview_status_->setText(tr("Preview failed: cannot display pose. Showing editing pose.")); break;
+    case mdl::animation_display_status::empty: preview_status_->setText(tr("No poses to preview.")); break;
+    default: preview_status_->setText(tr("Editing pose")); break;
+    }
+}
+
 void ui::pane::animation_editor::refresh() {
     const bool timing_changed = pose_strip_->refresh();
     const sm::animation* animation = nullptr;
@@ -191,9 +235,12 @@ void ui::pane::animation_editor::refresh() {
         auto owner = project_->core().character(character_);
         if (owner) animation = owner->get().animation_data().find_animation(animation_);
     }
-    if (timing_changed) playback_->set_duration(animation ? animation->duration_seconds() : 0);
+    if (timing_changed) {
+        if (project_) project_->exit_animation_preview();
+        playback_->set_duration(animation ? animation->duration_seconds() : 0);
+    }
     const bool has_poses = animation && !animation->keyframes.empty();
-    play_->setEnabled(has_poses && animation->duration_seconds() > 0);
+    play_->setEnabled(has_poses);
     start_->setEnabled(has_poses);
     end_->setEnabled(has_poses);
     const bool has_selection = project_ && project_->animation_session_keyframe().has_value();

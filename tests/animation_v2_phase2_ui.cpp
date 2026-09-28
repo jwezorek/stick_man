@@ -4,6 +4,7 @@
 #include "ui/panes/animation_editor.hpp"
 #include "ui/panes/animation_pane.hpp"
 #include "ui/widgets/pose_strip.hpp"
+#include "json.hpp"
 #include <QtWidgets>
 #include <algorithm>
 #include <cstdint>
@@ -135,7 +136,7 @@ int main(int argc, char** argv) {
         auto* time = editor->findChild<QLabel*>("animation_time_display");
         require(play && play->isEnabled() && start && start->isEnabled(),
             "Pose Strip transport is not enabled for timed animation");
-        const auto playback_canvas_before = scene_image(scene);
+        const auto playback_editing_before = model.topology().to_json();
         const auto playback_model_before = model.serialize();
         play->click();
         QThread::msleep(100); // A blocked event loop must not lose elapsed time.
@@ -148,8 +149,8 @@ int main(int argc, char** argv) {
         require(time->text() == paused_time, "paused playback advanced");
         require(model.animation_session_keyframe() == second,
             "playback changed editing selection");
-        require(same_image(playback_canvas_before, scene_image(scene)),
-            "Pose Strip playback changed the canvas");
+        require(model.topology().to_json() == playback_editing_before,
+            "playback changed selected-keyframe editing geometry");
         require(model.serialize() == playback_model_before,
             "transient playback state leaked into serialization");
         start->click();
@@ -165,7 +166,7 @@ int main(int argc, char** argv) {
         require(play->text() == "Pause", "Play at end did not restart");
         model.select_animation_keyframe(*first);
         model.rename_animation_keyframe(std::string("Standing"));
-        require(play->text() == "Pause", "selection or rename stopped playback");
+        require(play->text() == "Play", "selection or rename failed to stop playback");
         duplicate->click();
         require(play->text() == "Play" && time->text() == "0:00.000",
             "structural insertion did not reset playback");
@@ -180,6 +181,7 @@ int main(int argc, char** argv) {
         require(model.animation_session_keyframe() == second,
             "final playback pose overwrote editing selection");
         const sm::point pose2{45, 30};
+        model.select_animation_keyframe(*second); // Explicitly return to editing.
         model.transform_node_positions({{n1, pose1}}, {{n1, pose2}});
 
         ghost->setChecked(false);

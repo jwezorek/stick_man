@@ -1,5 +1,13 @@
 # Phase 2.5: Pose Strip timing
 
+This document records the historical Phase 2.5 boundary. **Phase 3C supersedes
+the stationary-canvas behavior below**: explicit transport preview now displays
+Core constrained skeletal samples at the same time as the Pose Strip. The
+selected editing topology, editing selection, stored keyframes, and thumbnail
+sources remain isolated. See [current implementation status](animation.md#implementation-status--animation-v2-phase-3c)
+for the preview lifecycle, read-only behavior, and failure handling. Scrubbing
+and artwork-state animation remain deferred.
+
 The Animation Editor now plays the Pose Strip's timing. The canvas continues to
 show the selected editing pose. Playback does not select keyframes, apply poses,
 evaluate actions, solve IK, or update artwork on the canvas.

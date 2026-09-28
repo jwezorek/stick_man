@@ -17,7 +17,8 @@ namespace ui {
         private:
             std::vector<std::unique_ptr<base>> tool_registry_;
             int curr_item_index_;
-            mdl::project* project_ = nullptr;
+            QPointer<mdl::project> project_;
+            bool input_allowed() const;
 
             int index_from_id(id id) const;
 

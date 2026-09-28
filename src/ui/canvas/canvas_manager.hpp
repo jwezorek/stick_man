@@ -22,8 +22,9 @@ namespace ui {
             QGraphicsView& active_view() const;
             tool::input_handler& inp_handler_;
             drag_mode drag_mode_;
-            mdl::project* project_ = nullptr;
+            QPointer<mdl::project> project_;
             bool animation_session_active_ = false;
+            std::vector<sm::object_id> editing_selection_;
             void prepare_to_add_bone(sm::node& u, sm::node& v);
             void add_new_bone(sm::bone& bone);
             void add_new_skeleton(sm::skel_ref skel);

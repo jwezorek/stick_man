@@ -191,6 +191,9 @@ sm::expected_skel sm::skeleton::copy_to(
         if (!copied) {
             return std::unexpected(copied.error());
         }
+        // Geometry and rest length are independent: preserving both keeps scale
+        // (and bone-bound artwork) unchanged in detached preview copies.
+        copied->get().length_ = bone->length();
         dest.register_bone(copied->get());
     }
     other_topology.copy_constraints_from(owner(), id_remap);

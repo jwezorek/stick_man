@@ -161,7 +161,7 @@ void ui::canvas::scene::drawBackground(QPainter* painter, const QRectF& dirty_re
 
     // Animation V2 previous-pose onion skin. This is derived presentation only:
     // it is rendered from a temporary topology and never becomes selectable.
-    if (model_ && model_->animation_mode() && model_->show_previous_pose()) {
+    if (model_ && model_->animation_mode() && !model_->animation_preview_active() && model_->show_previous_pose()) {
         auto cid = model_->animation_session_character();
         auto aid = model_->animation_session_animation();
         auto kid = model_->animation_session_keyframe();
@@ -288,10 +288,10 @@ void ui::canvas::scene::set_zoom_level(int zoom, std::optional<QPointF> pt) {
 
 void ui::canvas::scene::sync_to_model() {
     if (model_) {
-        const auto& constraints = model_->topology().constraints();
+        const auto& constraints = model_->display_topology().constraints();
         if (selected_constraint_id_ && !constraints.contains(*selected_constraint_id_))
             selected_constraint_id_.reset();
-        constraint_adornments_->sync(model_->topology(), constraints, scale());
+        constraint_adornments_->sync(model_->display_topology(), constraints, scale());
         constraint_adornments_->set_visible(constraints_visible());
         constraint_adornments_->set_selected(selected_constraint_id_);
     }
@@ -306,7 +306,7 @@ void ui::canvas::scene::set_contents(mdl::project& model) {
 
     model_ = &model;
     std::unordered_set<sm::object_id> current_node_ids;
-    for (auto skel : model.topology().skeletons()) {
+    for (auto skel : model.display_topology().skeletons()) {
         for (auto node : skel->nodes()) current_node_ids.insert(node->id());
     }
     std::erase_if(pinned_node_ids_, [&](const auto& id) { return !current_node_ids.contains(id); });
@@ -314,17 +314,17 @@ void ui::canvas::scene::set_contents(mdl::project& model) {
     clear();
     if (!model.animation_mode())
         for (auto character : model.core().characters()) addItem(new item::character(character.get()));
-    for (auto skel_ref : model.topology().skeletons()) {
+    for (auto skel_ref : model.display_topology().skeletons()) {
         const auto& skel = skel_ref.get();
-        auto& root = std::get<sm::node_ref>(model.get(skel.root_node().id())).get();
+        auto& root = model.display_topology().get<sm::node>(skel.root_node().id())->get();
         insert_item(root.owner());
 
         for (auto node : skel.nodes()) {
-            insert_item(std::get<sm::node_ref>(model.get(node->id())));
+            insert_item(model.display_topology().get<sm::node>(node->id())->get());
         }
 
         for (auto bone : skel.bones()) {
-            insert_item(std::get<sm::bone_ref>(model.get(bone->id())));
+            insert_item(model.display_topology().get<sm::bone>(bone->id())->get());
         }
     }
 
@@ -408,6 +408,7 @@ void ui::canvas::scene::toggle_node_pinned(const sm::object_id& id) {
 }
 
 void ui::canvas::scene::toggle_node_pinned_undoable(const sm::object_id& id) {
+    if (model_ && model_->animation_preview_active()) return;
     if (!model_) { toggle_node_pinned(id); return; }
     const bool before = is_node_pinned(id);
     const bool after = !before;
@@ -848,6 +849,10 @@ void ui::canvas::scene::keyReleaseEvent(QKeyEvent* event) {
 }
 
 void ui::canvas::scene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
+    if (model_ && model_->animation_preview_active()) {
+        inp_handler_.mousePressEvent(*this, event);
+        return;
+    }
     if (bone_pick_active()) {
         if (event->button() == Qt::RightButton) {
             cancel_bone_pick();
@@ -871,6 +876,10 @@ void ui::canvas::scene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
 }
 
 void ui::canvas::scene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
+    if (model_ && model_->animation_preview_active()) {
+        inp_handler_.mouseMoveEvent(*this, event);
+        return;
+    }
     if (bone_pick_active()) {
         update_bone_pick_hover(event->scenePos());
         event->accept();
@@ -889,6 +898,10 @@ void ui::canvas::scene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
 }
 
 void ui::canvas::scene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
+    if (model_ && model_->animation_preview_active()) {
+        inp_handler_.mouseReleaseEvent(*this, event);
+        return;
+    }
     if (bone_pick_active()) {
         event->accept();
         return;
@@ -906,6 +919,10 @@ void ui::canvas::scene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
 }
 
 void ui::canvas::scene::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
+    if (model_ && model_->animation_preview_active()) {
+        inp_handler_.mouseDoubleClickEvent(*this, event);
+        return;
+    }
     if (bone_pick_active()) {
         event->accept();
         return;

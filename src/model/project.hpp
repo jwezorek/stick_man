@@ -22,6 +22,7 @@
 namespace mdl {
 
     class project;
+    enum class animation_display_status { editing, empty, sampled, sampling_failed, reconstruction_failed };
     struct command {
         std::function<void(project&)> redo;
         std::function<void(project&)> undo;
@@ -50,6 +51,9 @@ namespace mdl {
             std::stack<command> undo_stack;
         };
         std::optional<animation_edit_session> animation_session_;
+        std::unique_ptr<sm::topology> playback_topology_;
+        animation_display_status playback_status_ = animation_display_status::editing;
+        std::optional<sm::result> playback_error_;
         bool show_previous_pose_ = false;
         std::stack<command> redo_stack_;
         std::stack<command> undo_stack_;
@@ -75,6 +79,14 @@ namespace mdl {
         void advance_default_name_counters_from_topology();
     public:
         project();
+        ~project() override;
+        // Authoring APIs always use topology()/get(); only rendering uses this view.
+        const sm::topology& display_topology() const;
+        bool animation_preview_active() const { return bool(playback_topology_); }
+        animation_display_status preview_status() const { return playback_status_; }
+        std::optional<sm::result> preview_error() const { return playback_error_; }
+        animation_display_status preview_animation_time(double seconds);
+        void exit_animation_preview();
         bool animation_mode() const { return animation_session_.has_value(); }
         sm::result begin_animation_session(sm::object_id character, sm::object_id animation);
         void end_animation_session();
@@ -140,6 +152,13 @@ namespace mdl {
             const node_locs& old_locs, const node_locs& new_locs
         );
     signals:
+        void animation_editing_requested();
+        void animation_display_changing(bool preview);
+        void animation_display_changed();
+        void animation_display_status_changed();
+        void topology_about_to_reset();
+        void animation_session_ending();
+        void model_about_to_be_destroyed();
         void pre_new_bone_added(sm::node& u, sm::node& v);
         void new_bone_added(sm::bone& bone);
         void new_project_opened(project& model);

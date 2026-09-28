@@ -28,7 +28,7 @@ class constraint : public base {
     QComboBox* operation_ = nullptr;
     QComboBox* reference_ = nullptr;
     QLabel* reference_label_ = nullptr;
-    mdl::project* model_ = nullptr;
+    QPointer<mdl::project> model_;
     canvas::manager* canvases_ = nullptr;
     std::optional<sm::object_id> pending_bone_;
     std::optional<drag_state> drag_;

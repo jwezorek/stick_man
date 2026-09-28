@@ -59,6 +59,7 @@ sm::rotation_reference_kind ui::tool::constraint::current_reference_kind() const
 }
 
 void ui::tool::constraint::update_settings_state() {
+    if (!model_) return;
     const bool session = model_ && model_->animation_mode();
     const bool rotation = !session && current_operation() == operation::rotation;
     if (operation_) operation_->setEnabled(!session);

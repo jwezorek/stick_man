@@ -667,6 +667,7 @@ std::optional<ui::tool::translation_state> ui::tool::rig_interaction::create_tra
     return state;
 }
 void ui::tool::rig_interaction::pin_selection() {
+    if (!project_ || project_->animation_preview_active()) return;
     auto& canvas = canvases_->active_canvas();
     auto nodes = canvas.selected_nodes();
     if (nodes.empty()) {
@@ -830,4 +831,15 @@ QWidget* ui::tool::rig_interaction::settings_widget() {
     return settings_panel_;
 }
 
-void ui::tool::rig_interaction::keyPressEvent(canvas::scene&, QKeyEvent*) {}
+void ui::tool::rig_interaction::keyPressEvent(canvas::scene& scene, QKeyEvent* event) {
+    if (event->key() != Qt::Key_Escape) return;
+    if (drag_) {
+        if (auto* rotation = std::get_if<rotation_state>(&drag_->extra))
+            restore_scene_locations(scene, rotation->old_node_locs());
+        if (auto* translation = std::get_if<translation_state>(&drag_->extra))
+            restore_scene_locations(scene, translation->old_locs);
+        destroy_rubber_band(scene, drag_->rubber_band);
+        drag_.reset();
+    }
+    click_pt_.reset();
+}
