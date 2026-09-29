@@ -35,11 +35,12 @@ namespace {
     void restore_scene_locations(ui::canvas::scene& scene, const mdl::project::node_locs& locations) {
         std::unordered_map<const sm::topology*, std::vector<std::pair<sm::node*, sm::point>>> grouped;
         for (const auto& [id, position] : locations)
-            for (auto* item : scene.node_items()) if (item->model().id() == id) {
-                auto& node = item->model();
-                grouped[&node.owner().owner()].emplace_back(&node, position);
-                break;
-            }
+            for (auto* item : scene.node_items())
+                if (item->model().id() == id) {
+                    auto& node = item->model();
+                    grouped[&node.owner().owner()].emplace_back(&node, position);
+                    break;
+                }
         for (const auto& [topology, nodes] : grouped) {
             sm::geometry_batch batch(*topology);
             for (const auto& [node, position] : nodes) node->set_world_pos(position);
@@ -225,7 +226,8 @@ namespace {
     }
 
     void destroy_rubber_band(ui::canvas::scene& canv, ui::canvas::item::rubber_band* rb) {
-        if (!rb) return;
+        if (!rb)
+            return;
         canv.removeItem(dynamic_cast<QGraphicsItem*>(rb));
         delete rb;
     }
@@ -235,8 +237,10 @@ namespace {
         for (auto* item : items) {
             if (auto* character = dynamic_cast<item::character*>(item)) {
                 for (auto skel : character->model().rig().skeletons()) {
-                    for (auto node : skel->nodes()) result.insert(&item_from_model<item::node>(node.get()));
-                    for (auto bone : skel->bones()) result.insert(&item_from_model<item::bone>(bone.get()));
+                    for (auto node : skel->nodes())
+                        result.insert(&item_from_model<item::node>(node.get()));
+                    for (auto bone : skel->bones())
+                        result.insert(&item_from_model<item::bone>(bone.get()));
                 }
             } else if (auto* skel = dynamic_cast<item::skeleton*>(item)) {
                 for (auto node : skel->model().nodes()) {
@@ -259,11 +263,13 @@ namespace {
         auto incoming = topology_items(items);
         auto selection = (add != subtract) ? topology_items(canv.selection()) : selection_set{};
         for (auto* item : incoming) {
-            if (subtract && !add) selection.erase(item);
+            if (subtract && !add)
+                selection.erase(item);
             else selection.insert(item);
         }
         mdl::selection objects;
-        for (auto* item : selection) objects.push_back(item->to_selection_object());
+        for (auto* item : selection)
+            objects.push_back(item->to_selection_object());
         std::vector<item::base*> selected;
         for (const auto& object : mdl::infer_selection(objects)) std::visit(overload{
             [&](sm::const_node_ref n) { selected.push_back(&item_from_model<item::node>(n.get())); },
@@ -297,7 +303,7 @@ namespace {
             [](auto ref) {return ref.ptr(); }
         ) | r::to<std::unordered_set>();
         auto visit_node = [&](sm::maybe_node_ref prev, sm::node& node) {
-            auto prev_pos = (prev) ? prev->get().world_pos() : sm::point{ 0,0 };
+            auto prev_pos = (prev) ? prev->get().world_pos() : sm::point{ 0, 0 };
             auto trans_offset = node.world_pos() - prev_pos;
             bool was_translated = prev &&
                 has_been_translated.contains(&(prev->get()));
@@ -309,7 +315,7 @@ namespace {
                 has_been_translated.insert(&node);
             }
             tbl[&node] = trans_offset;
-            };
+        };
         sm::visit_bone_hierarchy(src,
             [&](sm::maybe_bone_ref maybe_prev, sm::bone& bone)->sm::visit_result {
                 if (!maybe_prev) {
@@ -336,9 +342,11 @@ namespace {
         sm::geometry_batch batch(src.owner().owner());
         auto tbl = rubber_band_translation_table(src, delta, sel);
         sm::constraint_geometry geometry(src.owner().owner());
-        if (geometry.status() != sm::result::success) return;
+        if (geometry.status() != sm::result::success)
+            return;
         std::unordered_map<sm::node*, sm::point> before;
-        for (auto node : src.owner().nodes()) before.emplace(node.ptr(), node->world_pos());
+        for (auto node : src.owner().nodes())
+            before.emplace(node.ptr(), node->world_pos());
         std::unordered_set<std::size_t> projected_fans;
         bool failed = false;
         sm::visit_bone_hierarchy(src,
@@ -369,7 +377,8 @@ namespace {
         );
         if (failed || geometry.validate() != sm::result::success)
             for (const auto& [node, point] : before) node->set_world_pos(point);
-        if (!failed) batch.commit();
+        if (!failed)
+            batch.commit();
     }
     void do_ragdoll_translate(sm::skel_ref& skel,
         const sm::point& delta, const std::vector<sm::node_ref>& sel,
@@ -450,9 +459,11 @@ namespace {
     std::vector<sm::node_ref> selected_nodes_for_translation(
         ui::canvas::scene& canv, QPointF clicked_pt) {
         auto* clicked_item = canv.top_item(clicked_pt);
-        if (!clicked_item) return {};
+        if (!clicked_item)
+            return {};
         if (auto* character = canv.selected_character()) {
-            if (clicked_item == character) return selection_to_nodes(canv);
+            if (clicked_item == character)
+                return selection_to_nodes(canv);
             auto clicked_nodes = skel_piece_to_nodes(clicked_item->to_skeleton_piece());
             if (!clicked_nodes.empty() && character->model().rig().contains(clicked_nodes.front()->owner().id()))
                 return selection_to_nodes(canv);
@@ -514,7 +525,8 @@ std::optional<ui::tool::rubber_band_type> ui::tool::rig_interaction::kind_of_rub
             else if constexpr (std::is_same_v<T, sm::skeleton>) return character->model().rig().contains(ref->id());
             else return character->model().rig().contains(ref->owner().id());
         }, selected_item->to_selection_object());
-        if (belongs) return translation_rb;
+        if (belongs)
+            return translation_rb;
     }
     if (settings.is_in_rotate_mode_) {
         return rotation_rb;
@@ -568,7 +580,8 @@ std::optional<ui::tool::drag_state> ui::tool::rig_interaction::create_drag_state
 void  ui::tool::rig_interaction::do_dragging(canvas::scene& canv, QPointF pt) {
     if (!is_dragging()) {
         auto rb_type = kind_of_rubber_band(canv, *click_pt_);
-        if (!rb_type) return;
+        if (!rb_type)
+            return;
         drag_ = create_drag_state(*rb_type, canv, *click_pt_);
     }
     if (is_dragging()) {
@@ -597,7 +610,8 @@ std::optional<ui::tool::rotation_state> ui::tool::rig_interaction::create_rotati
         return {};
     }
 
-    if (dynamic_cast<canvas::item::character*>(item)) return {};
+    if (dynamic_cast<canvas::item::character*>(item))
+        return {};
     auto model = item->to_skeleton_piece();
     if (!settings.rotate_on_pinned_ || !has_pinned_nodes(model, canv)) {
         auto parent_bone = std::visit(
@@ -647,10 +661,12 @@ std::optional<ui::tool::translation_state> ui::tool::rig_interaction::create_tra
     ui::canvas::scene& canv, QPointF clicked_pt,
     const ui::tool::sel_drag_settings& settings) const {
     auto* item = canv.top_item(clicked_pt);
-    if (!item) return {};
+    if (!item)
+        return {};
     auto mode = settings.trans_mode_;
     auto resolved=canv.resolved_skeletons();
-    if(dynamic_cast<canvas::item::character*>(item) && resolved.empty()) return {};
+    if (dynamic_cast<canvas::item::character*>(item) && resolved.empty())
+        return {};
     auto anchor_piece = dynamic_cast<canvas::item::character*>(item)
         ? mdl::skel_piece{sm::ref(resolved.front()->model())}
         : item->to_skeleton_piece();
@@ -661,13 +677,17 @@ std::optional<ui::tool::translation_state> ui::tool::rig_interaction::create_tra
     if (!selected_skeletons.empty() && (canv.selected_character() || selected_skeletons.size() == canv.selection().size()) &&
         r::any_of(selected_skeletons, [&](auto* skel) { return &skel->model() == &anchor->owner(); })) mode = sel_drag_mode::rigid;
     node_locs old_locs;
-    for (auto skel : skeletons_from_nodes(selected_nodes)) for (auto node : skel->nodes()) old_locs.emplace_back(node->id(), node->world_pos());
+    for (auto skel : skeletons_from_nodes(selected_nodes))
+        for (auto node : skel->nodes())
+            old_locs.emplace_back(node->id(), node->world_pos());
 
-    translation_state state{std::move(selected_nodes),std::move(pinned_nodes),anchor,offset,mode,std::move(old_locs)};
+    translation_state state{ std::move(selected_nodes), std::move(pinned_nodes), anchor, offset,
+        mode, std::move(old_locs) };
     return state;
 }
 void ui::tool::rig_interaction::pin_selection() {
-    if (!project_ || project_->animation_preview_active()) return;
+    if (!project_ || project_->animation_preview_active())
+        return;
     auto& canvas = canvases_->active_canvas();
     auto nodes = canvas.selected_nodes();
     if (nodes.empty()) {
@@ -832,7 +852,8 @@ QWidget* ui::tool::rig_interaction::settings_widget() {
 }
 
 void ui::tool::rig_interaction::keyPressEvent(canvas::scene& scene, QKeyEvent* event) {
-    if (event->key() != Qt::Key_Escape) return;
+    if (event->key() != Qt::Key_Escape)
+        return;
     if (drag_) {
         if (auto* rotation = std::get_if<rotation_state>(&drag_->extra))
             restore_scene_locations(scene, rotation->old_node_locs());

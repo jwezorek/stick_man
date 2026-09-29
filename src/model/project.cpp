@@ -42,11 +42,13 @@ namespace {
         try {
             for (auto sid : skeletons) {
                 auto skel = reference.skeleton(sid);
-                if (!skel || !skel->get().copy_to(copy)) return {};
+                if (!skel || !skel->get().copy_to(copy))
+                    return {};
             }
             sm::apply_skeletal_pose(pose, copy, skeletons);
             auto node = copy.get<sm::node>(node_id);
-            if (!node) return {};
+            if (!node)
+                return {};
             return node->get().world_pos();
         } catch (...) {
             return {};
@@ -69,7 +71,8 @@ namespace {
     }
     bool same_constraint_definition(const sm::constraint_definition& a,
             const sm::constraint_definition& b) {
-        if (a.index() != b.index()) return false;
+        if (a.index() != b.index())
+            return false;
         if (auto ar = std::get_if<sm::rotation_constraint>(&a)) {
             const auto& br = std::get<sm::rotation_constraint>(b);
             return ar->target_bone == br.target_bone && ar->reference == br.reference &&
@@ -99,26 +102,31 @@ void mdl::project::notify_command_change(const command& cmd) {
         emit project_changed(*this);
 }
 sm::result mdl::project::execute_command(const command& cmd) {
-    if (animation_session_) return sm::result::invalid_membership;
+    if (animation_session_)
+        return sm::result::invalid_membership;
     const bool was_dirty = is_dirty();
     command stored = cmd;
     stored.redo(*this);
-    if (stored.outcome && stored.outcome() != sm::result::success) return stored.outcome();
+    if (stored.outcome && stored.outcome() != sm::result::success)
+        return stored.outcome();
     clear_redo_stack();
-    if (stored.document_edit) stored.history_transition = history_.advance();
+    if (stored.document_edit)
+        stored.history_transition = history_.advance();
     undo_stack_.push(stored);
     emit_history_state(was_dirty);
     notify_command_change(stored);
     return sm::result::success;
 }
 sm::result mdl::project::execute_session_command(const command& cmd) {
-    if (!animation_session_) return sm::result::invalid_membership;
+    if (!animation_session_)
+        return sm::result::invalid_membership;
     exit_animation_preview();
     const bool was_dirty = is_dirty();
     command stored = cmd;
     stored.document_edit = false;
     stored.redo(*this);
-    if (stored.outcome && stored.outcome() != sm::result::success) return stored.outcome();
+    if (stored.outcome && stored.outcome() != sm::result::success)
+        return stored.outcome();
     clear_session_redo_stack();
     if (stored.animation_edit) ++animation_session_->authored_depth;
     animation_session_->undo_stack.push(std::move(stored));
@@ -132,7 +140,8 @@ mdl::project::project() {
     // invalidates a held sample or restarts the clock.
     connect(this, &project::animation_preview_changed, this, &project::exit_animation_preview);
     connect(this, &project::project_changed, this, [this] {
-        if (animation_preview_active()) exit_animation_preview();
+        if (animation_preview_active())
+            exit_animation_preview();
     });
 }
 mdl::project::~project() {
@@ -144,7 +153,8 @@ mdl::project::~project() {
 const sm::project& mdl::project::core() const { return core_; }
 sm::project& mdl::project::core() { return core_; }
 void mdl::project::edit_artwork(const sm::object_id& id, const std::function<void(sm::artwork&)>& edit) {
-    if (animation_mode()) return;
+    if (animation_mode())
+        return;
     auto before = core_.artwork(id);
     auto after = before;
     edit(after);
@@ -161,8 +171,10 @@ const sm::topology& mdl::project::topology() const {
 
 mdl::model_object mdl::project::get(const sm::object_id& id) {
     if (animation_session_) {
-        if (auto node = animation_session_->working_topology.get<sm::node>(id)) return *node;
-        if (auto bone = animation_session_->working_topology.get<sm::bone>(id)) return *bone;
+        if (auto node = animation_session_->working_topology.get<sm::node>(id))
+            return *node;
+        if (auto bone = animation_session_->working_topology.get<sm::bone>(id))
+            return *bone;
         throw std::runtime_error("animation session object ID not found");
     }
     return core_.get(id);
@@ -171,9 +183,12 @@ mdl::model_object mdl::project::get(const sm::object_id& id) {
 mdl::const_model_object mdl::project::get(const sm::object_id& id) const {
     if (animation_session_) {
         const auto& working = std::as_const(animation_session_->working_topology);
-        if (auto node = working.get<sm::node>(id)) return sm::const_node_ref(std::as_const(node->get()));
-        if (auto bone = working.get<sm::bone>(id)) return sm::const_bone_ref(std::as_const(bone->get()));
-        if (auto skel = working.skeleton(id)) return *skel;
+        if (auto node = working.get<sm::node>(id))
+            return sm::const_node_ref(std::as_const(node->get()));
+        if (auto bone = working.get<sm::bone>(id))
+            return sm::const_bone_ref(std::as_const(bone->get()));
+        if (auto skel = working.skeleton(id))
+            return *skel;
         if (auto it = working.constraints().find(id); it != working.constraints().end())
             return sm::const_constraint_ref(std::as_const(it->second));
     }
@@ -218,7 +233,8 @@ void mdl::project::advance_default_name_counters_from_topology() {
 }
 void mdl::project::undo() {
     exit_animation_preview();
-    if (!can_undo()) return;
+    if (!can_undo())
+        return;
     if (animation_session_) {
         const bool was_dirty = is_dirty();
         auto cmd = animation_session_->undo_stack.top();
@@ -234,19 +250,22 @@ void mdl::project::undo() {
     auto cmd = undo_stack_.top();
     undo_stack_.pop();
     cmd.undo(*this);
-    if (cmd.document_edit) history_.undo(cmd.history_transition);
+    if (cmd.document_edit)
+        history_.undo(cmd.history_transition);
     redo_stack_.push(cmd);
     emit_history_state(was_dirty);
     notify_command_change(cmd);
 }
 sm::result mdl::project::redo() {
     exit_animation_preview();
-    if (!can_redo()) return sm::result::success;
+    if (!can_redo())
+        return sm::result::success;
     if (animation_session_) {
         const bool was_dirty = is_dirty();
         auto cmd = animation_session_->redo_stack.top();
         cmd.redo(*this);
-        if (cmd.outcome && cmd.outcome() != sm::result::success) return cmd.outcome();
+        if (cmd.outcome && cmd.outcome() != sm::result::success)
+            return cmd.outcome();
         animation_session_->redo_stack.pop();
         if (cmd.animation_edit) ++animation_session_->authored_depth;
         animation_session_->undo_stack.push(std::move(cmd));
@@ -257,9 +276,11 @@ sm::result mdl::project::redo() {
     const bool was_dirty = is_dirty();
     auto cmd = redo_stack_.top();
     cmd.redo(*this);
-    if (cmd.outcome && cmd.outcome() != sm::result::success) return cmd.outcome();
+    if (cmd.outcome && cmd.outcome() != sm::result::success)
+        return cmd.outcome();
     redo_stack_.pop();
-    if (cmd.document_edit) history_.redo(cmd.history_transition);
+    if (cmd.document_edit)
+        history_.redo(cmd.history_transition);
     undo_stack_.push(cmd);
     emit_history_state(was_dirty);
     notify_command_change(cmd);
@@ -295,7 +316,8 @@ sm::project_result mdl::project::validate_serialized(std::span<const std::uint8_
 sm::project_result mdl::project::deserialize_result(std::span<const std::uint8_t> buffer) {
     // Validate before detaching the live view; malformed input leaves it intact.
     const auto validation = validate_serialized(buffer);
-    if (validation != sm::project_result::success) return validation;
+    if (validation != sm::project_result::success)
+        return validation;
     exit_animation_preview();
     emit animation_session_ending();
     emit topology_about_to_reset();
@@ -318,14 +340,16 @@ sm::project_result mdl::project::deserialize_result(std::span<const std::uint8_t
     return sm::project_result::success;
 }
 bool mdl::project::deserialize(std::span<const std::uint8_t> buffer) {
-    if (animation_mode()) return false;
+    if (animation_mode())
+        return false;
     return deserialize_result(buffer) == sm::project_result::success;
 }
 sm::result mdl::project::add_bone(const handle& u, const handle& v) {
     auto& node_u = commands::resolve<sm::node>(*this, u);
     auto& node_v = commands::resolve<sm::node>(*this, v);
     auto preview = core_.preview_create_bone(node_u, node_v);
-    if (!preview) return preview.error();
+    if (!preview)
+        return preview.error();
     return execute_command(commands::make_add_bone_command(
         u, v, next_default_bone_name(), *preview));
 }
@@ -345,7 +369,8 @@ sm::result mdl::project::adopt_skeletons(const sm::object_id& character_id,
                 state->status = proj.core_.restore_membership(*state->after);
             } else {
                 std::vector<sm::object_id> ids;
-                for (auto s : candidates) ids.push_back(s->id());
+                for (auto s : candidates)
+                    ids.push_back(s->id());
                 state->before = proj.core_.snapshot_membership(ids,
                     std::span<const sm::object_id>(&character_id, 1));
                 state->status = proj.core_.adopt_skeletons(character_id, candidates);
@@ -363,7 +388,8 @@ sm::result mdl::project::adopt_skeletons(const sm::object_id& character_id,
     });
 }
 void mdl::project::add_new_skeleton_root(sm::point loc) {
-    if (animation_mode()) return;
+    if (animation_mode())
+        return;
     execute_command(commands::make_create_node_command(loc, next_default_node_name()));
 }
 std::expected<sm::object_id, sm::result> mdl::project::make_character(
@@ -382,10 +408,14 @@ std::expected<sm::object_id, sm::result> mdl::project::make_character(
                 state->status = proj.core_.restore_membership(state->after);
             } else {
                 std::vector<sm::object_id> ids;
-                for (auto s : candidates) ids.push_back(s->id());
+                for (auto s : candidates)
+                    ids.push_back(s->id());
                 state->before = proj.core_.snapshot_membership(ids);
                 auto created = proj.core_.create_character(candidates);
-                if (!created) { state->status = created.error(); return; }
+                if (!created) {
+                    state->status = created.error();
+                    return;
+                }
                 state->id = created->get().id();
                 state->after = proj.core_.snapshot_membership(ids);
                 state->created = true;
@@ -402,14 +432,16 @@ std::expected<sm::object_id, sm::result> mdl::project::make_character(
         },
         [state] { return state->status; }
     });
-    if (result != sm::result::success) return std::unexpected(result);
+    if (result != sm::result::success)
+        return std::unexpected(result);
     return state->id;
 }
 
 std::expected<sm::object_id, sm::result> mdl::project::paste_character(
         const sm::topology& rig, const std::string& name, const sm::artwork& artwork,
         const sm::animation_assets& animation_data) {
-    if (rig.empty()) return std::unexpected(sm::result::empty_character);
+    if (rig.empty())
+        return std::unexpected(sm::result::empty_character);
     struct state_type {
         sm::topology topology;
         sm::membership_state membership;
@@ -419,15 +451,18 @@ std::expected<sm::object_id, sm::result> mdl::project::paste_character(
     };
     auto state = std::make_shared<state_type>();
     std::unordered_set<std::string> existing_names;
-    for (auto character : core_.characters()) existing_names.insert(character->name());
+    for (auto character : core_.characters())
+        existing_names.insert(character->name());
     auto copied_name = name + " copy";
     for (std::size_t suffix = 2; existing_names.contains(copied_name); ++suffix)
         copied_name = name + " copy " + std::to_string(suffix);
     std::unordered_map<sm::object_id, sm::object_id> remap;
     for (auto skel : rig.skeletons()) {
         remap.emplace(skel->id(), sm::object_id::generate());
-        for (auto node : skel->nodes()) remap.emplace(node->id(), sm::object_id::generate());
-        for (auto bone : skel->bones()) remap.emplace(bone->id(), sm::object_id::generate());
+        for (auto node : skel->nodes())
+            remap.emplace(node->id(), sm::object_id::generate());
+        for (auto bone : skel->bones())
+            remap.emplace(bone->id(), sm::object_id::generate());
     }
     for (const auto& [id, constraint] : rig.constraints())
         remap.emplace(id, sm::object_id::generate());
@@ -439,7 +474,8 @@ std::expected<sm::object_id, sm::result> mdl::project::paste_character(
         std::move(copied_artwork), std::move(copied_animation_data)});
     for (auto skel : rig.skeletons()) {
         auto copy = skel->copy_to(state->topology, remap);
-        if (!copy) return std::unexpected(copy.error());
+        if (!copy)
+            return std::unexpected(copy.error());
         state->ids.push_back(copy->get().id());
         state->membership.parents.emplace(copy->get().id(), state->character);
     }
@@ -463,13 +499,15 @@ std::expected<sm::object_id, sm::result> mdl::project::paste_character(
         [state](project& proj) { proj.replace_skeletons_aux(state->ids, {}); },
         [state] { return state->status; }
     });
-    if (result != sm::result::success) return std::unexpected(result);
+    if (result != sm::result::success)
+        return std::unexpected(result);
     return state->character;
 }
 
 sm::result mdl::project::delete_character(const sm::object_id& id) {
     auto character = core_.character(id);
-    if (!character) return character.error();
+    if (!character)
+        return character.error();
     // Stage 2 replacement is the semantic structural deletion operation: it prunes
     // the empty character and snapshots both identity and membership for undo.
     return replace_skeletons(character->get().rig().skeleton_ids(), {});
@@ -494,8 +532,10 @@ std::expected<sm::object_id, sm::result> mdl::project::add_rotation_constraint(
             },
             [state] { return state->status; }
         });
-        if (result == sm::result::duplicate_id) continue;
-        if (result != sm::result::success) return std::unexpected(result);
+        if (result == sm::result::duplicate_id)
+            continue;
+        if (result != sm::result::success)
+            return std::unexpected(result);
         return id;
     }
 }
@@ -533,15 +573,18 @@ std::expected<sm::object_id, sm::result> mdl::project::add_rigid_triangle_constr
         },
         [state] { return state->status; }
     });
-    if (result != sm::result::success) return std::unexpected(result);
+    if (result != sm::result::success)
+        return std::unexpected(result);
     return state->value->id();
 }
 
 sm::result mdl::project::update_constraint(sm::object_id id, sm::constraint_definition definition) {
     auto current = core_.constraint_by_id(id);
-    if (!current) return current.error();
+    if (!current)
+        return current.error();
     const auto before = current->get().definition();
-    if (same_constraint_definition(before, definition)) return sm::result::success;
+    if (same_constraint_definition(before, definition))
+        return sm::result::success;
     struct state_type { sm::result status = sm::result::success; };
     auto state = std::make_shared<state_type>();
     return execute_command({
@@ -558,18 +601,19 @@ sm::result mdl::project::update_constraint(sm::object_id id, sm::constraint_defi
 
 sm::result mdl::project::remove_constraint(sm::object_id id) {
     auto current = core_.constraint_by_id(id);
-    if (!current) return current.error();
+    if (!current)
+        return current.error();
     const sm::constraint snapshot = current->get();
     struct state_type { sm::result status = sm::result::success; };
     auto state = std::make_shared<state_type>();
-    return execute_command({
-        [state, id](project& proj) { state->status = proj.core_.remove_constraint(id); },
-        [snapshot](project& proj) {
-            auto restored = proj.core_.add_constraint(snapshot);
-            if (!restored) throw std::runtime_error("unable to restore deleted constraint");
-        },
-        [state] { return state->status; }
-    });
+    return execute_command(
+        { [state, id](project& proj) { state->status = proj.core_.remove_constraint(id); },
+            [snapshot](project& proj) {
+                auto restored = proj.core_.add_constraint(snapshot);
+                if (!restored)
+                    throw std::runtime_error("unable to restore deleted constraint");
+            },
+            [state] { return state->status; } });
 }
 
 void mdl::project::record_transient_edit(std::function<void()> redo, std::function<void()> undo) {
@@ -578,13 +622,15 @@ void mdl::project::record_transient_edit(std::function<void()> redo, std::functi
         [undo = std::move(undo)](project&) { undo(); }
     };
     cmd.document_edit = false;
-    if (animation_session_) execute_session_command(cmd);
+    if (animation_session_)
+        execute_session_command(cmd);
     else execute_command(cmd);
 }
 
 bool mdl::project::rename(const sm::object_id& id, const std::string& new_name) {
     auto old_name = std::visit([](auto ref) { return ref->name(); }, std::as_const(core_).get(id));
-    if (old_name == new_name) return true;
+    if (old_name == new_name)
+        return true;
     execute_command({
         [id, new_name](project& proj) { proj.rename_aux(id, new_name); },
         [id, old_name](project& proj) { proj.rename_aux(id, old_name); }
@@ -612,10 +658,14 @@ bool mdl::project::rename(skel_piece piece, const std::string& new_name) {
 }
 void mdl::project::transform(const std::vector<handle>& nodes,
         const std::function<void(sm::node&)>& fn) {
-    if (animation_preview_active()) return;
+    if (animation_preview_active())
+        return;
     if (!animation_session_ || !animation_session_->selected_keyframe) {
         auto cmd = commands::make_transform_bones_or_nodes_command(*this, nodes, {}, fn, {});
-        if (animation_session_) execute_session_command(cmd); else execute_command(cmd);
+        if (animation_session_)
+            execute_session_command(cmd);
+        else
+            execute_command(cmd);
         return;
     }
 
@@ -623,53 +673,71 @@ void mdl::project::transform(const std::vector<handle>& nodes,
     // proposed property edit transactionally against the session topology, turn
     // the result into one pose edit, then restore the topology before committing.
     node_locs before, after;
-    for (auto skel : topology().skeletons()) for (auto node : skel->nodes())
-        before.emplace_back(node->id(), node->world_pos());
+    for (auto skel : topology().skeletons())
+        for (auto node : skel->nodes())
+            before.emplace_back(node->id(), node->world_pos());
     {
         sm::geometry_batch batch(topology());
-        for (auto h : nodes) fn(commands::resolve<sm::node>(*this, h));
-        if (batch.commit() != sm::result::success) return;
+        for (auto h : nodes)
+            fn(commands::resolve<sm::node>(*this, h));
+        if (batch.commit() != sm::result::success)
+            return;
     }
-    for (auto skel : topology().skeletons()) for (auto node : skel->nodes())
-        after.emplace_back(node->id(), node->world_pos());
+    for (auto skel : topology().skeletons())
+        for (auto node : skel->nodes())
+            after.emplace_back(node->id(), node->world_pos());
     {
         sm::geometry_batch batch(topology());
         for (const auto& [h, pt] : before) commands::resolve<sm::node>(*this, h).set_world_pos(pt);
-        if (batch.commit() != sm::result::success) throw std::runtime_error("unable to restore animation edit probe");
+        if (batch.commit() != sm::result::success)
+            throw std::runtime_error("unable to restore animation edit probe");
     }
     transform_node_positions(before, after);
 }
 void mdl::project::transform(const std::vector<handle>& bones,
         const std::function<void(sm::bone&)>& fn) {
-    if (animation_preview_active()) return;
+    if (animation_preview_active())
+        return;
     if (!animation_session_ || !animation_session_->selected_keyframe) {
         auto cmd = commands::make_transform_bones_or_nodes_command(*this, {}, bones, {}, fn);
-        if (animation_session_) execute_session_command(cmd); else execute_command(cmd);
+        if (animation_session_)
+            execute_session_command(cmd);
+        else
+            execute_command(cmd);
         return;
     }
     node_locs before, after;
-    for (auto skel : topology().skeletons()) for (auto node : skel->nodes())
-        before.emplace_back(node->id(), node->world_pos());
+    for (auto skel : topology().skeletons())
+        for (auto node : skel->nodes())
+            before.emplace_back(node->id(), node->world_pos());
     {
         sm::geometry_batch batch(topology());
-        for (auto h : bones) fn(commands::resolve<sm::bone>(*this, h));
-        if (batch.commit() != sm::result::success) return;
+        for (auto h : bones)
+            fn(commands::resolve<sm::bone>(*this, h));
+        if (batch.commit() != sm::result::success)
+            return;
     }
-    for (auto skel : topology().skeletons()) for (auto node : skel->nodes())
-        after.emplace_back(node->id(), node->world_pos());
+    for (auto skel : topology().skeletons())
+        for (auto node : skel->nodes())
+            after.emplace_back(node->id(), node->world_pos());
     {
         sm::geometry_batch batch(topology());
         for (const auto& [h, pt] : before) commands::resolve<sm::node>(*this, h).set_world_pos(pt);
-        if (batch.commit() != sm::result::success) throw std::runtime_error("unable to restore animation edit probe");
+        if (batch.commit() != sm::result::success)
+            throw std::runtime_error("unable to restore animation edit probe");
     }
     transform_node_positions(before, after);
 }
 void mdl::project::transform_node_positions(
         const node_locs& old_locs, const node_locs& new_locs) {
-    if (animation_preview_active()) return;
+    if (animation_preview_active())
+        return;
     if (!animation_session_ || !animation_session_->selected_keyframe) {
         auto cmd = commands::make_transform_node_positions_command(*this, old_locs, new_locs);
-        if (animation_session_) execute_session_command(cmd); else execute_command(cmd);
+        if (animation_session_)
+            execute_session_command(cmd);
+        else
+            execute_command(cmd);
         return;
     }
 
@@ -679,7 +747,8 @@ void mdl::project::transform_node_positions(
     const auto skeletons = core_.character(character_id)->get().rig().skeleton_ids();
     auto* animation = core_.animation_data(character_id).find_animation(animation_id);
     auto* keyframe = animation ? animation->find_keyframe(keyframe_id) : nullptr;
-    if (!keyframe) throw std::runtime_error("selected animation keyframe is missing");
+    if (!keyframe)
+        throw std::runtime_error("selected animation keyframe is missing");
     const auto before_pose = keyframe->pose;
 
     struct pose_edit_state {
@@ -692,7 +761,8 @@ void mdl::project::transform_node_positions(
             skeletons, before_pose, state](project& proj) {
         auto* animation = proj.core_.animation_data(character_id).find_animation(animation_id);
         auto* keyframe = animation ? animation->find_keyframe(keyframe_id) : nullptr;
-        if (!keyframe) throw std::runtime_error("animation keyframe missing during pose edit");
+        if (!keyframe)
+            throw std::runtime_error("animation keyframe missing during pose edit");
         state->status = sm::result::success;
 
         if (!state->after_pose) {
@@ -734,7 +804,8 @@ void mdl::project::transform_node_positions(
             before_pose, skeletons](project& proj) {
         auto* animation = proj.core_.animation_data(character_id).find_animation(animation_id);
         auto* keyframe = animation ? animation->find_keyframe(keyframe_id) : nullptr;
-        if (!keyframe) throw std::runtime_error("animation keyframe missing during pose undo");
+        if (!keyframe)
+            throw std::runtime_error("animation keyframe missing during pose undo");
 
         keyframe->pose = before_pose;
         sm::apply_skeletal_pose(before_pose, proj.topology(), skeletons);
@@ -753,7 +824,8 @@ sm::topology_change mdl::project::replace_skeletons_aux(
         const std::unordered_set<sm::object_id>& regenerate_ids,
         const sm::membership_state* membership) {
     auto change = core_.replace_skeletons(replacees, replacements, regenerate_ids, membership);
-    if (change.status != sm::result::success) return change;
+    if (change.status != sm::result::success)
+        return change;
     advance_default_name_counters_from_topology();
     emit refresh_canvas(*this, true);
     return change;
@@ -763,7 +835,8 @@ sm::result mdl::project::replace_skeletons(
         const std::vector<sm::skel_ref>& replacements,
         const std::unordered_set<sm::object_id>& regenerate_ids) {
     auto preview = core_.preview_replace_skeletons(replacees, replacements, regenerate_ids);
-    if (!preview) return preview.error();
+    if (!preview)
+        return preview.error();
     return execute_command(commands::make_replace_skeletons_command(
         replacees, replacements, regenerate_ids, *preview));
 }
@@ -773,11 +846,14 @@ bool mdl::identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2) {
 }
 
 sm::result mdl::project::begin_animation_session(sm::object_id character_id, sm::object_id animation_id) {
-    if (animation_session_) return sm::result::invalid_membership;
+    if (animation_session_)
+        return sm::result::invalid_membership;
     auto character = core_.character(character_id);
-    if (!character) return character.error();
+    if (!character)
+        return character.error();
     auto* source_animation = character->get().animation_data().find_animation(animation_id);
-    if (!source_animation) return sm::result::not_found;
+    if (!source_animation)
+        return sm::result::not_found;
 
     animation_edit_session session;
     session.character = character_id;
@@ -785,12 +861,14 @@ sm::result mdl::project::begin_animation_session(sm::object_id character_id, sm:
     session.original_animation_data = character->get().animation_data();
     for (auto skel : character->get().rig().skeletons()) {
         auto copied = skel->copy_to(session.working_topology);
-        if (!copied) return copied.error();
+        if (!copied)
+            return copied.error();
         copied->get().clear_user_data();
         for (auto node : copied->get().nodes()) node->clear_user_data();
         for (auto bone : copied->get().bones()) bone->clear_user_data();
     }
-    if (!source_animation->keyframes.empty()) session.selected_keyframe = source_animation->keyframes.front().id;
+    if (!source_animation->keyframes.empty())
+        session.selected_keyframe = source_animation->keyframes.front().id;
     animation_session_ = std::move(session);
     if (animation_session_->selected_keyframe) {
         const auto* a = core_.animation_data(character_id).find_animation(animation_id);
@@ -803,7 +881,8 @@ sm::result mdl::project::begin_animation_session(sm::object_id character_id, sm:
     return sm::result::success;
 }
 void mdl::project::end_animation_session() {
-    if (!animation_session_) return;
+    if (!animation_session_)
+        return;
     exit_animation_preview();
     emit animation_session_ending();
     emit topology_about_to_reset();
@@ -824,22 +903,28 @@ void mdl::project::end_animation_session() {
     }
 }
 std::optional<sm::object_id> mdl::project::animation_session_character() const {
-    if (!animation_session_) return {};
+    if (!animation_session_)
+        return {};
     return animation_session_->character;
 }
 std::optional<sm::object_id> mdl::project::animation_session_animation() const {
-    if (!animation_session_) return {};
+    if (!animation_session_)
+        return {};
     return animation_session_->animation;
 }
 std::optional<sm::object_id> mdl::project::animation_session_keyframe() const {
-    if (!animation_session_) return {};
+    if (!animation_session_)
+        return {};
     return animation_session_->selected_keyframe;
 }
 
 std::unordered_set<sm::object_id> mdl::project::animation_session_pinned_nodes() const {
-    if (!animation_session_) return {};
-    if (animation_preview_active()) return playback_pinned_node_ids_;
-    if (!animation_session_->selected_keyframe) return {};
+    if (!animation_session_)
+        return {};
+    if (animation_preview_active())
+        return playback_pinned_node_ids_;
+    if (!animation_session_->selected_keyframe)
+        return {};
     const auto* animation = core_.animation_data(animation_session_->character).find_animation(
         animation_session_->animation);
     const auto* keyframe = animation ? animation->find_keyframe(*animation_session_->selected_keyframe) : nullptr;
@@ -847,40 +932,52 @@ std::unordered_set<sm::object_id> mdl::project::animation_session_pinned_nodes()
 }
 
 std::unordered_set<sm::object_id> mdl::project::animation_session_incoming_locked_nodes() const {
-    if (!animation_session_ || animation_preview_active() || !animation_session_->selected_keyframe) return {};
+    if (!animation_session_ || animation_preview_active() || !animation_session_->selected_keyframe)
+        return {};
     const auto* animation = core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
-    if (!animation) return {};
+    if (!animation)
+        return {};
     auto index = animation->keyframe_index(*animation_session_->selected_keyframe);
-    if (!index || *index == 0) return {};
+    if (!index || *index == 0)
+        return {};
     return animation->keyframes[*index - 1].pinned_nodes;
 }
 
 std::optional<std::string> mdl::project::animation_session_incoming_lock_source_label(sm::object_id node) const {
-    if (!animation_session_ || !animation_session_->selected_keyframe) return {};
+    if (!animation_session_ || !animation_session_->selected_keyframe)
+        return {};
     const auto* animation = core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
-    if (!animation) return {};
+    if (!animation)
+        return {};
     auto index = animation->keyframe_index(*animation_session_->selected_keyframe);
-    if (!index || *index == 0 || !animation->keyframes[*index - 1].pinned_nodes.contains(node)) return {};
+    if (!index || *index == 0 || !animation->keyframes[*index - 1].pinned_nodes.contains(node))
+        return {};
     const auto& source = animation->keyframes[*index - 1];
-    if (source.name) return *source.name;
+    if (source.name)
+        return *source.name;
     return std::string("Pose ") + std::to_string(*index);
 }
 
 sm::result mdl::project::set_animation_keyframe_node_pinned(sm::object_id node_id, bool pinned) {
-    if (!animation_session_ || !animation_session_->selected_keyframe) return sm::result::not_found;
-    if (!animation_session_->working_topology.get<sm::node>(node_id)) return sm::result::invalid_membership;
+    if (!animation_session_ || !animation_session_->selected_keyframe)
+        return sm::result::not_found;
+    if (!animation_session_->working_topology.get<sm::node>(node_id))
+        return sm::result::invalid_membership;
 
     const auto character_id = animation_session_->character;
     const auto animation_id = animation_session_->animation;
     const auto keyframe_id = *animation_session_->selected_keyframe;
     auto* animation = core_.animation_data(character_id).find_animation(animation_id);
     auto* keyframe = animation ? animation->find_keyframe(keyframe_id) : nullptr;
-    if (!keyframe) return sm::result::not_found;
+    if (!keyframe)
+        return sm::result::not_found;
     const bool before = keyframe->pinned_nodes.contains(node_id);
-    if (before == pinned) return sm::result::success;
+    if (before == pinned)
+        return sm::result::success;
     if (pinned) {
         auto index = animation->keyframe_index(keyframe_id);
-        if (!index) return sm::result::not_found;
+        if (!index)
+            return sm::result::not_found;
         if (*index + 1 < animation->keyframes.size()) {
             const auto skeletons = core_.character(character_id)->get().rig().skeleton_ids();
             auto a = pose_node_position(keyframe->pose, core_.topology(), skeletons, node_id);
@@ -901,7 +998,8 @@ sm::result mdl::project::set_animation_keyframe_node_pinned(sm::object_id node_i
     auto apply = [character_id, animation_id, keyframe_id, node_id](project& p, bool value) {
         auto* animation = p.core_.animation_data(character_id).find_animation(animation_id);
         auto* keyframe = animation ? animation->find_keyframe(keyframe_id) : nullptr;
-        if (!keyframe) throw std::runtime_error("animation keyframe missing during pin edit");
+        if (!keyframe)
+            throw std::runtime_error("animation keyframe missing during pin edit");
         if (value) keyframe->pinned_nodes.insert(node_id);
         else keyframe->pinned_nodes.erase(node_id);
         p.animation_session_->selected_keyframe = keyframe_id;
@@ -919,12 +1017,15 @@ sm::result mdl::project::set_animation_keyframe_node_pinned(sm::object_id node_i
 
 sm::result mdl::project::select_animation_keyframe(sm::object_id keyframe_id) {
     exit_animation_preview();
-    if (!animation_session_) return sm::result::invalid_membership;
+    if (!animation_session_)
+        return sm::result::invalid_membership;
     auto character = core_.character(animation_session_->character);
-    if (!character) return character.error();
+    if (!character)
+        return character.error();
     auto* a = core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
     auto* k = a ? a->find_keyframe(keyframe_id) : nullptr;
-    if (!k) return sm::result::not_found;
+    if (!k)
+        return sm::result::not_found;
     sm::apply_skeletal_pose(k->pose, animation_session_->working_topology, character->get().rig().skeleton_ids());
     animation_session_->selected_keyframe = keyframe_id;
     emit animation_keyframe_selected(keyframe_id);
@@ -935,12 +1036,14 @@ sm::result mdl::project::select_animation_keyframe(sm::object_id keyframe_id) {
 
 sm::result mdl::project::add_animation_keyframe() {
     exit_animation_preview();
-    if (!animation_session_) return sm::result::invalid_membership;
+    if (!animation_session_)
+        return sm::result::invalid_membership;
 
     const auto character_id = animation_session_->character;
     const auto animation_id = animation_session_->animation;
     auto* animation = core_.animation_data(character_id).find_animation(animation_id);
-    if (!animation) return sm::result::not_found;
+    if (!animation)
+        return sm::result::not_found;
 
     const auto skeletons = core_.character(character_id)->get().rig().skeleton_ids();
     const auto before = *animation;
@@ -949,7 +1052,8 @@ sm::result mdl::project::add_animation_keyframe() {
     sm::pose_keyframe keyframe;
     keyframe.pose = after.keyframes.empty() ?
         sm::capture_skeletal_pose(topology(), skeletons) : after.keyframes.back().pose;
-    if (!after.keyframes.empty()) keyframe.pinned_nodes = after.keyframes.back().pinned_nodes;
+    if (!after.keyframes.empty())
+        keyframe.pinned_nodes = after.keyframes.back().pinned_nodes;
     const auto keyframe_id = keyframe.id;
     after.keyframes.push_back(std::move(keyframe));
     after.reconcile_transitions();
@@ -961,7 +1065,8 @@ sm::result mdl::project::add_animation_keyframe() {
     auto apply = [character_id, animation_id, keyframe_id, skeletons](
             project& p, const sm::animation& value) {
         auto* target = p.core_.animation_data(character_id).find_animation(animation_id);
-        if (!target) throw std::runtime_error("animation missing");
+        if (!target)
+            throw std::runtime_error("animation missing");
 
         *target = value;
         p.animation_session_->selected_keyframe = keyframe_id;
@@ -979,7 +1084,8 @@ sm::result mdl::project::add_animation_keyframe() {
     cmd.animation_edit = true;
     cmd.undo = [before, character_id, animation_id, skeletons](project& p) {
         auto* target = p.core_.animation_data(character_id).find_animation(animation_id);
-        if (!target) throw std::runtime_error("animation missing");
+        if (!target)
+            throw std::runtime_error("animation missing");
         *target = before;
 
         if (!before.keyframes.empty()) {
@@ -1006,10 +1112,12 @@ sm::result mdl::project::duplicate_animation_keyframe() {
     const auto animation_id = animation_session_->animation;
     const auto selected_id = *animation_session_->selected_keyframe;
     auto* animation = core_.animation_data(character_id).find_animation(animation_id);
-    if (!animation) return sm::result::not_found;
+    if (!animation)
+        return sm::result::not_found;
 
     auto index = animation->keyframe_index(selected_id);
-    if (!index) return sm::result::not_found;
+    if (!index)
+        return sm::result::not_found;
 
     const auto before = *animation;
     auto after = before;
@@ -1032,7 +1140,8 @@ sm::result mdl::project::duplicate_animation_keyframe() {
     command cmd{
         [character_id, animation_id, copy_id, after, skeletons](project& p) {
             auto* target = p.core_.animation_data(character_id).find_animation(animation_id);
-            if (!target) throw std::runtime_error("animation missing");
+            if (!target)
+                throw std::runtime_error("animation missing");
             *target = after;
             p.animation_session_->selected_keyframe = copy_id;
             sm::apply_skeletal_pose(target->find_keyframe(copy_id)->pose,
@@ -1043,7 +1152,8 @@ sm::result mdl::project::duplicate_animation_keyframe() {
         },
         [character_id, animation_id, selected_id, before, skeletons](project& p) {
             auto* target = p.core_.animation_data(character_id).find_animation(animation_id);
-            if (!target) throw std::runtime_error("animation missing");
+            if (!target)
+                throw std::runtime_error("animation missing");
             *target = before;
             p.animation_session_->selected_keyframe = selected_id;
             sm::apply_skeletal_pose(target->find_keyframe(selected_id)->pose,
@@ -1058,25 +1168,33 @@ sm::result mdl::project::duplicate_animation_keyframe() {
 }
 
 sm::result mdl::project::set_animation_transition_duration(sm::object_id transition_id, double seconds) {
-    if (!animation_session_) return sm::result::invalid_membership;
-    if (!(seconds > 0.0) || !std::isfinite(seconds)) return sm::result::invalid_animation;
+    if (!animation_session_)
+        return sm::result::invalid_membership;
+    if (!(seconds > 0.0) || !std::isfinite(seconds))
+        return sm::result::invalid_animation;
     const auto character_id = animation_session_->character;
     const auto animation_id = animation_session_->animation;
     auto* animation = core_.animation_data(character_id).find_animation(animation_id);
-    if (!animation) return sm::result::not_found;
+    if (!animation)
+        return sm::result::not_found;
     auto it = std::find_if(animation->transitions.begin(), animation->transitions.end(),
         [transition_id](const auto& t) { return t.id == transition_id; });
-    if (it == animation->transitions.end()) return sm::result::not_found;
+    if (it == animation->transitions.end())
+        return sm::result::not_found;
     const double before = it->duration_seconds;
-    if (before == seconds) return sm::result::success;
+    if (before == seconds)
+        return sm::result::success;
     double total = animation->duration_seconds() - before + seconds;
-    if (!std::isfinite(total)) return sm::result::invalid_animation;
+    if (!std::isfinite(total))
+        return sm::result::invalid_animation;
     auto apply = [character_id, animation_id, transition_id](project& p, double value) {
         auto* a = p.core_.animation_data(character_id).find_animation(animation_id);
-        if (!a) throw std::runtime_error("animation missing");
+        if (!a)
+            throw std::runtime_error("animation missing");
         auto t = std::find_if(a->transitions.begin(), a->transitions.end(),
             [transition_id](const auto& candidate) { return candidate.id == transition_id; });
-        if (t == a->transitions.end()) throw std::runtime_error("transition missing");
+        if (t == a->transitions.end())
+            throw std::runtime_error("transition missing");
         t->duration_seconds = value;
         emit p.animation_preview_changed();
     };
@@ -1087,11 +1205,13 @@ sm::result mdl::project::set_animation_transition_duration(sm::object_id transit
 }
 
 sm::result mdl::project::insert_animation_keyframe(double seconds) {
-    if (!animation_session_ || !std::isfinite(seconds)) return sm::result::invalid_animation;
+    if (!animation_session_ || !std::isfinite(seconds))
+        return sm::result::invalid_animation;
     const auto character_id = animation_session_->character;
     const auto animation_id = animation_session_->animation;
     auto* animation = core_.animation_data(character_id).find_animation(animation_id);
-    if (!animation || animation->keyframes.size() < 2) return sm::result::invalid_animation;
+    if (!animation || animation->keyframes.size() < 2)
+        return sm::result::invalid_animation;
     const auto skeletons = core_.character(character_id)->get().rig().skeleton_ids();
     if (validate_pin_endpoints(*animation, core_.topology(), skeletons) != sm::result::success) {
         emit animation_authoring_error(QStringLiteral("Cannot insert into a transition with mismatched pinned endpoints. Remove the offending source pin first."));
@@ -1102,10 +1222,14 @@ sm::result mdl::project::insert_animation_keyframe(double seconds) {
     std::optional<std::size_t> interval;
     for (std::size_t i = 0; i < animation->transitions.size(); ++i) {
         const double end = start + animation->transitions[i].duration_seconds;
-        if (seconds > start && seconds < end) { interval = i; break; }
+        if (seconds > start && seconds < end) {
+            interval = i;
+            break;
+        }
         start = end;
     }
-    if (!interval) return sm::result::invalid_animation;
+    if (!interval)
+        return sm::result::invalid_animation;
     const double original_duration = animation->transitions[*interval].duration_seconds;
     const double first_duration = seconds - start;
     const double second_duration = original_duration - first_duration;
@@ -1139,12 +1263,14 @@ sm::result mdl::project::insert_animation_keyframe(double seconds) {
     auto apply = [character_id, animation_id, skeletons](project& p, const sm::animation& value,
             std::optional<sm::object_id> selection) {
         auto* a = p.core_.animation_data(character_id).find_animation(animation_id);
-        if (!a) throw std::runtime_error("animation missing");
+        if (!a)
+            throw std::runtime_error("animation missing");
         *a = value;
         p.animation_session_->selected_keyframe = selection;
         if (selection) {
             auto* k = a->find_keyframe(*selection);
-            if (!k) throw std::runtime_error("keyframe missing");
+            if (!k)
+                throw std::runtime_error("keyframe missing");
             sm::apply_skeletal_pose(k->pose, p.topology(), skeletons);
             emit p.animation_keyframe_selected(*selection);
         }
@@ -1168,15 +1294,18 @@ sm::result mdl::project::rename_animation_keyframe(const std::optional<std::stri
     const auto keyframe_id = *animation_session_->selected_keyframe;
     auto* animation = core_.animation_data(character_id).find_animation(animation_id);
     auto* keyframe = animation ? animation->find_keyframe(keyframe_id) : nullptr;
-    if (!keyframe) return sm::result::not_found;
+    if (!keyframe)
+        return sm::result::not_found;
 
     const auto old_name = keyframe->name;
     command cmd{
         [character_id, animation_id, keyframe_id, name](project& p) {
             auto* target = p.core_.animation_data(character_id).find_animation(animation_id);
-            if (!target) throw std::runtime_error("animation missing");
+            if (!target)
+                throw std::runtime_error("animation missing");
             auto* keyframe = target->find_keyframe(keyframe_id);
-            if (!keyframe) throw std::runtime_error("animation keyframe missing");
+            if (!keyframe)
+                throw std::runtime_error("animation keyframe missing");
             keyframe->name = name;
             p.animation_session_->selected_keyframe = keyframe_id;
             emit p.animation_keyframe_selected(keyframe_id);
@@ -1184,9 +1313,11 @@ sm::result mdl::project::rename_animation_keyframe(const std::optional<std::stri
         },
         [character_id, animation_id, keyframe_id, old_name](project& p) {
             auto* target = p.core_.animation_data(character_id).find_animation(animation_id);
-            if (!target) throw std::runtime_error("animation missing");
+            if (!target)
+                throw std::runtime_error("animation missing");
             auto* keyframe = target->find_keyframe(keyframe_id);
-            if (!keyframe) throw std::runtime_error("animation keyframe missing");
+            if (!keyframe)
+                throw std::runtime_error("animation keyframe missing");
             keyframe->name = old_name;
             p.animation_session_->selected_keyframe = keyframe_id;
             emit p.animation_keyframe_selected(keyframe_id);
@@ -1207,10 +1338,12 @@ sm::result mdl::project::delete_animation_keyframe() {
     const auto animation_id = animation_session_->animation;
     const auto keyframe_id = *animation_session_->selected_keyframe;
     auto* animation = core_.animation_data(character_id).find_animation(animation_id);
-    if (!animation) return sm::result::not_found;
+    if (!animation)
+        return sm::result::not_found;
 
     auto index = animation->keyframe_index(keyframe_id);
-    if (!index) return sm::result::not_found;
+    if (!index)
+        return sm::result::not_found;
 
     const auto before = *animation;
     auto after = before;
@@ -1234,7 +1367,8 @@ sm::result mdl::project::delete_animation_keyframe() {
     command cmd{
         [character_id, animation_id, after, next, skeletons](project& p) {
             auto* target = p.core_.animation_data(character_id).find_animation(animation_id);
-            if (!target) throw std::runtime_error("animation missing");
+            if (!target)
+                throw std::runtime_error("animation missing");
             *target = after;
             p.animation_session_->selected_keyframe = next;
             if (next) {
@@ -1247,7 +1381,8 @@ sm::result mdl::project::delete_animation_keyframe() {
         },
         [character_id, animation_id, before, keyframe_id, skeletons](project& p) {
             auto* target = p.core_.animation_data(character_id).find_animation(animation_id);
-            if (!target) throw std::runtime_error("animation missing");
+            if (!target)
+                throw std::runtime_error("animation missing");
             *target = before;
             p.animation_session_->selected_keyframe = keyframe_id;
             sm::apply_skeletal_pose(target->find_keyframe(keyframe_id)->pose,
@@ -1262,7 +1397,8 @@ sm::result mdl::project::delete_animation_keyframe() {
 }
 
 void mdl::project::set_show_previous_pose(bool show) {
-    if (show_previous_pose_ == show) return;
+    if (show_previous_pose_ == show)
+        return;
     show_previous_pose_ = show;
     emit refresh_canvas(*this, false);
 }
@@ -1271,13 +1407,15 @@ void mdl::project::edit_animation_data(sm::object_id id, const std::function<voi
     auto before = core_.animation_data(id), after = before;
     edit(after);
     const auto character = core_.character(id);
-    if (!character) throw std::invalid_argument("Missing character");
+    if (!character)
+        throw std::invalid_argument("Missing character");
     after.validate(core_.topology(), character->get().rig().skeleton_ids());
     execute_command({[id, after](project& p) { p.core_.animation_data(id) = after; },
         [id, before](project& p) { p.core_.animation_data(id) = before; }});
 }
 void mdl::project::apply_pose(sm::object_id character, sm::object_id id) {
-    if (animation_mode()) return;
+    if (animation_mode())
+        return;
     const auto& c = core_.character(character).value().get();
     const auto* pose = c.animation_data().find_pose(id);
     if (!pose || !sm::pose_compatible(*pose, topology(), c.rig().skeleton_ids()))

@@ -14,8 +14,10 @@ void ui::animation_playback::set_duration(double seconds) {
 }
 
 void ui::animation_playback::play() {
-    if (playing() || duration_ <= 0) return;
-    if (time_ >= duration_) time_ = 0;
+    if (playing() || duration_ <= 0)
+        return;
+    if (time_ >= duration_)
+        time_ = 0;
     anchor_ = time_;
     elapsed_.start();
     timer_.start();
@@ -35,7 +37,8 @@ void ui::animation_playback::tick() {
 
 
 bool ui::animation_playback::seek(double seconds) {
-    if (!std::isfinite(seconds)) return false;
+    if (!std::isfinite(seconds))
+        return false;
     const bool was_playing = playing();
     timer_.stop();
     if (was_playing) emit playing_changed(false);
@@ -46,7 +49,8 @@ bool ui::animation_playback::seek(double seconds) {
 }
 
 void ui::animation_playback::pause() {
-    if (!playing()) return;
+    if (!playing())
+        return;
     tick();
     if (playing()) {
         timer_.stop();

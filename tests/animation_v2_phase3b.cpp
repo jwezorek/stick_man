@@ -12,7 +12,8 @@
 namespace {
 constexpr double pi = std::numbers::pi;
 void require(bool value, const char* message) {
-    if (!value) throw std::runtime_error(message);
+    if (!value)
+        throw std::runtime_error(message);
 }
 void near(double a, double b, double tolerance = 1e-7) {
     require(std::abs(a - b) <= tolerance, "scalar mismatch");
@@ -30,7 +31,8 @@ struct fixture {
     }
     void scope() {
         rig.clear();
-        for (auto s : project.topology().skeletons()) rig.push_back(s->id());
+        for (auto s : project.topology().skeletons())
+            rig.push_back(s->id());
         std::ranges::sort(rig);
     }
     sm::animation sequence() {
@@ -52,12 +54,16 @@ struct fixture {
         const auto authored = a;
         const auto geometry = project.topology().to_json();
         std::map<sm::object_id, std::tuple<double, double, double>> lengths;
-        for (auto s : project.topology().skeletons()) for (auto b : s->bones())
-            lengths.emplace(b->id(), std::tuple{b->length(), b->scaled_length(), b->scale()});
+        for (auto s : project.topology().skeletons())
+            for (auto b : s->bones())
+                lengths.emplace(b->id(), std::tuple{ b->length(), b->scaled_length(), b->scale() });
         auto result = sm::sample_constrained_pose(a, t, project.topology(), rig);
         require(project.topology().to_json() == geometry, "sampling mutated topology/constraints");
-        for (auto s : project.topology().skeletons()) for (auto b : s->bones())
-            require(lengths.at(b->id()) == std::tuple{b->length(), b->scaled_length(), b->scale()}, "length/scale mutation");
+        for (auto s : project.topology().skeletons())
+            for (auto b : s->bones())
+                require(lengths.at(b->id()) ==
+                        std::tuple{ b->length(), b->scaled_length(), b->scale() },
+                    "length/scale mutation");
         require(a.id == authored.id && a.name == authored.name && a.keyframes.size() == authored.keyframes.size() &&
             a.transitions.size() == authored.transitions.size(), "animation mutation");
         for (std::size_t i = 0; i < a.keyframes.size(); ++i) {
@@ -75,12 +81,14 @@ struct fixture {
     // with Core geometry, not the numeric projection's constraint rows.
     void feasible(const sm::skeletal_pose& pose) {
         sm::topology copy;
-        for (auto id : rig) require(project.topology().skeleton(id)->get().copy_to(copy).has_value(), "copy");
+        for (auto id : rig)
+            require(project.topology().skeleton(id)->get().copy_to(copy).has_value(), "copy");
         sm::constraint_geometry geometry(copy);
         sm::apply_skeletal_pose(pose, copy, rig);
         require(geometry.validate() == sm::result::success, "returned pose infeasible");
-        for (auto id : rig) for (auto b : project.topology().skeleton(id)->get().bones())
-            near(copy.get<sm::bone>(b->id())->get().scaled_length(), b->scaled_length());
+        for (auto id : rig)
+            for (auto b : project.topology().skeleton(id)->get().bones())
+                near(copy.get<sm::bone>(b->id())->get().scaled_length(), b->scaled_length());
     }
 };
 const sm::constrained_pose_sample& success(const sm::constrained_pose_result& result) {
@@ -116,17 +124,21 @@ void timing_and_exactness() {
             actual.to_keyframe_id == wanted.to_keyframe_id && actual.progress == wanted.progress, "timing metadata");
     }
     auto one = a;
-    one.keyframes.resize(1); one.transitions.clear();
-    for (double t : {-100., 0., 100.}) same_pose(success(f.sample(one, t)).pose, one.keyframes[0].pose);
+    one.keyframes.resize(1);
+    one.transitions.clear();
+    for (double t : { -100., 0., 100. })
+        same_pose(success(f.sample(one, t)).pose, one.keyframes[0].pose);
     sm::animation empty;
     require(f.sample(empty, 1).has_value() && !*f.sample(empty, 1), "empty outcome");
     for (double t : {std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) {
         failed(f.sample(a, t), sm::result::invalid_animation);
         failed(f.sample(empty, t), sm::result::invalid_animation);
     }
-    auto malformed = a; malformed.transitions[0].duration_seconds = 0;
+    auto malformed = a;
+    malformed.transitions[0].duration_seconds = 0;
     failed(f.sample(malformed, 0), sm::result::invalid_animation);
-    malformed = a; malformed.keyframes[1].pose.bone_rotations.clear();
+    malformed = a;
+    malformed.keyframes[1].pose.bone_rotations.clear();
     failed(f.sample(malformed, 0), sm::result::invalid_animation);
     require(f.project.topology().to_json() == before, "timing mutated topology");
 }
@@ -148,7 +160,8 @@ void source_keyframe_pins_govern_outgoing_transition() {
 
     auto world_position = [&](const sm::skeletal_pose& pose, sm::object_id id) {
         sm::topology copy;
-        for (auto sid : f.rig) require(f.project.topology().skeleton(sid)->get().copy_to(copy).has_value(), "copy");
+        for (auto sid : f.rig)
+            require(f.project.topology().skeleton(sid)->get().copy_to(copy).has_value(), "copy");
         sm::apply_skeletal_pose(pose, copy, f.rig);
         return copy.get<sm::node>(id)->get().world_pos();
     };
@@ -175,7 +188,8 @@ void source_keyframe_pins_govern_outgoing_transition() {
 
 void world_projection_and_failures() {
     fixture f;
-    auto root = f.node({0, 0}), tip = f.node({10, 0}); auto b = f.link(root, tip);
+    auto root = f.node({ 0, 0 }), tip = f.node({ 10, 0 });
+    auto b = f.link(root, tip);
     auto a = f.sequence();
     // Both endpoints lie in [-135, 135] degrees; shortest arc crosses the
     // forbidden sector at 180 degrees. The nearest feasible boundary is 135.
@@ -189,13 +203,16 @@ void world_projection_and_failures() {
     auto result = f.sample(a, 0.8);
     near(success(result).pose.bone_rotations.at(b->id()), 3*pi/4);
     f.feasible(success(result).pose);
-    auto feasible = a; feasible.keyframes[1].pose.bone_rotations[b->id()] = 0;
+    auto feasible = a;
+    feasible.keyframes[1].pose.bone_rotations[b->id()] = 0;
     same_pose(success(f.sample(feasible, 1)).pose, sm::sample_reference_pose(feasible, 1)->pose);
-    auto invalid = a; invalid.keyframes[0].pose.bone_rotations[b->id()] = pi;
+    auto invalid = a;
+    invalid.keyframes[0].pose.bone_rotations[b->id()] = pi;
     failed(f.sample(invalid, 0), sm::result::unsatisfiable_constraints);
     require(invalid.keyframes[0].pose.bone_rotations.at(b->id()) == pi, "invalid endpoint repaired");
     auto incompatible = a;
-    for (auto& k : incompatible.keyframes) k.pose.bone_rotations.clear();
+    for (auto& k : incompatible.keyframes)
+        k.pose.bone_rotations.clear();
     failed(f.sample(incompatible, 0), sm::result::invalid_membership);
     auto first = success(f.sample(a, 0.8));
     (void)f.sample(a, 1.6);
@@ -214,7 +231,8 @@ void parent_and_coupled_relations() {
     auto a = f.sequence();
     f.limit(parent, sm::rotation_reference::world(), {0.4, 0});
     f.limit(child, sm::rotation_reference::parent(), {-3*pi/4, 3*pi/2});
-    for (auto& k : a.keyframes) k.pose.bone_rotations[parent->id()] = 0.4;
+    for (auto& k : a.keyframes)
+        k.pose.bone_rotations[parent->id()] = 0.4;
     a.keyframes[0].pose.bone_rotations[child->id()] = 2*pi/3;
     a.keyframes[1].pose.bone_rotations[child->id()] = -2*pi/3;
     auto result = f.sample(a, 0.8);
@@ -285,7 +303,8 @@ void triangles() {
         const sm::point u{10*std::cos(xangle), 10*std::sin(xangle)}, v{7*std::cos(yangle), 7*std::sin(yangle)};
         near(sm::distance(u, v), std::sqrt(149.));
         require(handedness*(u.x*v.y-u.y*v.x) > 0, "triangle reflected");
-        auto invalid = a; invalid.keyframes[0].pose = reference;
+        auto invalid = a;
+        invalid.keyframes[0].pose = reference;
         failed(f.sample(invalid, 0), sm::result::unsatisfiable_constraints);
         require(f.project.topology().to_json() == before, "triangle mutation");
     }
@@ -323,9 +342,13 @@ void multiple_roots_scope_and_roundtrip() {
     require(topology.from_json(reversed) == sm::result::success, "topology roundtrip");
     std::reverse(f.rig.begin(), f.rig.end());
     for (auto& k : loaded.animations.front().keyframes) {
-        auto old = k.pose; k.pose.root_positions.clear(); k.pose.bone_rotations.clear();
-        for (auto id : {s->id(), r->id()}) k.pose.root_positions.emplace(id, old.root_positions.at(id));
-        for (auto id : {y->id(), x->id()}) k.pose.bone_rotations.emplace(id, old.bone_rotations.at(id));
+        auto old = k.pose;
+        k.pose.root_positions.clear();
+        k.pose.bone_rotations.clear();
+        for (auto id : { s->id(), r->id() })
+            k.pose.root_positions.emplace(id, old.root_positions.at(id));
+        for (auto id : { y->id(), x->id() })
+            k.pose.bone_rotations.emplace(id, old.bone_rotations.at(id));
     }
     auto roundtrip = sm::sample_constrained_pose(loaded.animations.front(), 0.8, topology, f.rig);
     same_pose(result.pose, success(roundtrip).pose);
@@ -336,7 +359,8 @@ void multiple_roots_scope_and_roundtrip() {
     for (auto skel : {x->owner().id(), y->owner().id()}) {
         f.rig = {skel};
         auto partial = a;
-        for (auto& k : partial.keyframes) k.pose = sm::capture_skeletal_pose(f.project.topology(), f.rig);
+        for (auto& k : partial.keyframes)
+            k.pose = sm::capture_skeletal_pose(f.project.topology(), f.rig);
         failed(f.sample(partial, 1), sm::result::invalid_membership);
         failed(f.sample(partial, 0), sm::result::invalid_membership);
     }
@@ -355,12 +379,14 @@ void edge_cases_and_failure_isolation() {
     failed(roots.sample(roots_only, 0), sm::result::invalid_membership);
 
     fixture f;
-    auto r = f.node({0, 0}), p = f.node({1, 0}); auto x = f.link(r, p);
+    auto r = f.node({ 0, 0 }), p = f.node({ 1, 0 });
+    auto x = f.link(r, p);
     auto a = f.sequence();
     const auto before = f.project.topology().to_json();
     // At this origin a one-unit horizontal bone collapses under double FK.
     // A coordinate-scaled roundoff tolerance must not approve the zero length.
-    for (auto& key : a.keyframes) key.pose.root_positions[r->id()] = {1e16, 0};
+    for (auto& key : a.keyframes)
+        key.pose.root_positions[r->id()] = { 1e16, 0 };
     failed(f.sample(a, 0), sm::result::out_of_bounds);
     failed(f.sample(a, 1), sm::result::out_of_bounds);
     require(f.project.topology().to_json() == before, "unrepresentable FK changed topology");
@@ -415,6 +441,7 @@ int main() {
         edge_cases_and_failure_isolation();
         std::cout << "PASS animation_v2_phase3b\n";
     } catch (const std::exception& e) {
-        std::cerr << e.what() << '\n'; return 1;
+        std::cerr << e.what() << '\n';
+        return 1;
     }
 }

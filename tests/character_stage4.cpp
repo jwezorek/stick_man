@@ -16,7 +16,8 @@ namespace {
 using nlohmann::json;
 
 void require(bool condition, const char* message) {
-    if (!condition) throw std::runtime_error(message);
+    if (!condition)
+        throw std::runtime_error(message);
 }
 
 std::size_t character_count(const sm::project& project) {
@@ -26,7 +27,8 @@ std::size_t character_count(const sm::project& project) {
 sm::object_id make_character(sm::project& project, std::initializer_list<sm::skeleton*> skeletons) {
     std::vector<sm::const_skel_ref> members;
     members.reserve(skeletons.size());
-    for (auto* skeleton : skeletons) members.emplace_back(*skeleton);
+    for (auto* skeleton : skeletons)
+        members.emplace_back(*skeleton);
     auto character = project.create_character(members);
     require(character.has_value(), "character fixture creation failed");
     return character->get().id();

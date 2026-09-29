@@ -71,9 +71,11 @@ struct ik_neighborhood {
 };
 
 sm::node& current_node(const ik_neighborhood& neighborhood) {
-    if (!neighborhood.prev) return neighborhood.start_node;
+    if (!neighborhood.prev)
+        return neighborhood.start_node;
     auto shared = neighborhood.current_bone.shared_node(neighborhood.prev->get());
-    if (!shared) throw std::runtime_error("invalid ik neighborhood");
+    if (!shared)
+        throw std::runtime_error("invalid ik neighborhood");
     return shared->get();
 }
 
@@ -89,7 +91,8 @@ sm::point apply_all_constraints(
     double old_rotation,
     const sm::constraint_geometry& geometry) {
 
-    if (geometry.status() != sm::result::success) throw constraint_failure{geometry.status()};
+    if (geometry.status() != sm::result::success)
+        throw constraint_failure{ geometry.status() };
 
     auto& leader = current_node(neighborhood);
     const bool forward = &leader == &neighborhood.current_bone.parent_node();
@@ -102,7 +105,8 @@ sm::point apply_all_constraints(
         allowed = allowed.intersect(sm::angle_set({old_rotation - max_delta, 2.0 * max_delta}));
     }
     auto clamped = allowed.closest_angle(theta);
-    if (!clamped) throw constraint_failure{sm::result::unsatisfiable_constraints};
+    if (!clamped)
+        throw constraint_failure{ sm::result::unsatisfiable_constraints };
 
     const double direction = *clamped + (forward ? 0.0 : std::numbers::pi);
     const double length = sm::distance(leader.world_pos(), proposed);
@@ -121,7 +125,8 @@ struct circular_set {
     std::vector<interval> parts{{0.0, k_two_pi}};
 
     static std::vector<interval> arc(double start, double span) {
-        if (span >= k_two_pi - 1e-14) return {{0.0, k_two_pi}};
+        if (span >= k_two_pi - 1e-14)
+            return { { 0.0, k_two_pi } };
         const double s = normalize_positive(start);
         std::vector<interval> out;
         if (span <= 1e-14) {
@@ -139,14 +144,17 @@ struct circular_set {
             has_zero |= std::abs(part.low) <= 1e-14 || std::abs(part.high) <= 1e-14;
             has_tau |= std::abs(part.low - k_two_pi) <= 1e-14 || std::abs(part.high - k_two_pi) <= 1e-14;
         }
-        if (has_zero && !has_tau) out.push_back({k_two_pi, k_two_pi});
-        if (has_tau && !has_zero) out.push_back({0.0, 0.0});
+        if (has_zero && !has_tau)
+            out.push_back({ k_two_pi, k_two_pi });
+        if (has_tau && !has_zero)
+            out.push_back({ 0.0, 0.0 });
         return out;
     }
 
     void canonicalize() {
         std::ranges::sort(parts, [](const interval& a, const interval& b) {
-            if (a.low != b.low) return a.low < b.low;
+            if (a.low != b.low)
+                return a.low < b.low;
             return a.high < b.high;
         });
         std::vector<interval> merged;
@@ -167,7 +175,8 @@ struct circular_set {
             for (auto right : rhs) {
                 const double low = std::max(left.low, right.low);
                 const double high = std::min(left.high, right.high);
-                if (low <= high + 1e-13) result.push_back({low, std::max(low, high)});
+                if (low <= high + 1e-13)
+                    result.push_back({ low, std::max(low, high) });
             }
         }
         parts = std::move(result);
@@ -182,8 +191,10 @@ struct circular_set {
     }
 
     std::vector<interval> circular_components() const {
-        if (parts.empty()) return {};
-        if (full()) return {{0.0, k_two_pi}};
+        if (parts.empty())
+            return {};
+        if (full())
+            return { { 0.0, k_two_pi } };
 
         std::vector<interval> result;
         std::size_t begin = 0;
@@ -196,7 +207,8 @@ struct circular_set {
             begin = 1;
             end = parts.size() - 1;
         }
-        for (std::size_t i = begin; i < end; ++i) result.push_back(parts[i]);
+        for (std::size_t i = begin; i < end; ++i)
+            result.push_back(parts[i]);
         return result;
     }
 };
@@ -219,8 +231,9 @@ struct lifted_interval {
 };
 
 std::vector<lifted_interval> lifted_choices(const circular_set& set, double incoming) {
-    if (set.full()) return {{-std::numeric_limits<double>::infinity(),
-                            std::numeric_limits<double>::infinity(), 0.0}};
+    if (set.full())
+        return { { -std::numeric_limits<double>::infinity(),
+            std::numeric_limits<double>::infinity(), 0.0 } };
 
     std::vector<lifted_interval> choices;
     for (auto component : set.circular_components()) {
@@ -230,20 +243,25 @@ std::vector<lifted_interval> lifted_choices(const circular_set& set, double inco
             const double low = component.low + shift * k_two_pi;
             const double high = component.high + shift * k_two_pi;
             double distance = 0.0;
-            if (incoming < low) distance = low - incoming;
-            else if (incoming > high) distance = incoming - high;
+            if (incoming < low)
+                distance = low - incoming;
+            else if (incoming > high)
+                distance = incoming - high;
             choices.push_back({low, high, distance});
         }
     }
     std::ranges::sort(choices, [](const lifted_interval& a, const lifted_interval& b) {
-        if (std::abs(a.distance - b.distance) > 1e-13) return a.distance < b.distance;
-        if (a.low != b.low) return a.low < b.low;
+        if (std::abs(a.distance - b.distance) > 1e-13)
+            return a.distance < b.distance;
+        if (a.low != b.low)
+            return a.low < b.low;
         return a.high < b.high;
     });
     choices.erase(std::unique(choices.begin(), choices.end(), [](const auto& a, const auto& b) {
         return std::abs(a.low - b.low) <= 1e-12 && std::abs(a.high - b.high) <= 1e-12;
     }), choices.end());
-    if (choices.size() > 4) choices.resize(4);
+    if (choices.size() > 4)
+        choices.resize(4);
     return choices;
 }
 
@@ -319,10 +337,12 @@ sm::result build_angle_variables(kinematic_model& model) {
 
     for (const auto& [id, constraint] : model.topology->constraints()) {
         const auto* triangle = constraint.triangle();
-        if (!triangle) continue;
+        if (!triangle)
+            continue;
         auto first_ref = model.topology->get<sm::bone>(triangle->first_bone);
         auto second_ref = model.topology->get<sm::bone>(triangle->second_bone);
-        if (!first_ref || !second_ref) return sm::result::invalid_constraint;
+        if (!first_ref || !second_ref)
+            return sm::result::invalid_constraint;
         auto* first = first_ref->ptr();
         auto* second = second_ref->ptr();
         const bool first_active = active.contains(first);
@@ -332,7 +352,8 @@ sm::result build_angle_variables(kinematic_model& model) {
             // brought all sibling members on the movable side of a pin into the region.
             return sm::result::unsatisfiable_constraints;
         }
-        if (!first_active) continue;
+        if (!first_active)
+            continue;
         graph[first].push_back({second, triangle->relative_angle});
         graph[second].push_back({first, -triangle->relative_angle});
     }
@@ -345,7 +366,8 @@ sm::result build_angle_variables(kinematic_model& model) {
 
     std::unordered_set<sm::bone*> assigned;
     for (auto* seed : model.bones) {
-        if (assigned.contains(seed)) continue;
+        if (assigned.contains(seed))
+            continue;
 
         std::vector<sm::bone*> component;
         if (!graph.contains(seed)) {
@@ -356,9 +378,11 @@ sm::result build_angle_variables(kinematic_model& model) {
             while (!pending.empty()) {
                 auto* current = pending.back();
                 pending.pop_back();
-                if (!seen.insert(current).second) continue;
+                if (!seen.insert(current).second)
+                    continue;
                 component.push_back(current);
-                for (auto [other, delta] : graph[current]) pending.push_back(other);
+                for (auto [other, delta] : graph[current])
+                    pending.push_back(other);
             }
             std::ranges::sort(component, bone_id_less);
         }
@@ -370,7 +394,8 @@ sm::result build_angle_variables(kinematic_model& model) {
         while (!pending.empty()) {
             auto* current = pending.back();
             pending.pop_back();
-            if (!graph.contains(current)) continue;
+            if (!graph.contains(current))
+                continue;
             for (auto [other, delta] : graph[current]) {
                 const double candidate = sm::normalize_angle(offsets[current] + delta);
                 auto it = offsets.find(other);
@@ -412,8 +437,10 @@ sm::result build_kinematics(kinematic_model& model) {
         node_set.insert(&bone->child_node());
         total_length += bone->scaled_length();
     }
-    for (const auto& [node, target] : model.source->effectors) node_set.insert(mutable_ptr(node));
-    for (auto pin : model.source->pins) node_set.insert(mutable_ptr(pin));
+    for (const auto& [node, target] : model.source->effectors)
+        node_set.insert(mutable_ptr(node));
+    for (auto pin : model.source->pins)
+        node_set.insert(mutable_ptr(pin));
     model.nodes.assign(node_set.begin(), node_set.end());
     std::ranges::sort(model.nodes, node_id_less);
     for (std::size_t i = 0; i < model.nodes.size(); ++i) {
@@ -424,7 +451,8 @@ sm::result build_kinematics(kinematic_model& model) {
         ? 1.0
         : std::max(total_length / static_cast<double>(model.bones.size()), 1e-6);
 
-    if (model.nodes.empty()) return sm::result::success;
+    if (model.nodes.empty())
+        return sm::result::success;
 
     std::unordered_set<sm::bone*> active(model.bones.begin(), model.bones.end());
     std::vector<bool> visited(model.nodes.size(), false);
@@ -441,10 +469,12 @@ sm::result build_kinematics(kinematic_model& model) {
         });
         for (auto bone_ref : adjacent) {
             auto* bone = bone_ref.ptr();
-            if (!active.contains(bone)) continue;
+            if (!active.contains(bone))
+                continue;
             auto* child = &bone->opposite_node(*parent);
             const auto child_index = model.node_indices.at(child);
-            if (visited[child_index]) continue;
+            if (visited[child_index])
+                continue;
             visited[child_index] = true;
             pending.push_back(child_index);
             const auto coord = model.bone_coordinates.at(bone);
@@ -484,7 +514,8 @@ void evaluate_model(const kinematic_model& model, std::span<const double> x, eva
     }
     // Scratch storage is sized once per solve. The root is the only local row
     // that the traversal does not overwrite from its parent on every evaluation.
-    if (node_count != 0) out.local[0] = {0.0, 0.0};
+    if (node_count != 0)
+        out.local[0] = { 0.0, 0.0 };
     std::fill_n(out.local_jacobian.begin(), angle_count, sm::point{0.0, 0.0});
 
     for (const auto& step : model.steps) {
@@ -555,7 +586,8 @@ struct solve_context {
     double target_tolerance = k_tolerance;
 
     void ensure(const std::vector<double>& x) {
-        if (cached && x == last_x) return;
+        if (cached && x == last_x)
+            return;
         evaluate_model(*model, x, state);
         last_x = x;
         cached = true;
@@ -710,7 +742,8 @@ struct candidate {
 
 bool angle_satisfies(sm::angle_range range, double value) {
     sm::angle_set allowed(range);
-    if (allowed.contains(value)) return true;
+    if (allowed.contains(value))
+        return true;
     auto closest = allowed.closest_angle(value);
     return closest && std::abs(sm::angular_distance(value, *closest)) <= k_angular_feasibility_tolerance;
 }
@@ -720,17 +753,22 @@ std::optional<candidate> validate_candidate(
     const std::vector<double>& x) {
 
     const auto& model = *context.model;
-    if (x.size() != model.variable_count()) return std::nullopt;
-    if (!std::ranges::all_of(x, [](double value) { return std::isfinite(value); })) return std::nullopt;
+    if (x.size() != model.variable_count())
+        return std::nullopt;
+    if (!std::ranges::all_of(x, [](double value) { return std::isfinite(value); }))
+        return std::nullopt;
 
     context.ensure(x);
     const auto& state = context.state;
     const double position_tolerance = k_position_feasibility_scale;
 
-    for (const auto& p : state.world) if (!finite(p)) return std::nullopt;
+    for (const auto& p : state.world)
+        if (!finite(p))
+            return std::nullopt;
 
     for (const auto& pin : context.pins) {
-        if (sm::distance(state.world[pin.node_index], pin.position) > position_tolerance) return std::nullopt;
+        if (sm::distance(state.world[pin.node_index], pin.position) > position_tolerance)
+            return std::nullopt;
     }
 
     for (auto* bone : model.bones) {
@@ -764,24 +802,30 @@ std::optional<candidate> validate_candidate(
     std::unordered_set<sm::bone*> active(model.bones.begin(), model.bones.end());
     for (const auto& [id, constraint] : model.topology->constraints()) {
         const auto* rotation = constraint.rotation();
-        if (!rotation) continue;
+        if (!rotation)
+            continue;
         auto target_ref = model.topology->get<sm::bone>(rotation->target_bone);
-        if (!target_ref) return std::nullopt;
+        if (!target_ref)
+            return std::nullopt;
         auto* target = target_ref->ptr();
         sm::bone* reference = nullptr;
         if (rotation->reference.kind == sm::rotation_reference_kind::parent) {
             auto parent = target->parent_bone();
-            if (!parent) return std::nullopt;
+            if (!parent)
+                return std::nullopt;
             reference = parent->ptr();
         } else if (rotation->reference.kind == sm::rotation_reference_kind::bone) {
             auto ref = model.topology->get<sm::bone>(rotation->reference.bone_id);
-            if (!ref) return std::nullopt;
+            if (!ref)
+                return std::nullopt;
             reference = ref->ptr();
         }
-        if (!active.contains(target) && (!reference || !active.contains(reference))) continue;
+        if (!active.contains(target) && (!reference || !active.contains(reference)))
+            continue;
         const double relative = candidate_rotation(target)
             - (reference ? candidate_rotation(reference) : 0.0);
-        if (!angle_satisfies(rotation->allowed, relative)) return std::nullopt;
+        if (!angle_satisfies(rotation->allowed, relative))
+            return std::nullopt;
     }
 
     candidate result;
@@ -810,18 +854,24 @@ bool candidate_better(const candidate& lhs, const candidate& rhs, double toleran
     // to change IK branch. Every seed uses the same incoming-pose reference.
     const bool lhs_reached = lhs_max <= tolerance;
     const bool rhs_reached = rhs_max <= tolerance;
-    if (lhs_reached != rhs_reached) return lhs_reached;
+    if (lhs_reached != rhs_reached)
+        return lhs_reached;
     if (lhs_reached) {
-        if (lhs.pose_score != rhs.pose_score) return lhs.pose_score < rhs.pose_score;
+        if (lhs.pose_score != rhs.pose_score)
+            return lhs.pose_score < rhs.pose_score;
         return lhs.target_score < rhs.target_score;
     }
     const double target_slop = std::max(tolerance * 0.05, 1e-9);
-    if (lhs_max + target_slop < rhs_max) return true;
-    if (rhs_max + target_slop < lhs_max) return false;
+    if (lhs_max + target_slop < rhs_max)
+        return true;
+    if (rhs_max + target_slop < lhs_max)
+        return false;
     // Compare RMS distances, not squared errors against a squared distance
     // band: the latter makes the effective band shrink as residuals grow.
-    if (std::sqrt(lhs.target_score) + target_slop < std::sqrt(rhs.target_score)) return true;
-    if (std::sqrt(rhs.target_score) + target_slop < std::sqrt(lhs.target_score)) return false;
+    if (std::sqrt(lhs.target_score) + target_slop < std::sqrt(rhs.target_score))
+        return true;
+    if (std::sqrt(rhs.target_score) + target_slop < std::sqrt(lhs.target_score))
+        return false;
     return lhs.pose_score < rhs.pose_score;
 }
 
@@ -852,7 +902,8 @@ sm::result build_angular_groups(
 
     auto add_term = [](std::map<std::size_t, int>& terms, std::size_t index, int coefficient) {
         terms[index] += coefficient;
-        if (terms[index] == 0) terms.erase(index);
+        if (terms[index] == 0)
+            terms.erase(index);
     };
 
     auto coordinate = [&](sm::bone* bone, int coefficient,
@@ -870,18 +921,22 @@ sm::result build_angular_groups(
 
     for (const auto& [id, constraint] : model.topology->constraints()) {
         const auto* rotation = constraint.rotation();
-        if (!rotation) continue;
+        if (!rotation)
+            continue;
         auto target_ref = model.topology->get<sm::bone>(rotation->target_bone);
-        if (!target_ref) return sm::result::invalid_constraint;
+        if (!target_ref)
+            return sm::result::invalid_constraint;
         auto* target = target_ref->ptr();
         sm::bone* reference = nullptr;
         if (rotation->reference.kind == sm::rotation_reference_kind::parent) {
             auto parent = target->parent_bone();
-            if (!parent) return sm::result::invalid_constraint;
+            if (!parent)
+                return sm::result::invalid_constraint;
             reference = parent->ptr();
         } else if (rotation->reference.kind == sm::rotation_reference_kind::bone) {
             auto ref = model.topology->get<sm::bone>(rotation->reference.bone_id);
-            if (!ref) return sm::result::invalid_constraint;
+            if (!ref)
+                return sm::result::invalid_constraint;
             reference = ref->ptr();
         }
 
@@ -889,8 +944,10 @@ sm::result build_angular_groups(
         double constant = 0.0;
         std::map<std::size_t, int> term_map;
         coordinate(target, +1, term_map, constant, involves_active);
-        if (reference) coordinate(reference, -1, term_map, constant, involves_active);
-        if (!involves_active) continue;
+        if (reference)
+            coordinate(reference, -1, term_map, constant, involves_active);
+        if (!involves_active)
+            continue;
 
         if (term_map.empty()) {
             if (!angle_satisfies(rotation->allowed, constant)) {
@@ -900,24 +957,28 @@ sm::result build_angular_groups(
         }
 
         linear_key key;
-        for (auto [index, coefficient] : term_map) key.terms.push_back({index, coefficient});
+        for (auto [index, coefficient] : term_map)
+            key.terms.push_back({ index, coefficient });
         auto& entry = accumulated[key];
         if (!entry.initialized) {
             entry.allowed = circular_set{};
             entry.initialized = true;
         }
         entry.allowed.intersect(rotation->allowed.start_angle - constant, rotation->allowed.span_angle);
-        if (entry.allowed.empty()) return sm::result::unsatisfiable_constraints;
+        if (entry.allowed.empty())
+            return sm::result::unsatisfiable_constraints;
     }
 
     for (auto& [key, entry] : accumulated) {
-        if (entry.allowed.full()) continue;
+        if (entry.allowed.full())
+            continue;
         angular_group group;
         group.key = key;
         group.allowed = entry.allowed;
         group.incoming = linear_value(key, incoming_x);
         group.choices = lifted_choices(group.allowed, group.incoming);
-        if (group.choices.empty()) return sm::result::unsatisfiable_constraints;
+        if (group.choices.empty())
+            return sm::result::unsatisfiable_constraints;
         groups.push_back(std::move(group));
     }
     return sm::result::success;
@@ -942,7 +1003,8 @@ void add_hard_constraints(
     for (std::size_t i = 0; i < angular_groups.size(); ++i) {
         const auto& group = angular_groups[i];
         const auto& interval = group.choices[branch_selection[i]];
-        if (!std::isfinite(interval.low) || !std::isfinite(interval.high)) continue;
+        if (!std::isfinite(interval.low) || !std::isfinite(interval.high))
+            continue;
         if (std::abs(interval.high - interval.low) <= k_angular_feasibility_tolerance) {
             storage.affine.push_back({group.key, 0.5 * (interval.low + interval.high), 1.0});
             optimizer.add_equality_constraint(
@@ -967,7 +1029,8 @@ void add_hard_constraints(
     // Remaining pins use coordinate equalities; no squared-distance equality is introduced.
     const std::size_t first_explicit_pin = context.model->mode == translation_mode::pin_anchor ? 1u : 0u;
     for (std::size_t i = first_explicit_pin; i < context.pins.size(); ++i) {
-        if (context.pins[i].implied_by_bounds) continue;
+        if (context.pins[i].implied_by_bounds)
+            continue;
         storage.pins.push_back({&context, i, true});
         optimizer.add_equality_constraint(
             pin_constraint_callback,
@@ -1015,7 +1078,8 @@ struct prepared_optimizer {
         const std::vector<std::size_t>& branch_selection,
         bool pose_stage,
         const std::vector<double>& target_caps) {
-        if (opt) return;
+        if (opt)
+            return;
 
         storage.affine.reserve(angular_groups.size() * 2);
         storage.pins.reserve(context.pins.size() * 2);
@@ -1035,7 +1099,8 @@ struct prepared_optimizer {
             }
             opt->set_xtol_abs(step_tolerances);
             add_hard_constraints(*opt, context, angular_groups, branch_selection, storage);
-            if (!target_caps.empty()) add_target_caps(*opt, context, target_caps, storage);
+            if (!target_caps.empty())
+                add_target_caps(*opt, context, target_caps, storage);
             if (pose_stage) opt->set_min_objective(pose_objective, &context);
             else opt->set_min_objective(target_objective, &context);
         } catch (...) {
@@ -1059,8 +1124,10 @@ bool run_optimizer(
     const std::vector<double>& target_caps = {},
     prepared_optimizer* reusable = nullptr) {
 
-    if (x.empty() || remaining_budget <= 0) return false;
-    if (context.model->lower_bounds == context.model->upper_bounds) return true;
+    if (x.empty() || remaining_budget <= 0)
+        return false;
+    if (context.model->lower_bounds == context.model->upper_bounds)
+        return true;
 
     const int budget = std::max(1, std::min(requested_budget, remaining_budget));
     prepared_optimizer local;
@@ -1095,7 +1162,8 @@ std::vector<std::vector<std::size_t>> make_branch_selections(
     std::vector<std::size_t> preferred(groups.size(), 0);
     result.push_back(preferred);
     for (std::size_t i = 0; i < groups.size() && result.size() < k_max_branch_attempts; ++i) {
-        if (groups[i].choices.size() <= 1) continue;
+        if (groups[i].choices.size() <= 1)
+            continue;
         auto alternative = preferred;
         alternative[i] = 1;
         result.push_back(std::move(alternative));
@@ -1107,13 +1175,15 @@ std::vector<std::vector<double>> make_seeds(const kinematic_model& model, const 
     std::vector<std::vector<double>> seeds{base};
     for (std::size_t i = 0; i < model.angle_count() && seeds.size() < k_max_escape_seeds; ++i) {
         for (double sign : {1.0, -1.0}) {
-            if (seeds.size() >= k_max_escape_seeds) break;
+            if (seeds.size() >= k_max_escape_seeds)
+                break;
             auto seed = base;
             seed[i] = std::clamp(
                 seed[i] + sign * k_escape_angle,
                 model.lower_bounds[i],
                 model.upper_bounds[i]);
-            if (seed != base) seeds.push_back(std::move(seed));
+            if (seed != base)
+                seeds.push_back(std::move(seed));
         }
     }
     return seeds;
@@ -1130,12 +1200,14 @@ double chart_pose_lower_bound(
             incoming += coefficient * model.angle_variables[index].incoming;
             coefficients += std::abs(coefficient);
         }
-        if (coefficients == 0.0) continue;
+        if (coefficients == 0.0)
+            continue;
         const auto& interval = groups[i].choices[branch[i]];
         const double distance = std::max({0.0, interval.low - incoming, incoming - interval.high});
         const double angle = std::min(std::numbers::pi,
             std::max(0.0, distance - k_angular_feasibility_tolerance) / coefficients);
-        if (angle == 0.0) continue;
+        if (angle == 0.0)
+            continue;
 
         // At least one term's orientation must change by this angle. Variables
         // stay within incoming +/- pi, so the chord grows monotonically. For
@@ -1194,13 +1266,16 @@ sm::result eliminate_rigid_pin_coordinates(kinematic_model& model, solve_context
         const auto current = pending.back();
         pending.pop_back();
         for (auto [next, step] : adjacent[current]) {
-            if (visited[next]) continue;
+            if (visited[next])
+                continue;
             visited[next] = true;
             pending.push_back(next);
             auto& path = paths[next];
             path = paths[current];
-            if (path.variable == no_variable) path.variable = step->variable;
-            else if (path.variable != step->variable) path.multiple_variables = true;
+            if (path.variable == no_variable)
+                path.variable = step->variable;
+            else if (path.variable != step->variable)
+                path.multiple_variables = true;
             const double length = current == step->parent_node ? step->signed_length : -step->signed_length;
             path.offset += sm::point{length * step->offset_cos, length * step->offset_sin};
         }
@@ -1208,9 +1283,11 @@ sm::result eliminate_rigid_pin_coordinates(kinematic_model& model, solve_context
 
     const double position_tolerance = std::max(1e-9, k_position_feasibility_scale);
     for (auto& pin : context.pins) {
-        if (pin.node_index == model.anchor_node) continue;
+        if (pin.node_index == model.anchor_node)
+            continue;
         const auto& path = paths[pin.node_index];
-        if (path.multiple_variables || path.variable == no_variable) continue;
+        if (path.multiple_variables || path.variable == no_variable)
+            continue;
         const auto target = pin.position - model.anchor_position;
         const double radius = std::hypot(path.offset.x, path.offset.y);
         const double target_radius = std::hypot(target.x, target.y);
@@ -1257,18 +1334,23 @@ sm::result configure_model(
     std::ranges::sort(model.bones, bone_id_less);
 
     auto status = build_angle_variables(model);
-    if (status != sm::result::success) return status;
+    if (status != sm::result::success)
+        return status;
     status = build_kinematics(model);
-    if (status != sm::result::success) return status;
+    if (status != sm::result::success)
+        return status;
 
     for (auto* bone : model.bones) {
         auto parent = bone->parent_bone();
-        if (!parent) continue;
+        if (!parent)
+            continue;
         auto found = model.bone_coordinates.find(parent->ptr());
-        if (found == model.bone_coordinates.end()) continue;
+        if (found == model.bone_coordinates.end())
+            continue;
         const auto a = model.bone_coordinates.at(bone).variable;
         const auto b = found->second.variable;
-        if (a != b) model.articulations.emplace_back(std::min(a, b), std::max(a, b));
+        if (a != b)
+            model.articulations.emplace_back(std::min(a, b), std::max(a, b));
     }
     std::ranges::sort(model.articulations);
     model.articulations.erase(std::unique(model.articulations.begin(), model.articulations.end()),
@@ -1277,7 +1359,8 @@ sm::result configure_model(
     context.model = &model;
     context.target_tolerance = k_tolerance;
     context.incoming_x.reserve(model.angle_count() + 2);
-    for (const auto& variable : model.angle_variables) context.incoming_x.push_back(variable.incoming);
+    for (const auto& variable : model.angle_variables)
+        context.incoming_x.push_back(variable.incoming);
 
     if (!source.pins.empty()) {
         model.mode = translation_mode::pin_anchor;
@@ -1316,7 +1399,8 @@ sm::result configure_model(
                 low = std::max(low, member_center - k_max_ang_delta);
                 high = std::min(high, member_center + k_max_ang_delta);
             }
-            if (low > high + k_angular_feasibility_tolerance) return sm::result::unsatisfiable_constraints;
+            if (low > high + k_angular_feasibility_tolerance)
+                return sm::result::unsatisfiable_constraints;
             model.lower_bounds[i] = low;
             model.upper_bounds[i] = high;
             context.incoming_x[i] = std::clamp(context.incoming_x[i], low, high);
@@ -1333,7 +1417,8 @@ sm::result configure_model(
     }
 
     status = eliminate_rigid_pin_coordinates(model, context);
-    if (status != sm::result::success) return status;
+    if (status != sm::result::success)
+        return status;
 
     context.last_x.resize(model.variable_count());
     context.state.angle_directions.resize(model.angle_count());
@@ -1365,7 +1450,8 @@ std::optional<candidate> exact_rigid_pose(solve_context& context) {
         dot += v.x * q.x + v.y * q.y;
         cross += v.x * q.y - v.y * q.x;
     }
-    if (!std::isfinite(dot) || !std::isfinite(cross)) return std::nullopt;
+    if (!std::isfinite(dot) || !std::isfinite(cross))
+        return std::nullopt;
 
     auto exact_x = context.incoming_x;
     if (dot != 0.0 || cross != 0.0) {
@@ -1381,19 +1467,23 @@ sm::result solve_region(
     const region& source,
     std::vector<std::pair<sm::node*, sm::point>>& writes) {
 
-    if (source.effectors.empty()) return sm::result::ik_target_reached;
+    if (source.effectors.empty())
+        return sm::result::ik_target_reached;
 
     kinematic_model model;
     solve_context context;
     auto status = configure_model(source, model, context);
-    if (status != sm::result::success) return status;
+    if (status != sm::result::success)
+        return status;
 
     std::vector<angular_group> angular_groups;
     status = build_angular_groups(model, context.incoming_x, angular_groups);
-    if (status != sm::result::success) return status;
+    if (status != sm::result::success)
+        return status;
 
     std::optional<candidate> best;
-    if (auto initial = validate_candidate(context, context.incoming_x)) best = std::move(*initial);
+    if (auto initial = validate_candidate(context, context.incoming_x))
+        best = std::move(*initial);
     bool incoming_valid = best.has_value();
     // FK can repair an inconsistent incoming fan. Such a repair is not a
     // continuity anchor: allow every chart when restoring an invalid pose.
@@ -1407,7 +1497,8 @@ sm::result solve_region(
     std::optional<double> preferred_chart_pose;
     auto rigid_optimum = k_optimizer_evaluation_budget > 0
         ? exact_rigid_pose(context) : std::optional<candidate>{};
-    if (rigid_optimum) best = std::move(*rigid_optimum);
+    if (rigid_optimum)
+        best = std::move(*rigid_optimum);
 
     if (!rigid_optimum && model.variable_count() != 0 && k_optimizer_evaluation_budget > 0) {
         int remaining_budget = k_optimizer_evaluation_budget;
@@ -1513,7 +1604,8 @@ sm::result solve_region(
                     for (std::size_t i = 0; within_caps && i < caps.size(); ++i) {
                         within_caps = refined->target_errors[i] <= caps[i] + 1e-9;
                     }
-                    if (within_caps) consider_continuous(*refined);
+                    if (within_caps)
+                        consider_continuous(*refined);
                     if (within_caps && refined->pose_score < branch_best->pose_score) {
                         branch_best = std::move(*refined);
                     }
@@ -1527,7 +1619,8 @@ sm::result solve_region(
             // reference; retain eligible candidates from every seed, not only
             // the unrestricted branch winner. Invalid incoming poses may use
             // any chart to restore feasibility.
-            if (preferred_chart_pose) branch_best = std::move(continuous_best);
+            if (preferred_chart_pose)
+                branch_best = std::move(continuous_best);
             if (branch_best && (!best || candidate_better(*branch_best, *best, k_tolerance))) {
                 best = std::move(*branch_best);
             }
@@ -1542,7 +1635,8 @@ sm::result solve_region(
         }
     }
 
-    if (!best) return sm::result::ik_no_solution_found;
+    if (!best)
+        return sm::result::ik_no_solution_found;
 
     for (std::size_t i = 0; i < model.nodes.size(); ++i) {
         writes.push_back({model.nodes[i], best->positions[i]});
@@ -1553,7 +1647,8 @@ sm::result solve_region(
     if (reached == static_cast<std::ptrdiff_t>(best->target_errors.size())) {
         return sm::result::ik_target_reached;
     }
-    if (reached != 0) return sm::result::ik_mixed;
+    if (reached != 0)
+        return sm::result::ik_mixed;
     return sm::result::ik_converged;
 }
 
@@ -1561,15 +1656,20 @@ sm::result validate_ik_inputs(
     const std::vector<std::tuple<sm::node_ref, sm::point>>& effectors,
     const std::vector<sm::node_ref>& pins) {
 
-    if (effectors.empty()) return sm::result::ik_no_solution_found;
+    if (effectors.empty())
+        return sm::result::ik_no_solution_found;
     auto& owner = std::get<0>(effectors.front())->owner();
     for (const auto& [node, target] : effectors) {
-        if (&node->owner() != &owner) return sm::result::cross_skeleton_bone;
-        if (!finite(target) || !finite(node->world_pos())) return sm::result::out_of_bounds;
+        if (&node->owner() != &owner)
+            return sm::result::cross_skeleton_bone;
+        if (!finite(target) || !finite(node->world_pos()))
+            return sm::result::out_of_bounds;
     }
     for (auto node : pins) {
-        if (&node->owner() != &owner) return sm::result::cross_skeleton_bone;
-        if (!finite(node->world_pos())) return sm::result::out_of_bounds;
+        if (&node->owner() != &owner)
+            return sm::result::cross_skeleton_bone;
+        if (!finite(node->world_pos()))
+            return sm::result::out_of_bounds;
     }
     return sm::result::success;
 }
@@ -1587,12 +1687,14 @@ sm::result normalize_inputs(
         if (!inserted && sm::distance(it->second, target) > tolerance) {
             return sm::result::ik_no_solution_found;
         }
-        if (inserted) normalized_effectors.push_back({node, target});
+        if (inserted)
+            normalized_effectors.push_back({ node, target });
     }
 
     std::unordered_set<sm::node*> seen_pins;
     for (auto pin : pins) {
-        if (seen_pins.insert(mutable_ptr(pin)).second) normalized_pins.push_back(pin);
+        if (seen_pins.insert(mutable_ptr(pin)).second)
+            normalized_pins.push_back(pin);
     }
     return sm::result::success;
 }
@@ -1603,13 +1705,15 @@ std::vector<region> discover_regions(
     sm::constraint_geometry& geometry) {
 
     std::unordered_set<sm::node*> boundaries;
-    for (auto pin : pins) boundaries.insert(mutable_ptr(pin));
+    for (auto pin : pins)
+        boundaries.insert(mutable_ptr(pin));
 
     std::vector<region> regions;
     std::unordered_set<sm::node*> assigned;
 
     for (const auto& [effector, target] : effectors) {
-        if (boundaries.contains(mutable_ptr(effector)) || assigned.contains(mutable_ptr(effector))) continue;
+        if (boundaries.contains(mutable_ptr(effector)) || assigned.contains(mutable_ptr(effector)))
+            continue;
         auto& component = regions.emplace_back();
         std::vector<std::pair<sm::node*, sm::bone*>> pending{{mutable_ptr(effector), nullptr}};
         std::unordered_set<sm::node*> found_pins;
@@ -1619,7 +1723,8 @@ std::vector<region> discover_regions(
             pending.pop_back();
 
             if (boundaries.contains(node)) {
-                if (found_pins.insert(node).second) component.pins.push_back(*node);
+                if (found_pins.insert(node).second)
+                    component.pins.push_back(*node);
                 if (incoming) {
                     if (auto fan = geometry.fan_for(incoming)) {
                         auto members = geometry.fan_members(*fan);
@@ -1634,7 +1739,8 @@ std::vector<region> discover_regions(
                 continue;
             }
 
-            if (!component.nodes.insert(node).second) continue;
+            if (!component.nodes.insert(node).second)
+                continue;
             assigned.insert(node);
             auto adjacent = node->adjacent_bones();
             std::ranges::sort(adjacent, [](const sm::bone_ref& a, const sm::bone_ref& b) {
@@ -1651,7 +1757,8 @@ std::vector<region> discover_regions(
             return a->id() < b->id();
         });
         for (const auto& entry : effectors) {
-            if (component.nodes.contains(mutable_ptr(std::get<0>(entry)))) component.effectors.push_back(entry);
+            if (component.nodes.contains(mutable_ptr(std::get<0>(entry))))
+                component.effectors.push_back(entry);
         }
     }
     return regions;
@@ -1674,8 +1781,9 @@ double animation_angle_objective(const std::vector<double>& x,
     for (const auto& term : terms) {
         const double delta = linear_value(term.key, x) + term.offset;
         score += weight * 2.0 * (1.0 - std::cos(delta));
-        if (!gradient.empty()) for (auto [i, coefficient] : term.key.terms)
-            gradient[i] += weight * 2.0 * std::sin(delta) * coefficient;
+        if (!gradient.empty())
+            for (auto [i, coefficient] : term.key.terms)
+                gradient[i] += weight * 2.0 * std::sin(delta) * coefficient;
     }
     return score;
 }
@@ -1707,7 +1815,8 @@ struct animation_geometry {
                     const double length = lengths.at(b->id());
                     const auto p = node->world_pos();
                     const auto q = p + sm::point{length * std::cos(angle), length * std::sin(angle)};
-                    if (!finite(q)) return sm::result::out_of_bounds;
+                    if (!finite(q))
+                        return sm::result::out_of_bounds;
                     // A coordinate-scaled tolerance can exceed the whole bone
                     // at large origins. Require relative length fidelity instead.
                     const double reconstructed_length = sm::distance(p, q);
@@ -1741,8 +1850,11 @@ sm::result prepare_animation_geometry(const sm::topology& source,
     std::set<sm::object_id> bones;
     for (auto id : scratch.skeletons) {
         auto s = source.skeleton(id);
-        if (!s || s->get().empty()) return sm::result::invalid_membership;
-        for (auto n : s->get().nodes()) if (!finite(n->world_pos())) return sm::result::out_of_bounds;
+        if (!s || s->get().empty())
+            return sm::result::invalid_membership;
+        for (auto n : s->get().nodes())
+            if (!finite(n->world_pos()))
+                return sm::result::out_of_bounds;
         for (auto b : s->get().bones()) {
             const auto length = b->scaled_length();
             if (!std::isfinite(length) || length <= 0 || !std::isfinite(b->length()) || b->length() <= 0)
@@ -1753,7 +1865,8 @@ sm::result prepare_animation_geometry(const sm::topology& source,
     }
     if (!sm::skeletal_pose_compatible(reference, source, scratch.skeletons))
         return sm::result::invalid_membership;
-    if (auto status = sm::validate_constraints(source, source.constraints()); status != sm::result::success)
+    if (auto status = sm::validate_constraints(source, source.constraints());
+        status != sm::result::success)
         return status;
     for (const auto& [id, constraint] : source.constraints()) {
         if (const auto* r = constraint.rotation()) {
@@ -1767,7 +1880,8 @@ sm::result prepare_animation_geometry(const sm::topology& source,
     }
     for (auto id : scratch.skeletons) {
         auto copied = source.skeleton(id)->get().copy_to(scratch.topology);
-        if (!copied) return copied.error();
+        if (!copied)
+            return copied.error();
     }
     return sm::result::success;
 }
@@ -1787,12 +1901,14 @@ bool independent_animation_chart(const std::vector<angular_group>& groups,
             row.back() = 0.5 * (interval.low + interval.high);
             for (const auto& [pivot, previous] : basis) {
                 const double scale = row[pivot];
-                for (std::size_t j = pivot; j <= dimension; ++j) row[j] -= scale * previous[j];
+                for (std::size_t j = pivot; j <= dimension; ++j)
+                    row[j] -= scale * previous[j];
             }
             std::size_t pivot = 0;
             while (pivot < dimension && std::abs(row[pivot]) <= 1e-12) ++pivot;
             if (pivot == dimension) {
-                if (std::abs(row.back()) > k_angular_feasibility_tolerance) return false;
+                if (std::abs(row.back()) > k_angular_feasibility_tolerance)
+                    return false;
                 continue;
             }
             const double scale = row[pivot];
@@ -1813,7 +1929,8 @@ std::expected<sm::skeletal_pose, sm::result> project_animation_reference(
     model.topology = &geometry.topology;
     model.mode = translation_mode::pin_anchor; // angles only; no root variables
     for (auto s : geometry.topology.skeletons())
-        for (auto b : s->bones()) model.bones.push_back(const_cast<sm::bone*>(b.ptr()));
+        for (auto b : s->bones())
+            model.bones.push_back(const_cast<sm::bone*>(b.ptr()));
     std::ranges::sort(model.bones, bone_id_less);
     if (auto status = build_angle_variables(model); status != sm::result::success)
         return std::unexpected(status);
@@ -1837,7 +1954,9 @@ std::expected<sm::skeletal_pose, sm::result> project_animation_reference(
             offset -= p.offset;
         }
         linear_key key;
-        for (auto [i, coefficient] : coefficients) if (coefficient) key.terms.emplace_back(i, coefficient);
+        for (auto [i, coefficient] : coefficients)
+            if (coefficient)
+                key.terms.emplace_back(i, coefficient);
         terms.push_back({std::move(key), offset});
     }
     std::vector<angular_group> groups;
@@ -1847,7 +1966,8 @@ std::expected<sm::skeletal_pose, sm::result> project_animation_reference(
     std::optional<sm::skeletal_pose> best;
     double best_score = std::numeric_limits<double>::infinity();
     auto consider = [&](const std::vector<double>& x) {
-        if (!std::ranges::all_of(x, [](double v) { return std::isfinite(v); })) return;
+        if (!std::ranges::all_of(x, [](double v) { return std::isfinite(v); }))
+            return;
         auto pose = reference;
         for (auto* b : model.bones) {
             const auto coord = model.bone_coordinates.at(b);
@@ -1858,7 +1978,8 @@ std::expected<sm::skeletal_pose, sm::result> project_animation_reference(
             }
             pose.bone_rotations.at(b->id()) = sm::normalize_angle(local);
         }
-        if (geometry.validate(pose) != sm::result::success) return;
+        if (geometry.validate(pose) != sm::result::success)
+            return;
         std::vector<double> unused;
         const double score = animation_angle_objective(x, unused, &terms);
         // Stable first-wins ties avoid changes from insignificant score roundoff.
@@ -1874,10 +1995,12 @@ std::expected<sm::skeletal_pose, sm::result> project_animation_reference(
     // No wall-clock budget, random seed or prior sample participates.
     for (const auto& branch : branches) {
         std::vector<angular_group> independent;
-        if (!independent_animation_chart(groups, branch, incoming.size(), independent)) continue;
+        if (!independent_animation_chart(groups, branch, incoming.size(), independent))
+            continue;
         const std::vector<std::size_t> selection(independent.size(), 0);
         for (const auto& seed : seeds) {
-            if (incoming.empty()) continue;
+            if (incoming.empty())
+                continue;
             auto x = seed;
             optimizer_constraints storage;
             storage.affine.reserve(groups.size() * 2);
@@ -1904,7 +2027,8 @@ std::expected<sm::skeletal_pose, sm::result> project_animation_reference(
             consider(x);
         }
     }
-    if (!best) return std::unexpected(sm::result::ik_no_solution_found);
+    if (!best)
+        return std::unexpected(sm::result::ik_no_solution_found);
     return std::move(*best);
 }
 
@@ -1912,7 +2036,8 @@ std::expected<sm::skeletal_pose, sm::result> apply_transition_pins(
     const sm::pose_keyframe& from, const sm::skeletal_pose& candidate,
     animation_geometry& geometry) {
 
-    if (from.pinned_nodes.empty()) return candidate;
+    if (from.pinned_nodes.empty())
+        return candidate;
 
     // A source keyframe is itself an exact authored pose. If it cannot be
     // reconstructed under the persistent constraints, the outgoing transition
@@ -1930,7 +2055,8 @@ std::expected<sm::skeletal_pose, sm::result> apply_transition_pins(
     }
     for (auto id : pin_ids) {
         auto node = geometry.topology.get<sm::node>(id);
-        if (!node) return std::unexpected(sm::result::invalid_membership);
+        if (!node)
+            return std::unexpected(sm::result::invalid_membership);
         targets.emplace(id, node->get().world_pos());
     }
 
@@ -1940,7 +2066,8 @@ std::expected<sm::skeletal_pose, sm::result> apply_transition_pins(
     // anchors.
     for (auto id : pin_ids) {
         auto node = geometry.topology.get<sm::node>(id);
-        if (!node) return std::unexpected(sm::result::invalid_membership);
+        if (!node)
+            return std::unexpected(sm::result::invalid_membership);
         if (!node->get().parent_bone()) {
             auto root = pinned_pose.root_positions.find(id);
             if (root == pinned_pose.root_positions.end())
@@ -1958,13 +2085,15 @@ std::expected<sm::skeletal_pose, sm::result> apply_transition_pins(
     std::map<sm::object_id, std::vector<sm::object_id>> pins_by_skeleton;
     for (auto id : pin_ids) {
         auto node = geometry.topology.get<sm::node>(id);
-        if (!node) return std::unexpected(sm::result::invalid_membership);
+        if (!node)
+            return std::unexpected(sm::result::invalid_membership);
         pins_by_skeleton[node->get().owner().id()].push_back(id);
     }
 
     for (auto& [skeleton_id, ids] : pins_by_skeleton) {
         auto skeleton = geometry.topology.skeleton(skeleton_id);
-        if (!skeleton) return std::unexpected(sm::result::invalid_membership);
+        if (!skeleton)
+            return std::unexpected(sm::result::invalid_membership);
         // Animation root motion remains authored/interpolated unless the root
         // itself is pinned. Holding the current root while solving a non-root
         // pin prevents the interactive IK solver from satisfying a planted foot
@@ -1972,8 +2101,10 @@ std::expected<sm::skeletal_pose, sm::result> apply_transition_pins(
         std::vector<sm::node_ref> fixed{skeleton->get().root_node()};
         for (auto id : ids) {
             auto node = geometry.topology.get<sm::node>(id);
-            if (!node) return std::unexpected(sm::result::invalid_membership);
-            if (!node->get().parent_bone()) continue;
+            if (!node)
+                return std::unexpected(sm::result::invalid_membership);
+            if (!node->get().parent_bone())
+                continue;
 
             const std::vector<std::tuple<sm::node_ref, sm::point>> effectors{
                 {*node, targets.at(id)}};
@@ -2017,7 +2148,8 @@ sm::constrained_pose_result sm::sample_constrained_pose(const animation& animati
     } catch (const std::invalid_argument&) {
         return std::unexpected(result::invalid_animation);
     }
-    if (!reference) return std::optional<constrained_pose_sample>{};
+    if (!reference)
+        return std::optional<constrained_pose_sample>{};
     animation_geometry geometry;
     if (auto status = prepare_animation_geometry(topology, rig_skeletons, reference->pose, geometry);
         status != result::success) return std::unexpected(status);
@@ -2039,7 +2171,8 @@ sm::constrained_pose_result sm::sample_constrained_pose(const animation& animati
         active_keyframe = animation.find_keyframe(
             std::get<reference_keyframe>(reference->location).keyframe_id);
     }
-    if (!active_keyframe) return std::unexpected(result::invalid_animation);
+    if (!active_keyframe)
+        return std::unexpected(result::invalid_animation);
 
     // Phase 4 authoring invariant: a source pin must reach the destination at
     // exactly the same world position. Legacy files are not mutated on load, but
@@ -2047,7 +2180,8 @@ sm::constrained_pose_result sm::sample_constrained_pose(const animation& animati
     if (interior && !active_keyframe->pinned_nodes.empty()) {
         const auto tr = std::get<reference_transition>(reference->location);
         const auto* destination = animation.find_keyframe(tr.to_keyframe_id);
-        if (!destination) return std::unexpected(result::invalid_animation);
+        if (!destination)
+            return std::unexpected(result::invalid_animation);
         try {
             sm::topology from_topology, to_topology;
             for (auto sid : rig_skeletons) {
@@ -2060,7 +2194,8 @@ sm::constrained_pose_result sm::sample_constrained_pose(const animation& animati
             for (auto id : active_keyframe->pinned_nodes) {
                 auto a = from_topology.get<sm::node>(id);
                 auto b = to_topology.get<sm::node>(id);
-                if (!a || !b) return std::unexpected(result::invalid_membership);
+                if (!a || !b)
+                    return std::unexpected(result::invalid_membership);
                 if (sm::distance(a->get().world_pos(), b->get().world_pos()) > 1e-8)
                     return std::unexpected(result::invalid_animation);
             }
@@ -2078,7 +2213,8 @@ sm::constrained_pose_result sm::sample_constrained_pose(const animation& animati
         if (!interior || feasibility != result::unsatisfiable_constraints)
             return std::unexpected(feasibility);
         auto projected = project_animation_reference(reference->pose, world, geometry);
-        if (!projected) return std::unexpected(projected.error());
+        if (!projected)
+            return std::unexpected(projected.error());
         pose = std::move(*projected);
     }
 
@@ -2086,7 +2222,8 @@ sm::constrained_pose_result sm::sample_constrained_pose(const animation& animati
     // interior samples of the transition are adjusted to hold source-key pins.
     if (interior && !active_keyframe->pinned_nodes.empty()) {
         auto pinned = apply_transition_pins(*active_keyframe, pose, geometry);
-        if (!pinned) return std::unexpected(pinned.error());
+        if (!pinned)
+            return std::unexpected(pinned.error());
         pose = std::move(*pinned);
     }
     return constrained_pose_sample{std::move(pose), reference->location, active_keyframe->pinned_nodes};
@@ -2097,16 +2234,19 @@ sm::result sm::perform_ik(
     const std::vector<node_ref>& pins) {
 
     auto validation = validate_ik_inputs(effectors, pins);
-    if (validation != result::success) return validation;
+    if (validation != result::success)
+        return validation;
 
     std::vector<std::tuple<node_ref, point>> normalized_effectors;
     std::vector<node_ref> normalized_pins;
     validation = normalize_inputs(
         effectors, pins, k_tolerance, normalized_effectors, normalized_pins);
-    if (validation != result::success) return validation;
+    if (validation != result::success)
+        return validation;
 
     std::unordered_set<node*> boundaries;
-    for (auto pin : normalized_pins) boundaries.insert(mutable_ptr(pin));
+    for (auto pin : normalized_pins)
+        boundaries.insert(mutable_ptr(pin));
     for (const auto& [effector, target] : normalized_effectors) {
         if (boundaries.contains(mutable_ptr(effector))
             && distance(effector->world_pos(), target) > k_tolerance) {
@@ -2116,7 +2256,8 @@ sm::result sm::perform_ik(
 
     auto& topology = std::get<0>(normalized_effectors.front())->owner().owner();
     constraint_geometry geometry(topology);
-    if (geometry.status() != result::success) return geometry.status();
+    if (geometry.status() != result::success)
+        return geometry.status();
 
     auto regions = discover_regions(normalized_effectors, normalized_pins, geometry);
     geometry_batch batch(topology);
@@ -2147,7 +2288,8 @@ sm::result sm::perform_ik(
                                              : 1e-8),
             true,
             &active);
-        if (valid != result::success) return valid;
+        if (valid != result::success)
+            return valid;
         for (auto pin : component.pins) {
             auto saved = std::ranges::find_if(invocation_guard.saved,
                 [&](const auto& item) { return item.first == mutable_ptr(pin); });
@@ -2159,15 +2301,18 @@ sm::result sm::perform_ik(
         }
     }
 
-    if (auto status = batch.commit(); status != result::success) return status;
+    if (auto status = batch.commit(); status != result::success)
+        return status;
     invocation_guard.committed = true;
 
     std::size_t reached = 0;
     for (const auto& [effector, target] : normalized_effectors) {
         if (distance(effector->world_pos(), target) <= k_tolerance) ++reached;
     }
-    if (reached == normalized_effectors.size()) return result::ik_target_reached;
-    if (reached != 0) return result::ik_mixed;
+    if (reached == normalized_effectors.size())
+        return result::ik_target_reached;
+    if (reached != 0)
+        return result::ik_mixed;
     return result::ik_converged;
 }
 
@@ -2178,14 +2323,16 @@ sm::result sm::perform_ik(
 
     std::vector<std::tuple<sm::node_ref, sm::point>> one_effector{{effector, effector_target}};
     std::vector<sm::node_ref> pinned;
-    if (pin) pinned.push_back(*pin);
+    if (pin)
+        pinned.push_back(*pin);
     return sm::perform_ik(one_effector, pinned);
 }
 
 double sm::constrain_rotation(sm::bone& bone, double theta) {
     constraint_geometry geometry(bone.owner().owner());
     auto clamped = geometry.allowed_angles(bone).closest_angle(theta);
-    if (!clamped) throw std::invalid_argument("unsatisfiable rotation constraints");
+    if (!clamped)
+        throw std::invalid_argument("unsatisfiable rotation constraints");
     return *clamped;
 }
 

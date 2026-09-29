@@ -268,12 +268,14 @@ namespace {
     json perform_op_on_selection(ui::stick_man& main_wnd, selection_operation op) {
         auto& project = main_wnd.project();
         auto& canv = main_wnd.canvases().active_canvas();
-        if (canv.selection().empty()) return {};
+        if (canv.selection().empty())
+            return {};
         if (auto* character = canv.selected_character()) {
             auto id = character->id();
             sm::topology rig;
             for (auto skel : character->model().rig().skeletons()) {
-                if (!skel->copy_to(rig)) return {};
+                if (!skel->copy_to(rig))
+                    return {};
             }
             json payload{{"kind", "character"}, {"name", character->model().name()}, {"topology", rig.to_json()}};
             if (op != selection_operation::del) {
@@ -282,20 +284,24 @@ namespace {
                 std::vector<sm::const_skel_ref> members;
                 for (auto skel : character->model().rig().skeletons()) {
                     auto copied = resources.copy_skeleton(skel.get());
-                    if (!copied) return {};
+                    if (!copied)
+                        return {};
                     members.emplace_back(copied->get());
                 }
                 auto copied = resources.create_character(members);
-                if (!copied) return {};
+                if (!copied)
+                    return {};
                 resources.artwork(copied->get().id()) = character->model().artwork();
                 resources.animation_data(copied->get().id()) = character->model().animation_data();
                 auto encoded = resources.serialize();
-                if (!encoded) return {};
+                if (!encoded)
+                    return {};
                 payload["artwork_package"] = QByteArray(reinterpret_cast<const char*>(encoded->data()),
                     qsizetype(encoded->size())).toBase64().toStdString();
             }
             if (op != selection_operation::copy) {
-                if (project.delete_character(id) != sm::result::success) return {};
+                if (project.delete_character(id) != sm::result::success)
+                    return {};
             }
             return payload;
         }
@@ -310,7 +316,9 @@ namespace {
                     }
                 ) | r::to<std::vector<sm::object_id>>();
             auto replacements = unselected.skeletons() | r::to<std::vector<sm::skel_ref>>();
-            if (project.replace_skeletons(replacees, replacements, regenerate_ids) != sm::result::success) return {};
+            if (project.replace_skeletons(replacees, replacements, regenerate_ids) !=
+                sm::result::success)
+                return {};
         }
         if (op == selection_operation::cut || op == selection_operation::copy) {
             return selected.to_json();
@@ -321,11 +329,14 @@ namespace {
 
     QByteArray cut_or_copy_selection(ui::stick_man& main_wnd, selection_operation op) {
         auto selection_json = perform_op_on_selection(main_wnd, op);
-        if (selection_json.is_null()) return {};
+        if (selection_json.is_null())
+            return {};
         auto str = selection_json.dump(4);
         return QByteArray(str.c_str(), str.size());
     }
-    std::optional<sm::matrix> paste_matrix(std::optional<sm::point> target,const sm::topology& topology) {
+
+    std::optional<sm::matrix> paste_matrix(
+        std::optional<sm::point> target, const sm::topology& topology) {
         if (!target) {
             return {};
         }
@@ -344,13 +355,19 @@ namespace {
     }
     void paste_selection(ui::stick_man& main_wnd, const QByteArray& bytes, bool in_place) {
         auto payload = json::parse(bytes.constData(), bytes.constData() + bytes.size(), nullptr, false);
-        if (payload.is_discarded() || !payload.is_object()) return;
-        if (payload.contains("kind") && !payload["kind"].is_string()) return;
+        if (payload.is_discarded() || !payload.is_object())
+            return;
+        if (payload.contains("kind") && !payload["kind"].is_string())
+            return;
         bool character = payload.value("kind", std::string{}) == "character";
-        if (character && (!payload.contains("topology") || !payload.contains("name") || !payload["name"].is_string())) return;
+        if (character &&
+            (!payload.contains("topology") || !payload.contains("name") ||
+                !payload["name"].is_string()))
+            return;
         std::string topology_json_str = (character ? payload["topology"] : payload).dump();
         sm::topology clipboard_topology;
-        if (clipboard_topology.from_json_str(topology_json_str) != sm::result::success) return;
+        if (clipboard_topology.from_json_str(topology_json_str) != sm::result::success)
+            return;
 
         auto& canvases = main_wnd.canvases();
         auto& canv = canvases.active_canvas();
@@ -366,7 +383,8 @@ namespace {
             sm::artwork artwork;
             sm::animation_assets animation_data;
             if (payload.contains("artwork_package")) {
-                if (!payload["artwork_package"].is_string()) return;
+                if (!payload["artwork_package"].is_string())
+                    return;
                 auto encoded = QByteArray::fromBase64(QByteArray::fromStdString(payload["artwork_package"].get<std::string>()),
                     QByteArray::AbortOnBase64DecodingErrors);
                 sm::project resources;
@@ -378,7 +396,8 @@ namespace {
             }
             if (dest_mat) {
                 for (auto& pose : animation_data.poses)
-                    for (auto& [id, pt] : pose.node_positions) pt = sm::transform(pt, *dest_mat);
+                    for (auto& [id, pt] : pose.node_positions)
+                        pt = sm::transform(pt, *dest_mat);
                 for (auto& animation : animation_data.animations) {
                     for (auto& keyframe : animation.keyframes) {
                         for (auto& [id, pt] : keyframe.pose.root_positions) {
@@ -402,7 +421,8 @@ namespace {
 
         auto bytes = cut_or_copy_selection(main_wnd,
             should_cut ? selection_operation::cut : selection_operation::copy);
-        if (bytes.isEmpty()) return; // Cancel leaves both project and clipboard unchanged.
+        if (bytes.isEmpty())
+            return; // Cancel leaves both project and clipboard unchanged.
         QMimeData* mime_data = new QMimeData;
         mime_data->setData(
             k_stickman_mime_type,
@@ -413,7 +433,8 @@ namespace {
 }
 
 void ui::clipboard::cut(stick_man& main_wnd) {
-    if (main_wnd.project().animation_mode()) return;
+    if (main_wnd.project().animation_mode())
+        return;
     cut_or_copy(main_wnd, true);
 }
 
@@ -421,7 +442,8 @@ void ui::clipboard::copy(stick_man& main_wnd) {
     cut_or_copy(main_wnd, false);
 }
 void ui::clipboard::paste(stick_man& main_wnd, bool in_place) {
-    if (main_wnd.project().animation_mode()) return;
+    if (main_wnd.project().animation_mode())
+        return;
     QClipboard* clipboard = QApplication::clipboard();
     const QMimeData* mimeData = clipboard->mimeData();
     if (mimeData->hasFormat(k_stickman_mime_type)) {
@@ -431,7 +453,8 @@ void ui::clipboard::paste(stick_man& main_wnd, bool in_place) {
 }
 
 void ui::clipboard::del(stick_man& main_wnd) {
-    if (main_wnd.project().animation_mode()) return;
+    if (main_wnd.project().animation_mode())
+        return;
     auto& canv = main_wnd.canvases().active_canvas();
     if (auto constraint_id = canv.selected_constraint_id()) {
         if (main_wnd.project().remove_constraint(*constraint_id) == sm::result::success) {

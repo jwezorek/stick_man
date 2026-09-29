@@ -8,7 +8,8 @@ namespace {
 using nlohmann::json;
 
 void require(bool condition, const char* message) {
-    if (!condition) throw std::runtime_error(message);
+    if (!condition)
+        throw std::runtime_error(message);
 }
 
 json arm_json() {
@@ -26,10 +27,12 @@ json arm_json() {
 
 const sm::rotation_constraint* rotation_constraint_for(const sm::skeleton& skel, const char* bone_name) {
     auto bone = skel.get_by_name<sm::bone>(bone_name);
-    if (!bone) return nullptr;
+    if (!bone)
+        return nullptr;
     for (const auto& [id, constraint] : skel.owner().constraints()) {
         auto rotation = constraint.rotation();
-        if (rotation && rotation->target_bone == bone->get().id()) return rotation;
+        if (rotation && rotation->target_bone == bone->get().id())
+            return rotation;
     }
     return nullptr;
 }
@@ -111,14 +114,17 @@ void replacement(const std::string& mode) {
             require(project.core().copy_skeleton(arm).has_value(), "collision fixture failed");
         } else {
             regenerate.insert(arm.id());
-            for (auto node : arm.nodes()) regenerate.insert(node->id());
-            for (auto bone : arm.bones()) regenerate.insert(bone->id());
+            for (auto node : arm.nodes())
+                regenerate.insert(node->id());
+            for (auto bone : arm.bones())
+                regenerate.insert(bone->id());
         }
     }
     project.replace_skeletons(replacees, {sm::skel_ref(arm)}, regenerate);
     sm::object_id added_id;
     for (auto skel : project.topology().skeletons()) {
-        if (skel->id() != arm.id()) added_id = skel->id();
+        if (skel->id() != arm.id())
+            added_id = skel->id();
     }
     auto added = project.topology().skeleton(added_id);
     require(added.has_value(), "replacement missing");
@@ -148,7 +154,8 @@ int main(int argc, char** argv) {
     try {
         require(argc == 2, "expected test case name");
         std::string mode = argv[1];
-        if (mode == "regenerate" || mode == "collision" || mode == "paste") replacement(mode);
+        if (mode == "regenerate" || mode == "collision" || mode == "paste")
+            replacement(mode);
         else copying(mode);
         std::cout << "PASS " << mode << '\n';
         return 0;

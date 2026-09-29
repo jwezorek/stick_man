@@ -16,12 +16,14 @@
 
 namespace {
 void require(bool condition, const char* message) {
-    if (!condition) throw std::runtime_error(message);
+    if (!condition)
+        throw std::runtime_error(message);
 }
 
 QPushButton* tool_button(ui::stick_man& window, const QString& tooltip) {
     for (auto* button : window.findChildren<QPushButton*>())
-        if (button->toolTip() == tooltip) return button;
+        if (button->toolTip() == tooltip)
+            return button;
     return nullptr;
 }
 
@@ -34,7 +36,8 @@ void lock_on_existing_frame(QApplication& app) {
     const auto add_node = [&](sm::point pos) {
         model.add_new_skeleton_root(pos);
         for (auto skel : model.topology().skeletons())
-            if (skel->root_node().world_pos() == pos) return skel->root_node().id();
+            if (skel->root_node().world_pos() == pos)
+                return skel->root_node().id();
         throw std::runtime_error("missing fixture node");
     };
     const auto hip = add_node({0, 100});
@@ -59,10 +62,13 @@ void lock_on_existing_frame(QApplication& app) {
     window.tool_mgr().set_current_tool(canvases, ui::tool::id::constraint);
     auto& tool = window.tool_mgr().current_tool();
     QGraphicsSceneMouseEvent press(QEvent::GraphicsSceneMousePress);
-    press.setScenePos({0, 0}); press.setButton(Qt::LeftButton); press.setButtons(Qt::LeftButton);
+    press.setScenePos({ 0, 0 });
+    press.setButton(Qt::LeftButton);
+    press.setButtons(Qt::LeftButton);
     tool.mousePressEvent(canvas, &press);
     QGraphicsSceneMouseEvent release(QEvent::GraphicsSceneMouseRelease);
-    release.setScenePos({0, 0}); release.setButton(Qt::LeftButton);
+    release.setScenePos({ 0, 0 });
+    release.setButton(Qt::LeftButton);
     tool.mouseReleaseEvent(canvas, &release);
     require(model.animation_session_pinned_nodes().contains(ankle), "constraint tool did not pin ankle");
     window.tool_mgr().set_current_tool(canvases, ui::tool::id::selection);
@@ -72,9 +78,11 @@ void lock_on_existing_frame(QApplication& app) {
     app.processEvents();
     QGraphicsPathItem* lock = nullptr;
     for (auto* node : canvas.node_items()) {
-        if (node->model().id() != ankle) continue;
+        if (node->model().id() != ankle)
+            continue;
         for (auto* child : node->childItems())
-            if (auto* path = dynamic_cast<QGraphicsPathItem*>(child); path && path->isVisible()) lock = path;
+            if (auto* path = dynamic_cast<QGraphicsPathItem*>(child); path && path->isVisible())
+                lock = path;
     }
     require(lock != nullptr, "locked ankle has no lock graphic");
     auto* viewport = canvas.views().first()->viewport();
@@ -219,9 +227,11 @@ int main(int argc, char** argv) {
             "frame 1 pin must lock frame 2");
         bool visible_lock = false;
         for (auto* node : canvas.node_items()) {
-            if (node->model().id() != root_id) continue;
+            if (node->model().id() != root_id)
+                continue;
             for (auto* child : node->childItems())
-                if (dynamic_cast<QGraphicsPathItem*>(child) && child->isVisible()) visible_lock = true;
+                if (dynamic_cast<QGraphicsPathItem*>(child) && child->isVisible())
+                    visible_lock = true;
         }
         require(visible_lock, "frame 2 must display a lock after pinning existing frame 1");
         // Frame 2 was created before frame 1 was pinned, so it has no outgoing pin yet.

@@ -36,9 +36,11 @@ void ui::pane::props::skeletons::populate(mdl::project & proj) {
     character_->hide();
     connect(character_->hyperlink(), &QPushButton::clicked, this, [this] {
         auto* selected = get_current_canv_().selected_skeleton();
-        if (!selected) return;
+        if (!selected)
+            return;
         auto parent = selected->model().parent_character();
-        if (!parent) return;
+        if (!parent)
+            return;
         auto& canv = get_current_canv_();
         if (auto* character_item = canv.character_item(parent->get().id()))
             canv.set_selection(character_item, true);
@@ -92,11 +94,11 @@ void ui::pane::props::character::populate(mdl::project&) {
     skeletons_->setFrameShape(QFrame::NoFrame);
 
     connect(name_, &QLineEdit::editingFinished, this, [this] {
-        if (parent_->read_only()) return;
+        if (parent_->read_only())
+            return;
         if (auto* selected = get_current_canv_().selected_character())
             proj_->rename(selected->id(), name_->text().toStdString());
     });
-
 }
 
 void ui::pane::props::character::set_selection(const canvas::scene& canv) {
@@ -116,7 +118,8 @@ void ui::pane::props::character::set_selection(const canvas::scene& canv) {
             links->addWidget(link, 0, Qt::AlignLeft);
             connect(link, &QPushButton::clicked, this, [this, id] {
                 auto skel = proj_->topology().skeleton(id);
-                if (!skel) return;
+                if (!skel)
+                    return;
                 get_current_canv_().set_selection(
                     &canvas::item_from_model<canvas::item::skeleton>(skel->get()), true);
             });

@@ -505,7 +505,8 @@ void ui::stick_man::reset_view() {
     remove_dock(tool_pane_);
     remove_dock(skel_pane_);
     remove_dock(anim_pane_);
-    if (artwork) remove_dock(artwork);
+    if (artwork)
+        remove_dock(artwork);
 
     addDockWidget(Qt::RightDockWidgetArea, tool_pane_);
     addDockWidget(Qt::RightDockWidgetArea, skel_pane_);

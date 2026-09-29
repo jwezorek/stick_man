@@ -9,7 +9,10 @@
 
 namespace sm {
 
-    struct sprite_frame { image_resource image; point registration_origin{}; };
+    struct sprite_frame {
+        image_resource image;
+        point registration_origin{};
+    };
     enum class bone_anchor { root, tip };
 
     struct slot_definition {
@@ -50,7 +53,10 @@ namespace sm {
         point registration_origin;
     };
 
-    struct packed_sprite_page { image_buffer png; int width, height; };
+    struct packed_sprite_page {
+        image_buffer png;
+        int width, height;
+    };
     struct packed_artwork {
         std::vector<packed_sprite_page> pages;
         std::vector<packed_frame_region> frames;

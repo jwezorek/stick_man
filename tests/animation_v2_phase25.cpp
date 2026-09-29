@@ -11,7 +11,8 @@
 
 namespace {
 void require(bool condition, const char* message) {
-    if (!condition) throw std::runtime_error(message);
+    if (!condition)
+        throw std::runtime_error(message);
 }
 void near(double actual, double expected, const char* message) {
     require(std::abs(actual - expected) < 1e-9, message);
@@ -79,7 +80,8 @@ void names_transitions_and_sequence_edits() {
     auto animation = [&]() -> sm::animation& {
         return *model.core().animation_data(character).find_animation(id);
     };
-    for (int i = 0; i < 3; ++i) require(model.add_animation_keyframe() == sm::result::success, "add failed");
+    for (int i = 0; i < 3; ++i)
+        require(model.add_animation_keyframe() == sm::result::success, "add failed");
     const auto first = animation().keyframes[0].id;
     const auto last = animation().keyframes[2].id;
     model.select_animation_keyframe(first);

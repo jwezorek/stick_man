@@ -21,15 +21,18 @@ double positive_span(double start, double end) {
 
 double reference_angle(const sm::topology& topology, const sm::rotation_constraint& rotation) {
     auto target = topology.get<sm::bone>(rotation.target_bone);
-    if (!target) return 0.0;
+    if (!target)
+        return 0.0;
     switch (rotation.reference.kind) {
     case sm::rotation_reference_kind::world:
         return 0.0;
     case sm::rotation_reference_kind::parent:
-        if (auto parent = target->get().parent_bone()) return parent->get().world_rotation();
+        if (auto parent = target->get().parent_bone())
+            return parent->get().world_rotation();
         return 0.0;
     case sm::rotation_reference_kind::bone:
-        if (auto bone = topology.get<sm::bone>(rotation.reference.bone_id)) return bone->get().world_rotation();
+        if (auto bone = topology.get<sm::bone>(rotation.reference.bone_id))
+            return bone->get().world_rotation();
         return 0.0;
     }
     return 0.0;
@@ -59,7 +62,8 @@ sm::rotation_reference_kind ui::tool::constraint::current_reference_kind() const
 }
 
 void ui::tool::constraint::update_settings_state() {
-    if (!model_) return;
+    if (!model_)
+        return;
     const bool session = model_ && model_->animation_mode();
     const bool rotation = !session && current_operation() == operation::rotation;
     if (operation_) operation_->setEnabled(!session);
@@ -76,7 +80,8 @@ void ui::tool::constraint::activate(canvas::manager& canvases) {
 }
 
 void ui::tool::constraint::deactivate(canvas::manager& canvases) {
-    if (drag_) cancel_drag(canvases.active_canvas());
+    if (drag_)
+        cancel_drag(canvases.active_canvas());
     clear_triangle_sweep();
     clear_pending();
     for (auto* canv : canvases.canvases()) {
@@ -119,7 +124,8 @@ void ui::tool::constraint::init(canvas::manager& canvases, mdl::project& model) 
 
     QObject::connect(operation_, qOverload<int>(&QComboBox::currentIndexChanged), settings_, [this](int) {
         if (canvases_) {
-            if (drag_) cancel_drag(canvases_->active_canvas());
+            if (drag_)
+                cancel_drag(canvases_->active_canvas());
             clear_triangle_sweep();
             clear_pending();
         }
@@ -138,9 +144,11 @@ void ui::tool::constraint::init(canvas::manager& canvases, mdl::project& model) 
 }
 
 void ui::tool::constraint::set_animation_mode(bool active) {
-    if (!settings_) return;
+    if (!settings_)
+        return;
     if (canvases_) {
-        if (drag_) cancel_drag(canvases_->active_canvas());
+        if (drag_)
+            cancel_drag(canvases_->active_canvas());
         clear_triangle_sweep();
         clear_pending();
         for (auto* canv : canvases_->canvases()) {
@@ -179,7 +187,8 @@ void ui::tool::constraint::show_pending(canvas::scene& canv, const sm::bone& bon
 }
 
 void ui::tool::constraint::clear_triangle_sweep(bool hide_status) {
-    if (!triangle_sweep_) return;
+    if (!triangle_sweep_)
+        return;
     auto* scene = triangle_sweep_->scene;
     if (triangle_sweep_->trail && scene) {
         scene->removeItem(triangle_sweep_->trail);
@@ -213,7 +222,8 @@ void ui::tool::constraint::begin_triangle_sweep(canvas::scene& canv, QPointF poi
 }
 
 void ui::tool::constraint::set_triangle_sweep_first(canvas::scene& canv, const sm::bone& bone) {
-    if (!triangle_sweep_) return;
+    if (!triangle_sweep_)
+        return;
     if (triangle_sweep_->first_highlight) {
         canv.removeItem(triangle_sweep_->first_highlight);
         delete triangle_sweep_->first_highlight;
@@ -232,7 +242,8 @@ void ui::tool::constraint::set_triangle_sweep_first(canvas::scene& canv, const s
 }
 
 void ui::tool::constraint::process_triangle_sweep_bone(canvas::scene& canv, sm::bone& bone) {
-    if (!triangle_sweep_) return;
+    if (!triangle_sweep_)
+        return;
     if (!triangle_sweep_->first_bone) {
         set_triangle_sweep_first(canv, bone);
         return;
@@ -244,7 +255,8 @@ void ui::tool::constraint::process_triangle_sweep_bone(canvas::scene& canv, sm::
         report_failure(canv, sm::result::not_found, "Cannot create rigid triangle");
         return;
     }
-    if (first->get().id() == bone.id()) return;
+    if (first->get().id() == bone.id())
+        return;
 
     if (!first->get().is_sibling(bone)) {
         // Keep the gesture forgiving: the most recently crossed unrelated bone
@@ -267,7 +279,8 @@ void ui::tool::constraint::process_triangle_sweep_bone(canvas::scene& canv, sm::
 }
 
 void ui::tool::constraint::update_triangle_sweep(canvas::scene& canv, QPointF point) {
-    if (!triangle_sweep_ || triangle_sweep_->scene != &canv) return;
+    if (!triangle_sweep_ || triangle_sweep_->scene != &canv)
+        return;
 
     auto path = triangle_sweep_->trail->path();
     path.lineTo(point);
@@ -289,7 +302,8 @@ void ui::tool::constraint::update_triangle_sweep(canvas::scene& canv, QPointF po
         }
 
         const auto id = bone->model().id();
-        if (triangle_sweep_->last_crossed_bone && *triangle_sweep_->last_crossed_bone == id) continue;
+        if (triangle_sweep_->last_crossed_bone && *triangle_sweep_->last_crossed_bone == id)
+            continue;
         triangle_sweep_->last_crossed_bone = id;
         process_triangle_sweep_bone(canv, bone->model());
     }
@@ -328,7 +342,8 @@ void ui::tool::constraint::create_rotation(canvas::scene& canv, sm::bone& target
         report_failure(canv, result.error(), "Cannot create rotation constraint");
         return;
     }
-    if (canv.is_status_line_visible()) canv.hide_status_line();
+    if (canv.is_status_line_visible())
+        canv.hide_status_line();
     canv.select_constraint(*result);
 }
 
@@ -364,14 +379,16 @@ void ui::tool::constraint::create_triangle(canvas::scene& canv, sm::bone& bone) 
     }
 
     auto result = add_triangle(canv, *pending_bone_, bone.id());
-    if (!result) return;
+    if (!result)
+        return;
     clear_pending();
     canv.select_constraint(*result);
 }
 
 void ui::tool::constraint::keyPressEvent(canvas::scene& canv, QKeyEvent* event) {
     if (event->key() == Qt::Key_Escape) {
-        if (drag_) cancel_drag(canv);
+        if (drag_)
+            cancel_drag(canv);
         clear_triangle_sweep();
         clear_pending();
         canv.set_hovered_constraint({});
@@ -380,14 +397,17 @@ void ui::tool::constraint::keyPressEvent(canvas::scene& canv, QKeyEvent* event) 
 
 void ui::tool::constraint::mousePressEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
     press_handled_ = false;
-    if (event->button() != Qt::LeftButton) return;
+    if (event->button() != Qt::LeftButton)
+        return;
 
     auto* item = canv.top_item(event->scenePos());
 
     // Node clicks always mean pin/unpin for the constraint tool.  Give nodes
     // priority over any constraint adornment that happens to overlap them.
-    if (dynamic_cast<canvas::item::node*>(item)) return;
-    if (model_ && model_->animation_mode()) return;
+    if (dynamic_cast<canvas::item::node*>(item))
+        return;
+    if (model_ && model_->animation_mode())
+        return;
 
     if (auto hit = canv.constraint_at(event->scenePos())) {
         clear_triangle_sweep();
@@ -396,7 +416,8 @@ void ui::tool::constraint::mousePressEvent(canvas::scene& canv, QGraphicsSceneMo
         press_handled_ = true;
         if (hit->part != canvas::constraint_part::body) {
             auto current = model_->core().constraint_by_id(hit->id);
-            if (current) drag_ = drag_state{hit->id, hit->part, current->get().definition()};
+            if (current)
+                drag_ = drag_state{ hit->id, hit->part, current->get().definition() };
         }
         return;
     }
@@ -408,14 +429,19 @@ void ui::tool::constraint::mousePressEvent(canvas::scene& canv, QGraphicsSceneMo
 }
 
 void ui::tool::constraint::update_drag(canvas::scene& canv, QPointF point) {
-    if (!drag_) return;
+    if (!drag_)
+        return;
     auto current = model_->core().constraint_by_id(drag_->id);
-    if (!current) { drag_.reset(); return; }
+    if (!current) {
+        drag_.reset();
+        return;
+    }
     auto definition = current->get().definition();
 
     if (auto* rotation = std::get_if<sm::rotation_constraint>(&definition)) {
         auto target = model_->topology().get<sm::bone>(rotation->target_bone);
-        if (!target) return;
+        if (!target)
+            return;
         auto pivot = target->get().parent_node().world_pos();
         if (rotation->reference.kind == sm::rotation_reference_kind::world) {
             const auto tip = target->get().child_node().world_pos();
@@ -431,9 +457,11 @@ void ui::tool::constraint::update_drag(canvas::scene& canv, QPointF point) {
             rotation->allowed.span_angle = positive_span(rotation->allowed.start_angle, local_angle);
         } else return;
     } else if (auto* triangle = std::get_if<sm::rigid_triangle_constraint>(&definition)) {
-        if (drag_->part != canvas::constraint_part::triangle_angle) return;
+        if (drag_->part != canvas::constraint_part::triangle_angle)
+            return;
         auto first = model_->topology().get<sm::bone>(triangle->first_bone);
-        if (!first) return;
+        if (!first)
+            return;
         const auto pivot = first->get().parent_node().world_pos();
         const double world_angle = sm::angle_from_u_to_v(pivot, ui::from_qt_pt(point));
         triangle->relative_angle = sm::normalize_angle(world_angle - first->get().world_rotation());
@@ -447,16 +475,21 @@ void ui::tool::constraint::update_drag(canvas::scene& canv, QPointF point) {
 }
 
 void ui::tool::constraint::cancel_drag(canvas::scene& canv) {
-    if (!drag_) return;
+    if (!drag_)
+        return;
     model_->core().update_constraint(drag_->id, drag_->original);
     drag_.reset();
     canv.sync_to_model();
 }
 
 void ui::tool::constraint::finish_drag(canvas::scene& canv) {
-    if (!drag_) return;
+    if (!drag_)
+        return;
     auto current = model_->core().constraint_by_id(drag_->id);
-    if (!current) { drag_.reset(); return; }
+    if (!current) {
+        drag_.reset();
+        return;
+    }
     const auto id = drag_->id;
     const auto before = drag_->original;
     const auto after = current->get().definition();
@@ -472,7 +505,10 @@ void ui::tool::constraint::finish_drag(canvas::scene& canv) {
 }
 
 void ui::tool::constraint::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
-    if (model_ && model_->animation_mode()) { canv.set_hovered_constraint({}); return; }
+    if (model_ && model_->animation_mode()) {
+        canv.set_hovered_constraint({});
+        return;
+    }
     if (drag_) {
         update_drag(canv, event->scenePos());
         return;
@@ -485,7 +521,8 @@ void ui::tool::constraint::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMou
     canv.set_hovered_constraint(hit ? std::optional<sm::object_id>{hit->id} : std::nullopt);
 
     if (pending_bone_) {
-        if (auto* item = canv.top_item(event->scenePos()); auto* bone = dynamic_cast<canvas::item::bone*>(item)) {
+        if (auto* item = canv.top_item(event->scenePos());
+            auto* bone = dynamic_cast<canvas::item::bone*>(item)) {
             if (current_operation() == operation::rigid_triangle) {
                 auto first = model_->topology().get<sm::bone>(*pending_bone_);
                 const bool valid = first && first->get().id() != bone->model().id() &&
@@ -498,7 +535,8 @@ void ui::tool::constraint::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMou
 }
 
 void ui::tool::constraint::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
-    if (event->button() != Qt::LeftButton) return;
+    if (event->button() != Qt::LeftButton)
+        return;
     if (drag_) {
         update_drag(canv, event->scenePos());
         finish_drag(canv);
@@ -518,16 +556,19 @@ void ui::tool::constraint::mouseReleaseEvent(canvas::scene& canv, QGraphicsScene
 
     auto* item = canv.top_item(event->scenePos());
     if (!item) {
-        if (current_operation() == operation::select) canv.clear_constraint_selection();
+        if (current_operation() == operation::select)
+            canv.clear_constraint_selection();
         return;
     }
     if (auto* node = dynamic_cast<canvas::item::node*>(item)) {
         canv.toggle_node_pinned_undoable(node->model().id());
         return;
     }
-    if (model_ && model_->animation_mode()) return;
+    if (model_ && model_->animation_mode())
+        return;
     auto* bone = dynamic_cast<canvas::item::bone*>(item);
-    if (!bone) return;
+    if (!bone)
+        return;
 
     switch (current_operation()) {
     case operation::select:

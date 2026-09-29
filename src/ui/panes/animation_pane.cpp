@@ -30,19 +30,27 @@ QIcon icon(kind k) {
     painter.setPen(QPen(QColor("#aaa5d8"), 1.7));
     if (k == character) {
         painter.drawEllipse(QPointF(10, 4), 2, 2);
-        painter.drawLine(10, 6, 10, 13); painter.drawLine(5, 8, 15, 8);
-        painter.drawLine(10, 13, 6, 18); painter.drawLine(10, 13, 14, 18);
+        painter.drawLine(10, 6, 10, 13);
+        painter.drawLine(5, 8, 15, 8);
+        painter.drawLine(10, 13, 6, 18);
+        painter.drawLine(10, 13, 14, 18);
     } else if (k == poses || k == animations) {
-        painter.drawRoundedRect(2, 5, 16, 13, 2, 2); painter.drawLine(3, 3, 9, 3);
-        if (k == poses) painter.drawEllipse(7, 9, 6, 6);
-        else painter.drawPolygon(QPolygon{{8,8},{14,12},{8,16}});
+        painter.drawRoundedRect(2, 5, 16, 13, 2, 2);
+        painter.drawLine(3, 3, 9, 3);
+        if (k == poses)
+            painter.drawEllipse(7, 9, 6, 6);
+        else
+            painter.drawPolygon(QPolygon{ { 8, 8 }, { 14, 12 }, { 8, 16 } });
     } else if (k == animation) {
         painter.drawRoundedRect(2, 3, 16, 14, 2, 2);
-        painter.drawPolygon(QPolygon{{8,6},{14,10},{8,14}});
+        painter.drawPolygon(QPolygon{ { 8, 6 }, { 14, 10 }, { 8, 14 } });
     } else {
         painter.drawEllipse(3, 3, 14, 14);
-        if (k == default_pose) { painter.drawLine(6,10,9,13); painter.drawLine(9,13,15,7); }
-        else painter.drawLine(6,10,14,10);
+        if (k == default_pose) {
+            painter.drawLine(6, 10, 9, 13);
+            painter.drawLine(9, 13, 15, 7);
+        } else
+            painter.drawLine(6, 10, 14, 10);
     }
     return QIcon(image);
 }
@@ -77,8 +85,10 @@ ui::pane::animation::animation(QWidget* parent) : QDockWidget(tr("Animation"), p
     connect(delete_button_, &QPushButton::clicked, this, &animation::delete_current);
     connect(tree_, &QTreeWidget::itemSelectionChanged, this, &animation::update_buttons);
     connect(tree_, &QTreeWidget::customContextMenuRequested, this, &animation::context_menu);
-    connect(tree_, &QTreeWidget::itemChanged, this,
-        [this](auto* item, int) { if (!syncing_) rename_item(item); });
+    connect(tree_, &QTreeWidget::itemChanged, this, [this](auto* item, int) {
+        if (!syncing_)
+            rename_item(item);
+    });
     connect(tree_->itemDelegate(), &QAbstractItemDelegate::closeEditor, this,
         [this] { QTimer::singleShot(0, this, &animation::offer_edit); });
     connect(tree_, &QTreeWidget::itemDoubleClicked, this, [this](auto* item, int) {
@@ -92,14 +102,18 @@ ui::pane::animation::animation(QWidget* parent) : QDockWidget(tr("Animation"), p
 }
 
 ui::pane::animation::~animation() {
-    if (project_ && !active_animation_.is_nil()) leave_animation();
+    if (project_ && !active_animation_.is_nil())
+        leave_animation();
 }
 
 void ui::pane::animation::init(canvas::manager& canvases, mdl::project& project) {
     canvases_ = &canvases;
     project_ = &project;
     connect(&project, &mdl::project::project_changed, this, &animation::refresh);
-    connect(&project, &mdl::project::new_project_opened, this, [this] { leave_animation(); refresh(); });
+    connect(&project, &mdl::project::new_project_opened, this, [this] {
+        leave_animation();
+        refresh();
+    });
     connect(&canvases, &canvas::manager::selection_changed, this, &animation::update_buttons);
 
     auto* window = qobject_cast<QMainWindow*>(parentWidget());
@@ -125,8 +139,11 @@ void ui::pane::animation::init(canvas::manager& canvases, mdl::project& project)
 }
 
 sm::object_id ui::pane::animation::selected_character() const {
-    if (auto* item = tree_->currentItem()) return object_id(item->data(0, owner_role));
-    if (canvases_) if (auto* c = canvases_->active_canvas().selected_character()) return c->id();
+    if (auto* item = tree_->currentItem())
+        return object_id(item->data(0, owner_role));
+    if (canvases_)
+        if (auto* c = canvases_->active_canvas().selected_character())
+            return c->id();
     return {};
 }
 
@@ -141,17 +158,20 @@ void ui::pane::animation::update_buttons() {
 
 QTreeWidgetItem* ui::pane::animation::find_asset(sm::object_id id) const {
     for (QTreeWidgetItemIterator it(tree_); *it; ++it)
-        if (object_id((*it)->data(0, id_role)) == id) return *it;
+        if (object_id((*it)->data(0, id_role)) == id)
+            return *it;
     return nullptr;
 }
 
 void ui::pane::animation::refresh() {
-    if (!project_) return;
+    if (!project_)
+        return;
     QSet<QString> expanded, existing;
     const QString selected = tree_->currentItem() ? key(tree_->currentItem()) : QString{};
     for (QTreeWidgetItemIterator it(tree_); *it; ++it) {
         existing.insert(key(*it));
-        if ((*it)->isExpanded()) expanded.insert(key(*it));
+        if ((*it)->isExpanded())
+            expanded.insert(key(*it));
     }
 
     syncing_ = true;
@@ -160,8 +180,10 @@ void ui::pane::animation::refresh() {
     auto add = [&](QTreeWidgetItem* parent, kind k, QString label,
                    sm::object_id owner, sm::object_id id = {}) {
         auto* item = parent ? new QTreeWidgetItem(parent) : new QTreeWidgetItem(tree_);
-        item->setText(0, label); item->setIcon(0, icon(k));
-        item->setData(0, kind_role, k); item->setData(0, owner_role, text(owner));
+        item->setText(0, label);
+        item->setIcon(0, icon(k));
+        item->setData(0, kind_role, k);
+        item->setData(0, owner_role, text(owner));
         item->setData(0, id_role, text(id));
         if (k == pose || k == ::animation) item->setFlags(item->flags() | Qt::ItemIsEditable);
         item->setExpanded(!existing.contains(key(item)) || expanded.contains(key(item)));
@@ -194,10 +216,12 @@ void ui::pane::animation::refresh() {
 }
 
 void ui::pane::animation::select_and_rename(sm::object_id id) {
-    show(); raise();
+    show();
+    raise();
     if (auto* item = find_asset(id)) {
         tree_->setCurrentItem(item);
-        for (auto* p = item->parent(); p; p = p->parent()) p->setExpanded(true);
+        for (auto* p = item->parent(); p; p = p->parent())
+            p->setExpanded(true);
         tree_->scrollToItem(item);
         tree_->editItem(item);
     }
@@ -205,7 +229,8 @@ void ui::pane::animation::select_and_rename(sm::object_id id) {
 
 void ui::pane::animation::create_pose() {
     const auto cid = selected_character();
-    if (!project_ || project_->animation_mode() || cid.is_nil()) return;
+    if (!project_ || project_->animation_mode() || cid.is_nil())
+        return;
     const auto& c = project_->core().character(cid).value().get();
     auto p = sm::capture_pose(project_->core().topology(), c.rig().skeleton_ids(),
         "Pose " + std::to_string(c.animation_data().poses.size()));
@@ -216,7 +241,8 @@ void ui::pane::animation::create_pose() {
 
 void ui::pane::animation::create_animation() {
     const auto cid = selected_character();
-    if (!project_ || project_->animation_mode() || cid.is_nil()) return;
+    if (!project_ || project_->animation_mode() || cid.is_nil())
+        return;
     const auto& data = project_->core().animation_data(cid);
     sm::animation a;
     a.name = "Animation " + std::to_string(data.animations.size() + 1);
@@ -226,38 +252,57 @@ void ui::pane::animation::create_animation() {
 }
 
 void ui::pane::animation::offer_edit() {
-    if (!pending_edit_) return;
+    if (!pending_edit_)
+        return;
     auto [cid, aid] = *pending_edit_;
     pending_edit_.reset();
-    auto c = project_->core().character(cid); if (!c) return;
-    auto* a = c->get().animation_data().find_animation(aid); if (!a) return;
+    auto c = project_->core().character(cid);
+    if (!c)
+        return;
+    auto* a = c->get().animation_data().find_animation(aid);
+    if (!a)
+        return;
     QMessageBox prompt(QMessageBox::Question, "Edit animation",
         QString("Edit \"%1\" now?\nEditing opens the Animation Editor and enters Animation Mode.")
             .arg(QString::fromStdString(a->name)), QMessageBox::NoButton, this);
     auto* edit = prompt.addButton("Edit Animation", QMessageBox::AcceptRole);
     prompt.addButton("Not Now", QMessageBox::RejectRole);
     prompt.exec();
-    if (prompt.clickedButton() == edit) open_animation(cid, aid);
+    if (prompt.clickedButton() == edit)
+        open_animation(cid, aid);
 }
 
 void ui::pane::animation::rename_item(QTreeWidgetItem* item) {
-    if (!project_ || project_->animation_mode()) return;
+    if (!project_ || project_->animation_mode())
+        return;
     const auto cid = object_id(item->data(0, owner_role));
     const auto id = object_id(item->data(0, id_role));
     const auto name = item->text(0).trimmed().toStdString();
     const auto k = item->data(0, kind_role).toInt();
-    if (name.empty()) { QTimer::singleShot(0, this, &animation::refresh); return; }
+    if (name.empty()) {
+        QTimer::singleShot(0, this, &animation::refresh);
+        return;
+    }
     QTimer::singleShot(0, this, [this, cid, id, name, k] {
-        if (!project_->core().character(cid)) return;
+        if (!project_->core().character(cid))
+            return;
         project_->edit_animation_data(cid, [&](auto& data) {
-            if (k == pose) for (auto& p : data.poses) if (p.id == id) p.name = name;
-            if (k == ::animation) for (auto& a : data.animations) if (a.id == id) a.name = name;
+            if (k == pose)
+                for (auto& p : data.poses)
+                    if (p.id == id)
+                        p.name = name;
+            if (k == ::animation)
+                for (auto& a : data.animations)
+                    if (a.id == id)
+                        a.name = name;
         });
     });
 }
 
 void ui::pane::animation::apply_current() {
-    auto* item = tree_->currentItem(); if (!item) return;
+    auto* item = tree_->currentItem();
+    if (!item)
+        return;
     try {
         project_->apply_pose(object_id(item->data(0, owner_role)), object_id(item->data(0, id_role)));
     } catch (const std::exception& e) {
@@ -266,7 +311,9 @@ void ui::pane::animation::apply_current() {
 }
 
 void ui::pane::animation::duplicate_current() {
-    auto* item = tree_->currentItem(); if (!item) return;
+    auto* item = tree_->currentItem();
+    if (!item)
+        return;
     const auto cid = object_id(item->data(0, owner_role));
     const auto id = object_id(item->data(0, id_role));
     const auto created = sm::object_id::generate();
@@ -274,7 +321,8 @@ void ui::pane::animation::duplicate_current() {
     project_->edit_animation_data(cid, [&](auto& data) {
         if (k == ::animation) {
             auto copy = *data.find_animation(id);
-            copy.id = created; copy.name += " copy";
+            copy.id = created;
+            copy.name += " copy";
             for (auto& keyframe : copy.keyframes) {
                 keyframe.id = sm::object_id::generate();
             }
@@ -284,7 +332,8 @@ void ui::pane::animation::duplicate_current() {
             data.animations.push_back(std::move(copy));
         } else {
             auto copy = *data.find_pose(id);
-            copy.id = created; copy.name += " copy";
+            copy.id = created;
+            copy.name += " copy";
             data.poses.push_back(std::move(copy));
         }
     });
@@ -293,11 +342,13 @@ void ui::pane::animation::duplicate_current() {
 
 void ui::pane::animation::delete_current() {
     auto* item = tree_->currentItem();
-    if (!item || project_->animation_mode()) return;
+    if (!item || project_->animation_mode())
+        return;
     const auto cid = object_id(item->data(0, owner_role));
     const auto id = object_id(item->data(0, id_role));
     const int k = item->data(0, kind_role).toInt();
-    if (k != pose && k != ::animation) return;
+    if (k != pose && k != ::animation)
+        return;
     project_->edit_animation_data(cid, [&](auto& data) {
         if (k == ::animation)
             std::erase_if(data.animations, [&](const auto& a) { return a.id == id; });
@@ -308,7 +359,8 @@ void ui::pane::animation::delete_current() {
 
 void ui::pane::animation::context_menu(QPoint point) {
     auto* item = tree_->itemAt(point);
-    if (!item || project_->animation_mode()) return;
+    if (!item || project_->animation_mode())
+        return;
     tree_->setCurrentItem(item);
     const int k = item->data(0, kind_role).toInt();
     const auto cid = object_id(item->data(0, owner_role));
@@ -316,18 +368,27 @@ void ui::pane::animation::context_menu(QPoint point) {
     QMenu menu(this);
     if (k == ::animation)
         menu.addAction("Edit Animation", this, [this, cid, id] { open_animation(cid, id); });
-    if (k == pose || k == default_pose) menu.addAction("Apply Pose", this, &animation::apply_current);
-    if (k == pose || k == default_pose) menu.addAction(
-        k == default_pose ? "Update Default from Current" : "Update Pose from Current",
-        this, [this, cid, id] {
-            auto character = project_->core().character(cid); if (!character) return;
-            const auto* old = character->get().animation_data().find_pose(id); if (!old) return;
-            auto p = sm::capture_pose(project_->core().topology(), character->get().rig().skeleton_ids(), old->name);
-            p.id = id;
-            project_->edit_animation_data(cid, [&](auto& data) {
-                for (auto& existing : data.poses) if (existing.id == id) existing = p;
+    if (k == pose || k == default_pose)
+        menu.addAction("Apply Pose", this, &animation::apply_current);
+    if (k == pose || k == default_pose)
+        menu.addAction(
+            k == default_pose ? "Update Default from Current" : "Update Pose from Current", this,
+            [this, cid, id] {
+                auto character = project_->core().character(cid);
+                if (!character)
+                    return;
+                const auto* old = character->get().animation_data().find_pose(id);
+                if (!old)
+                    return;
+                auto p = sm::capture_pose(
+                    project_->core().topology(), character->get().rig().skeleton_ids(), old->name);
+                p.id = id;
+                project_->edit_animation_data(cid, [&](auto& data) {
+                    for (auto& existing : data.poses)
+                        if (existing.id == id)
+                            existing = p;
+                });
             });
-        });
     if (k == pose || k == ::animation) {
         menu.addSeparator();
         menu.addAction("Rename", this, [this, item] { tree_->editItem(item); });
@@ -336,15 +397,22 @@ void ui::pane::animation::context_menu(QPoint point) {
         menu.addAction("Duplicate", this, &animation::duplicate_current);
     if (k == pose || k == ::animation)
         menu.addAction("Delete", this, &animation::delete_current);
-    if (!menu.isEmpty()) menu.exec(tree_->viewport()->mapToGlobal(point));
+    if (!menu.isEmpty())
+        menu.exec(tree_->viewport()->mapToGlobal(point));
 }
 
 bool ui::pane::animation::open_animation(sm::object_id cid, sm::object_id aid) {
-    if (!project_) return false;
-    auto c = project_->core().character(cid); if (!c) return false;
-    auto* a = c->get().animation_data().find_animation(aid); if (!a) return false;
+    if (!project_)
+        return false;
+    auto c = project_->core().character(cid);
+    if (!c)
+        return false;
+    auto* a = c->get().animation_data().find_animation(aid);
+    if (!a)
+        return false;
     if (!active_animation_.is_nil()) {
-        if (active_character_ == cid && active_animation_ == aid) return true;
+        if (active_character_ == cid && active_animation_ == aid)
+            return true;
         leave_animation();
         // Committing the old session may replace its animation asset storage.
         c = project_->core().character(cid);
@@ -383,9 +451,11 @@ bool ui::pane::animation::open_animation(sm::object_id cid, sm::object_id aid) {
         widget->setEnabled(false);
     };
     for (auto* dock : main->findChildren<QDockWidget*>())
-        if (dock != editor_ && dock != tool_settings && dock != skeleton_pane && dock != this) lock(dock);
+        if (dock != editor_ && dock != tool_settings && dock != skeleton_pane && dock != this)
+            lock(dock);
     for (auto* toolbar : main->findChildren<QToolBar*>())
-        if (toolbar != tools_toolbar) lock(toolbar);
+        if (toolbar != tools_toolbar)
+            lock(toolbar);
 
     for (const auto* name : {"edit_cut", "edit_paste", "edit_paste_in_place", "edit_delete"}) {
         if (auto* action = main->findChild<QAction*>(name)) {
@@ -407,7 +477,8 @@ bool ui::pane::animation::open_animation(sm::object_id cid, sm::object_id aid) {
 }
 
 void ui::pane::animation::leave_animation() {
-    if (active_animation_.is_nil()) return;
+    if (active_animation_.is_nil())
+        return;
     editor_->end();
 
     // Animation canvas items and artwork preview state point into the detached
@@ -418,7 +489,9 @@ void ui::pane::animation::leave_animation() {
     if (project_->animation_mode()) project_->end_animation_session();
     canvases_->show_animation_session(false);
 
-    for (auto& [scene, pins] : pins_before_) if (scene) scene->set_pinned_node_ids(pins);
+    for (auto& [scene, pins] : pins_before_)
+        if (scene)
+            scene->set_pinned_node_ids(pins);
     pins_before_.clear();
 
     if (auto* window = qobject_cast<ui::stick_man*>(parentWidget())) {
@@ -432,9 +505,13 @@ void ui::pane::animation::leave_animation() {
     if (auto* window = qobject_cast<ui::stick_man*>(parentWidget()))
         window->skel_pane().set_animation_mode(false);
 
-    for (auto& [widget, enabled] : enabled_before_) if (widget) widget->setEnabled(enabled);
+    for (auto& [widget, enabled] : enabled_before_)
+        if (widget)
+            widget->setEnabled(enabled);
     enabled_before_.clear();
-    for (auto& [action, enabled] : actions_enabled_before_) if (action) action->setEnabled(enabled);
+    for (auto& [action, enabled] : actions_enabled_before_)
+        if (action)
+            action->setEnabled(enabled);
     actions_enabled_before_.clear();
     banner_->hide();
     active_character_ = {};

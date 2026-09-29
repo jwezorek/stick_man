@@ -13,7 +13,8 @@ constexpr double inf = std::numeric_limits<double>::infinity();
 constexpr double nan = std::numeric_limits<double>::quiet_NaN();
 
 void require(bool condition, const char* message) {
-    if (!condition) throw std::runtime_error(message);
+    if (!condition)
+        throw std::runtime_error(message);
 }
 void near(double actual, double expected) {
     require(std::abs(actual - expected) < 1e-12, "incorrect interpolated scalar");
@@ -92,7 +93,8 @@ void empty_single_clamping_and_invalid_time() {
     one.keyframes.resize(1);
     one.reconcile_transitions();
     one.keyframes[0].pose.bone_rotations.at(id(3)) = 7 * pi;
-    for (double t : {-1e300, 0.0, 0.2, 1e300}) exact(one, t, 0);
+    for (double t : { -1e300, 0.0, 0.2, 1e300 })
+        exact(one, t, 0);
     auto a = sequence();
     exact(a, -10, 0);
     exact(a, 10, 2);
@@ -178,7 +180,8 @@ template<class Map> void reverse_insertion(Map& map) {
     std::vector<typename Map::value_type> entries(map.begin(), map.end());
     map.clear();
     map.rehash(67);
-    for (auto it = entries.rbegin(); it != entries.rend(); ++it) map.insert(*it);
+    for (auto it = entries.rbegin(); it != entries.rend(); ++it)
+        map.insert(*it);
 }
 
 void history_order_immutability_and_roundtrip() {
@@ -227,7 +230,8 @@ void malformed_sequences_fail_before_any_sample() {
         reject(a);
     }
     a = sequence();
-    for (auto& t : a.transitions) t.duration_seconds = std::numeric_limits<double>::max();
+    for (auto& t : a.transitions)
+        t.duration_seconds = std::numeric_limits<double>::max();
     reject(a);
     for (double value : {nan, inf, -inf}) {
         a = sequence();

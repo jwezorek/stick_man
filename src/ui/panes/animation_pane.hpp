@@ -9,8 +9,13 @@
 
 #include "../../core/sm_object_id.hpp"
 
-namespace mdl { class project; }
-namespace ui::canvas { class manager; class scene; }
+namespace mdl { class project;
+}
+
+namespace ui::canvas {
+    class manager;
+    class scene;
+}
 namespace ui::pane {
     class animation_editor;
 

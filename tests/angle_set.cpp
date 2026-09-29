@@ -9,7 +9,8 @@ namespace {
 constexpr double pi = std::numbers::pi;
 constexpr double tau = 2 * pi;
 void require(bool value, const char* message) {
-    if (!value) throw std::runtime_error(message);
+    if (!value)
+        throw std::runtime_error(message);
 }
 void near(std::optional<double> actual, double expected, const char* message) {
     require(actual && std::abs(*actual - expected) < 1e-12, message);
@@ -75,7 +76,11 @@ void invalid_inputs() {
 }
 int main() {
     try {
-        full_and_empty(); wrap_and_seam(); disconnected_intersection(); transforms(); invalid_inputs();
+        full_and_empty();
+        wrap_and_seam();
+        disconnected_intersection();
+        transforms();
+        invalid_inputs();
         std::cout << "angle_set tests passed\n";
         return 0;
     } catch (const std::exception& error) {

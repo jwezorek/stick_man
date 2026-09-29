@@ -115,22 +115,21 @@ std::vector<int> ui::tool::zoom_combobox::magnification_levels() const
 
 void ui::tool::zoom_combobox::onEditingFinished() {
 
-   QLineEdit* lineEdit = this->lineEdit();
-   QString currentText = lineEdit->text();
+    QLineEdit* lineEdit = this->lineEdit();
+    QString currentText = lineEdit->text();
 
-   // Check if the text ends with '%' already
-   if (!currentText.endsWith("%")) {
-       bool ok;
-       int value = currentText.toInt(&ok);
+    // Check if the text ends with '%' already
+    if (!currentText.endsWith("%")) {
+        bool ok;
+        int value = currentText.toInt(&ok);
 
-       // Ensure value is within the allowed range and append '%'
-       if (ok && value >= 1 && value <= 500) {
-           lineEdit->setText(QString::number(value) + "%");
-       }
-   }
+        // Ensure value is within the allowed range and append '%'
+        if (ok && value >= 1 && value <= 500) {
+            lineEdit->setText(QString::number(value) + "%");
+        }
+    }
 
-   onChange(this->currentText());
-
+    onChange(this->currentText());
 }
 
 void ui::tool::zoom_combobox::onChange(const QString& str) {

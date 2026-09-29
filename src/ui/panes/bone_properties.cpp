@@ -23,8 +23,9 @@ namespace {
         std::vector<sm::bone*> ordered_bones;
         for (auto skel_item : canv.skeleton_items()) {
             auto& skel = skel_item->model();
-            sm::visit_bones(skel.root_node(), [&](auto& bone)->sm::visit_result {
-                if (selected.contains(&bone)) ordered_bones.push_back(&bone);
+            sm::visit_bones(skel.root_node(), [&](auto& bone) -> sm::visit_result {
+                if (selected.contains(&bone))
+                    ordered_bones.push_back(&bone);
                 return sm::visit_result::continue_traversal;
             });
         }
@@ -52,7 +53,8 @@ std::function<void()> make_select_node_fn(const current_canvas_fn& get_current_c
     return [get_current_canv, parent_node]() {
         auto& canv = get_current_canv();
         auto bones = canv.selected_bones();
-        if (bones.size() != 1) return;
+        if (bones.size() != 1)
+            return;
         sm::bone& bone = bones.front()->model();
         auto& node_itm = ui::canvas::item_from_model<ui::canvas::item::node>(
             parent_node ? bone.parent_node() : bone.child_node());
@@ -65,10 +67,12 @@ class rotation_tab : public ui::tabbed_values {
 
     double convert_to_or_from_parent_coords(double val, bool to_parent) {
         auto bone_selection = get_current_canv_().selected_bones();
-        if (bone_selection.size() != 1) return val;
+        if (bone_selection.size() != 1)
+            return val;
         auto& bone = bone_selection.front()->model();
         auto parent = bone.parent_bone();
-        if (!parent) return val;
+        if (!parent)
+            return val;
         auto parent_rot = ui::radians_to_degrees(parent->get().world_rotation());
         return to_parent ? val - parent_rot : val + parent_rot;
     }
@@ -141,11 +145,15 @@ void ui::pane::props::bones::set_selection_common(const ui::canvas::scene& canv)
 }
 
 void ui::pane::props::bones::set_selection_multi(const ui::canvas::scene&) {
-    name_->hide(); nodes_->hide(); rotation_->lock_to_primary_tab();
+    name_->hide();
+    nodes_->hide();
+    rotation_->lock_to_primary_tab();
 }
 
 void ui::pane::props::bones::set_selection_single(const ui::canvas::scene& canv) {
-    name_->show(); nodes_->show(); rotation_->unlock();
+    name_->show();
+    nodes_->show();
+    rotation_->unlock();
     auto& bone = canv.selected_bones().front()->model();
     name_->set_value(bone.name().c_str());
     u_->hyperlink()->setText(bone.parent_node().name().c_str());

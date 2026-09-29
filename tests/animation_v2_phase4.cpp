@@ -10,9 +10,13 @@
 #include <vector>
 
 namespace {
-void require(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
+    void require(bool ok, const char* message) {
+        if (!ok)
+            throw std::runtime_error(message);
+    }
 void near(double a, double b, double eps = 1e-9) {
-    if (std::abs(a - b) > eps) throw std::runtime_error("numeric mismatch");
+    if (std::abs(a - b) > eps)
+        throw std::runtime_error("numeric mismatch");
 }
 
 void seek_contract() {
@@ -63,13 +67,15 @@ struct fixture {
         sm::node_ref r = core.create_skeleton({0, 0}).root_node();
         sm::node_ref t = core.create_skeleton({10, 0}).root_node();
         require(core.create_bone("bone", r, t).has_value(), "create bone");
-        root = r->id(); tip = t->id();
+        root = r->id();
+        tip = t->id();
         character = project.make_character(std::vector<sm::const_skel_ref>{r->owner()}).value();
         auto rig = core.character(character)->get().rig().skeleton_ids();
         sm::animation a;
         a.name = "phase4";
         a.keyframes.resize(2);
-        for (auto& k : a.keyframes) k.pose = sm::capture_skeletal_pose(core.topology(), rig);
+        for (auto& k : a.keyframes)
+            k.pose = sm::capture_skeletal_pose(core.topology(), rig);
         a.reconcile_transitions();
         a.transitions[0].duration_seconds = 2.0;
         animation_id = a.id;
@@ -87,7 +93,8 @@ void duration_and_insert() {
         "duration edit failed");
     near(a->transitions[0].duration_seconds, 4.0);
     require(f.project.can_undo(), "duration edit missing history");
-    f.project.undo(); near(a->transitions[0].duration_seconds, 2.0);
+    f.project.undo();
+    near(a->transitions[0].duration_seconds, 2.0);
     require(f.project.redo() == sm::result::success, "duration redo failed");
     near(a->transitions[0].duration_seconds, 4.0);
     const auto original_id = a->transitions[0].id;
@@ -120,8 +127,8 @@ void pin_endpoint_invariant() {
     auto old_tip = f.project.topology().get<sm::node>(f.tip)->get().world_pos();
     const bool dirty_before = f.project.is_dirty();
     const bool undo_before = f.project.can_undo();
-    f.project.transform_node_positions({{f.root, old_root}, {f.tip, old_tip}},
-        {{f.root, old_root + sm::point{1,0}}, {f.tip, old_tip + sm::point{1,0}}});
+    f.project.transform_node_positions({ { f.root, old_root }, { f.tip, old_tip } },
+        { { f.root, old_root + sm::point{ 1, 0 } }, { f.tip, old_tip + sm::point{ 1, 0 } } });
     require(f.project.topology().get<sm::node>(f.tip)->get().world_pos() == old_tip,
         "incoming lock movement was committed");
     require(f.project.is_dirty() == dirty_before && f.project.can_undo() == undo_before,

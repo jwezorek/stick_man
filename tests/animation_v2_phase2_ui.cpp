@@ -14,13 +14,15 @@
 
 namespace {
 void require(bool condition, const char* message) {
-    if (!condition) throw std::runtime_error(message);
+    if (!condition)
+        throw std::runtime_error(message);
 }
 
 sm::object_id node_at(const mdl::project& project, sm::point target) {
     for (auto skeleton : project.topology().skeletons()) {
         for (auto node : skeleton->nodes()) {
-            if (node->world_pos() == target) return node->id();
+            if (node->world_pos() == target)
+                return node->id();
         }
     }
     throw std::runtime_error("fixture node missing");
@@ -243,7 +245,8 @@ int main(int argc, char** argv) {
             artwork_only.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied)),
             "combined preview did not add skeleton to partially skinned artwork");
 
-        for (int i = 0; i < 6; ++i) add->click();
+        for (int i = 0; i < 6; ++i)
+            add->click();
         auto* source = model.core().animation_data(character_id).find_animation(animation_id);
         source->transitions[0].duration_seconds = 0.35;
         source->transitions[1].duration_seconds = 0.15;
@@ -264,7 +267,8 @@ int main(int argc, char** argv) {
         app.processEvents();
         play->click();
         const auto capture = qEnvironmentVariable("STICK_MAN_TEST_CAPTURE");
-        if (!capture.isEmpty()) require(editor->grab().save(capture), "UI capture failed");
+        if (!capture.isEmpty())
+            require(editor->grab().save(capture), "UI capture failed");
 
         play->click();
         source->transitions[0].duration_seconds = 0.6;

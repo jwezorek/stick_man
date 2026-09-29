@@ -5,7 +5,8 @@
 #include <cmath>
 
 ui::pose_strip_layout::pose_strip_layout(const sm::animation* animation, double card_width) {
-    if (!animation || animation->keyframes.empty()) return;
+    if (!animation || animation->keyframes.empty())
+        return;
     constexpr double margin = 10;
     constexpr double pixels_per_second = 160;
     constexpr double minimum_transition_width = 12;
@@ -35,7 +36,8 @@ ui::pose_strip_layout::pose_strip_layout(const sm::animation* animation, double 
 }
 
 std::optional<ui::pose_strip_layout::position> ui::pose_strip_layout::at_time(double seconds) const {
-    if (cards.empty()) return {};
+    if (cards.empty())
+        return {};
     seconds = std::clamp(seconds, 0.0, cards.back().time);
     const auto next = std::upper_bound(cards.begin(), cards.end(), seconds,
         [](double time, const card& value) { return time < value.time; });
@@ -49,8 +51,10 @@ std::optional<ui::pose_strip_layout::position> ui::pose_strip_layout::at_time(do
 }
 
 std::optional<double> ui::pose_strip_layout::time_at_x(double x) const {
-    if (cards.empty() || !std::isfinite(x)) return {};
-    if (x <= cards.front().rect.left()) return cards.front().time;
+    if (cards.empty() || !std::isfinite(x))
+        return {};
+    if (x <= cards.front().rect.left())
+        return cards.front().time;
     for (std::size_t i = 0; i < cards.size(); ++i) {
         if (cards[i].rect.contains(QPointF(x, cards[i].rect.center().y())) ||
                 (x >= cards[i].rect.left() && x <= cards[i].rect.right())) {
@@ -71,9 +75,11 @@ std::optional<double> ui::pose_strip_layout::time_at_x(double x) const {
 }
 
 bool ui::pose_strip_layout::same_timing(const pose_strip_layout& other) const {
-    if (cards.size() != other.cards.size() || transitions.size() != other.transitions.size()) return false;
+    if (cards.size() != other.cards.size() || transitions.size() != other.transitions.size())
+        return false;
     for (std::size_t i = 0; i < cards.size(); ++i) {
-        if (cards[i].id != other.cards[i].id) return false;
+        if (cards[i].id != other.cards[i].id)
+            return false;
     }
     for (std::size_t i = 0; i < transitions.size(); ++i) {
         if (transitions[i].id != other.transitions[i].id ||

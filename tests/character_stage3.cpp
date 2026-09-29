@@ -5,7 +5,8 @@
 
 namespace {
 void require(bool value, const char* message) {
-    if (!value) throw std::runtime_error(message);
+    if (!value)
+        throw std::runtime_error(message);
 }
 void selection_and_translation() {
     mdl::project model;
@@ -33,7 +34,9 @@ void selection_and_translation() {
     auto mixed = mdl::infer_selection(topology);
     require(mixed.size() == 3 && std::ranges::all_of(mixed, [](auto object) {return std::holds_alternative<sm::const_skel_ref>(object);}), "rig plus loose must remain skeletons");
     std::vector<mdl::handle> nodes;
-    for (auto object : mdl::selection_topology(selected)) if (auto node = std::get_if<sm::const_node_ref>(&object)) nodes.push_back(node->get().id());
+    for (auto object : mdl::selection_topology(selected))
+        if (auto node = std::get_if<sm::const_node_ref>(&object))
+            nodes.push_back(node->get().id());
     model.transform(nodes, std::function<void(sm::node&)>([](sm::node& node) { node.set_world_pos(node.world_pos() + sm::point{10, 20}); }));
     require(sm::distance(body.root_node().world_pos(), {10, 20}) < .001 && sm::distance(eye.root_node().world_pos(), {80, 50}) < .001, "complete rig translation");
     model.undo();
@@ -55,25 +58,38 @@ void authoring_history() {
     require(std::holds_alternative<sm::const_skel_ref>(explicit_child.front()), "explicit pane selection is not inferred");
     require(std::holds_alternative<sm::const_character_ref>(mdl::infer_selection(explicit_child).front()), "canvas one-component inference");
     require(!model.make_character(rig), "already-owned creation must reject");
-    model.undo(); require(!core.character(*id) && body.is_loose(), "creation undo");
-    model.redo(); require(core.character(*id).has_value(), "creation redo identity");
+    model.undo();
+    require(!core.character(*id) && body.is_loose(), "creation undo");
+    model.redo();
+    require(core.character(*id).has_value(), "creation redo identity");
     model.rename(*id, "Alice");
-    model.undo(); require(core.character(*id)->get().name() != "Alice", "rename undo");
-    model.redo(); require(core.character(*id)->get().name() == "Alice", "rename redo");
+    model.undo();
+    require(core.character(*id)->get().name() != "Alice", "rename undo");
+    model.redo();
+    require(core.character(*id)->get().name() == "Alice", "rename redo");
     std::vector<sm::const_skel_ref> adopt{eye};
     require(model.adopt_skeletons(*id, adopt) == sm::result::success, "adopt");
-    model.undo(); require(eye.is_loose(), "adoption undo");
-    model.redo(); require(core.character(*id)->get().rig().size() == 2, "adoption redo");
+    model.undo();
+    require(eye.is_loose(), "adoption undo");
+    model.redo();
+    require(core.character(*id)->get().rig().size() == 2, "adoption redo");
     require(model.replace_skeletons({eye_id}, {}) == sm::result::success, "component delete");
     require(core.character(*id)->get().rig().size() == 1, "nonfinal retains character");
     require(model.delete_character(*id) == sm::result::success && !core.character(*id), "character semantic delete");
     model.undo();
     require(core.character(*id)->get().rig().contains(body_id), "final-component undo restores identity");
-    model.undo(); require(core.character(*id)->get().rig().contains(eye_id), "component undo restores rig");
+    model.undo();
+    require(core.character(*id)->get().rig().contains(eye_id), "component undo restores rig");
     require(core.has_consistent_membership(), "consistent membership after history");
 }
 }
 int main() {
-    try { selection_and_translation(); authoring_history(); std::cout << "PASS character stage 3 model\n"; }
-    catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
+    try {
+        selection_and_translation();
+        authoring_history();
+        std::cout << "PASS character stage 3 model\n";
+    } catch (const std::exception& error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    }
 }

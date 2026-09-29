@@ -40,7 +40,8 @@ void angle_set::append_arc(double start, double span) {
     }
     start = normalized(start);
     const double end = start + span;
-    if (end <= tau) intervals_.push_back({start, end});
+    if (end <= tau)
+        intervals_.push_back({ start, end });
     else {
         intervals_.push_back({start, tau});
         intervals_.push_back({0, end - tau});
@@ -69,10 +70,12 @@ void angle_set::canonicalize() {
 bool angle_set::is_empty() const { return intervals_.empty(); }
 
 bool angle_set::contains(double angle) const {
-    if (!std::isfinite(angle)) return false;
+    if (!std::isfinite(angle))
+        return false;
     angle = normalized(angle);
     for (auto part : intervals_)
-        if (angle >= part.low && angle <= part.high) return true;
+        if (angle >= part.low && angle <= part.high)
+            return true;
     return false;
 }
 
@@ -82,7 +85,8 @@ angle_set angle_set::intersect(const angle_set& other) const {
         for (auto right : other.intervals_) {
             const double low = std::max(left.low, right.low);
             const double high = std::min(left.high, right.high);
-            if (low <= high) result.intervals_.push_back({low, high});
+            if (low <= high)
+                result.intervals_.push_back({ low, high });
         }
     }
     result.canonicalize();
@@ -90,25 +94,30 @@ angle_set angle_set::intersect(const angle_set& other) const {
 }
 
 angle_set angle_set::shifted(double offset) const {
-    if (!std::isfinite(offset)) throw std::invalid_argument("angle offset must be finite");
+    if (!std::isfinite(offset))
+        throw std::invalid_argument("angle offset must be finite");
     offset = normalized(offset);
     auto result = empty();
-    for (auto part : intervals_) result.append_arc(part.low + offset, part.high - part.low);
+    for (auto part : intervals_)
+        result.append_arc(part.low + offset, part.high - part.low);
     result.canonicalize();
     return result;
 }
 
 angle_set angle_set::negated() const {
     auto result = empty();
-    for (auto part : intervals_) result.append_arc(-part.high, part.high - part.low);
+    for (auto part : intervals_)
+        result.append_arc(-part.high, part.high - part.low);
     result.canonicalize();
     return result;
 }
 
 std::optional<double> angle_set::closest_angle(double angle) const {
-    if (is_empty() || !std::isfinite(angle)) return std::nullopt;
+    if (is_empty() || !std::isfinite(angle))
+        return std::nullopt;
     angle = normalized(angle);
-    if (contains(angle)) return angle;
+    if (contains(angle))
+        return angle;
     double best = 0;
     double distance = std::numeric_limits<double>::infinity();
     for (auto part : intervals_) {

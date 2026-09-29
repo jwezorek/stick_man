@@ -172,16 +172,18 @@ double sm::node::world_y() const {
 void sm::node::set_world_pos(const point& pt) {
     auto& topology = owner().owner();
     if (!topology.geometry_edit_active()) {
-        for (auto& [id,c] : topology.constraints()) if (auto tri = c.triangle()) {
-            auto b = topology.get<bone>(tri->first_bone);
-            if (b && &b->get().owner() == &owner()) {
-                const auto status = perform_ik(*this,pt,{});
-                if (status == result::unsatisfiable_constraints || status == result::inconsistent_constraints)
-                    throw std::invalid_argument("node move conflicts with constraints");
-                return;
-            }
-        }
-    }
+		for (auto& [id, c] : topology.constraints())
+			if (auto tri = c.triangle()) {
+				auto b = topology.get<bone>(tri->first_bone);
+				if (b && &b->get().owner() == &owner()) {
+					const auto status = perform_ik(*this, pt, {});
+					if (status == result::unsatisfiable_constraints ||
+					    status == result::inconsistent_constraints)
+						throw std::invalid_argument("node move conflicts with constraints");
+					return;
+				}
+			}
+	}
 	x_ = pt.x;
 	y_ = pt.y;
 }
@@ -396,8 +398,8 @@ void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_b
 
     constraint_geometry geometry(owner().owner());
     if (geometry.fan_for(this)) {
-        if (rotate_constrained_bone(*this,theta,!just_this_bone,axis) != result::success)
-            throw std::invalid_argument("rotation conflicts with constraints");
+		if (rotate_constrained_bone(*this, theta, !just_this_bone, axis) != result::success)
+			throw std::invalid_argument("rotation conflicts with constraints");
         return;
     }
     geometry_batch batch(owner().owner());
@@ -421,9 +423,9 @@ void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_b
 				)
 			);
             if (auto fan = geometry.fan_for(&bone)) {
-                if (projected_fans.insert(*fan).second &&
-                        geometry.project_fan(*fan,bone,u,new_v_pos) != result::success)
-                    throw std::invalid_argument("rotation conflicts with fan limits");
+			    if (projected_fans.insert(*fan).second &&
+			        geometry.project_fan(*fan, bone, u, new_v_pos) != result::success)
+				    throw std::invalid_argument("rotation conflicts with fan limits");
             } else {
                 new_v_pos = sm::apply_rotation_constraints(new_v_pos, *axis, prev, bone);
                 v.set_world_pos(new_v_pos);
@@ -432,13 +434,15 @@ void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_b
 			return sm::visit_result::continue_traversal;
 		}
 	);
-    if (batch.commit() != result::success) throw std::invalid_argument("rotation conflicts with rigid geometry");
+	if (batch.commit() != result::success)
+		throw std::invalid_argument("rotation conflicts with rigid geometry");
 }
 void sm::bone::set_length(double len) {
-    if (!std::isfinite(len) || len <= 0) throw std::invalid_argument("invalid bone length");
-    geometry_batch batch(owner().owner());
-    std::unordered_map<bone*, std::tuple<double,double>> bone_to_len_and_rot;
-    std::vector<bone*> topo_order;
+	if (!std::isfinite(len) || len <= 0)
+		throw std::invalid_argument("invalid bone length");
+	geometry_batch batch(owner().owner());
+	std::unordered_map<bone*, std::tuple<double, double>> bone_to_len_and_rot;
+	std::vector<bone*> topo_order;
     visit_nodes_and_bones(*this, {},
         [&](sm::bone& bone)->visit_result {
             bone_to_len_and_rot[&bone] = { bone.length(), bone.world_rotation() };
@@ -457,5 +461,6 @@ void sm::bone::set_length(double len) {
         auto new_child_node_pos = bone->parent_node().world_pos() + offset;
         bone->child_node().set_world_pos(new_child_node_pos);
     }
-    if (batch.commit() != result::success) throw std::invalid_argument("length edit conflicts with rigid geometry");
+	if (batch.commit() != result::success)
+		throw std::invalid_argument("length edit conflicts with rigid geometry");
 }

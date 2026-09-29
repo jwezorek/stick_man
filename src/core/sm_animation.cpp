@@ -36,7 +36,8 @@ void validate_animation(const sm::animation& a, std::unordered_set<sm::object_id
             }
         }
         for (const auto id : keyframe.pinned_nodes) {
-            if (id.is_nil()) throw std::invalid_argument("Invalid keyframe pin");
+            if (id.is_nil())
+                throw std::invalid_argument("Invalid keyframe pin");
         }
     }
     for (const auto& transition : a.transitions) {
@@ -59,42 +60,48 @@ bool same_ids(const auto& a, const auto& b) {
 
 const sm::pose* sm::animation_assets::find_pose(object_id id) const {
     for (const auto& p : poses) {
-        if (p.id == id) return &p;
+        if (p.id == id)
+            return &p;
     }
     return nullptr;
 }
 
 const sm::animation* sm::animation_assets::find_animation(object_id id) const {
     for (const auto& a : animations) {
-        if (a.id == id) return &a;
+        if (a.id == id)
+            return &a;
     }
     return nullptr;
 }
 
 sm::animation* sm::animation_assets::find_animation(object_id id) {
     for (auto& a : animations) {
-        if (a.id == id) return &a;
+        if (a.id == id)
+            return &a;
     }
     return nullptr;
 }
 
 const sm::pose_keyframe* sm::animation::find_keyframe(object_id id) const {
     for (const auto& keyframe : keyframes) {
-        if (keyframe.id == id) return &keyframe;
+        if (keyframe.id == id)
+            return &keyframe;
     }
     return nullptr;
 }
 
 sm::pose_keyframe* sm::animation::find_keyframe(object_id id) {
     for (auto& keyframe : keyframes) {
-        if (keyframe.id == id) return &keyframe;
+        if (keyframe.id == id)
+            return &keyframe;
     }
     return nullptr;
 }
 
 std::optional<std::size_t> sm::animation::keyframe_index(object_id id) const {
     for (std::size_t i = 0; i < keyframes.size(); ++i) {
-        if (keyframes[i].id == id) return i;
+        if (keyframes[i].id == id)
+            return i;
     }
     return {};
 }
@@ -120,7 +127,8 @@ std::optional<sm::reference_pose_sample> sm::sample_reference_pose(
     }
     std::unordered_set<object_id> ids;
     validate_animation(animation, ids);
-    if (animation.keyframes.empty()) return {};
+    if (animation.keyframes.empty())
+        return {};
 
     const auto& first = animation.keyframes.front().pose;
     for (const auto& keyframe : animation.keyframes) {
@@ -140,7 +148,8 @@ std::optional<sm::reference_pose_sample> sm::sample_reference_pose(
         const auto& transition = animation.transitions[i];
         const double end = start + transition.duration_seconds;
         if (time < end) {
-            if (time == start) return exact(i);
+            if (time == start)
+                return exact(i);
             const auto& from = animation.keyframes[i];
             const auto& to = animation.keyframes[i + 1];
             const double u = (time - start) / transition.duration_seconds;
@@ -258,14 +267,17 @@ bool sm::skeletal_pose_compatible(const skeletal_pose& pose, const topology& top
 
     for (const auto id : skeletons) {
         auto s = topology.skeleton(id);
-        if (!s) return false;
+        if (!s)
+            return false;
 
         ++roots;
-        if (!pose.root_positions.contains(s->get().root_node().id())) return false;
+        if (!pose.root_positions.contains(s->get().root_node().id()))
+            return false;
 
         for (auto bone : s->get().bones()) {
             ++bones;
-            if (!pose.bone_rotations.contains(bone->id())) return false;
+            if (!pose.bone_rotations.contains(bone->id()))
+                return false;
         }
     }
 
@@ -325,7 +337,8 @@ void sm::apply_skeletal_pose(const skeletal_pose& pose, const topology& topology
 
 void sm::initialize_animation_assets(animation_assets& assets, const topology& topology,
         const std::vector<object_id>& skeletons) {
-    if (!assets.poses.empty() || skeletons.empty()) return;
+    if (!assets.poses.empty() || skeletons.empty())
+        return;
 
     auto p = capture_pose(topology, skeletons, "Default");
     assets.default_pose = p.id;
@@ -335,7 +348,8 @@ void sm::initialize_animation_assets(animation_assets& assets, const topology& t
 void sm::reconcile_animation_poses(animation_assets& assets, const topology& topology,
         const std::vector<object_id>& skeletons) {
     initialize_animation_assets(assets, topology, skeletons);
-    if (assets.poses.empty()) return;
+    if (assets.poses.empty())
+        return;
 
     std::unordered_map<object_id, point> members;
     for (const auto& sid : skeletons) {
@@ -427,7 +441,8 @@ bool sm::pose_compatible(const pose& pose, const topology& topology,
         if (auto s = topology.skeleton(id)) {
             for (auto n : s->get().nodes()) {
                 ++count;
-                if (!pose.node_positions.contains(n->id())) return false;
+                if (!pose.node_positions.contains(n->id()))
+                    return false;
             }
         }
     }

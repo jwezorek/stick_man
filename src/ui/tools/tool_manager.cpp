@@ -116,9 +116,11 @@ void ui::tool::manager::set_current_tool(canvas::manager& canvases, id id) {
         return;
     }
     int new_tool_index = index_from_id(id);
-    if (new_tool_index == curr_item_index_) return;
+    if (new_tool_index == curr_item_index_)
+        return;
     canvases.active_canvas().setFocus();
-    if (has_current_tool()) current_tool().deactivate(canvases);
+    if (has_current_tool())
+        current_tool().deactivate(canvases);
     curr_item_index_ = new_tool_index;
     current_tool().activate(canvases);
     emit current_tool_changed(current_tool());

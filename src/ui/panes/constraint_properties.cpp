@@ -8,7 +8,8 @@ namespace {
 
 QString bone_label(const mdl::project& project, sm::object_id id) {
     auto bone = project.topology().get<sm::bone>(id);
-    if (!bone) return "<missing>";
+    if (!bone)
+        return "<missing>";
     auto text = QString::fromStdString(bone->get().name());
     auto short_id = QString::fromStdString(id.to_string()).left(8);
     return QString("%1  [%2]").arg(text, short_id);
@@ -61,11 +62,14 @@ void ui::pane::props::constraint_properties::populate(mdl::project& proj) {
     layout_->addWidget(triangle_group_);
 
     connect(name_->value(), &ui::string_edit::value_changed, this, [this](const std::string& name) {
-        if (setting_ || !proj_) return;
-        if (auto id = get_current_canv_().selected_constraint_id()) proj_->rename(*id, name);
+        if (setting_ || !proj_)
+            return;
+        if (auto id = get_current_canv_().selected_constraint_id())
+            proj_->rename(*id, name);
     });
     connect(reference_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int index) {
-        if (setting_) return;
+        if (setting_)
+            return;
         const bool bone_reference = index == 2;
         reference_bone_->setEnabled(bone_reference);
         reference_bone_label_->setEnabled(bone_reference);
@@ -75,45 +79,58 @@ void ui::pane::props::constraint_properties::populate(mdl::project& proj) {
             return;
         }
         update_rotation([this, index](sm::rotation_constraint& rotation) {
-            if (index == 0) rotation.reference = sm::rotation_reference::world();
-            else if (index == 1) rotation.reference = sm::rotation_reference::parent();
+            if (index == 0)
+                rotation.reference = sm::rotation_reference::world();
+            else if (index == 1)
+                rotation.reference = sm::rotation_reference::parent();
             else {
-                if (reference_bone_->currentIndex() < 0) return;
+                if (reference_bone_->currentIndex() < 0)
+                    return;
                 auto id = sm::object_id::from_string(reference_bone_->currentData().toString().toStdString());
-                if (id) rotation.reference = sm::rotation_reference::bone(*id);
+                if (id)
+                    rotation.reference = sm::rotation_reference::bone(*id);
             }
         });
     });
     connect(reference_bone_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int) {
-        if (setting_ || reference_->currentIndex() != 2 || reference_bone_->currentIndex() < 0) return;
+        if (setting_ || reference_->currentIndex() != 2 || reference_bone_->currentIndex() < 0)
+            return;
         auto id = sm::object_id::from_string(reference_bone_->currentData().toString().toStdString());
-        if (id) update_rotation([&](sm::rotation_constraint& rotation) {
-            rotation.reference = sm::rotation_reference::bone(*id);
-        });
+        if (id)
+            update_rotation([&](sm::rotation_constraint& rotation) {
+                rotation.reference = sm::rotation_reference::bone(*id);
+            });
     });
-    connect(range_start_->num_edit(), &ui::number_edit::value_changed, this, [this](double degrees) {
-        if (!setting_) update_rotation([&](sm::rotation_constraint& rotation) {
-            rotation.allowed.start_angle = ui::degrees_to_radians(degrees);
+    connect(
+        range_start_->num_edit(), &ui::number_edit::value_changed, this, [this](double degrees) {
+            if (!setting_)
+                update_rotation([&](sm::rotation_constraint& rotation) {
+                    rotation.allowed.start_angle = ui::degrees_to_radians(degrees);
+                });
         });
-    });
     connect(range_span_->num_edit(), &ui::number_edit::value_changed, this, [this](double degrees) {
-        if (!setting_) update_rotation([&](sm::rotation_constraint& rotation) {
-            rotation.allowed.span_angle = ui::degrees_to_radians(degrees);
-        });
+        if (!setting_)
+            update_rotation([&](sm::rotation_constraint& rotation) {
+                rotation.allowed.span_angle = ui::degrees_to_radians(degrees);
+            });
     });
-    connect(relative_angle_->num_edit(), &ui::number_edit::value_changed, this, [this](double degrees) {
-        if (!setting_) update_triangle([&](sm::rigid_triangle_constraint& triangle) {
-            triangle.relative_angle = sm::normalize_angle(ui::degrees_to_radians(degrees));
+    connect(
+        relative_angle_->num_edit(), &ui::number_edit::value_changed, this, [this](double degrees) {
+            if (!setting_)
+                update_triangle([&](sm::rigid_triangle_constraint& triangle) {
+                    triangle.relative_angle = sm::normalize_angle(ui::degrees_to_radians(degrees));
+                });
         });
-    });
 }
 
 void ui::pane::props::constraint_properties::populate_reference_bones(const sm::rotation_constraint& rotation) {
     reference_bone_->clear();
-    if (!proj_) return;
+    if (!proj_)
+        return;
     for (auto skel : proj_->topology().skeletons()) {
         for (auto bone : skel->bones()) {
-            if (bone->id() == rotation.target_bone) continue;
+            if (bone->id() == rotation.target_bone)
+                continue;
             reference_bone_->addItem(bone_label(*proj_, bone->id()), QString::fromStdString(bone->id().to_string()));
         }
     }
@@ -126,9 +143,11 @@ void ui::pane::props::constraint_properties::populate_reference_bones(const sm::
 void ui::pane::props::constraint_properties::update_rotation(std::function<void(sm::rotation_constraint&)> edit) {
     auto& canv = get_current_canv_();
     auto id = canv.selected_constraint_id();
-    if (!id || !proj_) return;
+    if (!id || !proj_)
+        return;
     auto current = proj_->core().constraint_by_id(*id);
-    if (!current || !current->get().rotation()) return;
+    if (!current || !current->get().rotation())
+        return;
     auto definition = current->get().definition();
     auto& rotation = std::get<sm::rotation_constraint>(definition);
     edit(rotation);
@@ -142,9 +161,11 @@ void ui::pane::props::constraint_properties::update_rotation(std::function<void(
 void ui::pane::props::constraint_properties::update_triangle(std::function<void(sm::rigid_triangle_constraint&)> edit) {
     auto& canv = get_current_canv_();
     auto id = canv.selected_constraint_id();
-    if (!id || !proj_) return;
+    if (!id || !proj_)
+        return;
     auto current = proj_->core().constraint_by_id(*id);
-    if (!current || !current->get().triangle()) return;
+    if (!current || !current->get().triangle())
+        return;
     auto definition = current->get().definition();
     edit(std::get<sm::rigid_triangle_constraint>(definition));
     const auto result = proj_->update_constraint(*id, definition);
@@ -156,7 +177,8 @@ void ui::pane::props::constraint_properties::update_triangle(std::function<void(
 
 void ui::pane::props::constraint_properties::set_selection(const ui::canvas::scene& canv) {
     const auto* constraint = canv.selected_constraint();
-    if (!constraint) return;
+    if (!constraint)
+        return;
     setting_ = true;
     name_->set_value(QString::fromStdString(constraint->name()));
 

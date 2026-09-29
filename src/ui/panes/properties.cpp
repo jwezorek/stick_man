@@ -28,7 +28,8 @@ namespace {
 
 	ui::selection_type type_of_selection(const ui::canvas::scene& canv) {
 
-        if (canv.selected_constraint_id()) return ui::selection_type::constraint;
+        if (canv.selected_constraint_id())
+            return ui::selection_type::constraint;
         const auto& sel = canv.selection();
 		if (sel.empty()) {
 			return ui::selection_type::none;

@@ -87,13 +87,15 @@ void ui::canvas::manager::init(mdl::project& proj) {
         // touch its items in response to ordinary project notifications; the
         // animation-specific refresh_canvas signal owns those updates.  This is
         // also important while the detached topology is being torn down.
-        if (animation_session_active_ || model.animation_mode()) return;
+        if (animation_session_active_ || model.animation_mode())
+            return;
         active_canvas().sync_to_model();
         emit canvas_refresh(model.core());
         active_canvas().sync_selection();
     });
     connect(&proj, &mdl::project::select_character, this, [this](sm::object_id id) {
-        if (auto* item = active_canvas().character_item(id)) active_canvas().set_selection(item, true);
+        if (auto* item = active_canvas().character_item(id))
+            active_canvas().set_selection(item, true);
     });
     connect(&proj, &mdl::project::pre_new_bone_added, this, &manager::prepare_to_add_bone);
     connect(&proj, &mdl::project::new_bone_added, this, &manager::add_new_bone);
@@ -199,7 +201,8 @@ void ui::canvas::manager::show_animation_session(bool active) {
 }
 
 void ui::canvas::manager::detach_animation_session_view() {
-    if (!animation_session_active_) return;
+    if (!animation_session_active_)
+        return;
 
     // Canvas items in Animation Mode directly reference the session's detached
     // working topology, and the artwork layer may also hold that topology as its

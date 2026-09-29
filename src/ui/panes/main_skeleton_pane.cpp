@@ -157,10 +157,12 @@ void ui::pane::main_skeleton_pane::sync_with_model(const sm::project& model)
         root->setIcon(QApplication::style()->standardIcon(QStyle::SP_DirIcon));
         tree_model->appendRow(root);
         canvas().character_item(character->id())->set_treeview_item(root);
-        for (auto skel : character->rig().skeletons()) insert_skeleton(root, skel);
-    }
+		for (auto skel : character->rig().skeletons())
+			insert_skeleton(root, skel);
+	}
     for (auto skel : model.topology().skeletons())
-        if (skel->is_loose()) insert_skeleton(tree_model->invisibleRootItem(), skel);
+		if (skel->is_loose())
+			insert_skeleton(tree_model->invisibleRootItem(), skel);
 
 	skeleton_tree_->clearSelection();
 
@@ -195,8 +197,9 @@ void ui::pane::main_skeleton_pane::handle_tree_selection_change(
     auto character_row = r::find_if(selection, is_character_treeitem);
     if (character_row != selection.end()) {
         auto id = sm::object_id::from_string((*character_row)->data(k_model_role).toString().toStdString());
-        if (id) canvas().set_selection(canvas().character_item(*id), true);
-        handle_canv_sel_change();
+		if (id)
+			canvas().set_selection(canvas().character_item(*id), true);
+		handle_canv_sel_change();
         connect_canv_sel_handler();
         return;
     }
@@ -221,9 +224,11 @@ void ui::pane::main_skeleton_pane::handle_tree_selection_change(
             if (all_skeletons) {
                 unique_items.insert(&canvas::item_from_model<canvas::item::skeleton>(skel));
             } else {
-                for (auto node : skel.nodes()) unique_items.insert(&canvas::item_from_model<canvas::item::node>(node.get()));
-                for (auto bone : skel.bones()) unique_items.insert(&canvas::item_from_model<canvas::item::bone>(bone.get()));
-            }
+				for (auto node : skel.nodes())
+					unique_items.insert(&canvas::item_from_model<canvas::item::node>(node.get()));
+				for (auto bone : skel.bones())
+					unique_items.insert(&canvas::item_from_model<canvas::item::bone>(bone.get()));
+			}
         }
     }
     sel_canv_items = unique_items | r::to<std::vector<canvas::item::base*>>();
@@ -256,18 +261,17 @@ void ui::pane::main_skeleton_pane::handle_rename(mdl::const_skel_piece piece, co
 	if (std::holds_alternative<sm::const_node_ref>(piece)) {
 		return;
 	}
-	traverse_tree_items(
-		[&](QStandardItem* itm)->void {
-            if (is_character_treeitem(itm)) return;
-			auto itm_piece = get_treeitem_var(itm);
-			if (mdl::to_handle(piece) == mdl::to_handle(itm_piece)) {
-				auto curr_name = itm->text().toStdString();
-				if (curr_name != new_name) {
-					itm->setText(new_name.c_str());
-				}
+	traverse_tree_items([&](QStandardItem* itm) -> void {
+		if (is_character_treeitem(itm))
+			return;
+		auto itm_piece = get_treeitem_var(itm);
+		if (mdl::to_handle(piece) == mdl::to_handle(itm_piece)) {
+			auto curr_name = itm->text().toStdString();
+			if (curr_name != new_name) {
+				itm->setText(new_name.c_str());
 			}
 		}
-	);
+	});
 }
 
 void ui::pane::main_skeleton_pane::select_item(QStandardItem* item, bool select = true) {
@@ -312,7 +316,8 @@ void ui::pane::main_skeleton_pane::select_items(const std::vector<QStandardItem*
 }
 
 void ui::pane::main_skeleton_pane::handle_canv_sel_change() {
-    if (animation_mode_) return;
+	if (animation_mode_)
+		return;
 
 	disconnect_tree_sel_handler();
 
@@ -328,8 +333,9 @@ void ui::pane::main_skeleton_pane::handle_canv_sel_change() {
 }
 
 void ui::pane::main_skeleton_pane::handle_tree_change(QStandardItem* item) {
-    if (animation_mode_) return;
-    if (is_character_treeitem(item)) {
+	if (animation_mode_)
+		return;
+	if (is_character_treeitem(item)) {
         auto id = sm::object_id::from_string(item->data(k_model_role).toString().toStdString());
         auto name = item->text().toStdString();
         if (id) project_->rename(*id, name);
@@ -401,23 +407,27 @@ void ui::pane::main_skeleton_pane::init_aux(canvas::manager& canvases, mdl::proj
 	sel_properties_->init(canvases, proj);
 	connect(project_, &mdl::project::name_changed, this, &main_skeleton_pane::handle_rename);
     skeleton_tree_->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(skeleton_tree_, &QWidget::customContextMenuRequested, this, [this](QPoint point) {
-        if (animation_mode_) return;
-        QMenu menu(skeleton_tree_);
+	connect(skeleton_tree_, &QWidget::customContextMenuRequested, this, [this](QPoint point) {
+		if (animation_mode_)
+			return;
+		QMenu menu(skeleton_tree_);
         auto* make = menu.addAction("Make Character");
         auto* adopt = menu.addAction("Add to Character...");
         bool loose = !canvas().loose_selection().empty();
         make->setEnabled(loose);
         adopt->setEnabled(loose && !r::empty(project_->core().characters()));
         auto* chosen = menu.exec(skeleton_tree_->viewport()->mapToGlobal(point));
-        if (chosen == make) character_actions::make(canvas(), *project_);
-        if (chosen == adopt) character_actions::adopt(canvas(), *project_, this);
-    });
+        if (chosen == make)
+			character_actions::make(canvas(), *project_);
+        if (chosen == adopt)
+			character_actions::adopt(canvas(), *project_, this);
+	});
 }
 
 void ui::pane::main_skeleton_pane::set_animation_mode(bool active) {
-    if (animation_mode_ == active) return;
-    animation_mode_ = active;
+	if (animation_mode_ == active)
+		return;
+	animation_mode_ = active;
 
     // The tree is backed by the persistent project topology, while Animation
     // Mode displays a detached working topology. Keep the tree visible but inert

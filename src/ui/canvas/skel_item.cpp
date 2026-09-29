@@ -24,14 +24,21 @@ void ui::canvas::item::aggregate_frame::sync_item_to_model() {
     for (auto skel : components()) {
         for (auto node : skel->nodes()) {
             auto p = node->world_pos();
-            left = std::min(left, p.x); right = std::max(right, p.x);
-            bottom = std::min(bottom, p.y); top = std::max(top, p.y);
+            left = std::min(left, p.x);
+            right = std::max(right, p.x);
+            bottom = std::min(bottom, p.y);
+            top = std::max(top, p.y);
         }
     }
-    if (left > right) { setRect({}); return; }
+    if (left > right) {
+        setRect({});
+        return;
+    }
     const double margin = 11.0 / canvas()->scale();
     setRect(QRectF(left, bottom, right - left, top - bottom).adjusted(-margin, -margin, margin, margin));
-    auto p = pen(); p.setCosmetic(true); setPen(p);
+    auto p = pen();
+    p.setCosmetic(true);
+    setPen(p);
     if (tag_) {
         label_->setText(QString::fromStdString(label()));
         auto bounds = label_->boundingRect();

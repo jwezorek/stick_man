@@ -9,18 +9,23 @@
 #include <iostream>
 #include <stdexcept>
 
-void require(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
+void require(bool ok, const char* message) {
+    if (!ok)
+        throw std::runtime_error(message);
+}
 template<class F> void rejects(F fn) {
     bool rejected = false;
     try { fn(); } catch (const std::exception&) { rejected = true; }
     require(rejected, "invalid artwork accepted");
 }
 sm::image_resource fixture() {
-    return sm::image_resource::from_rgba(2, 2, {255,0,0,0, 0,255,0,73, 0,0,255,128, 5,6,7,255});
+    return sm::image_resource::from_rgba(
+        2, 2, { 255, 0, 0, 0, 0, 255, 0, 73, 0, 0, 255, 128, 5, 6, 7, 255 });
 }
 void same_pixels(const sm::image_resource& a, const sm::image_resource& b) {
     require(a.width() == b.width() && a.height() == b.height(), "image dimensions changed");
-    for (int y = 0; y < a.height(); ++y) require(std::ranges::equal(a.row(y), b.row(y)), "RGBA pixels changed");
+    for (int y = 0; y < a.height(); ++y)
+        require(std::ranges::equal(a.row(y), b.row(y)), "RGBA pixels changed");
 }
 void resources_and_semantics() {
     auto img = fixture();
@@ -35,7 +40,8 @@ void resources_and_semantics() {
     auto bone = sm::object_id::generate();
     rejects([&] { art.add_slot("bad", {bone, sm::bone_anchor::root, {"open"}}); });
     rejects([&] { art.add_slot("bad", {bone, sm::bone_anchor::root, {"default", "default"}}); });
-    art.add_slot("eyes", {bone}); art.add_slot("glasses", {bone});
+    art.add_slot("eyes", { bone });
+    art.add_slot("glasses", { bone });
     rejects([&] { art.add_slot("eyes", {bone}); });
     art.add_state("eyes", "closed");
     art.add_state("eyes", "open"); // Declared but unmapped: falls back to default.
@@ -49,15 +55,21 @@ void resources_and_semantics() {
     rejects([&] { art.delete_frame("eye"); });
     require(!art.resolve_frame("Human", "eyes", "closed"), "hidden state fell back");
     require(art.resolve_frame("Human", "eyes", "open") == "eye", "missing state did not fall back");
-    art.rename_frame("eye", "renamed"); art.rename_slot("eyes", "face"); art.rename_state("face", "closed", "shut");
+    art.rename_frame("eye", "renamed");
+    art.rename_slot("eyes", "face");
+    art.rename_state("face", "closed", "shut");
     require(art.resolve_frame("Human", "face") == "renamed", "rename lost frame reference");
     require(art.appearances().at("Human").appearance_slots[0].states.contains("shut"), "state rename lost reference");
     rejects([&] { art.delete_state("face", "default"); });
     rejects([&] { art.rename_state("face", "default", "x"); });
-    art.delete_state("face", "shut"); art.delete_slot("face"); art.delete_frame("renamed");
+    art.delete_state("face", "shut");
+    art.delete_slot("face");
+    art.delete_frame("renamed");
     require(art.appearances().at("Human").appearance_slots.empty(), "slot deletion left implementation");
-    art.rename_appearance("Human", "Robot"); art.delete_appearance("Robot");
-    for (int i = 0; i < 3; ++i) art.insert_frame(std::to_string(i), {img, {double(i), -2}});
+    art.rename_appearance("Human", "Robot");
+    art.delete_appearance("Robot");
+    for (int i = 0; i < 3; ++i)
+        art.insert_frame(std::to_string(i), { img, { double(i), -2 } });
     auto packed = art.pack(4);
     require(packed.pages.size() == 3 && packed.frames.size() == 3, "multipage packing failed");
     for (const auto& f : packed.frames) {
@@ -82,15 +94,20 @@ void persistence() {
     art.add_slot("eyes", {sm::object_id::generate(), sm::bone_anchor::tip, {"default", "closed"}});
     art.add_appearance("Robot", {{{"eyes", {{"default", "eye"}, {"closed", std::nullopt}}, {{4, 5}, 0.3, {-1, 2}}}}});
     require(!p.slot_resolved(id, "eyes"), "missing bone resolved");
-    auto encoded = p.serialize(); require(encoded.has_value(), "artwork save failed");
-    sm::project loaded; require(loaded.deserialize(*encoded) == sm::project_result::success, "artwork load failed");
+    auto encoded = p.serialize();
+    require(encoded.has_value(), "artwork save failed");
+    sm::project loaded;
+    require(loaded.deserialize(*encoded) == sm::project_result::success, "artwork load failed");
     same_pixels(fixture(), loaded.artwork(id).frames().at("eye").image);
-    require(loaded.artwork(id).frames().at("eye").registration_origin == sm::point{1,-3}, "origin lost");
+    require(loaded.artwork(id).frames().at("eye").registration_origin == sm::point{ 1, -3 },
+        "origin lost");
     const auto& slot = loaded.artwork(id).appearances().at("Robot").appearance_slots[0];
-    require(slot.transform.scale == sm::point{-1,2} && slot.transform.rotation == 0.3, "transform lost");
+    require(slot.transform.scale == sm::point{ -1, 2 } && slot.transform.rotation == 0.3,
+        "transform lost");
     require(!loaded.artwork(id).resolve_frame("Robot", "eyes", "closed"), "hidden mapping lost");
     loaded.artwork(id).insert_frame("new", fixture().encode_png());
-    auto mixed = loaded.serialize(); require(mixed.has_value(), "mixed backing save failed");
+    auto mixed = loaded.serialize();
+    require(mixed.has_value(), "mixed backing save failed");
     require(loaded.deserialize(*mixed) == sm::project_result::success, "mixed backing load failed");
     same_pixels(fixture(), loaded.artwork(id).frames().at("new").image);
     sm::detail::package_reader reader(*encoded);
@@ -100,11 +117,13 @@ void persistence() {
     auto prefix = "characters/" + id.to_string() + "/artwork/";
     auto png = reader.read(prefix + "page-0.png");
     auto malformed = [&](auto mutate, bool include_page = true) {
-        auto j = semantic; mutate(j["characters"][0]["artwork"]);
+        auto j = semantic;
+        mutate(j["characters"][0]["artwork"]);
         sm::detail::package_writer writer;
         auto text = j.dump();
         writer.add("project.json", {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()});
-        if (include_page) writer.add(prefix + "page-0.png", png);
+        if (include_page)
+            writer.add(prefix + "page-0.png", png);
         require(loaded.deserialize(writer.finish()) != sm::project_result::success, "malformed artwork accepted");
         require(loaded.artwork(id).frames().contains("new"), "failed load changed live project");
     };
@@ -119,7 +138,8 @@ void persistence() {
     malformed([](auto& a) { a["appearances"][0]["slots"][0]["slot"] = "missing"; });
     malformed([](auto& a) { a["appearances"][0]["slots"][0]["states"]["bad"] = nullptr; });
     auto legacy = semantic;
-    legacy["version"] = 4.0; legacy["characters"][0].erase("artwork");
+    legacy["version"] = 4.0;
+    legacy["characters"][0].erase("artwork");
     sm::detail::package_writer legacy_writer;
     auto legacy_text = legacy.dump();
     legacy_writer.add("project.json", {reinterpret_cast<const std::uint8_t*>(legacy_text.data()), legacy_text.size()});
@@ -235,5 +255,8 @@ int main() {
         mz_free(data);
         mz_zip_reader_end(&zip);
         require(json["characters"][0].contains("artwork"), "character must serialize owned artwork");
-    } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << '\n';
+        return 1;
+    }
 }

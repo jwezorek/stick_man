@@ -5,7 +5,8 @@
 
 namespace {
 void require(bool ok, const char* message) {
-    if (!ok) throw std::runtime_error(message);
+    if (!ok)
+        throw std::runtime_error(message);
 }
 sm::object_id own(sm::project& p, std::initializer_list<sm::const_skel_ref> members) {
     auto c = p.create_character(std::span(members.begin(), members.size()));
@@ -40,9 +41,12 @@ void merges() {
         const auto aid = a.id(), bid = b.id();
         const auto u = a.root_node().id(), v = b.root_node().id();
         std::optional<sm::object_id> cid;
-        if (mode == 1) cid = own(p, {a});
-        if (mode == 2) cid = own(p, {b});
-        if (mode == 3) cid = own(p, {a, b});
+        if (mode == 1)
+            cid = own(p, { a });
+        if (mode == 2)
+            cid = own(p, { b });
+        if (mode == 3)
+            cid = own(p, { a, b });
         model.add_bone(u, v);
         const auto bone_id = (*p.topology().skeleton(aid)->get().bones().begin())->id();
         for (int cycle = 0; cycle < 4; ++cycle) {
@@ -51,7 +55,8 @@ void merges() {
             require(merged.has_value() && !p.topology().skeleton(bid), "merge topology");
             require(merged->get().is_loose() == !cid, "merge membership");
             require(p.topology().get<sm::bone>(bone_id).has_value(), "merge redo bone ID");
-            if (cid) require(p.character(*cid)->get().rig().contains(aid), "merge rig");
+            if (cid)
+                require(p.character(*cid)->get().rig().contains(aid), "merge rig");
             model.undo();
             check(p);
             require(p.topology().skeleton(aid)->get().is_loose() == (mode == 0 || mode == 2), "undo A membership");
@@ -65,7 +70,8 @@ void rejected_merges() {
     auto& p = model.core();
     auto& a = p.create_skeleton({0, 0});
     auto& b = p.create_skeleton({1, 0});
-    own(p, {a}); own(p, {b});
+    own(p, { a });
+    own(p, { b });
     const auto before = p.topology().to_json_str();
     const auto u = a.root_node().id(), v = b.root_node().id();
     require(p.can_create_bone(a.root_node(), b.root_node()) == sm::result::different_characters, "merge preflight");
@@ -73,7 +79,8 @@ void rejected_merges() {
     require(!result && result.error() == sm::result::different_characters, "core cross-character failure");
     require(model.add_bone(u, v) == sm::result::different_characters, "model cross-character failure");
     require(!model.can_undo(), "failed command in history");
-    model.add_new_skeleton_root({2, 0}); model.undo();
+    model.add_new_skeleton_root({ 2, 0 });
+    model.undo();
     require(model.can_redo(), "redo fixture");
     require(model.add_bone(v, u) == sm::result::different_characters && model.can_redo(), "failure cleared redo");
     require(before == p.topology().to_json_str(), "failed merge changed topology");
@@ -110,8 +117,10 @@ void split_and_delete() {
         check(p);
         require(p.character(cid)->get().rig().size() == 2, "split lost membership");
         require(&p.character(cid)->get() == character_address, "transiently destroyed character");
-        for (auto id : split_ids) require(p.topology().skeleton(id).has_value(), "split redo IDs");
-        model.undo(); check(p);
+        for (auto id : split_ids)
+            require(p.topology().skeleton(id).has_value(), "split redo IDs");
+        model.undo();
+        check(p);
         require(p.character(cid)->get().rig().contains(original), "split undo identity");
         model.redo();
     }
@@ -124,18 +133,24 @@ void split_and_delete() {
     require(plan && plan->deleted_character_ids == std::vector{cid}, "final deletion preflight");
     require(model.replace_skeletons({split_ids[1]}, {}) == sm::result::success, "delete final component");
     for (int cycle = 0; cycle < 4; ++cycle) {
-        check(p); require(!p.character(cid), "final deletion left character");
-        model.undo(); check(p);
+        check(p);
+        require(!p.character(cid), "final deletion left character");
+        model.undo();
+        check(p);
         require(p.character(cid)->get().name() == "Fred", "restored character name");
         require(p.character(cid)->get().rig().contains(split_ids[1]), "restored rig");
         model.redo();
     }
-    model.undo(); model.undo(); check(p);
+    model.undo();
+    model.undo();
+    check(p);
     require(p.character(cid)->get().rig().size() == 2, "restore both deletions");
     require(p.delete_skeleton(split_ids[0]) == sm::result::success, "direct deletion");
-    check(p); require(p.character(cid).has_value(), "direct partial deletion");
+    check(p);
+    require(p.character(cid).has_value(), "direct partial deletion");
     require(p.delete_skeleton(split_ids[1]) == sm::result::success, "direct final deletion");
-    check(p); require(!p.character(cid), "direct final character survives");
+    check(p);
+    require(!p.character(cid), "direct final character survives");
 }
 void mixed_replacements() {
     mdl::project model;
@@ -160,7 +175,9 @@ void mixed_replacements() {
         require(p.topology().skeleton(loose_new)->get().is_loose(), "mixed replacement adopted loose component");
         require(p.character(other_cid)->get().rig().contains(other_new), "mixed wrong character");
         require(p.character(cid)->get().rig().size() == 2, "mixed same-character components");
-        model.undo(); check(p); model.redo();
+        model.undo();
+        check(p);
+        model.redo();
     }
     sm::topology bad;
     auto sa = p.topology().skeleton(replacements[2]->id())->get().copy_to(bad);
@@ -206,8 +223,10 @@ void adoption_history() {
     std::vector<sm::const_skel_ref> candidates{b, c};
     require(model.adopt_skeletons(cid, candidates) == sm::result::success, "model adoption");
     for (int cycle = 0; cycle < 4; ++cycle) {
-        check(p); require(p.character(cid)->get().rig().size() == 3, "adoption redo");
-        model.undo(); check(p);
+        check(p);
+        require(p.character(cid)->get().rig().size() == 3, "adoption redo");
+        model.undo();
+        check(p);
         require(b.is_loose() && c.is_loose() && p.character(cid)->get().rig().size() == 1, "adoption undo");
         model.redo();
     }
@@ -246,13 +265,17 @@ void remapped_split() {
     require(a.root_node().copy_to(scratch, duplicate_boundary->get().id()).has_value(), "boundary copy");
     replacements.push_back(*duplicate_boundary);
     std::unordered_set<sm::object_id> regenerate{original, root};
-    for (auto s : replacements) regenerate.insert(s->id());
+    for (auto s : replacements)
+        regenerate.insert(s->id());
     require(model.replace_skeletons({original}, replacements, regenerate) == sm::result::success, "remapped split");
     const auto inserted = p.character(cid)->get().rig().skeleton_ids();
     for (int cycle = 0; cycle < 4; ++cycle) {
-        check(p); require(inserted.size() == 3, "boundary component count");
-        for (auto id : inserted) require(p.character(cid)->get().rig().contains(id), "remap redo identity");
-        model.undo(); check(p);
+        check(p);
+        require(inserted.size() == 3, "boundary component count");
+        for (auto id : inserted)
+            require(p.character(cid)->get().rig().contains(id), "remap redo identity");
+        model.undo();
+        check(p);
         require(p.character(cid)->get().rig().contains(original), "remap undo identity");
         model.redo();
     }
@@ -267,10 +290,12 @@ void ambiguous_replacement() {
     auto change = p.replace_skeletons({original}, {replacement});
     require(change.status == sm::result::ambiguous_membership && before == p.topology().to_json_str(), "ambiguous ownership guessed");
     auto state = p.snapshot_membership({original});
-    state.parents.clear(); state.parents[replacement.id()] = cid;
+    state.parents.clear();
+    state.parents[replacement.id()] = cid;
     change = p.replace_skeletons({original}, {replacement}, {}, &state);
     require(change.status == sm::result::success, "explicit provenance rejected");
-    check(p); require(p.character(cid)->get().rig().contains(replacement.id()), "explicit provenance lost");
+    check(p);
+    require(p.character(cid)->get().rig().contains(replacement.id()), "explicit provenance lost");
 }
 void rejected_redo() {
     mdl::project model;
@@ -295,13 +320,33 @@ void live_duplication() {
     const auto aid = a.id(), cid = own(p, {a});
     require(model.replace_skeletons({}, {a}) == sm::result::success, "duplicate live topology");
     for (auto s : p.topology().skeletons()) {
-        if (s->id() != aid) require(s->is_loose(), "duplicate adopted source character");
+        if (s->id() != aid)
+            require(s->is_loose(), "duplicate adopted source character");
     }
     require(p.character(cid)->get().rig().size() == 1, "duplication changed source rig");
-    check(p); model.undo(); check(p); model.redo(); check(p);
+    check(p);
+    model.undo();
+    check(p);
+    model.redo();
+    check(p);
 }
 }
 int main() {
-    try { merges(); rejected_merges(); split_and_delete(); mixed_replacements(); adoption(); adoption_history(); explicit_replacement_state(); remapped_split(); ambiguous_replacement(); rejected_redo(); live_duplication(); std::cout << "PASS character stage 2\n"; }
-    catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
+    try {
+        merges();
+        rejected_merges();
+        split_and_delete();
+        mixed_replacements();
+        adoption();
+        adoption_history();
+        explicit_replacement_state();
+        remapped_split();
+        ambiguous_replacement();
+        rejected_redo();
+        live_duplication();
+        std::cout << "PASS character stage 2\n";
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << '\n';
+        return 1;
+    }
 }

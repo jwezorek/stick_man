@@ -15,9 +15,7 @@ namespace {
         auto d = static_cast<float>(length);
         auto x1 = (r * r) / d;
         auto y1 = r * std::sqrt(1.0f - (r * r) / (d * d));
-        QList<QPointF> pts = {
-            {0,0}, {x1, y1 }, {d, 0}, {x1, -y1}, {0,0}
-        };
+        QList<QPointF> pts = { { 0, 0 }, { x1, y1 }, { d, 0 }, { x1, -y1 }, { 0, 0 } };
         return { pts };
     }
 

@@ -9,7 +9,7 @@ namespace sm {
 
     class geometry_batch {
         const topology& topology_;
-        std::vector<std::pair<node*,point>> saved_;
+        std::vector<std::pair<node*, point>> saved_;
         bool outer_, committed_ = false;
     public:
         explicit geometry_batch(const topology&);

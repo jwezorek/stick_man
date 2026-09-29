@@ -48,7 +48,8 @@ public:
         stroker.setCapStyle(Qt::RoundCap);
         stroker.setJoinStyle(Qt::RoundJoin);
         auto result = stroker.createStroke(path());
-        if (filled_) result = result.united(path());
+        if (filled_)
+            result = result.united(path());
         return result;
     }
     void set_constraint_state(bool selected, bool hovered) override {
@@ -159,12 +160,14 @@ QPointF bone_midpoint(const sm::bone& bone) {
 
 double rotation_reference_angle(const sm::topology& topology, const sm::rotation_constraint& constraint) {
     auto target = topology.get<sm::bone>(constraint.target_bone);
-    if (!target) return 0.0;
+    if (!target)
+        return 0.0;
     switch (constraint.reference.kind) {
     case sm::rotation_reference_kind::world:
         return 0.0;
     case sm::rotation_reference_kind::parent:
-        if (auto parent = target->get().parent_bone()) return parent->get().world_rotation();
+        if (auto parent = target->get().parent_bone())
+            return parent->get().world_rotation();
         return 0.0;
     case sm::rotation_reference_kind::bone:
         if (auto reference = topology.get<sm::bone>(constraint.reference.bone_id))
@@ -196,7 +199,8 @@ void ui::canvas::constraint_adornment_layer::sync(
         visual v;
         if (auto rotation = constraint.rotation()) {
             auto target = topology.get<sm::bone>(rotation->target_bone);
-            if (!target) continue;
+            if (!target)
+                continue;
             const bool filled_wedge = rotation->reference.kind == sm::rotation_reference_kind::world ||
                 rotation->reference.kind == sm::rotation_reference_kind::parent;
             const QPointF pivot = rotation->reference.kind == sm::rotation_reference_kind::world
@@ -210,18 +214,22 @@ void ui::canvas::constraint_adornment_layer::sync(
             body->setPath(filled_wedge
                 ? wedge_path(pivot, radius, start, rotation->allowed.span_angle)
                 : arc_path(pivot, radius, start, rotation->allowed.span_angle));
-            owner_.addItem(body); v.graphics.push_back(body);
+            owner_.addItem(body);
+            v.graphics.push_back(body);
 
             auto* min_handle = new handle_graphic(id, constraint_part::rotation_min,
                 radial(pivot, radius, start), scale);
             auto* max_handle = new handle_graphic(id, constraint_part::rotation_max,
                 radial(pivot, radius, end), scale);
-            owner_.addItem(min_handle); owner_.addItem(max_handle);
-            v.graphics.push_back(min_handle); v.graphics.push_back(max_handle);
+            owner_.addItem(min_handle);
+            owner_.addItem(max_handle);
+            v.graphics.push_back(min_handle);
+            v.graphics.push_back(max_handle);
         } else if (auto triangle = constraint.triangle()) {
             auto first = topology.get<sm::bone>(triangle->first_bone);
             auto second = topology.get<sm::bone>(triangle->second_bone);
-            if (!first || !second) continue;
+            if (!first || !second)
+                continue;
 
             // A rigid-triangle constraint binds two sibling bones.  Render the
             // actual rigid region: shared root + the two bound child nodes.
@@ -230,12 +238,14 @@ void ui::canvas::constraint_adornment_layer::sync(
             const QPointF second_tip = ui::to_qt_pt(second->get().child_node().world_pos());
 
             auto* body = new triangle_graphic(id, QPolygonF{root, first_tip, second_tip}, scale);
-            owner_.addItem(body); v.graphics.push_back(body);
+            owner_.addItem(body);
+            v.graphics.push_back(body);
 
             // Keep angle dragging available, but let the second node itself be the
             // visible affordance instead of drawing a separate constraint handle.
             auto* handle = new triangle_angle_hit_graphic(id, second_tip, scale);
-            owner_.addItem(handle); v.graphics.push_back(handle);
+            owner_.addItem(handle);
+            v.graphics.push_back(handle);
         }
         for (auto* graphic : v.graphics) {
             const auto* constraint_item = dynamic_cast<constraint_graphic*>(graphic);
@@ -246,8 +256,10 @@ void ui::canvas::constraint_adornment_layer::sync(
         }
         visuals_.emplace(id, std::move(v));
     }
-    if (selected_ && !visuals_.contains(*selected_)) selected_.reset();
-    if (hovered_ && !visuals_.contains(*hovered_)) hovered_.reset();
+    if (selected_ && !visuals_.contains(*selected_))
+        selected_.reset();
+    if (hovered_ && !visuals_.contains(*hovered_))
+        hovered_.reset();
     update_styles();
 }
 
@@ -269,7 +281,8 @@ void ui::canvas::constraint_adornment_layer::set_handles_visible(bool visible) {
     for (auto& [id, visual] : visuals_) {
         for (auto* graphic : visual.graphics) {
             const auto* constraint_item = dynamic_cast<constraint_graphic*>(graphic);
-            if (!constraint_item) continue;
+            if (!constraint_item)
+                continue;
             if (constraint_item->part() == constraint_part::rotation_min ||
                 constraint_item->part() == constraint_part::rotation_max)
                 graphic->setVisible(visible_ && visible);
@@ -283,7 +296,8 @@ void ui::canvas::constraint_adornment_layer::set_selected(std::optional<sm::obje
 }
 
 void ui::canvas::constraint_adornment_layer::set_hovered(std::optional<sm::object_id> id) {
-    if (hovered_ == id) return;
+    if (hovered_ == id)
+        return;
     hovered_ = id;
     update_styles();
 }
@@ -299,7 +313,8 @@ void ui::canvas::constraint_adornment_layer::update_styles() {
 }
 
 std::optional<ui::canvas::constraint_hit> ui::canvas::constraint_adornment_layer::hit(const QPointF& point) const {
-    if (!visible_) return {};
+    if (!visible_)
+        return {};
     for (auto* graphic : owner_.items(point, Qt::IntersectsItemShape, Qt::DescendingOrder,
             owner_.views().isEmpty() ? QTransform{} : owner_.views().first()->viewportTransform())) {
         if (auto* item = dynamic_cast<const constraint_graphic*>(graphic))

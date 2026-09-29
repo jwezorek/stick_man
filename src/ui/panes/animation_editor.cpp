@@ -126,13 +126,13 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
             .arg(ms % 1000, 3, 10, QLatin1Char('0')));
         if (preview_requested_ && project_) project_->preview_animation_time(seconds);
     });
-    connect(pose_strip_, &pose_strip::playback_focus_changed, this,
-        [pose_scroll](QRectF region) {
-            if (pose_scroll->horizontalScrollBar()->isSliderDown()) return;
-            // Reveal only the clipped edge; never continually center the playhead.
-            pose_scroll->ensureVisible(qRound(region.left()), qRound(region.center().y()), 16, 0);
-            pose_scroll->ensureVisible(qRound(region.right()), qRound(region.center().y()), 16, 0);
-        });
+    connect(pose_strip_, &pose_strip::playback_focus_changed, this, [pose_scroll](QRectF region) {
+        if (pose_scroll->horizontalScrollBar()->isSliderDown())
+            return;
+        // Reveal only the clipped edge; never continually center the playhead.
+        pose_scroll->ensureVisible(qRound(region.left()), qRound(region.center().y()), 16, 0);
+        pose_scroll->ensureVisible(qRound(region.right()), qRound(region.center().y()), 16, 0);
+    });
 
     artwork_timeline_ = new timeline(tabs_);
     artwork_timeline_->setObjectName("artwork_timeline");
@@ -149,7 +149,8 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
         if (project_) project_->add_animation_keyframe();
     });
     connect(insert_pose_, &QPushButton::clicked, this, [this] {
-        if (!project_) return;
+        if (!project_)
+            return;
         if (project_->insert_animation_keyframe(playback_->time()) == sm::result::success) {
             selected_transition_.reset();
             pose_strip_->set_selected_transition({});
@@ -181,7 +182,8 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
         refresh();
     });
     connect(transition_duration_, &QDoubleSpinBox::editingFinished, this, [this] {
-        if (!project_ || !selected_transition_) return;
+        if (!project_ || !selected_transition_)
+            return;
         if (project_->set_animation_transition_duration(*selected_transition_, transition_duration_->value())
                 == sm::result::success) {
             preview_requested_ = false;
@@ -253,24 +255,36 @@ void ui::pane::animation_editor::end() {
 ui::pane::animation_editor::~animation_editor() { end(); }
 
 void ui::pane::animation_editor::preview_time(double seconds) {
-    if (!project_ || !std::isfinite(seconds)) return;
+    if (!project_ || !std::isfinite(seconds))
+        return;
     preview_requested_ = true;
     playback_->seek(seconds);
 }
 
 void ui::pane::animation_editor::update_preview_status() {
-    if (!project_) { preview_status_->clear(); return; }
+    if (!project_) {
+        preview_status_->clear();
+        return;
+    }
     switch (project_->preview_status()) {
-    case mdl::animation_display_status::sampled: preview_status_->setText(tr("Playback preview (read-only)")); break;
+    case mdl::animation_display_status::sampled:
+        preview_status_->setText(tr("Playback preview (read-only)"));
+        break;
     case mdl::animation_display_status::sampling_failed:
         if (project_->preview_error() == sm::result::invalid_animation)
             preview_status_->setText(tr("Preview failed: animation data is inconsistent (for example, mismatched pinned endpoints). Showing editing pose."));
         else
             preview_status_->setText(tr("Preview failed: cannot solve pose. Showing editing pose."));
         break;
-    case mdl::animation_display_status::reconstruction_failed: preview_status_->setText(tr("Preview failed: cannot display pose. Showing editing pose.")); break;
-    case mdl::animation_display_status::empty: preview_status_->setText(tr("No poses to preview.")); break;
-    default: preview_status_->setText(tr("Editing pose")); break;
+    case mdl::animation_display_status::reconstruction_failed:
+        preview_status_->setText(tr("Preview failed: cannot display pose. Showing editing pose."));
+        break;
+    case mdl::animation_display_status::empty:
+        preview_status_->setText(tr("No poses to preview."));
+        break;
+    default:
+        preview_status_->setText(tr("Editing pose"));
+        break;
     }
 }
 
@@ -279,7 +293,8 @@ void ui::pane::animation_editor::refresh() {
     const sm::animation* animation = nullptr;
     if (project_) {
         auto owner = project_->core().character(character_);
-        if (owner) animation = owner->get().animation_data().find_animation(animation_);
+        if (owner)
+            animation = owner->get().animation_data().find_animation(animation_);
     }
     if (timing_changed) {
         if (project_) project_->exit_animation_preview();
@@ -307,8 +322,12 @@ void ui::pane::animation_editor::refresh() {
     if (animation && selected_transition_) {
         auto it = std::find_if(animation->transitions.begin(), animation->transitions.end(),
             [this](const auto& t) { return t.id == *selected_transition_; });
-        if (it != animation->transitions.end()) selected = &*it;
-        else { selected_transition_.reset(); pose_strip_->set_selected_transition({}); }
+        if (it != animation->transitions.end())
+            selected = &*it;
+        else {
+            selected_transition_.reset();
+            pose_strip_->set_selected_transition({});
+        }
     }
     transition_duration_->setEnabled(selected != nullptr);
     if (selected) {
@@ -318,16 +337,19 @@ void ui::pane::animation_editor::refresh() {
 }
 
 void ui::pane::animation_editor::rename_selected() {
-    if (!project_) return;
+    if (!project_)
+        return;
 
     const auto selected = project_->animation_session_keyframe();
-    if (!selected) return;
+    if (!selected)
+        return;
 
     auto character = project_->core().character(character_);
     auto* animation = character ?
         character->get().animation_data().find_animation(animation_) : nullptr;
     auto* keyframe = animation ? animation->find_keyframe(*selected) : nullptr;
-    if (!keyframe) return;
+    if (!keyframe)
+        return;
 
     bool ok = false;
     const QString current = keyframe->name ?
@@ -335,7 +357,8 @@ void ui::pane::animation_editor::rename_selected() {
     const QString value = QInputDialog::getText(this, tr("Rename pose"),
         tr("Name (leave empty for automatic Pose N label):"),
         QLineEdit::Normal, current, &ok);
-    if (!ok) return;
+    if (!ok)
+        return;
 
     const auto trimmed = value.trimmed();
     if (trimmed.isEmpty()) {

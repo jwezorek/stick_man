@@ -22,7 +22,7 @@ namespace {
             rv::transform(
                 [](auto&& mv)->std::tuple<mdl::handle, sm::point> {
                     const auto& [hnd, pt] = mv;
-                    return { hnd,pt };
+                    return { hnd, pt };
                 }
         ) | r::to<std::vector>();
     }

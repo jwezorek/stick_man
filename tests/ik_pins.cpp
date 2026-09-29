@@ -6,7 +6,8 @@
 
 namespace {
 void require(bool value, const char* message) {
-    if (!value) throw std::runtime_error(message);
+    if (!value)
+        throw std::runtime_error(message);
 }
 void at(sm::node_ref node, sm::point expected, const char* message) {
     require(sm::distance(node->world_pos(), expected) < 1e-8, message);
@@ -23,7 +24,10 @@ void pin_blocks_propagation() {
     auto outside = f.add({-10, 0}), pin = f.add({0, 0});
     auto elbow = f.add({10, 0}), hand = f.add({10, 10});
     auto branch = f.add({-10, 10});
-    f.link(outside, pin); f.link(pin, elbow); f.link(elbow, hand); f.link(outside, branch);
+    f.link(outside, pin);
+    f.link(pin, elbow);
+    f.link(elbow, hand);
+    f.link(outside, branch);
     sm::perform_ik(hand, {12, 8}, pin);
     at(outside, {-10, 0}, "IK moved geometry beyond pin");
     at(branch, {-10, 10}, "IK moved branch beyond pin");
@@ -36,7 +40,10 @@ void multiple_boundaries_and_failure() {
     fixture f;
     auto left = f.add({-10, 0}), a = f.add({0, 0}), hand = f.add({10, 10});
     auto b = f.add({20, 0}), right = f.add({30, 0});
-    f.link(left, a); f.link(a, hand); f.link(hand, b); f.link(b, right);
+    f.link(left, a);
+    f.link(a, hand);
+    f.link(hand, b);
+    f.link(b, right);
     require(sm::perform_ik({{hand, {10, 10}}, {hand, {100, 100}}}, {a, b})
             == sm::result::ik_no_solution_found,
         "conflicting targets for one effector were accepted");
@@ -49,7 +56,11 @@ void separated_effectors_are_independent() {
     fixture f;
     auto pin = f.add({0, 0}), le = f.add({-10, 0}), lh = f.add({-10, 10});
     auto re = f.add({10, 0}), rh = f.add({10, 10}), unused = f.add({0, -10});
-    f.link(pin, le); f.link(le, lh); f.link(pin, re); f.link(re, rh); f.link(pin, unused);
+    f.link(pin, le);
+    f.link(le, lh);
+    f.link(pin, re);
+    f.link(re, rh);
+    f.link(pin, unused);
     sm::perform_ik(lh, {-12, 8}, pin);
     const auto left_elbow = le->world_pos(), left_hand = lh->world_pos();
     at(re, {10, 0}, "inactive effector region moved");
@@ -57,8 +68,10 @@ void separated_effectors_are_independent() {
     const auto right_elbow = re->world_pos(), right_hand = rh->world_pos();
     at(le, left_elbow, "right solve disturbed left elbow");
     at(lh, left_hand, "right solve disturbed left hand");
-    le->set_world_pos({-10, 0}); lh->set_world_pos({-10, 10});
-    re->set_world_pos({10, 0}); rh->set_world_pos({10, 10});
+    le->set_world_pos({ -10, 0 });
+    lh->set_world_pos({ -10, 10 });
+    re->set_world_pos({ 10, 0 });
+    rh->set_world_pos({ 10, 10 });
     sm::perform_ik({{rh, {12, 8}}, {lh, {-12, 8}}}, {pin});
     at(le, left_elbow, "combined solve changed left result");
     at(lh, left_hand, "combined solve changed left target");
@@ -85,8 +98,12 @@ void reachable_target_between_two_pins() {
     auto outside = f.add({-10, 0}), a = f.add({0, 0}), elbow = f.add({10, 0});
     auto hand = f.add({10, 10}), other_elbow = f.add({20, 10}), b = f.add({20, 0});
     auto far_side = f.add({30, 0});
-    f.link(outside, a); f.link(a, elbow); f.link(elbow, hand);
-    f.link(hand, other_elbow); f.link(other_elbow, b); f.link(b, far_side);
+    f.link(outside, a);
+    f.link(a, elbow);
+    f.link(elbow, hand);
+    f.link(hand, other_elbow);
+    f.link(other_elbow, b);
+    f.link(b, far_side);
     sm::perform_ik({{hand, {10, 8}}}, {a, b});
     at(a, {0, 0}, "first pin moved in reachable solve");
     at(b, {20, 0}, "second pin moved in reachable solve");
@@ -108,6 +125,8 @@ int main() {
         no_pins_and_pinned_effector();
         reachable_target_between_two_pins();
         std::cout << "PASS ik_pins\n";
+    } catch (const std::exception& error) {
+        std::cerr << error.what() << '\n';
+        return 1;
     }
-    catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }

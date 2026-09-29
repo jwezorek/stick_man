@@ -146,12 +146,13 @@ ui::canvas::scene::scene(tool::input_handler& inp_handler) :
 void ui::canvas::scene::init() {
 }
 void ui::canvas::scene::init_artwork(mdl::project& project) {
-    if (!artwork_) artwork_ = new artwork_layer(*this, project);
+    if (!artwork_)
+        artwork_ = new artwork_layer(*this, project);
 }
 ui::canvas::artwork_layer& ui::canvas::scene::artwork() const { return *artwork_; }
 
 void ui::canvas::scene::drawBackground(QPainter* painter, const QRectF& dirty_rect) {
-    painter->fillRect(dirty_rect, QColor::fromRgb(53,53,53));
+    painter->fillRect(dirty_rect, QColor::fromRgb(53, 53, 53));
     painter->setRenderHint(QPainter::Antialiasing, true);
     auto scene_rect = sceneRect();
     auto rect = dirty_rect.intersected(scene_rect);
@@ -251,10 +252,11 @@ void ui::canvas::scene::focusOutEvent(QFocusEvent* focusEvent) {
         adornment->cancel();
     }
     if (manager().animation_session_active()) {
-        QKeyEvent cancel(QEvent::KeyPress,Qt::Key_Escape,Qt::NoModifier);
-        inp_handler_.keyPressEvent(*this,&cancel);
+        QKeyEvent cancel(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+        inp_handler_.keyPressEvent(*this, &cancel);
     }
-    if (bone_pick_active()) cancel_bone_pick();
+    if (bone_pick_active())
+        cancel_bone_pick();
     if (artwork_) artwork_->cancel_transform();
     if (is_status_line_visible()) {
         hide_status_line();
@@ -307,13 +309,15 @@ void ui::canvas::scene::set_contents(mdl::project& model) {
     model_ = &model;
     std::unordered_set<sm::object_id> current_node_ids;
     for (auto skel : model.display_topology().skeletons()) {
-        for (auto node : skel->nodes()) current_node_ids.insert(node->id());
+        for (auto node : skel->nodes())
+            current_node_ids.insert(node->id());
     }
     std::erase_if(pinned_node_ids_, [&](const auto& id) { return !current_node_ids.contains(id); });
 
     clear();
     if (!model.animation_mode())
-        for (auto character : model.core().characters()) addItem(new item::character(character.get()));
+        for (auto character : model.core().characters())
+            addItem(new item::character(character.get()));
     for (auto skel_ref : model.display_topology().skeletons()) {
         const auto& skel = skel_ref.get();
         auto& root = model.display_topology().get<sm::node>(skel.root_node().id())->get();
@@ -343,12 +347,14 @@ ui::canvas::item::character* ui::canvas::scene::selected_character() const {
 }
 ui::canvas::item::character* ui::canvas::scene::character_item(const sm::object_id& id) const {
     for (auto* candidate : canvas_items())
-        if (auto* c = dynamic_cast<item::character*>(candidate); c && c->id() == id) return c;
+        if (auto* c = dynamic_cast<item::character*>(candidate); c && c->id() == id)
+            return c;
     return nullptr;
 }
 mdl::selection ui::canvas::scene::selected_objects() const {
     mdl::selection result;
-    for (auto* item : selection_) result.push_back(item->to_selection_object());
+    for (auto* item : selection_)
+        result.push_back(item->to_selection_object());
     return result;
 }
 std::vector<ui::canvas::item::skeleton*> ui::canvas::scene::resolved_skeletons() const {
@@ -362,10 +368,12 @@ std::vector<ui::canvas::item::skeleton*> ui::canvas::scene::resolved_skeletons()
 }
 std::vector<sm::const_skel_ref> ui::canvas::scene::loose_selection() const {
     auto skeletons = selected_skeletons();
-    if (skeletons.empty() || skeletons.size() != selection_.size()) return {};
+    if (skeletons.empty() || skeletons.size() != selection_.size())
+        return {};
     std::vector<sm::const_skel_ref> result;
     for (auto* skel : skeletons) {
-        if (!skel->model().is_loose()) return {};
+        if (!skel->model().is_loose())
+            return {};
         result.push_back(skel->model());
     }
     return result;
@@ -392,7 +400,8 @@ bool ui::canvas::scene::is_node_pinned(const sm::object_id& id) const {
 }
 
 void ui::canvas::scene::set_node_pinned(const sm::object_id& id, bool pinned) {
-    if (pinned) pinned_node_ids_.insert(id);
+    if (pinned)
+        pinned_node_ids_.insert(id);
     else pinned_node_ids_.erase(id);
 
     for (auto* node : node_items()) {
@@ -408,8 +417,12 @@ void ui::canvas::scene::toggle_node_pinned(const sm::object_id& id) {
 }
 
 void ui::canvas::scene::toggle_node_pinned_undoable(const sm::object_id& id) {
-    if (model_ && model_->animation_preview_active()) return;
-    if (!model_) { toggle_node_pinned(id); return; }
+    if (model_ && model_->animation_preview_active())
+        return;
+    if (!model_) {
+        toggle_node_pinned(id);
+        return;
+    }
     // Incoming locks constrain this pose; only its authored pin controls the
     // next pose. Toggling that pin must not read or remove the incoming lock.
     const bool before = pinned_node_ids_.contains(id);
@@ -450,7 +463,8 @@ void ui::canvas::scene::set_constraint_tool_active(bool active) {
     constraint_tool_active_ = active;
     constraint_adornments_->set_handles_visible(active && !(model_ && model_->animation_mode()));
     constraint_adornments_->set_visible(constraints_visible());
-    if (!active) set_hovered_constraint({});
+    if (!active)
+        set_hovered_constraint({});
 }
 
 void ui::canvas::scene::set_constraints_view_visible(bool visible) {
@@ -459,18 +473,21 @@ void ui::canvas::scene::set_constraints_view_visible(bool visible) {
 }
 
 std::optional<ui::canvas::constraint_hit> ui::canvas::scene::constraint_at(const QPointF& point) const {
-    if (model_ && model_->animation_mode()) return {};
+    if (model_ && model_->animation_mode())
+        return {};
     return constraint_adornments_->hit(point);
 }
 
 const sm::constraint* ui::canvas::scene::selected_constraint() const {
-    if (!selected_constraint_id_ || !model_) return nullptr;
+    if (!selected_constraint_id_ || !model_)
+        return nullptr;
     auto constraint = model_->core().constraint_by_id(*selected_constraint_id_);
     return constraint ? &constraint->get() : nullptr;
 }
 
 void ui::canvas::scene::select_constraint(sm::object_id id) {
-    if (!model_ || !model_->core().constraint_by_id(id)) return;
+    if (!model_ || !model_->core().constraint_by_id(id))
+        return;
     selection_.clear();
     selected_constraint_id_ = id;
     constraint_adornments_->set_selected(id);
@@ -478,7 +495,8 @@ void ui::canvas::scene::select_constraint(sm::object_id id) {
 }
 
 void ui::canvas::scene::clear_constraint_selection(bool notify) {
-    if (!selected_constraint_id_) return;
+    if (!selected_constraint_id_)
+        return;
     selected_constraint_id_.reset();
     constraint_adornments_->set_selected({});
     if (notify) {
@@ -529,7 +547,8 @@ void ui::canvas::scene::transform_selection(bone_transform trans) {
 }
 
 void ui::canvas::scene::add_to_selection(std::span<ui::canvas::item::base*> itms, bool sync) {
-    if (!itms.empty()) clear_constraint_selection(false);
+    if (!itms.empty())
+        clear_constraint_selection(false);
     selection_.insert(itms.begin(), itms.end());
 	if (sync) {
 		sync_selection();
@@ -537,7 +556,7 @@ void ui::canvas::scene::add_to_selection(std::span<ui::canvas::item::base*> itms
 }
 
 void ui::canvas::scene::add_to_selection(ui::canvas::item::base* itm, bool sync) {
-    add_to_selection({ &itm,1 }, sync);
+    add_to_selection({ &itm, 1 }, sync);
 }
 
 void ui::canvas::scene::subtract_from_selection(std::span<ui::canvas::item::base*> itms, bool sync) {
@@ -550,17 +569,17 @@ void ui::canvas::scene::subtract_from_selection(std::span<ui::canvas::item::base
 }
 
 void ui::canvas::scene::subtract_from_selection(ui::canvas::item::base* itm, bool sync) {
-    subtract_from_selection({ &itm,1 }, sync);
+    subtract_from_selection({ &itm, 1 }, sync);
 }
 
 void ui::canvas::scene::set_selection(std::span<ui::canvas::item::base*> itms, bool sync) {
     clear_constraint_selection(false);
     selection_.clear();
-    add_to_selection(itms,sync);
+    add_to_selection(itms, sync);
 }
 
 void ui::canvas::scene::set_selection(ui::canvas::item::base* itm, bool sync) {
-    set_selection({ &itm,1 },sync);
+    set_selection({ &itm, 1 }, sync);
 }
 
 void ui::canvas::scene::clear_selection() {
@@ -685,22 +704,27 @@ void ui::canvas::scene::hide_status_line() {
 }
 
 ui::canvas::item::bone* ui::canvas::scene::bone_pick_target(const QPointF& pt) const {
-    if (!bone_pick_) return nullptr;
+    if (!bone_pick_)
+        return nullptr;
     for (auto* graphics : items(pt, Qt::IntersectsItemShape, Qt::DescendingOrder, view().viewportTransform())) {
         for (auto* candidate = graphics; candidate; candidate = candidate->parentItem()) {
             auto* bone = dynamic_cast<item::bone*>(candidate);
-            if (!bone || bone->effectiveOpacity() <= 0) continue;
+            if (!bone || bone->effectiveOpacity() <= 0)
+                continue;
             auto parent = bone->model().owner().parent_character();
-            if (parent && parent->get().id() == bone_pick_->character) return bone;
+            if (parent && parent->get().id() == bone_pick_->character)
+                return bone;
         }
     }
     return nullptr;
 }
 
 void ui::canvas::scene::update_bone_pick_hover(const QPointF& pt) {
-    if (!bone_pick_) return;
+    if (!bone_pick_)
+        return;
     auto* target = bone_pick_target(pt);
-    if (target == bone_pick_->hovered) return;
+    if (target == bone_pick_->hovered)
+        return;
     bone_pick_->hovered = target;
     if (!target) {
         if (bone_pick_->highlight) bone_pick_->highlight->hide();
@@ -722,7 +746,8 @@ void ui::canvas::scene::update_bone_pick_hover(const QPointF& pt) {
 }
 
 void ui::canvas::scene::finish_bone_pick(std::optional<sm::object_id> bone) {
-    if (!bone_pick_) return;
+    if (!bone_pick_)
+        return;
     auto picked = std::move(bone_pick_->picked);
     auto cancelled = std::move(bone_pick_->cancelled);
     auto previous_cursor = bone_pick_->previous_cursor;
@@ -743,7 +768,8 @@ void ui::canvas::scene::finish_bone_pick(std::optional<sm::object_id> bone) {
     hide_status_line();
 
     if (bone) {
-        if (picked) picked(*bone);
+        if (picked)
+            picked(*bone);
     } else if (cancelled) {
         cancelled();
     }
@@ -807,16 +833,19 @@ ui::canvas::item::node* ui::canvas::scene::top_node(const QPointF& pt) const {
 }
 
 ui::canvas::item::base* ui::canvas::scene::top_item(const QPointF& pt) const {
-    if (artwork_ && !artwork_->show_skeleton()) return nullptr;
+    if (artwork_ && !artwork_->show_skeleton())
+        return nullptr;
     for (auto* graphics : items(pt, Qt::IntersectsItemShape, Qt::DescendingOrder, view().viewportTransform())) {
         for (auto* candidate = graphics; candidate; candidate = candidate->parentItem())
-            if (auto* item = dynamic_cast<item::base*>(candidate)) return item;
+            if (auto* item = dynamic_cast<item::base*>(candidate))
+                return item;
     }
     return nullptr;
 }
 
 std::vector<ui::canvas::item::base*> ui::canvas::scene::items_in_rect(const QRectF& r) const {
-    if (artwork_ && !artwork_->show_skeleton()) return {};
+    if (artwork_ && !artwork_->show_skeleton())
+        return {};
     return qt_to_vector_of_type<ui::canvas::item::base>( items(r.normalized()) );
 }
 
@@ -850,13 +879,17 @@ int ui::canvas::scene::closest_zoom_level() const
 
 void ui::canvas::scene::keyPressEvent(QKeyEvent* event) {
     if (bone_pick_active()) {
-        if (event->key() == Qt::Key_Escape) cancel_bone_pick();
+        if (event->key() == Qt::Key_Escape)
+            cancel_bone_pick();
         event->accept();
         return;
     }
     if (interactive_adornment_) {
         auto adornment = interactive_adornment_;
-        if (adornment->keyPressEvent(event)) { event->accept(); return; }
+        if (adornment->keyPressEvent(event)) {
+            event->accept();
+            return;
+        }
     }
     if (artwork_ && artwork_->transform_editing() && !manager().animation_session_active()) {
         if (event->key() == Qt::Key_Escape) artwork_->cancel_transform();
@@ -888,14 +921,18 @@ void ui::canvas::scene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
             cancel_bone_pick();
         } else if (event->button() == Qt::LeftButton) {
             update_bone_pick_hover(event->scenePos());
-            if (bone_pick_ && bone_pick_->hovered) finish_bone_pick(bone_pick_->hovered->model().id());
+            if (bone_pick_ && bone_pick_->hovered)
+                finish_bone_pick(bone_pick_->hovered->model().id());
         }
         event->accept();
         return;
     }
     if (interactive_adornment_) {
         auto adornment = interactive_adornment_;
-        if (adornment->mousePressEvent(event)) { event->accept(); return; }
+        if (adornment->mousePressEvent(event)) {
+            event->accept();
+            return;
+        }
     }
     if (artwork_ && artwork_->transform_editing() && !manager().animation_session_active()) {
         if (event->button() == Qt::LeftButton) artwork_->begin_transform(event->scenePos());
@@ -917,7 +954,10 @@ void ui::canvas::scene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
     }
     if (interactive_adornment_) {
         auto adornment = interactive_adornment_;
-        if (adornment->mouseMoveEvent(event)) { event->accept(); return; }
+        if (adornment->mouseMoveEvent(event)) {
+            event->accept();
+            return;
+        }
     }
     if (artwork_ && artwork_->transform_editing() && !manager().animation_session_active()) {
         artwork_->update_transform(event->scenePos());
@@ -938,7 +978,10 @@ void ui::canvas::scene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
     }
     if (interactive_adornment_) {
         auto adornment = interactive_adornment_;
-        if (adornment->mouseReleaseEvent(event)) { event->accept(); return; }
+        if (adornment->mouseReleaseEvent(event)) {
+            event->accept();
+            return;
+        }
     }
     if (artwork_ && artwork_->transform_editing() && !manager().animation_session_active()) {
         if (event->button() == Qt::LeftButton) artwork_->end_transform(event->scenePos());
@@ -989,16 +1032,28 @@ std::optional<mdl::skel_piece> ui::canvas::selected_single_model(const scene& ca
 	return {};
 }
 void ui::canvas::scene::dragEnterEvent(QGraphicsSceneDragDropEvent* event) {
-    if (artwork_ && event->mimeData()->hasFormat(frame_mime_type)) { event->setDropAction(Qt::CopyAction); event->accept(); }
-    else event->ignore();
+    if (artwork_ && event->mimeData()->hasFormat(frame_mime_type)) {
+        event->setDropAction(Qt::CopyAction);
+        event->accept();
+    } else
+        event->ignore();
 }
 void ui::canvas::scene::dragMoveEvent(QGraphicsSceneDragDropEvent* event) {
-    if (artwork_ && artwork_->can_drop(event->mimeData(), event->scenePos())) { event->setDropAction(Qt::CopyAction); event->accept(); }
-    else event->ignore();
+    if (artwork_ && artwork_->can_drop(event->mimeData(), event->scenePos())) {
+        event->setDropAction(Qt::CopyAction);
+        event->accept();
+    } else
+        event->ignore();
 }
 void ui::canvas::scene::dropEvent(QGraphicsSceneDragDropEvent* event) {
     try {
-        if (artwork_ && artwork_->drop_frame(event->mimeData(), event->scenePos())) { event->setDropAction(Qt::CopyAction); event->accept(); }
-        else event->ignore();
-    } catch (const std::exception& e) { QMessageBox::warning(views().first(), "Assign image", e.what()); event->ignore(); }
+        if (artwork_ && artwork_->drop_frame(event->mimeData(), event->scenePos())) {
+            event->setDropAction(Qt::CopyAction);
+            event->accept();
+        } else
+            event->ignore();
+    } catch (const std::exception& e) {
+        QMessageBox::warning(views().first(), "Assign image", e.what());
+        event->ignore();
+    }
 }

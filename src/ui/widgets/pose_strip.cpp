@@ -72,12 +72,14 @@ bool ui::pose_strip::refresh() {
     const sm::animation* animation = nullptr;
     if (project_) {
         auto character = project_->core().character(character_);
-        if (character) animation = character->get().animation_data().find_animation(animation_);
+        if (character)
+            animation = character->get().animation_data().find_animation(animation_);
     }
     pose_strip_layout next(animation);
     const bool timing_changed = !layout_.same_timing(next);
     layout_ = std::move(next);
-    if (timing_changed) playback_time_ = 0;
+    if (timing_changed)
+        playback_time_ = 0;
     thumbnails_.clear();
     setMinimumWidth(int(std::ceil(layout_.width)));
     updateGeometry();
@@ -99,13 +101,15 @@ void ui::pose_strip::set_playback_time(double seconds) {
 }
 
 void ui::pose_strip::set_selected_transition(std::optional<sm::object_id> id) {
-    if (selected_transition_ == id) return;
+    if (selected_transition_ == id)
+        return;
     selected_transition_ = id;
     update();
 }
 
 QPixmap ui::pose_strip::render_preview(sm::object_id id) {
-    if (!project_) return {};
+    if (!project_)
+        return {};
 
     auto character = project_->core().character(character_);
     auto* animation = character ?
@@ -125,14 +129,17 @@ QPixmap ui::pose_strip::thumbnail(const sm::pose_keyframe& keyframe) {
 
     QPixmap pixmap(136, 82);
     pixmap.fill(Qt::transparent);
-    if (!project_ || !canvases_) return pixmap;
+    if (!project_ || !canvases_)
+        return pixmap;
 
     auto character_ref = project_->core().character(character_);
-    if (!character_ref) return pixmap;
+    if (!character_ref)
+        return pixmap;
     const auto& character = character_ref->get();
 
     auto* animation = character.animation_data().find_animation(animation_);
-    if (!animation) return pixmap;
+    if (!animation)
+        return pixmap;
 
     auto& layer = canvases_->active_canvas().artwork();
     const bool has_artwork = !character.artwork().appearances().empty();
@@ -242,7 +249,8 @@ QPixmap ui::pose_strip::thumbnail(const sm::pose_keyframe& keyframe) {
 void ui::pose_strip::paintEvent(QPaintEvent*) {
     QPainter painter(this);
     painter.fillRect(rect(), palette().base());
-    if (!project_) return;
+    if (!project_)
+        return;
 
     auto character = project_->core().character(character_);
     auto* animation = character ?
@@ -373,12 +381,14 @@ bool ui::pose_strip::event(QEvent* event) {
 }
 
 void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
-    if (!project_ || event->button() != Qt::LeftButton) return;
+    if (!project_ || event->button() != Qt::LeftButton)
+        return;
 
     auto character = project_->core().character(character_);
     auto* animation = character ?
         character->get().animation_data().find_animation(animation_) : nullptr;
-    if (!animation) return;
+    if (!animation)
+        return;
 
     if (event->position().y() <= 20.0) {
         scrubbing_ = true;
@@ -400,12 +410,14 @@ void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
 }
 
 void ui::pose_strip::mouseMoveEvent(QMouseEvent* event) {
-    if (!scrubbing_) return;
+    if (!scrubbing_)
+        return;
     if (auto time = layout_.time_at_x(event->position().x())) emit scrub_requested(*time);
 }
 
 void ui::pose_strip::mouseReleaseEvent(QMouseEvent* event) {
-    if (!scrubbing_ || event->button() != Qt::LeftButton) return;
+    if (!scrubbing_ || event->button() != Qt::LeftButton)
+        return;
     if (auto time = layout_.time_at_x(event->position().x())) emit scrub_requested(*time);
     scrubbing_ = false;
 }

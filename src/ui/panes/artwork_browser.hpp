@@ -3,7 +3,10 @@
 #include <array>
 #include "../../model/project.hpp"
 
-namespace ui::canvas { class manager; class artwork_layer; }
+namespace ui::canvas {
+    class manager;
+    class artwork_layer;
+}
 namespace ui::pane {
     std::optional<sm::object_id> artwork_character(const mdl::selection& selection);
     class artwork_browser : public QDockWidget {

@@ -82,7 +82,8 @@ mdl::command mdl::commands::make_add_bone_command(
             auto& u = commands::resolve<sm::node>(proj, state->u_hnd);
             auto& v = commands::resolve<sm::node>(proj, state->v_hnd);
             state->status = proj.core().can_create_bone(u, v);
-            if (state->status != sm::result::success) return;
+            if (state->status != sm::result::success)
+                return;
             auto& skel_u = u.owner();
             auto& skel_v = v.owner();
             state->before_constraints = proj.core().constraints();
@@ -170,7 +171,8 @@ mdl::command mdl::commands::make_replace_skeletons_command(
                 state->after_membership ? &*state->after_membership : nullptr
             );
             state->status = change.status;
-            if (change.status != sm::result::success) return;
+            if (change.status != sm::result::success)
+                return;
             if (state->after_constraints) {
                 if (proj.core().restore_constraints(*state->after_constraints) != sm::result::success)
                     throw std::runtime_error("unable to restore replacement constraints");
@@ -213,8 +215,9 @@ mdl::commands::transform_nodes_and_bones_state::transform_nodes_and_bones_state(
         old_node_to_position[hnd] = node.world_pos();
     }
     // A constrained node edit can move rigid siblings and their descendants.
-    for (auto skel : proj.topology().skeletons()) for (auto node : skel->nodes())
-        old_node_to_position[to_handle(node)] = node->world_pos();
+    for (auto skel : proj.topology().skeletons())
+        for (auto node : skel->nodes())
+            old_node_to_position[to_handle(node)] = node->world_pos();
 }
 mdl::commands::transform_nodes_and_bones_state::transform_nodes_and_bones_state(
         project& proj,

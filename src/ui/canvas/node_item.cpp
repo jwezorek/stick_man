@@ -42,7 +42,7 @@ ui::canvas::item::node::node(sm::node& node, double scale) :
 void ui::canvas::item::node::set_pin_visible(bool visible) {
     if (!pin_ && visible) {
         pin_ = new QGraphicsEllipseItem();
-        set_circle(pin_, { 0,0 }, k_pin_radius, 1.0 / canvas()->scale());
+        set_circle(pin_, { 0, 0 }, k_pin_radius, 1.0 / canvas()->scale());
         pin_->setPen(Qt::NoPen);
         pin_->setBrush(Qt::black);
         pin_->setParentItem(this);
@@ -63,8 +63,12 @@ void ui::canvas::item::node::set_lock_visible(bool visible, const QString& toolt
         lock_->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
         lock_->setAcceptedMouseButtons(Qt::NoButton);
     }
-    if (!lock_) return;
-    if (!visible) { lock_->hide(); return; }
+    if (!lock_)
+        return;
+    if (!visible) {
+        lock_->hide();
+        return;
+    }
     QPainterPath path;
     path.addRoundedRect(QRectF(7, -2, 8, 7), 1, 1);
     path.moveTo(9, -2);
@@ -102,14 +106,14 @@ void ui::canvas::item::node::sync_item_to_model() {
     apply_display_style(canv.scale());
     set_circle(this, to_qt_pt(model_.world_pos()), k_node_radius, inv_scale);
     if (pin_) {
-        set_circle(pin_, { 0,0 }, k_pin_radius, inv_scale);
+        set_circle(pin_, { 0, 0 }, k_pin_radius, inv_scale);
     }
 }
 
 void ui::canvas::item::node::sync_sel_frame_to_model() {
     auto* sf = static_cast<QGraphicsEllipseItem*>(selection_frame_);
     auto inv_scale = 1.0 / canvas()->scale();
-    set_circle(sf, { 0,0 }, k_node_radius + k_sel_frame_distance, inv_scale);
+    set_circle(sf, { 0, 0 }, k_node_radius + k_sel_frame_distance, inv_scale);
     sf->setPen(QPen(k_sel_color, k_sel_thickness * inv_scale, Qt::DotLine));
 }
 
@@ -117,7 +121,7 @@ QGraphicsItem* ui::canvas::item::node::create_selection_frame() const {
     auto& canv = *canvas();
     auto inv_scale = 1.0 / canvas()->scale();
     auto sf = new QGraphicsEllipseItem();
-    set_circle(sf, { 0.0,0.0 }, k_node_radius + k_sel_frame_distance, inv_scale);
+    set_circle(sf, { 0.0, 0.0 }, k_node_radius + k_sel_frame_distance, inv_scale);
     sf->setPen(QPen(k_sel_color, k_sel_thickness * inv_scale, Qt::DotLine));
     sf->setBrush(Qt::NoBrush);
     return sf;

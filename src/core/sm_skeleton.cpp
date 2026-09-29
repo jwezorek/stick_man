@@ -267,7 +267,8 @@ sm::result sm::skeleton::from_json(sm::topology& owner, const json& jobj) {
         if (!b || bones_.contains(b->get().id())) {
             return sm::result::invalid_json;
         }
-        if (bone_json.contains("rot_constraint")) return sm::result::invalid_json;
+        if (bone_json.contains("rot_constraint"))
+            return sm::result::invalid_json;
         bones_[b->get().id()] = &b->get();
     }
     auto* root = node_from_reference(*this, jobj.at("root"));
@@ -319,36 +320,44 @@ void sm::skeleton::apply(matrix& mat) {
     for (auto node : nodes()) {
         node->apply(mat);
     }
-    if (batch.commit() != result::success) throw std::invalid_argument("transform violates rigid geometry");
+    if (batch.commit() != result::success)
+        throw std::invalid_argument("transform violates rigid geometry");
 }
 /*------------------------------------------------------------------------------------------------*/
 
 sm::topology::topology() {}
 
-void sm::topology::copy_constraints_from(const topology& source,
-        const std::unordered_map<object_id,object_id>& ids) {
+void sm::topology::copy_constraints_from(
+    const topology& source, const std::unordered_map<object_id, object_id>& ids) {
     // Source can be this topology when duplicating within a scratch document.
     const auto snapshot = source.constraints();
-    for (auto& [id,c] : snapshot) {
+    for (auto& [id, c] : snapshot) {
         auto copy = c.remapped(ids);
         auto target = copy.rotation() ? copy.rotation()->target_bone : copy.triangle()->first_bone;
-        if (!get<bone>(target)) continue;
-        if (auto r = copy.rotation(); r && r->reference.kind == rotation_reference_kind::bone
-                && !get<bone>(r->reference.bone_id)) continue;
-        if (auto t = copy.triangle(); t && !get<bone>(t->second_bone)) continue;
+        if (!get<bone>(target))
+            continue;
+        if (auto r = copy.rotation(); r && r->reference.kind == rotation_reference_kind::bone &&
+            !get<bone>(r->reference.bone_id))
+            continue;
+        if (auto t = copy.triangle(); t && !get<bone>(t->second_bone))
+            continue;
         bool changed = false;
-        if (auto r = c.rotation()) changed = ids.contains(r->target_bone);
+        if (auto r = c.rotation())
+            changed = ids.contains(r->target_bone);
         else changed = ids.contains(c.triangle()->first_bone) || ids.contains(c.triangle()->second_bone);
         if (changed && !ids.contains(id)) {
-            auto remap = ids; remap.emplace(id,generate_object_id()); copy = c.remapped(remap);
+            auto remap = ids;
+            remap.emplace(id, generate_object_id());
+            copy = c.remapped(remap);
         }
-        constraints_.insert_or_assign(copy.id(),copy);
+        constraints_.insert_or_assign(copy.id(), copy);
     }
 }
 void sm::topology::prune_constraints() {
-    std::erase_if(constraints_,[&](const auto& entry) {
-        constraint_map one; one.emplace(entry);
-        return validate_constraints(*this,one) != result::success;
+    std::erase_if(constraints_, [&](const auto& entry) {
+        constraint_map one;
+        one.emplace(entry);
+        return validate_constraints(*this, one) != result::success;
     });
 }
 
@@ -566,9 +575,11 @@ sm::result sm::topology::from_json(const json& topology_json) {
             }
             skeletons_.emplace(id, std::move(skel));
         }
-        if (topology_json.contains("constraints")) constraints_ = constraints_from_json(topology_json.at("constraints"));
-        if (auto status = validate_constraints(*this,constraints_); status != result::success) {
-            clear(); return status;
+        if (topology_json.contains("constraints"))
+            constraints_ = constraints_from_json(topology_json.at("constraints"));
+        if (auto status = validate_constraints(*this, constraints_); status != result::success) {
+            clear();
+            return status;
         }
     }
     catch (...) {
@@ -591,5 +602,6 @@ void sm::topology::apply(matrix& mat) {
     for (auto skel : skeletons()) {
         skel->apply(mat);
     }
-    if (batch.commit() != result::success) throw std::invalid_argument("transform violates rigid geometry");
+    if (batch.commit() != result::success)
+        throw std::invalid_argument("transform violates rigid geometry");
 }
