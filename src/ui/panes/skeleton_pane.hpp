@@ -30,6 +30,7 @@ namespace ui {
             skeleton(ui::stick_man* mgr);
             selection_properties& sel_properties();
             void init(canvas::manager& canvases, mdl::project& proj);
+            void set_animation_mode(bool active);
             bool validate_props_name_change(const std::string& new_name);
 
         };

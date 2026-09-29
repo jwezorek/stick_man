@@ -312,6 +312,7 @@ void ui::pane::main_skeleton_pane::select_items(const std::vector<QStandardItem*
 }
 
 void ui::pane::main_skeleton_pane::handle_canv_sel_change() {
+    if (animation_mode_) return;
 
 	disconnect_tree_sel_handler();
 
@@ -327,6 +328,7 @@ void ui::pane::main_skeleton_pane::handle_canv_sel_change() {
 }
 
 void ui::pane::main_skeleton_pane::handle_tree_change(QStandardItem* item) {
+    if (animation_mode_) return;
     if (is_character_treeitem(item)) {
         auto id = sm::object_id::from_string(item->data(k_model_role).toString().toStdString());
         auto name = item->text().toStdString();
@@ -400,6 +402,7 @@ void ui::pane::main_skeleton_pane::init_aux(canvas::manager& canvases, mdl::proj
 	connect(project_, &mdl::project::name_changed, this, &main_skeleton_pane::handle_rename);
     skeleton_tree_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(skeleton_tree_, &QWidget::customContextMenuRequested, this, [this](QPoint point) {
+        if (animation_mode_) return;
         QMenu menu(skeleton_tree_);
         auto* make = menu.addAction("Make Character");
         auto* adopt = menu.addAction("Add to Character...");
@@ -412,6 +415,30 @@ void ui::pane::main_skeleton_pane::init_aux(canvas::manager& canvases, mdl::proj
     });
 }
 
+void ui::pane::main_skeleton_pane::set_animation_mode(bool active) {
+    if (animation_mode_ == active) return;
+    animation_mode_ = active;
+
+    // The tree is backed by the persistent project topology, while Animation
+    // Mode displays a detached working topology. Keep the tree visible but inert
+    // so it cannot navigate through stale persistent-model pointers.
+    if (active) {
+        tree_enabled_before_ = skeleton_tree_->isEnabled();
+        skeleton_tree_->setEnabled(false);
+    } else {
+        skeleton_tree_->setEnabled(tree_enabled_before_);
+    }
+
+    sel_properties_->set_read_only(active);
+    // set_selection() can change context-sensitive enabled state (for example,
+    // a constraint's reference-bone combo), so refresh once normal editing is
+    // restored rather than blindly enabling everything.
+    if (!active) {
+        handle_canv_sel_change();
+        sel_properties_->set(canvas());
+    }
+}
+
 bool ui::pane::main_skeleton_pane::validate_props_name_change(const std::string&) {
-    return selected_single_model(canvas()).has_value();
+    return !animation_mode_ && selected_single_model(canvas()).has_value();
 }

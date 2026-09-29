@@ -36,14 +36,18 @@ namespace ui {
         class selection_properties : public QStackedWidget {
             std::unordered_map<selection_type, props::props_box*> props_;
             pane::skeleton* skel_pane_;
+            bool read_only_ = false;
 
             void handle_selection_changed(canvas::scene& canv);
+            void apply_read_only(props::props_box& props);
 
         public:
             selection_properties(const props::current_canvas_fn& fn, pane::skeleton* pane);
             props::props_box* current_props() const;
             void set(const canvas::scene& canv);
             void init(canvas::manager& canvases, mdl::project& proj);
+            void set_read_only(bool read_only);
+            bool read_only() const { return read_only_; }
             pane::skeleton& skel_pane();
         };
 

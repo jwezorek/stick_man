@@ -30,6 +30,8 @@ namespace ui {
             selection_properties* sel_properties_;
             skeleton* skeleton_pane_;
             ui::stick_man* main_wnd_;
+            bool animation_mode_ = false;
+            bool tree_enabled_before_ = true;
 
             void expand_selected_items();
             void handle_rename(mdl::const_skel_piece piece, const std::string& new_name);
@@ -52,6 +54,7 @@ namespace ui {
 
             main_skeleton_pane(skeleton* parent, ui::stick_man* mgr);
             selection_properties& sel_properties();
+            void set_animation_mode(bool active);
             bool validate_props_name_change(const std::string& new_name);
         };
 

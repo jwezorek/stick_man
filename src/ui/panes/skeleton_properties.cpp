@@ -1,4 +1,5 @@
 #include "skeleton_properties.hpp"
+#include "properties.hpp"
 #include "../canvas/scene.hpp"
 #include "../canvas/skel_item.hpp"
 #include "skeleton_pane.hpp"
@@ -91,6 +92,7 @@ void ui::pane::props::character::populate(mdl::project&) {
     skeletons_->setFrameShape(QFrame::NoFrame);
 
     connect(name_, &QLineEdit::editingFinished, this, [this] {
+        if (parent_->read_only()) return;
         if (auto* selected = get_current_canv_().selected_character())
             proj_->rename(selected->id(), name_->text().toStdString());
     });

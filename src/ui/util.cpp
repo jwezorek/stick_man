@@ -247,6 +247,10 @@ void ui::string_edit::focusOutEvent(QFocusEvent* event) {
 }
 
 void ui::string_edit::handle_done_editing() {
+    if (isReadOnly()) {
+        old_val_ = value();
+        return;
+    }
 	if (valid_fn_ && !valid_fn_(value())) {
 		this->setText(old_val_.c_str());
 	}
@@ -282,6 +286,10 @@ void ui::number_edit::make_acceptable_value() {
 }
 
 void ui::number_edit::handle_done_editing() {
+    if (isReadOnly()) {
+        old_val_ = value();
+        return;
+    }
     make_acceptable_value();
     if (value() != old_val_) {
         emit value_changed(*value());

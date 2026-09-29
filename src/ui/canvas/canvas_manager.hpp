@@ -53,6 +53,14 @@ namespace ui {
                 );
             }
         signals:
+            // Emitted for every canvas selection change, including selections in
+            // Animation Mode's detached working topology. View-only UI such as
+            // the Properties pane should listen to this signal.
+            void view_selection_changed(ui::canvas::scene& canv);
+
+            // Persistent-project selection notification. This remains suppressed
+            // while Animation Mode is displaying its detached working topology so
+            // authoring panes cannot accidentally consume detached model pointers.
             void selection_changed(ui::canvas::scene& canv);
             void canvas_refresh(const sm::project& project);
         };

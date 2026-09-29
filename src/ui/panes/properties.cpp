@@ -98,6 +98,7 @@ void ui::pane::selection_properties::set(const ui::canvas::scene& canv) {
 
 	old_props->lose_selection();
 	current_props()->set_selection(canv);
+    apply_read_only(*current_props());
 
 	auto bone_items = ui::as_range_view_of_type<ui::canvas::item::bone>(canv.selection());
 	for (ui::canvas::item::bone* bi : bone_items) {
@@ -109,13 +110,36 @@ void ui::pane::selection_properties::handle_selection_changed(canvas::scene& can
     set(canv);
 }
 
+void ui::pane::selection_properties::apply_read_only(props::props_box& props) {
+    for (auto* edit : props.findChildren<QLineEdit*>())
+        edit->setReadOnly(read_only_);
+
+    for (auto* combo : props.findChildren<QComboBox*>())
+        combo->setEnabled(!read_only_);
+
+    // Navigation links remain live in read-only mode; ordinary buttons mutate
+    // the project and therefore do not.
+    for (auto* button : props.findChildren<QPushButton*>())
+        if (!dynamic_cast<ui::hyperlink_button*>(button))
+            button->setEnabled(!read_only_);
+}
+
+void ui::pane::selection_properties::set_read_only(bool read_only) {
+    read_only_ = read_only;
+    for (const auto& [_, prop_box] : props_)
+        apply_read_only(*prop_box);
+}
+
 void ui::pane::selection_properties::init(canvas::manager& canvases, mdl::project& proj)
 {
     for (const auto& [key, prop_box] : props_) {
         prop_box->init(proj);
     }
     set(canvases.active_canvas());
-    connect(&canvases, &canvas::manager::selection_changed,
+    // Properties describe the objects actually selected in the canvas.  In
+    // Animation Mode those objects belong to the detached working topology, so
+    // use the view-selection signal rather than the persistent-project-only one.
+    connect(&canvases, &canvas::manager::view_selection_changed,
         this,
         &selection_properties::handle_selection_changed
     );

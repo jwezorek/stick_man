@@ -481,8 +481,11 @@ void ui::canvas::scene::clear_constraint_selection(bool notify) {
     if (!selected_constraint_id_) return;
     selected_constraint_id_.reset();
     constraint_adornments_->set_selected({});
-    if (notify && !manager().animation_session_active() && !(model_ && model_->animation_mode()))
-        emit manager().selection_changed(*this);
+    if (notify) {
+        emit manager().view_selection_changed(*this);
+        if (!manager().animation_session_active() && !(model_ && model_->animation_mode()))
+            emit manager().selection_changed(*this);
+    }
 }
 
 void ui::canvas::scene::set_hovered_constraint(std::optional<sm::object_id> id) {
@@ -600,6 +603,12 @@ void ui::canvas::scene::sync_selection() {
         itm->set_selected(selected);
     }
     if (artwork_) artwork_->refresh_guides();
+
+    // Selection is still meaningful to view-only UI while Animation Mode uses
+    // its detached working topology.  Always publish the view selection, while
+    // preserving the old persistent-project signal suppression for panes whose
+    // model pointers come from mdl::project::core().
+    emit manager().view_selection_changed(*this);
     if (!manager().animation_session_active() && !(model_ && model_->animation_mode()))
         emit manager().selection_changed(*this);
 }
@@ -654,10 +663,10 @@ void ui::canvas::scene::delete_item(item::base* deletee, bool emit_signals) {
     delete body;
 
 
-	if (emit_signals) {
-		if (was_selected) {
-			emit manager().selection_changed(*this);
-		}
+	if (emit_signals && was_selected) {
+        emit manager().view_selection_changed(*this);
+        if (!manager().animation_session_active() && !(model_ && model_->animation_mode()))
+            emit manager().selection_changed(*this);
 	}
 }
 
