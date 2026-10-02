@@ -1,6 +1,7 @@
 #include "sm_image.hpp"
 #include <algorithm>
 #include <climits>
+#include <cstdlib>
 #include <stdexcept>
 #define STBI_NO_STDIO
 #define STBI_MAX_DIMENSIONS 8192

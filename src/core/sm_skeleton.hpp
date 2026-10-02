@@ -129,11 +129,11 @@ namespace sm {
     class topology {
         friend class project;
         friend class geometry_batch;
-        friend class skeleton;
+        friend class sm::skeleton;
         friend class node;
         friend class bone;
     private:
-        using skeleton_tbl = std::unordered_map<object_id, std::unique_ptr<skeleton>>;
+        using skeleton_tbl = std::unordered_map<object_id, std::unique_ptr<sm::skeleton>>;
         std::vector<std::unique_ptr<node>> nodes_;
         std::vector<std::unique_ptr<bone>> bones_;
         skeleton_tbl skeletons_;
@@ -143,9 +143,9 @@ namespace sm {
         void copy_constraints_from(const topology&, const std::unordered_map<object_id, object_id>& = {});
         void prune_constraints();
         object_id generate_object_id() const;
-        node_ref create_node(skeleton& parent, object_id id, const std::string& name, double x, double y);
-        node_ref create_node(skeleton& parent, const std::string& name, double x, double y);
-        node_ref create_node(skeleton& parent, double x, double y);
+        node_ref create_node(sm::skeleton& parent, object_id id, const std::string& name, double x, double y);
+        node_ref create_node(sm::skeleton& parent, const std::string& name, double x, double y);
+        node_ref create_node(sm::skeleton& parent, double x, double y);
         expected_bone create_bone_in_skeleton(object_id id, const std::string& bone_name, node& u, node& v);
         expected_bone create_bone_in_skeleton(const std::string& bone_name, node& u, node& v);
         expected_skel create_skeleton_with_id(object_id id, const std::string& name);
@@ -161,11 +161,13 @@ namespace sm {
         ~topology() = default;
         void clear();
         bool empty() const;
-        skeleton& create_skeleton(double x, double y);
-        skeleton& create_skeleton(const point& pt);
+        sm::skeleton& create_skeleton(double x, double y);
+        sm::skeleton& create_skeleton(const point& pt);
         expected_skel create_skeleton(const std::string& name);
         expected_skel skeleton(const object_id& id);
         expected_const_skel skeleton(const object_id& id) const;
+        auto skeletons() { return detail::to_range_view<skel_ref>(skeletons_); }
+        auto skeletons() const { return detail::to_range_view<const_skel_ref>(skeletons_); }
         // Global node/bone lookup. Live project topologies guarantee every skeleton, node,
         // and bone ID is unique, so node/bone lookup remains stable across split/merge.
         template <is_node_or_bone T>
@@ -193,7 +195,5 @@ namespace sm {
         std::string to_json_str() const;
         nlohmann::json to_json() const;
         void apply(matrix& mat);
-        auto skeletons() { return detail::to_range_view<skel_ref>(skeletons_); }
-        auto skeletons() const { return detail::to_range_view<const_skel_ref>(skeletons_); }
     };
 }

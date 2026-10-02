@@ -31,8 +31,8 @@ namespace ui {
                 void set_wireframe(bool wireframe);
             };
 
-            Q_DECLARE_METATYPE(bone*);
-
         }
     }
 }
+
+Q_DECLARE_METATYPE(ui::canvas::item::bone*);

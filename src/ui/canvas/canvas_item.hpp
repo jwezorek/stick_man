@@ -21,7 +21,7 @@ namespace ui {
         namespace item {
 
             class base {
-                friend class scene;
+                friend class canvas::scene;
             protected:
                 QGraphicsItem* selection_frame_;
 

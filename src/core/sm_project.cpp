@@ -1056,8 +1056,10 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
     std::size_t new_next_character_name = 1;
     try {
         std::vector<std::set<std::string>> object_keys;
+        const std::string_view project_json_text(
+            reinterpret_cast<const char*>(project_json.data()), project_json.size());
         auto semantic_project =
-            json::parse(project_json, [&object_keys](int, json::parse_event_t event, json& value) {
+            json::parse(project_json_text, [&object_keys](int, json::parse_event_t event, json& value) {
                 if (event == json::parse_event_t::object_start)
                     object_keys.emplace_back();
                 if (event == json::parse_event_t::key &&
