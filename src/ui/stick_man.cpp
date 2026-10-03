@@ -81,7 +81,9 @@ ui::stick_man::stick_man(QWidget* parent) :
         anim_pane_(new pane::animation(this)),
         tool_pane_(new pane::tool_settings(this)),
         skel_pane_(new pane::skeleton(this)) {
+#ifdef Q_OS_WIN
     setDarkTitleBar(winId());
+#endif
     setDockNestingEnabled(true);
 
     tool_pal_->setObjectName("tools_toolbar");

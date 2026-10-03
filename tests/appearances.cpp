@@ -8,6 +8,7 @@
 #include <numbers>
 #include <iostream>
 #include <stdexcept>
+#include <string_view>
 
 void require(bool ok, const char* message) {
     if (!ok)
@@ -112,7 +113,9 @@ void persistence() {
     same_pixels(fixture(), loaded.artwork(id).frames().at("new").image);
     sm::detail::package_reader reader(*encoded);
     auto bytes = reader.read("project.json");
-    auto semantic = nlohmann::json::parse(bytes);
+    auto semantic = nlohmann::json::parse(
+        std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size())
+    );
     require(semantic["version"] == 8.0, "Animation V2 Phase 1 requires project format version 8");
     auto prefix = "characters/" + id.to_string() + "/artwork/";
     auto png = reader.read(prefix + "page-0.png");

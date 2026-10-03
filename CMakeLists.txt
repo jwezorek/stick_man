@@ -36,7 +36,7 @@ set_target_properties(stick_man_ui PROPERTIES AUTOMOC ON)
 target_include_directories(stick_man_ui PRIVATE ${Boost_INCLUDE_DIRS})
 target_link_libraries(stick_man_ui PUBLIC stick_man_model Qt6::Widgets)
 
-add_executable(stick_man
+qt_add_executable(stick_man
     src/main.cpp
     src/ui/stick_man.qrc
     resources/stick_man.qrc
@@ -44,8 +44,7 @@ add_executable(stick_man
 target_link_libraries(stick_man PRIVATE stick_man_ui)
 set_target_properties(stick_man PROPERTIES
     AUTORCC ON
-    WIN32_EXECUTABLE ON
-    MACOSX_BUNDLE ON
+    MACOSX_BUNDLE_GUI_IDENTIFIER "com.jwezorek.stick-man"
 )
 
 if(WIN32)
