@@ -40,7 +40,7 @@ namespace ui {
 
         enum class id {
             none,
-            selection,
+            edit,
             pan,
             zoom,
             add_node,

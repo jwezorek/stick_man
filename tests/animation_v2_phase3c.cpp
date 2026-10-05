@@ -480,13 +480,13 @@ namespace {
 		require(model->begin_animation_session(cid, a.id) == sm::result::success, "lifetime begin");
 		canvases.show_animation_session(true);
 		editor.begin(*model, canvases, cid, a.id);
-		auto* select_settings = tools.tool_from_id(ui::tool::id::selection).settings_widget();
+		auto* edit_settings = tools.tool_from_id(ui::tool::id::edit).settings_widget();
 		auto* constraint_settings = tools.tool_from_id(ui::tool::id::constraint).settings_widget();
 		editor.findChild<QToolButton*>("animation_transport_play")->click();
 		require(editor.findChild<ui::animation_playback*>()->playing(),
 		    "destruction fixture not playing");
 		model.reset();
-		for (auto* button : select_settings->findChildren<QPushButton*>()) {
+		for (auto* button : edit_settings->findChildren<QPushButton*>()) {
 			button->click();
 		}
 		for (auto* combo : constraint_settings->findChildren<QComboBox*>()) {

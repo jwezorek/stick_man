@@ -5,9 +5,9 @@
 
 namespace ui::tool {
 
-    class select : public base {
+    class edit : public base {
     public:
-        select();
+        edit();
 
         void init(canvas::manager& canvases, mdl::project& model) override;
         void activate(canvas::manager& canvases) override;

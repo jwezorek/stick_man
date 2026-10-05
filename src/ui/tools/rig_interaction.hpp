@@ -6,7 +6,7 @@
 #include <optional>
 
 #include "drag_state.hpp"
-#include "select_tool_panel.hpp"
+#include "edit_tool_panel.hpp"
 
 namespace mdl {
     class project;
@@ -37,7 +37,7 @@ namespace ui {
             QWidget* settings_widget();
 
         private:
-            select_tool_panel* settings_panel_ = nullptr;
+            edit_tool_panel* settings_panel_ = nullptr;
             std::optional<drag_state> drag_;
             std::optional<QPointF> click_pt_;
             QPointer<mdl::project> project_;
@@ -58,10 +58,10 @@ namespace ui {
                 rubber_band_type typ, canvas::scene& canv, QPointF pt) const;
 
             static std::optional<rotation_state> create_rotation_state(
-                canvas::scene& canv, QPointF clicked_pt, const sel_drag_settings& settings);
+                canvas::scene& canv, QPointF clicked_pt, const edit_drag_settings& settings);
 
             std::optional<translation_state> create_translation_state(
-                canvas::scene& canv, QPointF clicked_pt, const sel_drag_settings& settings) const;
+                canvas::scene& canv, QPointF clicked_pt, const edit_drag_settings& settings) const;
 
         };
     }

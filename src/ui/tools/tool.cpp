@@ -1,5 +1,5 @@
 #include "tool.hpp"
-#include "selection_tool.hpp"
+#include "edit_tool.hpp"
 #include "../stick_man.hpp"
 #include "../panes/tool_settings_pane.hpp"
 #include "../util.hpp"

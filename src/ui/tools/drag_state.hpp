@@ -17,7 +17,7 @@ namespace ui {
 
     namespace tool {
 
-        enum class sel_drag_mode {
+        enum class edit_drag_mode {
             rag_doll,
             rubber_band,
             rigid,
@@ -36,7 +36,7 @@ namespace ui {
             double previous_pointer_theta_;
             double gesture_angle_ = 0.0;
             std::unique_ptr<node_locs> old_locs_;
-            sel_drag_mode mode_;
+            edit_drag_mode mode_;
             double radius_;
 
         public:
@@ -44,7 +44,7 @@ namespace ui {
                 sm::node_ref axis,
                 sm::node_ref rotating,
                 sm::bone_ref bone,
-                sel_drag_mode mode
+                edit_drag_mode mode
             );
 
             const sm::node& axis() const;
@@ -60,7 +60,7 @@ namespace ui {
             double gesture_angle() const;
             const node_locs& old_node_locs() const;
             node_locs current_node_locs() const;
-            sel_drag_mode mode() const;
+            edit_drag_mode mode() const;
             double radius() const;
         };
 
@@ -69,7 +69,7 @@ namespace ui {
             std::vector<sm::node_ref> pinned;
             sm::node_ref anchor;
             sm::point anchor_offset;
-            sel_drag_mode mode;
+            edit_drag_mode mode;
             node_locs old_locs;
         };
 

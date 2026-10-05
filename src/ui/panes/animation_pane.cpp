@@ -443,7 +443,7 @@ bool ui::pane::animation::open_animation(sm::object_id cid, sm::object_id aid) {
     if (window) {
         auto& constraint = static_cast<tool::constraint&>(window->tool_mgr().tool_from_id(tool::id::constraint));
         constraint.set_animation_mode(true);
-        window->tool_mgr().set_current_tool(*canvases_, tool::id::selection);
+        window->tool_mgr().set_current_tool(*canvases_, tool::id::edit);
     }
 
     auto lock = [this](QWidget* widget) {
@@ -497,7 +497,7 @@ void ui::pane::animation::leave_animation() {
     if (auto* window = qobject_cast<ui::stick_man*>(parentWidget())) {
         auto& constraint = static_cast<tool::constraint&>(window->tool_mgr().tool_from_id(tool::id::constraint));
         constraint.set_animation_mode(false);
-        window->tool_mgr().set_current_tool(*canvases_, tool::id::selection);
+        window->tool_mgr().set_current_tool(*canvases_, tool::id::edit);
     }
     if (auto* main = qobject_cast<QMainWindow*>(parentWidget()))
         if (auto* tools_toolbar = main->findChild<ui::pane::tools*>("tools_toolbar"))

@@ -5,7 +5,7 @@
 #include "ui/canvas/skel_item.hpp"
 #include "ui/canvas/node_item.hpp"
 #include "ui/canvas/bone_item.hpp"
-#include "ui/tools/selection_tool.hpp"
+#include "ui/tools/edit_tool.hpp"
 #include "ui/tools/constraint_tool.hpp"
 #include "ui/panes/tree_view.hpp"
 #include "ui/panes/skeleton_properties.hpp"
@@ -68,7 +68,7 @@ void choose_preview_state(QTreeWidget* tree, QTreeWidgetItem* state_item) {
 
 struct fixture {
     ui::stick_man window;
-    ui::tool::select tool;
+    ui::tool::edit tool;
     sm::object_id first, second;
 
     fixture() {

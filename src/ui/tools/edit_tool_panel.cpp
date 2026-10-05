@@ -1,4 +1,4 @@
-#include "select_tool_panel.hpp"
+#include "edit_tool_panel.hpp"
 
 namespace {
     constexpr int drag_select_only = 0;
@@ -10,7 +10,7 @@ namespace {
     constexpr int mode_rubber_band_or_unique = 2;
 }
 
-ui::tool::select_tool_panel::drag_behavior ui::tool::select_tool_panel::current_drag_behavior() const {
+ui::tool::edit_tool_panel::drag_behavior ui::tool::edit_tool_panel::current_drag_behavior() const {
     switch (drag_behavior_->currentData().toInt()) {
     case drag_rotate:
         return drag_behavior::rotate;
@@ -21,19 +21,19 @@ ui::tool::select_tool_panel::drag_behavior ui::tool::select_tool_panel::current_
     }
 }
 
-ui::tool::sel_drag_mode ui::tool::select_tool_panel::selected_mode() const {
+ui::tool::edit_drag_mode ui::tool::edit_tool_panel::selected_mode() const {
     switch (mode_->currentData().toInt()) {
     case mode_rag_doll:
-        return sel_drag_mode::rag_doll;
+        return edit_drag_mode::rag_doll;
     case mode_rubber_band_or_unique:
         return current_drag_behavior() == drag_behavior::rotate ?
-            sel_drag_mode::unique : sel_drag_mode::rubber_band;
+            edit_drag_mode::unique : edit_drag_mode::rubber_band;
     default:
-        return sel_drag_mode::rigid;
+        return edit_drag_mode::rigid;
     }
 }
 
-void ui::tool::select_tool_panel::populate_mode_combo() {
+void ui::tool::edit_tool_panel::populate_mode_combo() {
     QSignalBlocker blocker(mode_);
     mode_->clear();
     mode_->addItem("Rigid", mode_rigid);
@@ -47,16 +47,16 @@ void ui::tool::select_tool_panel::populate_mode_combo() {
 
     const auto desired = behavior == drag_behavior::rotate ? rotate_mode_ : trans_mode_;
     int desired_data = mode_rigid;
-    if (desired == sel_drag_mode::rag_doll)
+    if (desired == edit_drag_mode::rag_doll)
         desired_data = mode_rag_doll;
-    else if (desired == sel_drag_mode::rubber_band || desired == sel_drag_mode::unique)
+    else if (desired == edit_drag_mode::rubber_band || desired == edit_drag_mode::unique)
         desired_data = mode_rubber_band_or_unique;
 
     const auto index = mode_->findData(desired_data);
     mode_->setCurrentIndex(index >= 0 ? index : 0);
 }
 
-void ui::tool::select_tool_panel::update_controls() {
+void ui::tool::edit_tool_panel::update_controls() {
     const auto behavior = current_drag_behavior();
     const bool has_mode = behavior != drag_behavior::select_only;
 
@@ -68,7 +68,7 @@ void ui::tool::select_tool_panel::update_controls() {
         populate_mode_combo();
 }
 
-ui::tool::select_tool_panel::select_tool_panel() : QWidget() {
+ui::tool::edit_tool_panel::edit_tool_panel() : QWidget() {
     auto* column = new QVBoxLayout(this);
 
     auto* drag_row = new QHBoxLayout;
@@ -109,15 +109,15 @@ ui::tool::select_tool_panel::select_tool_panel() : QWidget() {
     init();
 }
 
-void ui::tool::select_tool_panel::init() {
-    rotate_mode_ = sel_drag_mode::rigid;
-    trans_mode_ = sel_drag_mode::rigid;
+void ui::tool::edit_tool_panel::init() {
+    rotate_mode_ = edit_drag_mode::rigid;
+    trans_mode_ = edit_drag_mode::rigid;
     rotate_on_pin_->setChecked(false);
     drag_behavior_->setCurrentIndex(drag_behavior_->findData(drag_translate));
     update_controls();
 }
 
-ui::tool::sel_drag_settings ui::tool::select_tool_panel::settings() const {
+ui::tool::edit_drag_settings ui::tool::edit_tool_panel::settings() const {
     return {
         .is_in_rotate_mode_ = current_drag_behavior() == drag_behavior::rotate,
         .rotate_on_pinned_ = rotate_on_pin_->isChecked(),
@@ -126,10 +126,10 @@ ui::tool::sel_drag_settings ui::tool::select_tool_panel::settings() const {
     };
 }
 
-bool ui::tool::select_tool_panel::has_drag_behavior() const {
+bool ui::tool::edit_tool_panel::has_drag_behavior() const {
     return current_drag_behavior() != drag_behavior::select_only;
 }
 
-QPushButton& ui::tool::select_tool_panel::pin_button() const {
+QPushButton& ui::tool::edit_tool_panel::pin_button() const {
     return *pin_button_;
 }

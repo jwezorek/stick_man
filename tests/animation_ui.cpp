@@ -71,7 +71,7 @@ void lock_on_existing_frame(QApplication& app) {
     release.setButton(Qt::LeftButton);
     tool.mouseReleaseEvent(canvas, &release);
     require(model.animation_session_pinned_nodes().contains(ankle), "constraint tool did not pin ankle");
-    window.tool_mgr().set_current_tool(canvases, ui::tool::id::selection);
+    window.tool_mgr().set_current_tool(canvases, ui::tool::id::edit);
     require(model.select_animation_keyframe(second) == sm::result::success, "select destination frame");
     require(canvas.is_node_pinned(ankle), "existing destination frame lost ankle lock");
     canvas.views().first()->centerOn(0, 25);
@@ -137,8 +137,8 @@ int main(int argc, char** argv) {
         require(browser->open_animation(character_id, animation_id), "could not open empty Animation V2 asset");
         app.processEvents();
         require(model.animation_mode(), "Animation Mode not active");
-        require(window.tool_mgr().current_tool().id() == ui::tool::id::selection,
-            "Animation Mode substituted a special Selection tool");
+        require(window.tool_mgr().current_tool().id() == ui::tool::id::edit,
+            "Animation Mode substituted a special Edit tool");
         require(!model.can_undo(), "Animation Mode inherited document undo state");
 
         auto* editor = window.findChild<ui::pane::animation_editor*>("animation_editor");
@@ -209,18 +209,18 @@ int main(int argc, char** argv) {
             app.processEvents();
         };
         select_card(0);
-        auto& selection_tool = window.tool_mgr().current_tool();
+        auto& edit_tool = window.tool_mgr().current_tool();
         QGraphicsSceneMouseEvent pin_press(QEvent::GraphicsSceneMousePress);
         pin_press.setScenePos({moved.x, moved.y});
         pin_press.setButton(Qt::LeftButton);
         pin_press.setButtons(Qt::LeftButton);
         pin_press.setModifiers(Qt::AltModifier);
-        selection_tool.mousePressEvent(canvas, &pin_press);
+        edit_tool.mousePressEvent(canvas, &pin_press);
         QGraphicsSceneMouseEvent pin_release(QEvent::GraphicsSceneMouseRelease);
         pin_release.setScenePos({moved.x, moved.y});
         pin_release.setButton(Qt::LeftButton);
         pin_release.setModifiers(Qt::AltModifier);
-        selection_tool.mouseReleaseEvent(canvas, &pin_release);
+        edit_tool.mouseReleaseEvent(canvas, &pin_release);
         require(model.animation_session_pinned_nodes().contains(root_id), "Alt-click did not pin frame 1");
         select_card(1);
         require(model.animation_session_incoming_locked_nodes().contains(root_id),

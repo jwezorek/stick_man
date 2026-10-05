@@ -33,7 +33,7 @@ ui::tool::rotation_state::rotation_state(
         sm::node_ref axis,
         sm::node_ref rotating,
         sm::bone_ref bone,
-        ui::tool::sel_drag_mode mode) :
+        ui::tool::edit_drag_mode mode) :
             axis_(axis),
             rotating_(rotating),
             bone_(bone),
@@ -92,7 +92,7 @@ ui::tool::node_locs ui::tool::rotation_state::current_node_locs() const {
     return node_locations(axis_);
 }
 
-ui::tool::sel_drag_mode ui::tool::rotation_state::mode() const {
+ui::tool::edit_drag_mode ui::tool::rotation_state::mode() const {
     return mode_;
 }
 

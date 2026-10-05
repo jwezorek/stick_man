@@ -1,7 +1,7 @@
 #include "tool_manager.hpp"
 #include "../canvas/canvas_manager.hpp"
 #include "tool.hpp"
-#include "selection_tool.hpp"
+#include "edit_tool.hpp"
 #include "pan_tool.hpp"
 #include "zoom_tool.hpp"
 #include "add_node_tool.hpp"
@@ -18,7 +18,7 @@ ui::tool::manager::manager() :
     curr_item_index_(-1) {
     tool_registry_.emplace_back(std::make_unique<ui::tool::pan>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::zoom>());
-    tool_registry_.emplace_back(std::make_unique<ui::tool::select>());
+    tool_registry_.emplace_back(std::make_unique<ui::tool::edit>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::constraint>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::add_node>());
     tool_registry_.emplace_back(std::make_unique<ui::tool::add_bone>());
@@ -112,7 +112,7 @@ const ui::tool::base& ui::tool::manager::tool_from_id(id id) const {
 
 void ui::tool::manager::set_current_tool(canvas::manager& canvases, id id) {
     if (project_ && project_->animation_mode() &&
-            id != id::selection && id != id::pan && id != id::zoom && id != id::constraint) {
+            id != id::edit && id != id::pan && id != id::zoom && id != id::constraint) {
         return;
     }
     int new_tool_index = index_from_id(id);

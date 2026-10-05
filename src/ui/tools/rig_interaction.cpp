@@ -2,7 +2,7 @@
 #include "../../core/sm_geometry_batch.hpp"
 #include "rig_interaction.hpp"
 #include "../../model/selection.hpp"
-#include "select_tool_panel.hpp"
+#include "edit_tool_panel.hpp"
 #include "../panes/skeleton_pane.hpp"
 #include "../util.hpp"
 #include "../canvas/scene.hpp"
@@ -602,7 +602,7 @@ void  ui::tool::rig_interaction::do_dragging(canvas::scene& canv, QPointF pt) {
 }
 std::optional<ui::tool::rotation_state> ui::tool::rig_interaction::create_rotation_state(
     ui::canvas::scene& canv, QPointF clicked_pt,
-    const ui::tool::sel_drag_settings& settings) {
+    const ui::tool::edit_drag_settings& settings) {
     std::optional<rotation_state> ri;
 
     auto* item = canv.top_item(clicked_pt);
@@ -659,7 +659,7 @@ std::optional<ui::tool::rotation_state> ui::tool::rig_interaction::create_rotati
 }
 std::optional<ui::tool::translation_state> ui::tool::rig_interaction::create_translation_state(
     ui::canvas::scene& canv, QPointF clicked_pt,
-    const ui::tool::sel_drag_settings& settings) const {
+    const ui::tool::edit_drag_settings& settings) const {
     auto* item = canv.top_item(clicked_pt);
     if (!item)
         return {};
@@ -675,7 +675,7 @@ std::optional<ui::tool::translation_state> ui::tool::rig_interaction::create_tra
     auto pinned_nodes = pinned_nodes_for_translation(canv);
     auto selected_skeletons = canv.resolved_skeletons();
     if (!selected_skeletons.empty() && (canv.selected_character() || selected_skeletons.size() == canv.selection().size()) &&
-        r::any_of(selected_skeletons, [&](auto* skel) { return &skel->model() == &anchor->owner(); })) mode = sel_drag_mode::rigid;
+        r::any_of(selected_skeletons, [&](auto* skel) { return &skel->model() == &anchor->owner(); })) mode = edit_drag_mode::rigid;
     node_locs old_locs;
     for (auto skel : skeletons_from_nodes(selected_nodes))
         for (auto node : skel->nodes())
@@ -736,13 +736,13 @@ void ui::tool::rig_interaction::handle_rotation(canvas::scene& c, QPointF pt, ro
     auto theta_diff = theta -
         sm::angle_from_u_to_v(ri.axis().world_pos(), ri.rotating().world_pos());
     switch (ri.mode()) {
-    case sel_drag_mode::rigid:
+    case edit_drag_mode::rigid:
         ri.bone().rotate_by(theta_diff, ri.axis(), false);
         break;
-    case sel_drag_mode::unique:
+    case edit_drag_mode::unique:
         ri.bone().rotate_by(theta_diff, ri.axis(), true);
         break;
-    case sel_drag_mode::rag_doll:
+    case edit_drag_mode::rag_doll:
         do_ragdoll_rotate(theta, ri);
         break;
     }
@@ -753,20 +753,20 @@ void ui::tool::rig_interaction::handle_translation(canvas::scene& c, QPointF pt,
     auto active_skeletons = skeletons_from_nodes(state.moving);
 
     switch (state.mode) {
-    case sel_drag_mode::rigid: {
+    case edit_drag_mode::rigid: {
         auto translate = sm::translation_matrix(delta);
         for (auto skel : active_skeletons) {
             skel->apply(translate);
         }
     }
                              break;
-    case sel_drag_mode::rubber_band: {
+    case edit_drag_mode::rubber_band: {
         for (auto skel : active_skeletons) {
             do_rubber_band_translate(skel->root_node(), delta, state.moving);
         }
     }
                                    break;
-    case sel_drag_mode::rag_doll:
+    case edit_drag_mode::rag_doll:
         for (auto skel : active_skeletons) {
             do_ragdoll_translate(
                 skel,
@@ -841,7 +841,7 @@ void ui::tool::rig_interaction::deactivate(canvas::manager& canv_mgr) {
 
 QWidget* ui::tool::rig_interaction::settings_widget() {
     if (!settings_panel_) {
-        settings_panel_ = new select_tool_panel();
+        settings_panel_ = new edit_tool_panel();
         settings_panel_->connect(&(settings_panel_->pin_button()), &QPushButton::clicked,
             [&]() {
                 pin_selection();
