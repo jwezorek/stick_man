@@ -1,126 +1,135 @@
 #include "select_tool_panel.hpp"
-#include <algorithm>
 
 namespace {
-    QWidget* indent_widget(int indent_level = 1) {
-        auto* iw = new QWidget();
-        iw->setFixedWidth(indent_level * 40);
-        return iw;
+    constexpr int drag_select_only = 0;
+    constexpr int drag_translate = 1;
+    constexpr int drag_rotate = 2;
+
+    constexpr int mode_rigid = 0;
+    constexpr int mode_rag_doll = 1;
+    constexpr int mode_rubber_band_or_unique = 2;
+}
+
+ui::tool::select_tool_panel::drag_behavior ui::tool::select_tool_panel::current_drag_behavior() const {
+    switch (drag_behavior_->currentData().toInt()) {
+    case drag_rotate:
+        return drag_behavior::rotate;
+    case drag_select_only:
+        return drag_behavior::select_only;
+    default:
+        return drag_behavior::translate;
     }
+}
 
-    QLayout* indented_widget(int indent_level, QWidget* widg) {
-        auto* row = new QHBoxLayout();
-        row->addWidget(indent_widget(indent_level));
-        row->addWidget(widg);
-        row->addStretch();
-        return row;
+ui::tool::sel_drag_mode ui::tool::select_tool_panel::selected_mode() const {
+    switch (mode_->currentData().toInt()) {
+    case mode_rag_doll:
+        return sel_drag_mode::rag_doll;
+    case mode_rubber_band_or_unique:
+        return current_drag_behavior() == drag_behavior::rotate ?
+            sel_drag_mode::unique : sel_drag_mode::rubber_band;
+    default:
+        return sel_drag_mode::rigid;
     }
 }
 
-std::vector<QWidget*> ui::tool::select_tool_panel::rot_ctrls(bool include_master) {
-    std::vector<QWidget*> ctrls = {
-        rotate_on_pin_, rot_rag_doll_mode_,
-        rot_unique_mode_, rot_rigid_mode_
-    };
-    if (include_master)
-        ctrls.push_back(rotate_);
-    return ctrls;
+void ui::tool::select_tool_panel::populate_mode_combo() {
+    QSignalBlocker blocker(mode_);
+    mode_->clear();
+    mode_->addItem("Rigid", mode_rigid);
+    mode_->addItem("Rag doll", mode_rag_doll);
+
+    const auto behavior = current_drag_behavior();
+    if (behavior == drag_behavior::rotate)
+        mode_->addItem("Unique bone", mode_rubber_band_or_unique);
+    else if (behavior == drag_behavior::translate)
+        mode_->addItem("Rubber band", mode_rubber_band_or_unique);
+
+    const auto desired = behavior == drag_behavior::rotate ? rotate_mode_ : trans_mode_;
+    int desired_data = mode_rigid;
+    if (desired == sel_drag_mode::rag_doll)
+        desired_data = mode_rag_doll;
+    else if (desired == sel_drag_mode::rubber_band || desired == sel_drag_mode::unique)
+        desired_data = mode_rubber_band_or_unique;
+
+    const auto index = mode_->findData(desired_data);
+    mode_->setCurrentIndex(index >= 0 ? index : 0);
 }
 
-std::vector<QWidget*> ui::tool::select_tool_panel::trans_ctrls(bool include_master) {
-    std::vector<QWidget*> ctrls = { 
-        trans_rag_doll_mode_, trans_rubber_band_mode_, trans_rigid_mode_
-    };
-    if (include_master)
-        ctrls.push_back(translate_);
-    return ctrls;
-}
+void ui::tool::select_tool_panel::update_controls() {
+    const auto behavior = current_drag_behavior();
+    const bool has_mode = behavior != drag_behavior::select_only;
 
-ui::tool::sel_drag_mode ui::tool::select_tool_panel::rot_mode() const {
-    if (rot_rag_doll_mode_->isChecked())
-        return sel_drag_mode::rag_doll;
-    if (rot_unique_mode_->isChecked())
-        return sel_drag_mode::unique;
-    return sel_drag_mode::rigid;
-}
+    mode_label_->setVisible(has_mode);
+    mode_->setVisible(has_mode);
+    rotate_on_pin_->setVisible(behavior == drag_behavior::rotate);
 
-ui::tool::sel_drag_mode ui::tool::select_tool_panel::trans_mode() const {
-    if (trans_rag_doll_mode_->isChecked())
-        return sel_drag_mode::rag_doll;
-    if (trans_rubber_band_mode_->isChecked())
-        return sel_drag_mode::rubber_band;
-    return sel_drag_mode::rigid;
+    if (has_mode)
+        populate_mode_combo();
 }
 
 ui::tool::select_tool_panel::select_tool_panel() : QWidget() {
-    QVBoxLayout* column = new QVBoxLayout(this);
-    toplevel_group_ = new QButtonGroup(this);
-    translate_group_ = new QButtonGroup(this);
-    rotate_group_ = new QButtonGroup(this);
-    column->addWidget(drag_behaviors_ = new QCheckBox("drag behaviors on"));
-    column->addLayout(indented_widget(1, rotate_ = new QRadioButton("rotate")));
-    column->addLayout(indented_widget(2, rotate_on_pin_ = new QCheckBox("rotate on nearest pin")));
-    column->addLayout(indented_widget(2, rot_rag_doll_mode_ = new QRadioButton("rag doll mode")));
-    column->addLayout(indented_widget(2, rot_unique_mode_ = new QRadioButton("unique bone mode")));
-    column->addLayout(indented_widget(2, rot_rigid_mode_ = new QRadioButton("rigid mode")));
-    column->addLayout(indented_widget(1, translate_ = new QRadioButton("translate")));
-    column->addLayout(indented_widget(2, trans_rag_doll_mode_ = new QRadioButton("rag doll mode")));
-    column->addLayout(indented_widget(2, trans_rubber_band_mode_ = new QRadioButton("rubber band mode")));
-    column->addLayout(indented_widget(2, trans_rigid_mode_ = new QRadioButton("rigid mode")));
-    column->addSpacerItem(new QSpacerItem(15, 15));
-    column->addWidget(pin_button_ = new QPushButton("pin selected nodes"));
+    auto* column = new QVBoxLayout(this);
 
+    auto* drag_row = new QHBoxLayout;
+    drag_row->addWidget(new QLabel("Drag:"));
+    drag_behavior_ = new QComboBox;
+    drag_behavior_->addItem("Selection only", drag_select_only);
+    drag_behavior_->addItem("Translate", drag_translate);
+    drag_behavior_->addItem("Rotate", drag_rotate);
+    drag_row->addWidget(drag_behavior_, 1);
+    column->addLayout(drag_row);
+
+    auto* mode_row = new QHBoxLayout;
+    mode_label_ = new QLabel("Mode:");
+    mode_row->addWidget(mode_label_);
+    mode_ = new QComboBox;
+    mode_row->addWidget(mode_, 1);
+    column->addLayout(mode_row);
+
+    rotate_on_pin_ = new QCheckBox("Rotate on nearest pin");
+    column->addWidget(rotate_on_pin_);
+
+    column->addSpacerItem(new QSpacerItem(15, 15));
+    pin_button_ = new QPushButton("Pin selected nodes");
+    column->addWidget(pin_button_);
     column->addStretch();
 
-    toplevel_group_->addButton(rotate_);
-    toplevel_group_->addButton(translate_);
-    translate_group_->addButton(trans_rag_doll_mode_);
-    translate_group_->addButton(trans_rubber_band_mode_);
-    translate_group_->addButton(trans_rigid_mode_);
-    rotate_group_->addButton(rot_rag_doll_mode_);
-    rotate_group_->addButton(rot_unique_mode_);
-    rotate_group_->addButton(rot_rigid_mode_);
+    connect(drag_behavior_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int) {
+        update_controls();
+    });
+    connect(mode_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int) {
+        const auto behavior = current_drag_behavior();
+        if (behavior == drag_behavior::rotate)
+            rotate_mode_ = selected_mode();
+        else if (behavior == drag_behavior::translate)
+            trans_mode_ = selected_mode();
+    });
 
-    connect(rotate_, &QRadioButton::toggled, [this](bool checked) {
-        for (auto* w : rot_ctrls(false)) {
-            w->setEnabled(checked);
-        }
-        for (auto* w : trans_ctrls(false)) {
-            w->setEnabled(!checked);
-        }
-    });
-    connect(drag_behaviors_, &QCheckBox::toggled, [this](bool checked) {
-        rotate_->setEnabled(checked);
-        translate_->setEnabled(checked);
-        for (auto* w : rot_ctrls(false)) {
-            w->setEnabled(checked && rotate_->isChecked());
-        }
-        for (auto* w : trans_ctrls(false)) {
-            w->setEnabled(checked && translate_->isChecked());
-        }
-    });
     init();
 }
 
 void ui::tool::select_tool_panel::init() {
-    drag_behaviors_->setChecked(true);
-    translate_->setChecked(true);
-    trans_rigid_mode_->setChecked(true);
-    rot_rigid_mode_->setChecked(true);
-    for (auto* rot : rot_ctrls(false)) {
-        rot->setEnabled(false);
-    }
-    for (auto* trans : trans_ctrls(false)) {
-        trans->setEnabled(true);
-    }
+    rotate_mode_ = sel_drag_mode::rigid;
+    trans_mode_ = sel_drag_mode::rigid;
+    rotate_on_pin_->setChecked(false);
+    drag_behavior_->setCurrentIndex(drag_behavior_->findData(drag_translate));
+    update_controls();
 }
 
 ui::tool::sel_drag_settings ui::tool::select_tool_panel::settings() const {
-    return { .is_in_rotate_mode_ = rotate_->isChecked(),
+    return {
+        .is_in_rotate_mode_ = current_drag_behavior() == drag_behavior::rotate,
         .rotate_on_pinned_ = rotate_on_pin_->isChecked(),
-        .rotate_mode_ = rot_mode(),
-        .trans_mode_ = trans_mode() };
+        .rotate_mode_ = rotate_mode_,
+        .trans_mode_ = trans_mode_
+    };
 }
-bool ui::tool::select_tool_panel::has_drag_behavior() const { return drag_behaviors_->isChecked(); }
-QPushButton& ui::tool::select_tool_panel::pin_button() const { return *pin_button_; }
 
+bool ui::tool::select_tool_panel::has_drag_behavior() const {
+    return current_drag_behavior() != drag_behavior::select_only;
+}
+
+QPushButton& ui::tool::select_tool_panel::pin_button() const {
+    return *pin_button_;
+}

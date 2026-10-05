@@ -17,26 +17,25 @@ namespace ui {
         };
 
         class select_tool_panel : public QWidget {
+            enum class drag_behavior {
+                select_only,
+                translate,
+                rotate
+            };
+
             QPushButton* pin_button_;
-            QCheckBox* drag_behaviors_;
-            QRadioButton* rotate_;
+            QComboBox* drag_behavior_;
+            QLabel* mode_label_;
+            QComboBox* mode_;
             QCheckBox* rotate_on_pin_;
-            QRadioButton* rot_rag_doll_mode_;
-            QRadioButton* rot_unique_mode_;
-            QRadioButton* rot_rigid_mode_;
-            QRadioButton* translate_;
-            QRadioButton* trans_rag_doll_mode_;
-            QRadioButton* trans_rubber_band_mode_;
-            QRadioButton* trans_rigid_mode_;
 
-            QButtonGroup* toplevel_group_;
-            QButtonGroup* translate_group_;
-            QButtonGroup* rotate_group_;
+            sel_drag_mode rotate_mode_ = sel_drag_mode::rigid;
+            sel_drag_mode trans_mode_ = sel_drag_mode::rigid;
 
-            std::vector<QWidget*> rot_ctrls(bool include_master);
-            std::vector<QWidget*> trans_ctrls(bool include_master);
-            sel_drag_mode rot_mode() const;
-            sel_drag_mode trans_mode() const;
+            drag_behavior current_drag_behavior() const;
+            sel_drag_mode selected_mode() const;
+            void populate_mode_combo();
+            void update_controls();
 
         public:
             select_tool_panel();
