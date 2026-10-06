@@ -34,6 +34,51 @@ namespace {
 		return a.translation == b.translation && a.rotation == b.rotation && a.scale == b.scale;
 	}
 
+	sm::sprite_transform transformed_drag(const sm::sprite_transform& before, sm::point start,
+	    sm::point current, ui::canvas::sprite_drag mode) {
+		auto result = before;
+		if (mode == ui::canvas::sprite_drag::translate) {
+			result.translation += current - start;
+			return result;
+		}
+
+		auto a = start - before.translation;
+		auto b = current - before.translation;
+		if (mode == ui::canvas::sprite_drag::rotate) {
+			if (std::hypot(a.x, a.y) > 1e-6 && std::hypot(b.x, b.y) > 1e-6) {
+				result.rotation += std::atan2(b.y, b.x) - std::atan2(a.y, a.x);
+			}
+			return result;
+		}
+
+		a = sm::transform(a, sm::rotation_matrix(-before.rotation));
+		b = sm::transform(b, sm::rotation_matrix(-before.rotation));
+		auto scale_axis = [](double original, double drag_start, double drag_current) {
+			return std::abs(drag_start) > 1e-6 ? original * drag_current / drag_start
+			                                    : original + (drag_current - drag_start) / 50.0;
+		};
+		if (mode == ui::canvas::sprite_drag::scale_xy) {
+			auto a_length = std::hypot(a.x, a.y);
+			auto b_length = std::hypot(b.x, b.y);
+			if (a_length > 1e-6) {
+				auto factor = b_length / a_length;
+				if (a.x * b.x + a.y * b.y < 0) {
+					factor = -factor;
+				}
+				result.scale.x = before.scale.x * factor;
+				result.scale.y = before.scale.y * factor;
+			}
+		} else {
+			if (mode == ui::canvas::sprite_drag::scale_x) {
+				result.scale.x = scale_axis(before.scale.x, a.x, b.x);
+			}
+			if (mode == ui::canvas::sprite_drag::scale_y) {
+				result.scale.y = scale_axis(before.scale.y, a.y, b.y);
+			}
+		}
+		return result;
+	}
+
 	double length(sm::point p) {
 		return std::hypot(p.x, p.y);
 	}
@@ -118,6 +163,10 @@ ui::canvas::artwork_layer::artwork_layer(scene& scene, mdl::project& project) :
 		cancel_transform();
 		refresh();
 	});
+	connect(&project, &mdl::project::backgrounds_changed, this, [this] {
+		cancel_transform();
+		refresh();
+	});
 	connect(&project, &mdl::project::new_project_opened, this, [this] { reset(); });
 	connect(&project, &mdl::project::refresh_canvas, this, [this] {
 		cancel_transform();
@@ -161,6 +210,7 @@ void ui::canvas::artwork_layer::set_selected_slot(
 	}
 	cancel_transform();
 	selected_ = value;
+	selected_background_.reset();
 	scene_.update();
 	emit selection_changed();
 }
@@ -171,6 +221,29 @@ void ui::canvas::artwork_layer::clear_selected_slot() {
 	}
 	cancel_transform();
 	selected_.reset();
+	scene_.update();
+	emit selection_changed();
+}
+
+void ui::canvas::artwork_layer::set_selected_background(sm::object_id id) {
+	if (!project_.core().background(id)) {
+		clear_selected_background();
+		return;
+	}
+	if (selected_background_ == id)
+		return;
+	cancel_transform();
+	selected_background_ = id;
+	selected_.reset();
+	scene_.update();
+	emit selection_changed();
+}
+
+void ui::canvas::artwork_layer::clear_selected_background() {
+	if (!selected_background_)
+		return;
+	cancel_transform();
+	selected_background_.reset();
 	scene_.update();
 	emit selection_changed();
 }
@@ -246,7 +319,34 @@ std::vector<ui::canvas::artwork_layer::drawable> ui::canvas::artwork_layer::draw
 	return result;
 }
 
+std::vector<ui::canvas::artwork_layer::background_drawable>
+ui::canvas::artwork_layer::background_drawables() const {
+	std::vector<background_drawable> result;
+	result.reserve(project_.core().backgrounds().size());
+	for (const auto& background : project_.core().backgrounds()) {
+		auto transform = local_matrix(background.transform, {});
+		if (background_drag_ && background_drag_->id == background.id)
+			transform = local_matrix(background_drag_->preview, {});
+		result.push_back({background.id, background.image, transform});
+	}
+	return result;
+}
+
 void ui::canvas::artwork_layer::paint(QPainter& painter) const {
+	for (const auto& background : background_drawables()) {
+		const auto& img = background.image;
+		auto stride = img.height() > 1 ? img.row(1).data() - img.row(0).data() : img.width() * 4;
+		QImage image(img.row(0).data(), img.width(), img.height(), qsizetype(stride),
+		    QImage::Format_RGBA8888);
+		const sm::matrix pixels_to_world = background.transform *
+		    sm::translation_matrix(-img.width() / 2.0, img.height() / 2.0) *
+		    sm::scale_matrix(1, -1);
+		painter.save();
+		painter.setWorldTransform(qt_matrix(pixels_to_world), true);
+		painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+		painter.drawImage(QPointF(0, 0), image);
+		painter.restore();
+	}
 	for (const auto& sprite : drawables()) {
 		const auto& img = sprite.image;
 		auto stride = img.height() > 1 ? img.row(1).data() - img.row(0).data() : img.width() * 4;
@@ -265,50 +365,58 @@ void ui::canvas::artwork_layer::paint(QPainter& painter) const {
 }
 
 void ui::canvas::artwork_layer::paint_selection(QPainter& painter) const {
-	if (!selected_ || !show_artwork_) {
-		return;
+	auto draw_handles = [&](const sm::matrix& transform, int width, int height) {
+		const auto half_width = width / 2.0;
+		const auto half_height = height / 2.0;
+		painter.save();
+		painter.setWorldTransform(qt_matrix(transform), true);
+		QPen pen(QColor(0, 160, 210), 1, Qt::DashLine);
+		pen.setCosmetic(true);
+		painter.setPen(pen);
+		painter.setBrush(Qt::NoBrush);
+		painter.drawRect(QRectF(-half_width, -half_height, width, height));
+		painter.restore();
+
+		const auto handles = handle_geometry(transform, width, height, scene_.scale());
+		painter.save();
+		QPen handle_pen(QColor(0, 160, 210), 1);
+		handle_pen.setCosmetic(true);
+		painter.setPen(handle_pen);
+		painter.setBrush(QColor(245, 245, 245));
+		painter.drawLine(handles.top, handles.rotate);
+		const auto square = [&](QPointF p) {
+			painter.drawRect(QRectF(p.x() - handles.radius, p.y() - handles.radius,
+			    2 * handles.radius, 2 * handles.radius));
+		};
+		square(handles.left); square(handles.right); square(handles.top); square(handles.bottom);
+		for (auto corner : handles.corners) square(corner);
+		painter.drawEllipse(handles.rotate, handles.radius, handles.radius);
+		painter.restore();
+	};
+
+	if (transform_scope_ == transform_scope::backgrounds && selected_background_) {
+		for (const auto& background : background_drawables())
+			if (background.id == *selected_background_)
+				draw_handles(background.transform, background.image.width(), background.image.height());
 	}
+
+	if (!selected_ || !show_artwork_)
+		return;
 	for (const auto& sprite : drawables()) {
-		if (sprite.selection == *selected_) {
-			const auto half_width = sprite.image.width() / 2.0;
-			const auto half_height = sprite.image.height() / 2.0;
-			painter.save();
-			painter.setWorldTransform(qt_matrix(sprite.transform), true);
-			QPen pen(QColor(0, 160, 210), 1, Qt::DashLine);
-			pen.setCosmetic(true);
-			painter.setPen(pen);
-			painter.setBrush(Qt::NoBrush);
-			painter.drawRect(
-			    QRectF(-half_width, -half_height, sprite.image.width(), sprite.image.height()));
-			painter.restore();
-
-			if (!transform_editing_) {
-				continue;
-			}
-
-			const auto handles = handle_geometry(
-			    sprite.transform, sprite.image.width(), sprite.image.height(), scene_.scale());
-
-			painter.save();
-			QPen handle_pen(QColor(0, 160, 210), 1);
-			handle_pen.setCosmetic(true);
-			painter.setPen(handle_pen);
-			painter.setBrush(QColor(245, 245, 245));
-			painter.drawLine(handles.top, handles.rotate);
-			const auto square = [&](QPointF p) {
-				painter.drawRect(QRectF(p.x() - handles.radius, p.y() - handles.radius,
-				    2 * handles.radius, 2 * handles.radius));
-			};
-			square(handles.left);
-			square(handles.right);
-			square(handles.top);
-			square(handles.bottom);
-			for (auto corner : handles.corners) {
-				square(corner);
-			}
-			painter.drawEllipse(handles.rotate, handles.radius, handles.radius);
-			painter.restore();
-		}
+		if (sprite.selection != *selected_)
+			continue;
+		const auto half_width = sprite.image.width() / 2.0;
+		const auto half_height = sprite.image.height() / 2.0;
+		painter.save();
+		painter.setWorldTransform(qt_matrix(sprite.transform), true);
+		QPen pen(QColor(0, 160, 210), 1, Qt::DashLine);
+		pen.setCosmetic(true);
+		painter.setPen(pen);
+		painter.setBrush(Qt::NoBrush);
+		painter.drawRect(QRectF(-half_width, -half_height, sprite.image.width(), sprite.image.height()));
+		painter.restore();
+		if (transform_scope_ == transform_scope::artwork)
+			draw_handles(sprite.transform, sprite.image.width(), sprite.image.height());
 	}
 }
 
@@ -347,6 +455,15 @@ std::optional<sm::sprite_transform> ui::canvas::artwork_layer::selected_transfor
 		}
 	}
 	return {};
+}
+
+std::optional<sm::sprite_transform> ui::canvas::artwork_layer::selected_background_transform() const {
+	if (background_drag_ && selected_background_ && background_drag_->id == *selected_background_)
+		return background_drag_->preview;
+	if (!selected_background_)
+		return {};
+	auto* background = project_.core().background(*selected_background_);
+	return background ? std::optional(background->transform) : std::nullopt;
 }
 
 std::optional<ui::canvas::artwork_layer::transform_target>
@@ -392,6 +509,37 @@ ui::canvas::artwork_layer::transform_target_at(QPointF position) const {
 	return {};
 }
 
+std::optional<ui::canvas::artwork_layer::background_transform_target>
+ui::canvas::artwork_layer::background_transform_target_at(QPointF position) const {
+	auto target_for = [&](const background_drawable& background, bool handles) -> std::optional<sprite_drag> {
+		const auto half_width = background.image.width() / 2.0;
+		const auto half_height = background.image.height() / 2.0;
+		if (handles) {
+			const auto h = handle_geometry(background.transform, background.image.width(),
+			    background.image.height(), scene_.scale());
+			const auto hit2 = h.hit_radius * h.hit_radius;
+			if (squared_distance(position, h.rotate) <= hit2) return sprite_drag::rotate;
+			for (auto corner : h.corners) if (squared_distance(position, corner) <= hit2) return sprite_drag::scale_xy;
+			if (squared_distance(position, h.left) <= hit2 || squared_distance(position, h.right) <= hit2) return sprite_drag::scale_x;
+			if (squared_distance(position, h.top) <= hit2 || squared_distance(position, h.bottom) <= hit2) return sprite_drag::scale_y;
+		}
+		if (std::abs(background.transform.determinant()) < 1e-12) return {};
+		auto local = sm::transform(point(position), background.transform.inverse());
+		auto x = local.x + half_width, y = half_height - local.y;
+		if (x < 0 || y < 0 || x >= background.image.width() || y >= background.image.height()) return {};
+		if (background.image.row(int(y))[int(x) * 4 + 3] == 0) return {};
+		return sprite_drag::translate;
+	};
+	auto backgrounds = background_drawables();
+	if (selected_background_)
+		for (const auto& background : backgrounds)
+			if (background.id == *selected_background_)
+				if (auto target = target_for(background, true)) return background_transform_target{background.id, *target};
+	for (auto it = backgrounds.rbegin(); it != backgrounds.rend(); ++it)
+		if (auto target = target_for(*it, false)) return background_transform_target{it->id, *target};
+	return {};
+}
+
 void ui::canvas::artwork_layer::refresh() {
 	std::erase_if(
 	    active_, [&](const auto& entry) { return !project_.core().character(entry.first); });
@@ -404,13 +552,19 @@ void ui::canvas::artwork_layer::refresh() {
 		selected_.reset();
 		emit selection_changed();
 	}
+	if (selected_background_ && !project_.core().background(*selected_background_)) {
+		selected_background_.reset();
+		emit selection_changed();
+	}
 	refresh_guides();
 	scene_.update();
 }
 
 void ui::canvas::artwork_layer::reset() {
 	drag_.reset();
+	background_drag_.reset();
 	selected_.reset();
+	selected_background_.reset();
 	active_.clear();
 	preview_states_.clear();
 	refresh();
@@ -464,22 +618,33 @@ void ui::canvas::artwork_layer::refresh_guides() {
 }
 
 void ui::canvas::artwork_layer::set_transform_editing(bool enabled) {
-	if (transform_editing_ == enabled) {
+	auto scope = enabled ? transform_scope::artwork : transform_scope::none;
+	if (transform_scope_ == scope)
 		return;
-	}
 	cancel_transform();
-	transform_editing_ = enabled;
+	transform_scope_ = scope;
+	scene_.update();
+	emit transform_changed();
+}
+
+void ui::canvas::artwork_layer::set_background_transform_editing(bool enabled) {
+	auto scope = enabled ? transform_scope::backgrounds : transform_scope::none;
+	if (transform_scope_ == scope)
+		return;
+	cancel_transform();
+	transform_scope_ = scope;
 	scene_.update();
 	emit transform_changed();
 }
 
 bool ui::canvas::artwork_layer::begin_transform(QPointF position) {
 	cancel_transform();
-	auto target = transform_target_at(position);
-	if (!target) {
-		return false;
+	if (transform_scope_ == transform_scope::backgrounds) {
+		auto target = background_transform_target_at(position);
+		return target ? begin_background_transform(position, *target) : false;
 	}
-	return begin_transform(position, *target);
+	auto target = transform_target_at(position);
+	return target ? begin_transform(position, *target) : false;
 }
 
 bool ui::canvas::artwork_layer::begin_transform(QPointF position, sprite_drag mode) {
@@ -516,54 +681,53 @@ bool ui::canvas::artwork_layer::begin_transform(QPointF position, const transfor
 	return false;
 }
 
+bool ui::canvas::artwork_layer::begin_background_transform(
+    QPointF position, const background_transform_target& target) {
+	if (project_.animation_mode())
+		return false;
+	auto* background = project_.core().background(target.id);
+	if (!background)
+		return false;
+	set_selected_background(target.id);
+	background_drag_ = background_drag_state{target.id, background->transform, background->transform,
+	    point(position), target.mode};
+	emit transform_changed();
+	return true;
+}
+
 void ui::canvas::artwork_layer::update_transform(QPointF position) {
+	if (background_drag_) {
+		auto& d = *background_drag_;
+		d.preview = transformed_drag(d.before, d.start, point(position), d.mode);
+		scene_.update();
+		emit transform_changed();
+		return;
+	}
 	if (!drag_) {
 		return;
 	}
 	auto& d = *drag_;
 	auto current = sm::transform(point(position), d.bone_inverse);
-	d.preview = d.before;
-	if (d.mode == sprite_drag::translate) {
-		d.preview.translation += current - d.start;
-	} else {
-		auto a = d.start - d.before.translation, b = current - d.before.translation;
-		if (d.mode == sprite_drag::rotate) {
-			if (std::hypot(a.x, a.y) > 1e-6 && std::hypot(b.x, b.y) > 1e-6) {
-				d.preview.rotation += std::atan2(b.y, b.x) - std::atan2(a.y, a.x);
-			}
-		} else {
-			a = sm::transform(a, sm::rotation_matrix(-d.before.rotation));
-			b = sm::transform(b, sm::rotation_matrix(-d.before.rotation));
-			auto scale_axis = [](double original, double start, double now) {
-				return std::abs(start) > 1e-6 ? original * now / start
-				                              : original + (now - start) / 50.0;
-			};
-			if (d.mode == sprite_drag::scale_xy) {
-				auto a_length = std::hypot(a.x, a.y);
-				auto b_length = std::hypot(b.x, b.y);
-				if (a_length > 1e-6) {
-					auto factor = b_length / a_length;
-					if (a.x * b.x + a.y * b.y < 0) {
-						factor = -factor;
-					}
-					d.preview.scale.x = d.before.scale.x * factor;
-					d.preview.scale.y = d.before.scale.y * factor;
-				}
-			} else {
-				if (d.mode == sprite_drag::scale_x) {
-					d.preview.scale.x = scale_axis(d.before.scale.x, a.x, b.x);
-				}
-				if (d.mode == sprite_drag::scale_y) {
-					d.preview.scale.y = scale_axis(d.before.scale.y, a.y, b.y);
-				}
-			}
-		}
-	}
+	d.preview = transformed_drag(d.before, d.start, current, d.mode);
 	scene_.update();
 	emit transform_changed();
 }
 
 void ui::canvas::artwork_layer::end_transform(QPointF position) {
+	if (background_drag_) {
+		update_transform(position);
+		auto d = *background_drag_;
+		background_drag_.reset();
+		if (!same(d.before, d.preview)) {
+			project_.edit_backgrounds([&](auto& backgrounds) {
+				for (auto& background : backgrounds)
+					if (background.id == d.id) background.transform = d.preview;
+			});
+		}
+		scene_.update();
+		emit transform_changed();
+		return;
+	}
 	if (!drag_) {
 		return;
 	}
@@ -586,8 +750,10 @@ void ui::canvas::artwork_layer::end_transform(QPointF position) {
 }
 
 void ui::canvas::artwork_layer::cancel_transform() {
-	if (drag_) {
-		drag_.reset();
+	const bool changed = drag_.has_value() || background_drag_.has_value();
+	drag_.reset();
+	background_drag_.reset();
+	if (changed) {
 		scene_.update();
 		emit transform_changed();
 	}

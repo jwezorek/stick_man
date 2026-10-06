@@ -11,6 +11,7 @@
 #include <memory>
 #include "sm_skeleton.hpp"
 #include "sm_character.hpp"
+#include "sm_background.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
 
@@ -58,7 +59,8 @@ namespace sm {
         invalid_project_json,
         duplicate_object_id,
         archive_error,
-        invalid_artwork
+        invalid_artwork,
+        invalid_background
     };
 
     class project {
@@ -69,6 +71,7 @@ namespace sm {
         // never outlive the character referenced by its non-owning parent link.
         character_tbl characters_;
         sm::topology topology_;
+        std::vector<background_image> backgrounds_;
         mutable std::unordered_map<object_id, mutable_object> objects_;
         mutable bool object_index_dirty_ = true;
         std::size_t next_character_name_ = 1;
@@ -143,6 +146,19 @@ namespace sm {
         const animation_assets& animation_data(const object_id& character_id) const;
         sm::artwork& artwork(const object_id& character_id);
         const sm::artwork& artwork(const object_id& character_id) const;
+
+        // Project-level raster references. Vector order is painter order: earlier
+        // items are behind later items. Mutations validate IDs/transforms and keep
+        // the ordering deterministic.
+        const std::vector<background_image>& backgrounds() const noexcept { return backgrounds_; }
+        const background_image* background(object_id id) const noexcept;
+        object_id add_background(std::string name, std::span<const std::uint8_t> encoded);
+        object_id add_background(std::string name, image_resource image);
+        void rename_background(object_id id, std::string name);
+        void set_background_transform(object_id id, sprite_transform transform);
+        void delete_background(object_id id);
+        void reorder_background(object_id id, std::size_t index);
+        void set_backgrounds(std::vector<background_image> backgrounds);
         bool slot_resolved(const object_id& character_id, const std::string& slot) const;
         std::vector<resolved_sprite> resolve_artwork(const object_id& character_id,
             const std::string& appearance, const std::map<std::string, std::string>& states = {}, const sm::topology* geometry = nullptr) const;

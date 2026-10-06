@@ -7,7 +7,7 @@ set_target_properties(selection_regressions PROPERTIES AUTORCC ON)
 
 foreach(case IN ITEMS
     rectangle partial modifiers tree clipboard drag pin_state rubber_band_directions fast_release release_endpoint pane_structure
-    character_hierarchy character_commands character_pane character_inference character_drag
+    character_hierarchy character_commands character_pane character_inference character_drag backgrounds
     character_artwork character_artwork_phase2 character_artwork_phase3
     character_delete character_actions character_error
 )
@@ -64,6 +64,10 @@ add_test(NAME character_stage4 COMMAND $<TARGET_FILE:character_stage4>)
 add_executable(appearances appearances.cpp)
 target_link_libraries(appearances PRIVATE stick_man_core)
 add_test(NAME appearances COMMAND $<TARGET_FILE:appearances>)
+
+add_executable(backgrounds backgrounds.cpp)
+target_link_libraries(backgrounds PRIVATE stick_man_core)
+add_test(NAME backgrounds COMMAND $<TARGET_FILE:backgrounds>)
 
 add_executable(animation_v2_phase1 animation_v2_phase1.cpp)
 target_link_libraries(animation_v2_phase1 PRIVATE stick_man_model)

@@ -64,6 +64,8 @@ namespace {
             return QStringLiteral("The project package could not be read or written completely.");
         case sm::project_result::invalid_artwork:
             return QStringLiteral("The project contains invalid or unreadable artwork resources.");
+        case sm::project_result::invalid_background:
+            return QStringLiteral("The project contains invalid or unreadable background resources.");
         }
         return QStringLiteral("An unknown project error occurred.");
     }

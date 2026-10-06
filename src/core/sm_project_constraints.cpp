@@ -24,7 +24,7 @@ std::vector<sm::const_constraint_ref> sm::project::constraints_for_bone(object_i
 }
 
 sm::expected_constraint sm::project::add_constraint(const constraint& value) {
-	if (!ensure_object_index() || objects_.contains(value.id())) {
+	if (!ensure_object_index() || objects_.contains(value.id()) || background(value.id())) {
 		return std::unexpected(result::duplicate_id);
 	}
 	auto proposed = constraints();
@@ -46,7 +46,7 @@ sm::expected_constraint sm::project::add_rotation_constraint(
 	object_id id;
 	do {
 		id = object_id::generate();
-	} while (objects_.contains(id));
+	} while (objects_.contains(id) || background(id));
 	return add_constraint(
 	    { id, std::move(name), rotation_constraint{ target, reference, allowed } });
 }
@@ -63,7 +63,7 @@ sm::expected_constraint sm::project::add_rigid_triangle_constraint(
 	object_id id;
 	do {
 		id = object_id::generate();
-	} while (objects_.contains(id));
+	} while (objects_.contains(id) || background(id));
 	return add_constraint({ id, std::move(name),
 	    rigid_triangle_constraint{ first, second,
 	        normalize_angle(b->get().world_rotation() - a->get().world_rotation()) } });
@@ -97,7 +97,7 @@ sm::result sm::project::restore_constraints(const constraint_map& snapshot) {
 		return status;
 	}
 	for (auto& [id, c] : snapshot) {
-		if (characters_.contains(id)) {
+		if (characters_.contains(id) || background(id)) {
 			return result::duplicate_id;
 		}
 	}

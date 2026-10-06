@@ -98,6 +98,8 @@ void mdl::project::emit_history_state(bool was_dirty) {
 void mdl::project::notify_command_change(const command& cmd) {
     if (cmd.artwork_character)
         emit artwork_changed(*this, *cmd.artwork_character);
+    else if (cmd.backgrounds_edit)
+        emit backgrounds_changed(*this);
     else
         emit project_changed(*this);
 }
@@ -163,6 +165,24 @@ void mdl::project::edit_artwork(const sm::object_id& id, const std::function<voi
         [id, before](project& p) { p.core_.artwork(id) = before; }
     };
     cmd.artwork_character = id;
+    execute_command(cmd);
+}
+void mdl::project::edit_backgrounds(
+        const std::function<void(std::vector<sm::background_image>&)>& edit) {
+    if (animation_mode())
+        return;
+    auto before = core_.backgrounds();
+    auto after = before;
+    edit(after);
+    // Validate atomically before placing the edit on the history stack. Image
+    // resources share immutable backing, so these snapshots remain inexpensive.
+    core_.set_backgrounds(after);
+    core_.set_backgrounds(before);
+    command cmd{
+        [after](project& p) { p.core_.set_backgrounds(after); },
+        [before](project& p) { p.core_.set_backgrounds(before); }
+    };
+    cmd.backgrounds_edit = true;
     execute_command(cmd);
 }
 const sm::topology& mdl::project::topology() const {

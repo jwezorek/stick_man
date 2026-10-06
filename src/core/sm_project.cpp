@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cassert>
 #include <charconv>
+#include <cmath>
 #include <limits>
 
 using json = nlohmann::json;
@@ -22,6 +23,26 @@ namespace {
 
     constexpr std::string_view project_json_name = "project.json";
     constexpr double project_json_version = 8.0;
+
+    json point_json(sm::point p) { return json::array({p.x, p.y}); }
+    sm::point read_point(const json& value) {
+        if (!value.is_array() || value.size() != 2)
+            throw std::invalid_argument("Invalid point");
+        const sm::point result{value.at(0).get<double>(), value.at(1).get<double>()};
+        if (!std::isfinite(result.x) || !std::isfinite(result.y))
+            throw std::invalid_argument("Background coordinates must be finite");
+        return result;
+    }
+    void validate_background(const sm::background_image& background) {
+        if (background.name.empty())
+            throw std::invalid_argument("Background name cannot be empty");
+        if (background.image.width() <= 0 || background.image.height() <= 0)
+            throw std::invalid_argument("Background image cannot be empty");
+        const auto& t = background.transform;
+        if (!std::isfinite(t.translation.x) || !std::isfinite(t.translation.y) ||
+            !std::isfinite(t.rotation) || !std::isfinite(t.scale.x) || !std::isfinite(t.scale.y))
+            throw std::invalid_argument("Background transform must be finite");
+    }
 
     template<typename Object>
     sm::object_id object_id_of(const Object& object) {
@@ -152,7 +173,7 @@ sm::skeleton& sm::project::create_skeleton(const point& pt) {
         auto& created = topology_.create_skeleton(pt);
         const auto created_id = created.id();
         invalidate_object_index();
-        if (ensure_object_index()) {
+        if (has_unique_object_ids()) {
             return created;
         }
         topology_.delete_skeleton(created_id);
@@ -172,7 +193,8 @@ sm::expected_skel sm::project::copy_skeleton(
         return it == id_remap.end() ? id : it->second;
     };
     auto collides = [this, &mapped_id](const object_id& id) {
-        return objects_.contains(mapped_id(id));
+        const auto mapped = mapped_id(id);
+        return objects_.contains(mapped) || background(mapped);
     };
 
     if (collides(source.id())) {
@@ -196,7 +218,7 @@ sm::expected_skel sm::project::copy_skeleton(
         if (!source.contains<bone>(target))
             continue;
         const bool new_identity = id_remap.contains(target) && !id_remap.contains(id);
-        if (!new_identity && objects_.contains(mapped_id(id)))
+        if (!new_identity && collides(id))
             return std::unexpected(result::duplicate_id);
     }
 
@@ -251,7 +273,7 @@ void sm::project::reconcile_character_animation_poses() {
 }
 
 sm::result sm::project::validate_integrity() const noexcept {
-    if (!ensure_object_index())
+    if (!has_unique_object_ids())
         return result::duplicate_id;
     if (auto status = validate_constraints(topology_, constraints()); status != result::success)
         return status;
@@ -297,7 +319,7 @@ sm::expected_bone sm::project::create_bone(const std::string& name, node& u, nod
     object_id id;
     do {
         id = object_id::generate();
-    } while (objects_.contains(id));
+    } while (objects_.contains(id) || background(id));
     return create_bone(id, name, u, v);
 }
 
@@ -308,7 +330,7 @@ sm::expected_bone sm::project::create_bone(
     if (!ensure_object_index()) {
         return std::unexpected(result::duplicate_id);
     }
-    if (objects_.contains(id)) {
+    if (objects_.contains(id) || background(id)) {
         return std::unexpected(result::duplicate_id);
     }
     const auto effects = effects_for_removed_objects({}, {}, {v.owner().id()});
@@ -403,6 +425,8 @@ sm::topology_change sm::project::replace_skeletons(
     }
     for (const auto& c : plan->membership.characters)
         used_ids.insert(c.id);
+    for (const auto& background : backgrounds_)
+        used_ids.insert(background.id);
 
     auto allocation_guard = used_ids;
     sm::topology staged;
@@ -609,7 +633,7 @@ sm::result sm::project::restore_membership(const membership_state& state) {
         if (!metadata.insert(c.id).second)
             return result::invalid_membership;
         if (!characters_.contains(c.id)) {
-            if (objects_.contains(c.id))
+            if (objects_.contains(c.id) || background(c.id))
                 return result::duplicate_id;
             prepared.emplace(c.id, sm::character::make_unique(*this, c.id, c.name, sm::rig(*this)));
             prepared.at(c.id)->artwork_ = c.artwork;
@@ -703,7 +727,7 @@ std::expected<sm::replacement_plan, sm::result> sm::project::plan_replacement(
         if (!characters_.contains(c.id)) {
             if (!ensure_object_index())
                 return std::unexpected(result::duplicate_id);
-            if (objects_.contains(c.id))
+            if (objects_.contains(c.id) || background(c.id))
                 return std::unexpected(result::duplicate_id);
         }
     }
@@ -884,7 +908,7 @@ sm::expected_const_character sm::project::create_character(std::span<const const
     object_id id;
     do {
         id = object_id::generate();
-    } while (objects_.contains(id));
+    } while (objects_.contains(id) || background(id));
 
     sm::rig rig(*this);
     for (auto skel : validated) {
@@ -997,13 +1021,22 @@ sm::const_project_object sm::project::get(const object_id& id) const {
 }
 
 bool sm::project::has_unique_object_ids() const {
-    return ensure_object_index();
+    if (!ensure_object_index())
+        return false;
+    std::unordered_set<object_id> ids;
+    ids.reserve(backgrounds_.size());
+    for (const auto& background : backgrounds_) {
+        if (objects_.contains(background.id) || !ids.insert(background.id).second)
+            return false;
+    }
+    return true;
 }
 
 void sm::project::clear() {
     objects_.clear();
     topology_.clear();
     characters_.clear();
+    backgrounds_.clear();
     object_index_dirty_ = false;
     next_character_name_ = 1;
 }
@@ -1028,10 +1061,25 @@ std::expected<sm::project_buffer, sm::project_result> sm::project::serialize() c
                 {"skeletons", std::move(skeletons)}, {"artwork", std::move(art)},
                 {"animation_data", animation_assets_to_json(character->animation_data())}});
         }
+        json backgrounds = json::array();
+        for (std::size_t i = 0; i < backgrounds_.size(); ++i) {
+            const auto& background = backgrounds_[i];
+            validate_background(background);
+            const auto resource = "backgrounds/" + background.id.to_string() + ".png";
+            package.add(resource, background.image.encode_png());
+            backgrounds.push_back({
+                {"id", background.id.to_string()}, {"name", background.name},
+                {"resource", resource}, {"order", i},
+                {"translation", point_json(background.transform.translation)},
+                {"rotation", background.transform.rotation},
+                {"scale", point_json(background.transform.scale)}
+            });
+        }
         auto topology_json = topology_.to_json();
         topology_json.erase("constraints");
         json semantic_project{{"version", project_json_version}, {"topology", std::move(topology_json)},
-            {"constraints", constraints_to_json(constraints())}, {"characters", std::move(characters)}};
+            {"constraints", constraints_to_json(constraints())}, {"characters", std::move(characters)},
+            {"backgrounds", std::move(backgrounds)}};
         auto text = semantic_project.dump(4);
         package.add(std::string(project_json_name), {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()});
         return package.finish();
@@ -1053,6 +1101,7 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
     // mirroring project member lifetime ordering for skeleton parent references.
     character_tbl new_characters;
     sm::topology new_topology;
+    std::vector<background_image> new_backgrounds;
     std::size_t new_next_character_name = 1;
     try {
         std::vector<std::set<std::string>> object_keys;
@@ -1081,6 +1130,48 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
         new_topology.constraints_ = constraints_from_json(semantic_project.at("constraints"));
         if (validate_constraints(new_topology, new_topology.constraints_) != result::success)
             return project_result::invalid_project_json;
+
+        if (semantic_project.contains("backgrounds")) {
+            try {
+                const auto& background_json = semantic_project.at("backgrounds");
+                if (!background_json.is_array())
+                    return project_result::invalid_background;
+                std::vector<std::pair<std::size_t, background_image>> ordered;
+                ordered.reserve(background_json.size());
+                std::unordered_set<object_id> background_ids;
+                std::unordered_set<std::size_t> orders;
+                std::size_t implicit_order = 0;
+                for (const auto& entry : background_json) {
+                    auto parsed_id = object_id::from_string(entry.at("id").get<std::string>());
+                    if (!parsed_id || !background_ids.insert(*parsed_id).second)
+                        return project_result::invalid_background;
+                    const auto order = entry.value("order", implicit_order++);
+                    if (!orders.insert(order).second)
+                        return project_result::invalid_background;
+                    const auto resource = entry.at("resource").get<std::string>();
+                    auto encoded = package->read(resource);
+                    sprite_transform transform;
+                    if (entry.contains("translation"))
+                        transform.translation = read_point(entry.at("translation"));
+                    if (entry.contains("rotation"))
+                        transform.rotation = entry.at("rotation").get<double>();
+                    if (entry.contains("scale"))
+                        transform.scale = read_point(entry.at("scale"));
+                    background_image background{*parsed_id, entry.at("name").get<std::string>(),
+                        image_resource::decode(encoded), transform};
+                    validate_background(background);
+                    ordered.emplace_back(order, std::move(background));
+                }
+                std::ranges::sort(ordered, {}, [](const auto& value) { return value.first; });
+                for (std::size_t i = 0; i < ordered.size(); ++i) {
+                    if (ordered[i].first != i)
+                        return project_result::invalid_background;
+                    new_backgrounds.push_back(std::move(ordered[i].second));
+                }
+            } catch (...) {
+                return project_result::invalid_background;
+            }
+        }
 
         const auto& character_json = semantic_project.at("characters");
         if (!character_json.is_array()) {
@@ -1162,6 +1253,13 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
     if (!build_object_index(new_topology, new_characters, new_objects)) {
         return project_result::duplicate_object_id;
     }
+    {
+        std::unordered_set<object_id> background_ids;
+        for (const auto& background : new_backgrounds) {
+            if (new_objects.contains(background.id) || !background_ids.insert(background.id).second)
+                return project_result::duplicate_object_id;
+        }
+    }
 
     // Commit only after topology, character membership and the project-wide object namespace
     // have all validated successfully. The old characters remain alive while old topology is
@@ -1169,11 +1267,88 @@ sm::project_result sm::project::deserialize(std::span<const std::uint8_t> buffer
     objects_.clear();
     topology_ = std::move(new_topology);
     characters_ = std::move(new_characters);
+    backgrounds_ = std::move(new_backgrounds);
     objects_ = std::move(new_objects);
     object_index_dirty_ = false;
     next_character_name_ = new_next_character_name;
     assert(has_consistent_membership());
     return project_result::success;
+}
+
+const sm::background_image* sm::project::background(object_id id) const noexcept {
+    auto it = std::ranges::find(backgrounds_, id, &background_image::id);
+    return it == backgrounds_.end() ? nullptr : &*it;
+}
+
+sm::object_id sm::project::add_background(std::string name, std::span<const std::uint8_t> encoded) {
+    return add_background(std::move(name), image_resource::decode(encoded));
+}
+
+sm::object_id sm::project::add_background(std::string name, image_resource image) {
+    if (!ensure_object_index())
+        throw std::invalid_argument("Project contains duplicate object IDs");
+    object_id id;
+    do {
+        id = object_id::generate();
+    } while (objects_.contains(id) || background(id));
+    background_image value{id, std::move(name), std::move(image), {}};
+    validate_background(value);
+    backgrounds_.push_back(std::move(value));
+    return id;
+}
+
+void sm::project::rename_background(object_id id, std::string name) {
+    auto it = std::ranges::find(backgrounds_, id, &background_image::id);
+    if (it == backgrounds_.end())
+        throw std::out_of_range("Background not found");
+    auto changed = *it;
+    changed.name = std::move(name);
+    validate_background(changed);
+    it->name = std::move(changed.name);
+}
+
+void sm::project::set_background_transform(object_id id, sprite_transform transform) {
+    auto it = std::ranges::find(backgrounds_, id, &background_image::id);
+    if (it == backgrounds_.end())
+        throw std::out_of_range("Background not found");
+    auto changed = *it;
+    changed.transform = transform;
+    validate_background(changed);
+    it->transform = transform;
+}
+
+void sm::project::delete_background(object_id id) {
+    auto it = std::ranges::find(backgrounds_, id, &background_image::id);
+    if (it == backgrounds_.end())
+        throw std::out_of_range("Background not found");
+    backgrounds_.erase(it);
+}
+
+void sm::project::reorder_background(object_id id, std::size_t index) {
+    auto it = std::ranges::find(backgrounds_, id, &background_image::id);
+    if (it == backgrounds_.end())
+        throw std::out_of_range("Background not found");
+    if (backgrounds_.empty())
+        return;
+    index = std::min(index, backgrounds_.size() - 1);
+    const auto from = static_cast<std::size_t>(it - backgrounds_.begin());
+    if (from == index)
+        return;
+    auto moved = std::move(*it);
+    backgrounds_.erase(backgrounds_.begin() + static_cast<std::ptrdiff_t>(from));
+    backgrounds_.insert(backgrounds_.begin() + static_cast<std::ptrdiff_t>(index), std::move(moved));
+}
+
+void sm::project::set_backgrounds(std::vector<background_image> backgrounds) {
+    if (!ensure_object_index())
+        throw std::invalid_argument("Project contains duplicate object IDs");
+    std::unordered_set<object_id> ids;
+    for (const auto& value : backgrounds) {
+        validate_background(value);
+        if (objects_.contains(value.id) || !ids.insert(value.id).second)
+            throw std::invalid_argument("Duplicate background object ID");
+    }
+    backgrounds_ = std::move(backgrounds);
 }
 
 sm::artwork& sm::project::artwork(const object_id& id) { return characters_.at(id)->artwork_; }

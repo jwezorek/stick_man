@@ -21,7 +21,9 @@ namespace ui::canvas {
         std::unordered_map<sm::object_id, std::string> active_;
         std::unordered_map<sm::object_id, std::map<std::string, std::string>> preview_states_;
         std::optional<sprite_selection> selected_;
-        bool transform_editing_ = false;
+        std::optional<sm::object_id> selected_background_;
+        enum class transform_scope { none, artwork, backgrounds };
+        transform_scope transform_scope_ = transform_scope::none;
         bool show_artwork_ = true;
         skeleton_display skeleton_display_ = skeleton_display::visible;
         struct drag_state {
@@ -32,18 +34,37 @@ namespace ui::canvas {
             sprite_drag mode;
         };
         std::optional<drag_state> drag_;
+        struct background_drag_state {
+            sm::object_id id;
+            sm::sprite_transform before, preview;
+            sm::point start;
+            sprite_drag mode;
+        };
+        std::optional<background_drag_state> background_drag_;
         struct drawable {
             sprite_selection selection;
             sm::image_resource image;
             sm::matrix transform, bone_transform;
         };
+        struct background_drawable {
+            sm::object_id id;
+            sm::image_resource image;
+            sm::matrix transform;
+        };
         struct transform_target {
             sprite_selection selection;
             sprite_drag mode;
         };
+        struct background_transform_target {
+            sm::object_id id;
+            sprite_drag mode;
+        };
         std::vector<drawable> drawables() const;
+        std::vector<background_drawable> background_drawables() const;
         std::optional<transform_target> transform_target_at(QPointF position) const;
+        std::optional<background_transform_target> background_transform_target_at(QPointF position) const;
         bool begin_transform(QPointF position, const transform_target& target);
+        bool begin_background_transform(QPointF position, const background_transform_target& target);
     public:
         artwork_layer(scene& scene, mdl::project& project);
 
@@ -59,6 +80,10 @@ namespace ui::canvas {
         void clear_selected_slot();
         const std::optional<sprite_selection>& selected_slot() const { return selected_; }
         std::optional<sm::sprite_transform> selected_transform() const;
+        void set_selected_background(sm::object_id id);
+        void clear_selected_background();
+        std::optional<sm::object_id> selected_background() const { return selected_background_; }
+        std::optional<sm::sprite_transform> selected_background_transform() const;
         std::optional<sprite_selection> hit_test(QPointF position) const;
         void paint(QPainter& painter) const;
         void paint_selection(QPainter& painter) const;
@@ -70,13 +95,14 @@ namespace ui::canvas {
         bool show_skeleton() const { return skeleton_display_ != skeleton_display::hidden; }
         void refresh_guides();
         void set_transform_editing(bool enabled);
-        bool transform_editing() const { return transform_editing_; }
+        void set_background_transform_editing(bool enabled);
+        bool transform_editing() const { return transform_scope_ != transform_scope::none; }
         bool begin_transform(QPointF position);
         bool begin_transform(QPointF position, sprite_drag mode);
         void update_transform(QPointF position);
         void end_transform(QPointF position);
         void cancel_transform();
-        bool dragging() const { return drag_.has_value(); }
+        bool dragging() const { return drag_.has_value() || background_drag_.has_value(); }
         // Empty slot creates a uniquely named root-anchored channel. One undo step.
         void assign_frame(const sm::object_id& character, const sm::object_id& bone,
             const std::string& frame, const std::optional<std::string>& slot = {});

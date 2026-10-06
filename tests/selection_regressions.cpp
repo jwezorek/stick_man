@@ -391,6 +391,64 @@ void character_test(fixture& f, const std::string& mode) {
         artwork_canvas_test(f, mode.ends_with("visual"));
         return;
     }
+    if (mode == "backgrounds") {
+        auto* browser = f.window.findChild<ui::pane::artwork_browser*>();
+        auto* target = browser ? browser->findChild<QComboBox*>("artwork_target") : nullptr;
+        auto* tabs = browser ? browser->findChild<QTabWidget*>() : nullptr;
+        require(browser && target && tabs, "background artwork target UI missing");
+        require(!browser->character_id() && target->currentText() == "Backgrounds",
+            "background target must be available without characters");
+        require(tabs->isTabVisible(3) && !tabs->isTabVisible(0) && !tabs->isTabVisible(1) &&
+            !tabs->isTabVisible(2), "background target must show only Backgrounds tab");
+
+        const auto first = sm::object_id::generate();
+        const auto second = sm::object_id::generate();
+        auto image = sm::image_resource::from_rgba(10, 10, sm::image_buffer(10 * 10 * 4, 255));
+        model.edit_backgrounds([&](auto& backgrounds) {
+            backgrounds.push_back({first, "first", image, {}});
+            backgrounds.push_back({second, "second", image, {{20, 0}, 0, {1, 1}}});
+        });
+        auto* list = browser->findChild<QListWidget*>("artwork_backgrounds");
+        require(list && list->count() == 2, "background thumbnails did not refresh");
+        list->setCurrentRow(0);
+        auto* tx = browser->findChild<QDoubleSpinBox*>("background_translation_x");
+        require(tx && tx->isEnabled(), "background numeric transform editor not enabled");
+        tx->setValue(7.0);
+        require(model.core().background(first)->transform.translation.x == 7.0,
+            "background numeric transform did not edit model");
+        model.undo();
+        require(model.core().background(first)->transform.translation.x == 0.0,
+            "background numeric transform undo failed");
+
+        auto* forward = browser->findChild<QToolButton*>("background_bring_forward");
+        require(forward && forward->isEnabled(), "background order control missing");
+        forward->click();
+        require(model.core().backgrounds()[0].id == second && model.core().backgrounds()[1].id == first,
+            "background order control did not change painter order");
+        model.undo();
+        require(model.core().backgrounds()[0].id == first && model.core().backgrounds()[1].id == second,
+            "background reorder undo failed");
+
+        auto& layer = f.canvas().artwork();
+        layer.set_selected_background(first);
+        layer.set_background_transform_editing(true);
+        require(layer.begin_transform(QPointF(0, 0)), "background direct transform did not start");
+        layer.end_transform(QPointF(3, 4));
+        require(model.core().background(first)->transform.translation == sm::point{3, 4},
+            "background direct translation did not persist");
+        model.undo();
+        require(model.core().background(first)->transform.translation == sm::point{},
+            "background direct translation undo failed");
+        layer.set_background_transform_editing(false);
+
+        auto character = f.make_character(false);
+        require(browser->character_id() == character && target->currentText() != "Backgrounds",
+            "character selection did not switch artwork target");
+        target->setCurrentIndex(target->findText("Backgrounds"));
+        require(!browser->character_id() && tabs->isTabVisible(3),
+            "manual Backgrounds target selection failed");
+        return;
+    }
     if (mode == "character_artwork" || mode == "character_artwork_visual") {
         auto id = f.make_character(false);
         auto* browser = f.window.findChild<ui::pane::artwork_browser*>();

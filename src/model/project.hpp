@@ -31,6 +31,7 @@ namespace mdl {
         bool document_edit = true;
         bool animation_edit = false;
         std::optional<sm::object_id> artwork_character;
+        bool backgrounds_edit = false;
         history_state::transition history_transition;
     };
     class project : public QObject {
@@ -113,6 +114,7 @@ namespace mdl {
         sm::project& core();
         // Validate on an independent semantic snapshot, then record one undoable edit.
         void edit_artwork(const sm::object_id& character, const std::function<void(sm::artwork&)>& edit);
+        void edit_backgrounds(const std::function<void(std::vector<sm::background_image>&)>& edit);
         const sm::topology& topology() const;
         model_object get(const sm::object_id& id);
         const_model_object get(const sm::object_id& id) const;
@@ -177,6 +179,7 @@ namespace mdl {
         void name_changed(const_skel_piece piece, const std::string& new_name);
         void project_changed(project& model);
         void artwork_changed(project& model, sm::object_id character);
+        void backgrounds_changed(project& model);
         void select_character(sm::object_id id);
         void refresh_undo_redo_state(bool, bool);
         void dirty_changed(bool dirty);
