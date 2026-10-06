@@ -13,6 +13,7 @@
 #include "../../core/sm_bone.hpp"
 #include "../../core/sm_skeleton.hpp"
 #include "../../core/sm_visit.hpp"
+#include <QIcon>
 #include <numbers>
 #include <ranges>
 #include <unordered_map>
@@ -68,6 +69,7 @@ namespace {
 
 	QStandardItem* make_treeitem(sm::bone& bone) {
 		auto* itm = new QStandardItem(bone.name().c_str());
+		itm->setIcon(QIcon(":/images/bone_icon.png"));
 		auto& bi = ui::canvas::item_from_model<ui::canvas::item::bone>(bone);
 		set_treeitem_data(itm, bone);
 		bi.set_treeview_item(itm);
@@ -77,6 +79,7 @@ namespace {
 	QStandardItem* make_treeitem(sm::skeleton& skel) {
 
 		auto* itm = new QStandardItem(skel.name().c_str());
+		itm->setIcon(QIcon(":/images/skeleton_icon.png"));
 		ui::canvas::item::skeleton* canv_item = nullptr;
 		canv_item = &ui::canvas::item_from_model<ui::canvas::item::skeleton>(skel);
 		set_treeitem_data(itm, skel);
@@ -91,7 +94,6 @@ namespace {
 		// by building a hash table mapping bones to their tree items.
 
 		QStandardItem* skel_item = make_treeitem(ui::canvas::item_from_model<ui::canvas::item::skeleton>(skel.get()).model());
-        skel_item->setIcon(QApplication::style()->standardIcon(QStyle::SP_FileIcon));
 		root->appendRow(skel_item);
 
 		std::unordered_map<const sm::bone*, QStandardItem*> bone_to_tree_item;
@@ -154,7 +156,7 @@ void ui::pane::main_skeleton_pane::sync_with_model(const sm::project& model)
         auto* root = new QStandardItem(QString::fromStdString(character->name()));
         root->setData(true, k_character_role);
         root->setData(QString::fromStdString(character->id().to_string()), k_model_role);
-        root->setIcon(QApplication::style()->standardIcon(QStyle::SP_DirIcon));
+        root->setIcon(QIcon(":/images/character_icon.png"));
         tree_model->appendRow(root);
         canvas().character_item(character->id())->set_treeview_item(root);
 		for (auto skel : character->rig().skeletons())

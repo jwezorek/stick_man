@@ -4,6 +4,9 @@
         <file>images/zoom_icon.png</file>
         <file>images/add_node_icon.png</file>
         <file>images/add_bone_icon.png</file>
+        <file>images/character_icon.png</file>
+        <file>images/skeleton_icon.png</file>
+        <file>images/bone_icon.png</file>
         <file>images/tool_palette_thumb.png</file>
         <file>images/arrow_icon.png</file>
         <file>images/move_icon.png</file>
