@@ -1,5 +1,6 @@
 #include "model/project.hpp"
 #include "core/sm_animation.hpp"
+#include "json.hpp"
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -99,33 +100,48 @@ void keyframe_operations_and_frame_aware_undo() {
         "authored Animation Mode edits did not dirty document on session commit");
 }
 
-void keyframe_pin_ownership_and_undo() {
+void transition_pin_ownership_and_undo() {
     fixture f;
     require(f.project.begin_animation_session(f.character, f.animation) == sm::result::success, "begin failed");
     require(f.project.add_animation_keyframe() == sm::result::success, "first key failed");
     const auto first = *f.project.animation_session_keyframe();
-
-    require(f.project.set_animation_keyframe_node_pinned(f.root, true) == sm::result::success, "pin failed");
-    require(f.anim().find_keyframe(first)->pinned_nodes.contains(f.root), "pin was not stored on first keyframe");
+    require(f.project.set_animation_outgoing_transition_node_pinned(f.root, true) == sm::result::not_found,
+        "terminal keyframe accepted hidden outgoing pin state");
 
     require(f.project.add_animation_keyframe() == sm::result::success, "second key failed");
     const auto second = *f.project.animation_session_keyframe();
-    require(f.anim().find_keyframe(second)->pinned_nodes.contains(f.root), "new keyframe did not inherit pin state");
+    require(f.anim().transitions.size() == 1 && f.anim().transitions[0].pinned_nodes.empty(),
+        "new first transition should start unpinned");
 
-    require(f.project.set_animation_keyframe_node_pinned(f.root, false) == sm::result::success, "unpin failed");
-    require(!f.anim().find_keyframe(second)->pinned_nodes.contains(f.root), "unpin did not affect second keyframe");
-    require(f.anim().find_keyframe(first)->pinned_nodes.contains(f.root), "unpin leaked backward to first keyframe");
+    require(f.project.select_animation_keyframe(first) == sm::result::success, "select first failed");
+    require(f.project.set_animation_outgoing_transition_node_pinned(f.root, true) == sm::result::success, "pin failed");
+    require(f.anim().transitions[0].pinned_nodes.contains(f.root), "pin was not stored on outgoing transition");
+    require(f.project.animation_session_pinned_nodes().contains(f.root), "selected source did not expose outgoing pins");
+
+    require(f.project.select_animation_keyframe(second) == sm::result::success, "select second failed");
+    require(f.project.animation_session_pinned_nodes().empty(), "terminal keyframe reported outgoing pins");
+    require(f.project.animation_session_incoming_locked_nodes().contains(f.root), "incoming transition pin not exposed as lock");
+    require(f.project.animation_session_incoming_lock_source_label(f.root) == std::optional<std::string>{"Pose 1"},
+        "incoming lock source did not identify preceding pose");
+
+    require(f.project.add_animation_keyframe() == sm::result::success, "third key failed");
+    const auto third = *f.project.animation_session_keyframe();
+    require(f.anim().transitions.size() == 2 && f.anim().transitions[1].pinned_nodes.contains(f.root),
+        "appended transition did not inherit current transition pin behavior");
+    require(f.project.animation_session_pinned_nodes().empty(), "new terminal keyframe reported hidden pins");
+
+    require(f.project.select_animation_keyframe(second) == sm::result::success, "reselect second failed");
+    require(f.project.set_animation_outgoing_transition_node_pinned(f.root, false) == sm::result::success, "unpin failed");
+    require(!f.anim().transitions[1].pinned_nodes.contains(f.root), "unpin did not affect second transition");
+    require(f.anim().transitions[0].pinned_nodes.contains(f.root), "unpin leaked backward to first transition");
 
     f.project.undo();
     require(f.project.animation_session_keyframe() == second &&
-        f.anim().find_keyframe(second)->pinned_nodes.contains(f.root), "pin undo did not restore second keyframe state");
+        f.anim().transitions[1].pinned_nodes.contains(f.root), "pin undo did not restore transition state");
     require(f.project.redo() == sm::result::success &&
-        !f.anim().find_keyframe(second)->pinned_nodes.contains(f.root), "pin redo failed");
-
-    require(f.project.select_animation_keyframe(first) == sm::result::success, "select first failed");
-    require(f.project.animation_session_pinned_nodes().contains(f.root), "selected first keyframe pins not exposed");
-    require(f.project.select_animation_keyframe(second) == sm::result::success, "select second failed");
-    require(!f.project.animation_session_pinned_nodes().contains(f.root), "selected second keyframe pins not exposed");
+        !f.anim().transitions[1].pinned_nodes.contains(f.root), "pin redo failed");
+    require(f.project.select_animation_keyframe(third) == sm::result::success, "select third failed");
+    require(f.project.animation_session_pinned_nodes().empty(), "final keyframe did not remain pin-free");
     f.project.end_animation_session();
 }
 
@@ -133,12 +149,21 @@ void persistence_validation_and_remap() {
     fixture f;
     require(f.project.begin_animation_session(f.character, f.animation) == sm::result::success,
         "begin failed");
-    require(f.project.add_animation_keyframe() == sm::result::success, "key failed");
-
-    const auto keyframe_id = *f.project.animation_session_keyframe();
-    require(f.project.set_animation_keyframe_node_pinned(f.root, true) == sm::result::success, "pin failed");
+    require(f.project.add_animation_keyframe() == sm::result::success, "first key failed");
+    const auto first = *f.project.animation_session_keyframe();
+    require(f.project.add_animation_keyframe() == sm::result::success, "second key failed");
+    require(f.project.select_animation_keyframe(first) == sm::result::success, "select source failed");
+    require(f.project.set_animation_outgoing_transition_node_pinned(f.root, true) == sm::result::success, "pin failed");
     require(f.project.rename_animation_keyframe(std::string("Contact")) == sm::result::success,
         "rename failed");
+
+    const auto json = sm::animation_assets_to_json(f.project.core().animation_data(f.character));
+    require(!json["animations"][0]["keyframes"][0].contains("pinned_nodes") &&
+        !json["animations"][0]["keyframes"][1].contains("pinned_nodes"),
+        "pins serialized on keyframes");
+    require(json["animations"][0]["transitions"][0].contains("pinned_nodes") &&
+        json["animations"][0]["transitions"][0]["pinned_nodes"].size() == 1,
+        "transition pins missing from serialization");
 
     auto bytes = f.project.serialize();
     require(bytes.has_value(), "serialize failed");
@@ -146,12 +171,13 @@ void persistence_validation_and_remap() {
     require(loaded.deserialize(*bytes) == sm::project_result::success, "round trip failed");
 
     const auto* animation = loaded.animation_data(f.character).find_animation(f.animation);
-    require(animation && animation->keyframes.size() == 1,
-        "keyframe did not round trip");
-    require(animation->keyframes[0].id == keyframe_id && animation->keyframes[0].name &&
+    require(animation && animation->keyframes.size() == 2 && animation->transitions.size() == 1,
+        "animation did not round trip");
+    require(animation->keyframes[0].id == first && animation->keyframes[0].name &&
         *animation->keyframes[0].name == "Contact",
         "keyframe identity/name did not round trip");
-    require(animation->keyframes[0].pinned_nodes.contains(f.root), "keyframe pins did not round trip");
+    require(animation->transitions[0].pinned_nodes.contains(f.root),
+        "transition pins did not round trip");
 
     auto assets = f.project.core().animation_data(f.character);
     const auto new_root = sm::object_id::generate();
@@ -159,33 +185,82 @@ void persistence_validation_and_remap() {
     auto* remapped = assets.find_animation(f.animation);
     require(remapped->keyframes[0].pose.root_positions.contains(new_root),
         "keyframe root reference was not remapped");
-    require(remapped->keyframes[0].pinned_nodes.contains(new_root) &&
-        !remapped->keyframes[0].pinned_nodes.contains(f.root), "keyframe pin was not remapped");
+    require(remapped->transitions[0].pinned_nodes.contains(new_root) &&
+        !remapped->transitions[0].pinned_nodes.contains(f.root), "transition pin was not remapped");
 
     f.project.end_animation_session();
 }
 
-void duplicate_and_empty_sequence() {
+void duplicate_delete_and_empty_sequence() {
     fixture f;
     require(f.project.begin_animation_session(f.character, f.animation) == sm::result::success,
         "begin failed");
-    require(f.project.add_animation_keyframe() == sm::result::success, "add failed");
-
+    require(f.project.add_animation_keyframe() == sm::result::success, "first add failed");
     const auto first = *f.project.animation_session_keyframe();
-    require(f.project.duplicate_animation_keyframe() == sm::result::success,
-        "duplicate failed");
-    require(f.anim().keyframes.size() == 2 && f.anim().keyframes[0].id == first &&
-        f.anim().keyframes[1].id != first, "duplicate identity wrong");
-    require(f.anim().transitions.size() == 1, "duplicate transition missing");
+    require(f.project.add_animation_keyframe() == sm::result::success, "second add failed");
+    const auto second = *f.project.animation_session_keyframe();
+    require(f.project.select_animation_keyframe(first) == sm::result::success, "select first failed");
+    require(f.project.set_animation_outgoing_transition_node_pinned(f.root, true) == sm::result::success, "pin failed");
+    const auto original_transition = f.anim().transitions[0].id;
+
+    require(f.project.duplicate_animation_keyframe() == sm::result::success, "duplicate failed");
+    require(f.anim().keyframes.size() == 3 && f.anim().keyframes[0].id == first &&
+        f.anim().keyframes[1].id != first && f.anim().keyframes[2].id == second, "duplicate identity wrong");
+    require(f.anim().transitions.size() == 2 &&
+        f.anim().transitions[0].pinned_nodes.contains(f.root) &&
+        f.anim().transitions[1].pinned_nodes.contains(f.root),
+        "duplicating a pinned interval did not preserve pins on both halves");
+    require(f.anim().transitions[1].id == original_transition,
+        "duplicate did not retain original transition on the second half");
 
     require(f.project.delete_animation_keyframe() == sm::result::success,
         "delete duplicate failed");
-    require(f.project.delete_animation_keyframe() == sm::result::success,
-        "delete final failed");
+    require(f.anim().keyframes.size() == 2 && f.anim().transitions.size() == 1 &&
+        f.anim().transitions[0].id == original_transition &&
+        f.anim().transitions[0].pinned_nodes.contains(f.root),
+        "middle deletion did not preserve resulting transition pin semantics");
+
+    require(f.project.select_animation_keyframe(second) == sm::result::success, "select final failed");
+    require(f.project.delete_animation_keyframe() == sm::result::success, "delete final failed");
+    require(f.project.delete_animation_keyframe() == sm::result::success, "delete last remaining failed");
     require(f.anim().keyframes.empty() && f.anim().transitions.empty() &&
         !f.project.animation_session_keyframe(),
         "final deletion did not produce empty sequence");
 
+    f.project.end_animation_session();
+}
+
+void middle_delete_uses_incoming_pin_semantics() {
+    fixture f;
+    require(f.project.begin_animation_session(f.character, f.animation) == sm::result::success,
+        "begin failed");
+    require(f.project.add_animation_keyframe() == sm::result::success, "first add failed");
+    const auto first = *f.project.animation_session_keyframe();
+    require(f.project.add_animation_keyframe() == sm::result::success, "second add failed");
+    const auto middle = *f.project.animation_session_keyframe();
+    require(f.project.add_animation_keyframe() == sm::result::success, "third add failed");
+
+    // Make the incoming and outgoing intervals observably different. Under the
+    // previous keyframe-owned model, deleting the middle pose made its predecessor
+    // the source of the resulting interval, so the predecessor's pins survived.
+    require(f.project.select_animation_keyframe(first) == sm::result::success, "select first failed");
+    require(f.project.set_animation_outgoing_transition_node_pinned(f.root, true) == sm::result::success,
+        "pin incoming interval failed");
+    require(f.anim().transitions[0].pinned_nodes.contains(f.root) &&
+        !f.anim().transitions[1].pinned_nodes.contains(f.root),
+        "test setup did not create distinct transition pin sets");
+    const auto retained_outgoing_id = f.anim().transitions[1].id;
+    const auto retained_outgoing_duration = f.anim().transitions[1].duration_seconds;
+
+    require(f.project.select_animation_keyframe(middle) == sm::result::success, "select middle failed");
+    require(f.project.delete_animation_keyframe() == sm::result::success, "delete middle failed");
+    require(f.anim().keyframes.size() == 2 && f.anim().transitions.size() == 1,
+        "middle delete did not reconcile sequence");
+    require(f.anim().transitions[0].id == retained_outgoing_id &&
+        f.anim().transitions[0].duration_seconds == retained_outgoing_duration,
+        "middle delete did not retain outgoing transition metadata");
+    require(f.anim().transitions[0].pinned_nodes.contains(f.root),
+        "middle delete did not carry predecessor pin semantics onto resulting interval");
     f.project.end_animation_session();
 }
 }
@@ -193,9 +268,10 @@ void duplicate_and_empty_sequence() {
 int main() {
     try {
         keyframe_operations_and_frame_aware_undo();
-        keyframe_pin_ownership_and_undo();
+        transition_pin_ownership_and_undo();
         persistence_validation_and_remap();
-        duplicate_and_empty_sequence();
+        duplicate_delete_and_empty_sequence();
+        middle_delete_uses_incoming_pin_semantics();
         std::cout << "PASS Animation V2 Phase 2 core/model\n";
         return 0;
     } catch (const std::exception& e) {

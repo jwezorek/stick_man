@@ -100,7 +100,7 @@ namespace mdl {
         std::optional<std::string> animation_session_incoming_lock_source_label(sm::object_id node) const;
         sm::result set_animation_transition_duration(sm::object_id transition, double seconds);
         sm::result insert_animation_keyframe(double seconds);
-        sm::result set_animation_keyframe_node_pinned(sm::object_id node, bool pinned);
+        sm::result set_animation_outgoing_transition_node_pinned(sm::object_id node, bool pinned);
         sm::result select_animation_keyframe(sm::object_id keyframe);
         sm::result add_animation_keyframe();
         sm::result duplicate_animation_keyframe();

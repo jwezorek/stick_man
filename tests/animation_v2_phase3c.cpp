@@ -253,7 +253,7 @@ namespace {
 		QApplication::processEvents();
 	}
 
-	void playback_uses_outgoing_keyframe_pins() {
+	void playback_uses_active_transition_pins() {
 		ui::stick_man window;
 		auto& p = window.project();
 		auto& core = p.core();
@@ -270,12 +270,12 @@ namespace {
 		for (auto& key : a.keyframes) {
 			key.pose = sm::capture_skeletal_pose(core.topology(), rig);
 		}
-		a.keyframes[0].pinned_nodes.insert(tid);
-		// Phase 4 requires a source pin to match the destination endpoint.
+		a.reconcile_transitions();
+		a.transitions[0].pinned_nodes.insert(tid);
+		// Transition pins require matching source/destination endpoints.
 		// Keep the first pinned interval stationary; the next interval is unpinned.
 		a.keyframes[2].pose.root_positions[rid] = { 20, 0 };
 		a.keyframes[2].pose.bone_rotations[bone->id()] = 0;
-		a.reconcile_transitions();
 		for (auto& transition : a.transitions) {
 			transition.duration_seconds = 2;
 		}
@@ -289,7 +289,7 @@ namespace {
 
 		editor->preview_time(1.0);
 		require(
-		    scene.is_node_pinned(tid), "outgoing source pin was not displayed during transition");
+		    scene.is_node_pinned(tid), "active transition pin was not displayed during transition");
 		near(displayed(scene, tid).x, 10.0, 0.006);
 		near(displayed(scene, tid).y, 0.0, 0.006);
 
@@ -506,7 +506,7 @@ int main(int argc, char** argv) {
 	QApplication app(argc, argv);
 	try {
 		endpoints();
-		playback_uses_outgoing_keyframe_pins();
+		playback_uses_active_transition_pins();
 		constrained_multiroot_artwork_and_failures();
 		model_destruction_detaches_views();
 		std::cout << "PASS Animation V2 Phase 3C\n";

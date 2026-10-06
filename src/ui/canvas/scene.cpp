@@ -423,12 +423,12 @@ void ui::canvas::scene::toggle_node_pinned_undoable(const sm::object_id& id) {
         toggle_node_pinned(id);
         return;
     }
-    // Incoming locks constrain this pose; only its authored pin controls the
-    // next pose. Toggling that pin must not read or remove the incoming lock.
+    // Incoming locks constrain this pose; its outgoing transition independently
+    // owns the pins edited here. Toggling them must not read or remove the lock.
     const bool before = pinned_node_ids_.contains(id);
     const bool after = !before;
     if (model_->animation_mode()) {
-        model_->set_animation_keyframe_node_pinned(id, after);
+        model_->set_animation_outgoing_transition_node_pinned(id, after);
         return;
     }
     model_->record_transient_edit(

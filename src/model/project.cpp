@@ -57,10 +57,10 @@ namespace {
 
     sm::result validate_pin_endpoints(const sm::animation& animation,
             const sm::topology& reference, std::span<const sm::object_id> skeletons) {
-        for (std::size_t i = 0; i + 1 < animation.keyframes.size(); ++i) {
+        for (std::size_t i = 0; i < animation.transitions.size(); ++i) {
             const auto& from = animation.keyframes[i];
             const auto& to = animation.keyframes[i + 1];
-            for (auto node_id : from.pinned_nodes) {
+            for (auto node_id : animation.transitions[i].pinned_nodes) {
                 auto a = pose_node_position(from.pose, reference, skeletons, node_id);
                 auto b = pose_node_position(to.pose, reference, skeletons, node_id);
                 if (!a || !b || sm::distance(*a, *b) > k_animation_pin_position_tolerance)
@@ -947,8 +947,12 @@ std::unordered_set<sm::object_id> mdl::project::animation_session_pinned_nodes()
         return {};
     const auto* animation = core_.animation_data(animation_session_->character).find_animation(
         animation_session_->animation);
-    const auto* keyframe = animation ? animation->find_keyframe(*animation_session_->selected_keyframe) : nullptr;
-    return keyframe ? keyframe->pinned_nodes : std::unordered_set<sm::object_id>{};
+    if (!animation)
+        return {};
+    const auto index = animation->keyframe_index(*animation_session_->selected_keyframe);
+    return index && *index < animation->transitions.size()
+        ? animation->transitions[*index].pinned_nodes
+        : std::unordered_set<sm::object_id>{};
 }
 
 std::unordered_set<sm::object_id> mdl::project::animation_session_incoming_locked_nodes() const {
@@ -960,7 +964,7 @@ std::unordered_set<sm::object_id> mdl::project::animation_session_incoming_locke
     auto index = animation->keyframe_index(*animation_session_->selected_keyframe);
     if (!index || *index == 0)
         return {};
-    return animation->keyframes[*index - 1].pinned_nodes;
+    return animation->transitions[*index - 1].pinned_nodes;
 }
 
 std::optional<std::string> mdl::project::animation_session_incoming_lock_source_label(sm::object_id node) const {
@@ -970,7 +974,7 @@ std::optional<std::string> mdl::project::animation_session_incoming_lock_source_
     if (!animation)
         return {};
     auto index = animation->keyframe_index(*animation_session_->selected_keyframe);
-    if (!index || *index == 0 || !animation->keyframes[*index - 1].pinned_nodes.contains(node))
+    if (!index || *index == 0 || !animation->transitions[*index - 1].pinned_nodes.contains(node))
         return {};
     const auto& source = animation->keyframes[*index - 1];
     if (source.name)
@@ -978,7 +982,7 @@ std::optional<std::string> mdl::project::animation_session_incoming_lock_source_
     return std::string("Pose ") + std::to_string(*index);
 }
 
-sm::result mdl::project::set_animation_keyframe_node_pinned(sm::object_id node_id, bool pinned) {
+sm::result mdl::project::set_animation_outgoing_transition_node_pinned(sm::object_id node_id, bool pinned) {
     if (!animation_session_ || !animation_session_->selected_keyframe)
         return sm::result::not_found;
     if (!animation_session_->working_topology.get<sm::node>(node_id))
@@ -988,40 +992,43 @@ sm::result mdl::project::set_animation_keyframe_node_pinned(sm::object_id node_i
     const auto animation_id = animation_session_->animation;
     const auto keyframe_id = *animation_session_->selected_keyframe;
     auto* animation = core_.animation_data(character_id).find_animation(animation_id);
-    auto* keyframe = animation ? animation->find_keyframe(keyframe_id) : nullptr;
-    if (!keyframe)
+    if (!animation)
         return sm::result::not_found;
-    const bool before = keyframe->pinned_nodes.contains(node_id);
+    const auto index = animation->keyframe_index(keyframe_id);
+    if (!index || *index >= animation->transitions.size())
+        return sm::result::not_found;
+    auto& transition = animation->transitions[*index];
+    const auto transition_id = transition.id;
+    const bool before = transition.pinned_nodes.contains(node_id);
     if (before == pinned)
         return sm::result::success;
     if (pinned) {
-        auto index = animation->keyframe_index(keyframe_id);
-        if (!index)
-            return sm::result::not_found;
-        if (*index + 1 < animation->keyframes.size()) {
-            const auto skeletons = core_.character(character_id)->get().rig().skeleton_ids();
-            auto a = pose_node_position(keyframe->pose, core_.topology(), skeletons, node_id);
-            auto b = pose_node_position(animation->keyframes[*index + 1].pose, core_.topology(), skeletons, node_id);
-            if (!a || !b || sm::distance(*a, *b) > k_animation_pin_position_tolerance) {
-                const auto source_label = keyframe->name ? QString::fromStdString(*keyframe->name) :
-                    QStringLiteral("Pose %1").arg(*index + 1);
-                const auto destination_label = animation->keyframes[*index + 1].name ?
-                    QString::fromStdString(*animation->keyframes[*index + 1].name) :
-                    QStringLiteral("Pose %1").arg(*index + 2);
-                emit animation_authoring_error(QStringLiteral("Cannot pin this node in %1: its position differs in %2.")
-                    .arg(source_label, destination_label));
-                return sm::result::invalid_animation;
-            }
+        const auto skeletons = core_.character(character_id)->get().rig().skeleton_ids();
+        auto a = pose_node_position(animation->keyframes[*index].pose, core_.topology(), skeletons, node_id);
+        auto b = pose_node_position(animation->keyframes[*index + 1].pose, core_.topology(), skeletons, node_id);
+        if (!a || !b || sm::distance(*a, *b) > k_animation_pin_position_tolerance) {
+            const auto& source = animation->keyframes[*index];
+            const auto& destination = animation->keyframes[*index + 1];
+            const auto source_label = source.name ? QString::fromStdString(*source.name) :
+                QStringLiteral("Pose %1").arg(*index + 1);
+            const auto destination_label = destination.name ? QString::fromStdString(*destination.name) :
+                QStringLiteral("Pose %1").arg(*index + 2);
+            emit animation_authoring_error(QStringLiteral("Cannot pin this node in %1: its position differs in %2.")
+                .arg(source_label, destination_label));
+            return sm::result::invalid_animation;
         }
     }
 
-    auto apply = [character_id, animation_id, keyframe_id, node_id](project& p, bool value) {
+    auto apply = [character_id, animation_id, keyframe_id, transition_id, node_id](project& p, bool value) {
         auto* animation = p.core_.animation_data(character_id).find_animation(animation_id);
-        auto* keyframe = animation ? animation->find_keyframe(keyframe_id) : nullptr;
-        if (!keyframe)
-            throw std::runtime_error("animation keyframe missing during pin edit");
-        if (value) keyframe->pinned_nodes.insert(node_id);
-        else keyframe->pinned_nodes.erase(node_id);
+        if (!animation)
+            throw std::runtime_error("animation missing during transition pin edit");
+        auto transition = std::find_if(animation->transitions.begin(), animation->transitions.end(),
+            [transition_id](const auto& candidate) { return candidate.id == transition_id; });
+        if (transition == animation->transitions.end())
+            throw std::runtime_error("animation transition missing during pin edit");
+        if (value) transition->pinned_nodes.insert(node_id);
+        else transition->pinned_nodes.erase(node_id);
         p.animation_session_->selected_keyframe = keyframe_id;
         emit p.animation_preview_changed();
         emit p.refresh_canvas(p, false);
@@ -1072,11 +1079,16 @@ sm::result mdl::project::add_animation_keyframe() {
     sm::pose_keyframe keyframe;
     keyframe.pose = after.keyframes.empty() ?
         sm::capture_skeletal_pose(topology(), skeletons) : after.keyframes.back().pose;
-    if (!after.keyframes.empty())
-        keyframe.pinned_nodes = after.keyframes.back().pinned_nodes;
     const auto keyframe_id = keyframe.id;
+    if (!after.keyframes.empty()) {
+        sm::pose_transition transition;
+        // Carry the preceding interval's pins forward when appending a new
+        // interval, without storing pending state on the terminal keyframe.
+        if (!after.transitions.empty())
+            transition.pinned_nodes = after.transitions.back().pinned_nodes;
+        after.transitions.push_back(std::move(transition));
+    }
     after.keyframes.push_back(std::move(keyframe));
-    after.reconcile_transitions();
     if (validate_pin_endpoints(after, core_.topology(), skeletons) != sm::result::success) {
         emit animation_authoring_error(QStringLiteral("Cannot add this pose because it would create mismatched pinned endpoints."));
         return sm::result::invalid_animation;
@@ -1147,9 +1159,14 @@ sm::result mdl::project::duplicate_animation_keyframe() {
     after.keyframes.insert(after.keyframes.begin() + *index + 1, std::move(copy));
 
     if (*index < after.transitions.size()) {
-        after.transitions.insert(after.transitions.begin() + *index, sm::pose_transition{});
+        sm::pose_transition inserted;
+        inserted.pinned_nodes = after.transitions[*index].pinned_nodes;
+        after.transitions.insert(after.transitions.begin() + *index, std::move(inserted));
     } else {
-        after.transitions.emplace_back();
+        sm::pose_transition appended;
+        if (!after.transitions.empty())
+            appended.pinned_nodes = after.transitions.back().pinned_nodes;
+        after.transitions.push_back(std::move(appended));
     }
 
     const auto skeletons = core_.character(character_id)->get().rig().skeleton_ids();
@@ -1234,7 +1251,7 @@ sm::result mdl::project::insert_animation_keyframe(double seconds) {
         return sm::result::invalid_animation;
     const auto skeletons = core_.character(character_id)->get().rig().skeleton_ids();
     if (validate_pin_endpoints(*animation, core_.topology(), skeletons) != sm::result::success) {
-        emit animation_authoring_error(QStringLiteral("Cannot insert into a transition with mismatched pinned endpoints. Remove the offending source pin first."));
+        emit animation_authoring_error(QStringLiteral("Cannot insert into a transition with mismatched pinned endpoints. Remove the offending transition pin first."));
         return sm::result::invalid_animation;
     }
 
@@ -1267,13 +1284,14 @@ sm::result mdl::project::insert_animation_keyframe(double seconds) {
     auto after = before;
     sm::pose_keyframe inserted;
     inserted.pose = (**sampled).pose;
-    inserted.pinned_nodes = after.keyframes[*interval].pinned_nodes;
     const auto inserted_id = inserted.id;
+    const auto split_pins = after.transitions[*interval].pinned_nodes;
     after.keyframes.insert(after.keyframes.begin() + *interval + 1, inserted);
-    after.transitions[*interval].duration_seconds = first_duration; // preserve original ID
+    after.transitions[*interval].duration_seconds = first_duration; // preserve original ID and pins
     sm::pose_transition second;
     second.duration_seconds = second_duration;
-    after.transitions.insert(after.transitions.begin() + *interval + 1, second);
+    second.pinned_nodes = split_pins;
+    after.transitions.insert(after.transitions.begin() + *interval + 1, std::move(second));
     if (validate_pin_endpoints(after, core_.topology(), skeletons) != sm::result::success) {
         emit animation_authoring_error(QStringLiteral("The sampled pose cannot be inserted without violating pinned endpoints."));
         return sm::result::invalid_animation;
@@ -1369,9 +1387,17 @@ sm::result mdl::project::delete_animation_keyframe() {
     auto after = before;
     after.keyframes.erase(after.keyframes.begin() + *index);
     if (!after.transitions.empty()) {
-        const auto transition_index = *index == 0 ? std::size_t{0} : *index - 1;
-        after.transitions.erase(after.transitions.begin() +
-            std::min(transition_index, after.transitions.size() - 1));
+        if (*index == 0) {
+            after.transitions.erase(after.transitions.begin());
+        } else if (*index == before.keyframes.size() - 1) {
+            after.transitions.erase(after.transitions.begin() + (*index - 1));
+        } else {
+            // Retain the outgoing transition metadata, but carry the removed
+            // interval's pin semantics onto the new interval explicitly.
+            const auto resulting_pins = after.transitions[*index - 1].pinned_nodes;
+            after.transitions.erase(after.transitions.begin() + (*index - 1));
+            after.transitions[*index - 1].pinned_nodes = resulting_pins;
+        }
     }
 
     std::optional<sm::object_id> next;

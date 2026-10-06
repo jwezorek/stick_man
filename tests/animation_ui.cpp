@@ -190,7 +190,7 @@ int main(int argc, char** argv) {
         require(!canvas.is_node_pinned(root_id), "unexpected initial pin state");
         canvas.toggle_node_pinned_undoable(root_id);
         require(!canvas.is_node_pinned(root_id),
-            "Animation Mode allowed pin state without an edited keyframe owner");
+            "Animation Mode allowed pin state without an outgoing transition");
 
         require(model.add_animation_keyframe() == sm::result::success, "create first frame");
         const auto first_frame = *model.animation_session_keyframe();
@@ -234,8 +234,20 @@ int main(int argc, char** argv) {
                     visible_lock = true;
         }
         require(visible_lock, "frame 2 must display a lock after pinning existing frame 1");
-        // Frame 2 was created before frame 1 was pinned, so it has no outgoing pin yet.
+        // A terminal keyframe has no outgoing transition and therefore no editable
+        // transition-local pin state. The existing gesture must simply leave it empty.
+        require(model.animation_session_pinned_nodes().empty(), "terminal frame exposed outgoing pins");
         canvas.toggle_node_pinned_undoable(root_id);
+        require(model.animation_session_pinned_nodes().empty(), "terminal frame created hidden pin state");
+
+        require(model.add_animation_keyframe() == sm::result::success, "create third frame");
+        const auto third_frame = *model.animation_session_keyframe();
+        require(model.select_animation_keyframe(second_frame) == sm::result::success, "reselect second frame");
+        require(model.animation_session_pinned_nodes().contains(root_id),
+            "new outgoing transition did not inherit the current pin behavior");
+
+        // The incoming lock from frame 1 must not prevent editing frame 2's outgoing
+        // transition. Removing that outgoing pin must leave the incoming lock visible.
         canvas.toggle_node_pinned_undoable(root_id);
         require(!model.animation_session_pinned_nodes().contains(root_id), "frame 2 unpin failed");
         require(canvas.is_node_pinned(root_id), "unpin must preserve frame 2 incoming movement lock");
@@ -243,7 +255,6 @@ int main(int argc, char** argv) {
         require(model.topology().get<sm::node>(root_id)->get().world_pos() == moved,
             "unpinning frame 2 must not allow moving its locked node");
 
-        // A lock from frame 1 must not prevent toggling frame 2's outgoing pin back on.
         canvas.toggle_node_pinned_undoable(root_id);
         require(model.animation_session_pinned_nodes().contains(root_id), "locked node could not be re-pinned");
         model.undo();
@@ -251,8 +262,7 @@ int main(int argc, char** argv) {
         require(model.redo() == sm::result::success, "re-pin redo failed");
         require(model.animation_session_pinned_nodes().contains(root_id), "re-pin redo lost pin");
         canvas.toggle_node_pinned_undoable(root_id);
-        require(model.add_animation_keyframe() == sm::result::success, "create third frame");
-        const auto third_frame = *model.animation_session_keyframe();
+        require(model.select_animation_keyframe(third_frame) == sm::result::success, "select third frame");
         require(!model.animation_session_incoming_locked_nodes().contains(root_id) &&
             !canvas.is_node_pinned(root_id), "frame 2 unpin must release frame 3");
         model.transform_node_positions({{root_id, moved}}, {{root_id, {100, 110}}});

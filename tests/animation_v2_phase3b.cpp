@@ -69,12 +69,12 @@ struct fixture {
         for (std::size_t i = 0; i < a.keyframes.size(); ++i) {
             require(a.keyframes[i].id == authored.keyframes[i].id &&
                 a.keyframes[i].name == authored.keyframes[i].name, "key identity/name mutation");
-            require(a.keyframes[i].pinned_nodes == authored.keyframes[i].pinned_nodes, "key pin mutation");
             same_pose(a.keyframes[i].pose, authored.keyframes[i].pose);
         }
         for (std::size_t i = 0; i < a.transitions.size(); ++i)
             require(a.transitions[i].id == authored.transitions[i].id &&
-                a.transitions[i].duration_seconds == authored.transitions[i].duration_seconds, "transition mutation");
+                a.transitions[i].duration_seconds == authored.transitions[i].duration_seconds &&
+                a.transitions[i].pinned_nodes == authored.transitions[i].pinned_nodes, "transition mutation");
         return result;
     }
     // Independent authority: apply only returned successful poses, and validate
@@ -142,19 +142,19 @@ void timing_and_exactness() {
     failed(f.sample(malformed, 0), sm::result::invalid_animation);
     require(f.project.topology().to_json() == before, "timing mutated topology");
 }
-void source_keyframe_pins_govern_outgoing_transition() {
+void transition_pins_govern_sampling_and_reporting() {
     fixture f;
     auto root = f.node({0, 0}), knee = f.node({10, 0}), foot = f.node({20, 0});
     auto upper = f.link(root, knee), lower = f.link(knee, foot);
     auto a = f.sequence();
     const auto rid = root->id(), fid = foot->id();
 
-    a.keyframes[0].pinned_nodes.insert(fid);
-    a.keyframes[1].pinned_nodes.insert(rid);
-    a.keyframes[1].pose.root_positions[rid] = {10, 0};
+    a.transitions[0].pinned_nodes.insert(fid);
+    a.transitions[1].pinned_nodes.insert(rid);
+    a.keyframes[1].pose.root_positions[rid] = {10, -10};
     a.keyframes[1].pose.bone_rotations[upper->id()] = std::numbers::pi / 2;
     a.keyframes[1].pose.bone_rotations[lower->id()] = -std::numbers::pi / 2;
-    a.keyframes[2].pose.root_positions[rid] = {30, 0};
+    a.keyframes[2].pose.root_positions[rid] = {10, -10};
     a.keyframes[2].pose.bone_rotations[upper->id()] = 0;
     a.keyframes[2].pose.bone_rotations[lower->id()] = 0;
 
@@ -168,7 +168,7 @@ void source_keyframe_pins_govern_outgoing_transition() {
 
     auto first_mid = success(f.sample(a, 1.0));
     require(first_mid.pinned_nodes.contains(fid) && !first_mid.pinned_nodes.contains(rid),
-        "first transition did not use source keyframe pins");
+        "first transition did not use its own pins");
     const auto planted_foot = world_position(first_mid.pose, fid);
     near(planted_foot.x, 20.0, 0.006);
     near(planted_foot.y, 0.0, 0.006);
@@ -176,14 +176,22 @@ void source_keyframe_pins_govern_outgoing_transition() {
     auto exact_second = success(f.sample(a, 2.0));
     same_pose(exact_second.pose, a.keyframes[1].pose);
     require(exact_second.pinned_nodes.contains(rid) && !exact_second.pinned_nodes.contains(fid),
-        "exact keyframe did not switch to its own pin state");
+        "exact non-terminal keyframe did not report outgoing transition pins");
 
     auto second_mid = success(f.sample(a, 3.5));
     require(second_mid.pinned_nodes.contains(rid) && !second_mid.pinned_nodes.contains(fid),
-        "second transition did not use second keyframe pins");
+        "second transition did not use its own pins");
     const auto planted_root = world_position(second_mid.pose, rid);
     near(planted_root.x, 10.0);
-    near(planted_root.y, 0.0);
+    near(planted_root.y, -10.0);
+
+    auto final = success(f.sample(a, 5.0));
+    same_pose(final.pose, a.keyframes[2].pose);
+    require(final.pinned_nodes.empty(), "final keyframe reported transition-local pins");
+
+    auto invalid_membership = a;
+    invalid_membership.transitions[0].pinned_nodes.insert(sm::object_id::generate());
+    failed(f.sample(invalid_membership, 1.0), sm::result::invalid_membership);
 }
 
 void world_projection_and_failures() {
@@ -432,7 +440,7 @@ void edge_cases_and_failure_isolation() {
 int main() {
     try {
         timing_and_exactness();
-        source_keyframe_pins_govern_outgoing_transition();
+        transition_pins_govern_sampling_and_reporting();
         world_projection_and_failures();
         parent_and_coupled_relations();
         coupled_equality_cycle();

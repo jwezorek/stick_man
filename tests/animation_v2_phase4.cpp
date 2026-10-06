@@ -89,6 +89,8 @@ void duration_and_insert() {
     fixture f;
     auto* a = f.project.core().animation_data(f.character).find_animation(f.animation_id);
     const auto transition_id = a->transitions[0].id;
+    require(f.project.set_animation_outgoing_transition_node_pinned(f.tip, true) == sm::result::success,
+        "pin before split failed");
     require(f.project.set_animation_transition_duration(transition_id, 4.0) == sm::result::success,
         "duration edit failed");
     near(a->transitions[0].duration_seconds, 4.0);
@@ -102,6 +104,8 @@ void duration_and_insert() {
     require(a->keyframes.size() == 3 && a->transitions.size() == 2, "insert shape");
     require(a->transitions[0].id == original_id, "first split did not preserve transition id");
     require(a->transitions[1].id != original_id, "second split did not get fresh id");
+    require(a->transitions[0].pinned_nodes.contains(f.tip) &&
+        a->transitions[1].pinned_nodes.contains(f.tip), "split did not preserve pins on both halves");
     near(a->transitions[0].duration_seconds, 1.5);
     near(a->transitions[1].duration_seconds, 2.5);
     near(a->duration_seconds(), 4.0);
@@ -118,7 +122,7 @@ void duration_and_insert() {
 void pin_endpoint_invariant() {
     fixture f;
     auto* a = f.project.core().animation_data(f.character).find_animation(f.animation_id);
-    require(f.project.set_animation_keyframe_node_pinned(f.tip, true) == sm::result::success,
+    require(f.project.set_animation_outgoing_transition_node_pinned(f.tip, true) == sm::result::success,
         "matching endpoint pin rejected");
     require(f.project.select_animation_keyframe(a->keyframes[1].id) == sm::result::success, "select destination");
     require(f.project.animation_session_incoming_locked_nodes().contains(f.tip), "incoming lock not derived");
@@ -135,20 +139,20 @@ void pin_endpoint_invariant() {
         "rejected locked edit changed history");
 
     require(f.project.select_animation_keyframe(a->keyframes[0].id) == sm::result::success, "select source");
-    require(f.project.set_animation_keyframe_node_pinned(f.tip, false) == sm::result::success, "unpin failed");
+    require(f.project.set_animation_outgoing_transition_node_pinned(f.tip, false) == sm::result::success, "unpin failed");
     a->keyframes[1].pose.root_positions[f.root] = {1, 0};
-    require(f.project.set_animation_keyframe_node_pinned(f.tip, true) == sm::result::invalid_animation,
+    require(f.project.set_animation_outgoing_transition_node_pinned(f.tip, true) == sm::result::invalid_animation,
         "mismatched endpoint pin accepted");
-    require(!a->keyframes[0].pinned_nodes.contains(f.tip), "failed pin mutated authored state");
+    require(!a->transitions[0].pinned_nodes.contains(f.tip), "failed pin mutated transition state");
 
-    // Legacy inconsistent data remains loadable/editable enough to remove the pin,
-    // but the inconsistent interval is not a valid continuous preview.
-    a->keyframes[0].pinned_nodes.insert(f.tip);
+    // Directly injected inconsistent transition data is not a valid continuous preview,
+    // but the authoring API still permits removing the offending pin.
+    a->transitions[0].pinned_nodes.insert(f.tip);
     auto rig = f.project.core().character(f.character)->get().rig().skeleton_ids();
     auto sample = sm::sample_constrained_pose(*a, 1.0, f.project.core().topology(), rig);
     require(!sample && sample.error() == sm::result::invalid_animation,
         "legacy mismatched interval preview was accepted");
-    require(f.project.set_animation_keyframe_node_pinned(f.tip, false) == sm::result::success,
+    require(f.project.set_animation_outgoing_transition_node_pinned(f.tip, false) == sm::result::success,
         "legacy offending pin could not be removed");
 }
 }

@@ -2033,19 +2033,19 @@ std::expected<sm::skeletal_pose, sm::result> project_animation_reference(
 }
 
 std::expected<sm::skeletal_pose, sm::result> apply_transition_pins(
-    const sm::pose_keyframe& from, const sm::skeletal_pose& candidate,
-    animation_geometry& geometry) {
+    const sm::pose_keyframe& from, const sm::pose_transition& transition,
+    const sm::skeletal_pose& candidate, animation_geometry& geometry) {
 
-    if (from.pinned_nodes.empty())
+    if (transition.pinned_nodes.empty())
         return candidate;
 
-    // A source keyframe is itself an exact authored pose. If it cannot be
-    // reconstructed under the persistent constraints, the outgoing transition
-    // cannot use its node positions as pin targets.
+    // Pin targets come from the exact source pose of the active transition. If
+    // that pose cannot be reconstructed under persistent constraints, the
+    // transition cannot use its node positions as pin targets.
     if (auto status = geometry.validate(from.pose); status != sm::result::success)
         return std::unexpected(status);
 
-    std::vector<sm::object_id> pin_ids(from.pinned_nodes.begin(), from.pinned_nodes.end());
+    std::vector<sm::object_id> pin_ids(transition.pinned_nodes.begin(), transition.pinned_nodes.end());
     std::ranges::sort(pin_ids);
     std::map<sm::object_id, sm::point> targets;
     try {
@@ -2154,30 +2154,40 @@ sm::constrained_pose_result sm::sample_constrained_pose(const animation& animati
     if (auto status = prepare_animation_geometry(topology, rig_skeletons, reference->pose, geometry);
         status != result::success) return std::unexpected(status);
     const std::unordered_set<object_id> rig_ids(rig_skeletons.begin(), rig_skeletons.end());
-    for (const auto& keyframe : animation.keyframes) {
-        for (auto id : keyframe.pinned_nodes) {
+    for (const auto& transition : animation.transitions) {
+        for (auto id : transition.pinned_nodes) {
             auto node = topology.get<sm::node>(id);
             if (!node || !rig_ids.contains(node->get().owner().id()))
                 return std::unexpected(result::invalid_membership);
         }
     }
 
-    const pose_keyframe* active_keyframe = nullptr;
+    const pose_keyframe* source_keyframe = nullptr;
+    const pose_transition* active_transition = nullptr;
+    const pose_transition* reported_transition = nullptr;
     const bool interior = std::holds_alternative<reference_transition>(reference->location);
     if (interior) {
-        active_keyframe = animation.find_keyframe(
-            std::get<reference_transition>(reference->location).from_keyframe_id);
+        const auto& tr = std::get<reference_transition>(reference->location);
+        source_keyframe = animation.find_keyframe(tr.from_keyframe_id);
+        auto transition = std::find_if(animation.transitions.begin(), animation.transitions.end(),
+            [&](const auto& candidate) { return candidate.id == tr.transition_id; });
+        if (transition != animation.transitions.end()) {
+            active_transition = &*transition;
+            reported_transition = active_transition;
+        }
     } else {
-        active_keyframe = animation.find_keyframe(
-            std::get<reference_keyframe>(reference->location).keyframe_id);
+        const auto keyframe_id = std::get<reference_keyframe>(reference->location).keyframe_id;
+        source_keyframe = animation.find_keyframe(keyframe_id);
+        const auto index = animation.keyframe_index(keyframe_id);
+        if (index && *index < animation.transitions.size())
+            reported_transition = &animation.transitions[*index];
     }
-    if (!active_keyframe)
+    if (!source_keyframe || (interior && !active_transition))
         return std::unexpected(result::invalid_animation);
 
-    // Phase 4 authoring invariant: a source pin must reach the destination at
-    // exactly the same world position. Legacy files are not mutated on load, but
-    // their inconsistent interval is not presented as a valid continuous preview.
-    if (interior && !active_keyframe->pinned_nodes.empty()) {
+    // A transition pin must occupy the same endpoint position at both keys.
+    // Inconsistent authored intervals are not valid continuous previews.
+    if (interior && !active_transition->pinned_nodes.empty()) {
         const auto tr = std::get<reference_transition>(reference->location);
         const auto* destination = animation.find_keyframe(tr.to_keyframe_id);
         if (!destination)
@@ -2189,9 +2199,9 @@ sm::constrained_pose_result sm::sample_constrained_pose(const animation& animati
                 if (!source || !source->get().copy_to(from_topology) || !source->get().copy_to(to_topology))
                     return std::unexpected(result::invalid_membership);
             }
-            apply_skeletal_pose(active_keyframe->pose, from_topology, rig_skeletons);
+            apply_skeletal_pose(source_keyframe->pose, from_topology, rig_skeletons);
             apply_skeletal_pose(destination->pose, to_topology, rig_skeletons);
-            for (auto id : active_keyframe->pinned_nodes) {
+            for (auto id : active_transition->pinned_nodes) {
                 auto a = from_topology.get<sm::node>(id);
                 auto b = to_topology.get<sm::node>(id);
                 if (!a || !b)
@@ -2218,15 +2228,16 @@ sm::constrained_pose_result sm::sample_constrained_pose(const animation& animati
         pose = std::move(*projected);
     }
 
-    // Pins are outgoing-key state. Exact keys retain their stored pose; only
-    // interior samples of the transition are adjusted to hold source-key pins.
-    if (interior && !active_keyframe->pinned_nodes.empty()) {
-        auto pinned = apply_transition_pins(*active_keyframe, pose, geometry);
+    // Transition-local pins affect only interior samples. Exact keys retain every
+    // authored scalar even though non-terminal keys report their outgoing pins.
+    if (interior && !active_transition->pinned_nodes.empty()) {
+        auto pinned = apply_transition_pins(*source_keyframe, *active_transition, pose, geometry);
         if (!pinned)
             return std::unexpected(pinned.error());
         pose = std::move(*pinned);
     }
-    return constrained_pose_sample{std::move(pose), reference->location, active_keyframe->pinned_nodes};
+    return constrained_pose_sample{std::move(pose), reference->location,
+        reported_transition ? reported_transition->pinned_nodes : std::unordered_set<object_id>{}};
 }
 
 sm::result sm::perform_ik(
