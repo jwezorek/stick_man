@@ -54,6 +54,7 @@ namespace mdl {
         std::optional<animation_edit_session> animation_session_;
         std::unique_ptr<sm::topology> playback_topology_;
         std::unordered_set<sm::object_id> playback_pinned_node_ids_;
+        sm::constraint_map playback_rotation_constraints_;
         animation_display_status playback_status_ = animation_display_status::editing;
         std::optional<sm::result> playback_error_;
         bool show_previous_pose_ = false;
@@ -96,6 +97,13 @@ namespace mdl {
         std::optional<sm::object_id> animation_session_animation() const;
         std::optional<sm::object_id> animation_session_keyframe() const;
         std::unordered_set<sm::object_id> animation_session_pinned_nodes() const;
+        sm::constraint_map animation_session_rotation_constraints() const;
+        std::expected<sm::object_id, sm::result> add_animation_rotation_constraint(
+            sm::object_id target, sm::rotation_reference reference, sm::angle_range allowed);
+        std::optional<sm::rotation_constraint> animation_session_rotation_constraint(sm::object_id id) const;
+        sm::result preview_animation_rotation_constraint(sm::object_id id, sm::rotation_constraint definition);
+        sm::result update_animation_rotation_constraint(sm::object_id id, sm::rotation_constraint definition);
+        sm::result remove_animation_rotation_constraint(sm::object_id id);
         std::unordered_set<sm::object_id> animation_session_incoming_locked_nodes() const;
         std::optional<std::string> animation_session_incoming_lock_source_label(sm::object_id node) const;
         sm::result set_animation_transition_duration(sm::object_id transition, double seconds);

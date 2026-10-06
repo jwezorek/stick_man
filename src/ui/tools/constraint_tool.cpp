@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <QSignalBlocker>
 
 namespace {
 constexpr double k_default_rot_constraint_min = -std::numbers::pi / 2.0;
@@ -65,7 +66,7 @@ void ui::tool::constraint::update_settings_state() {
     if (!model_)
         return;
     const bool session = model_ && model_->animation_mode();
-    const bool rotation = !session && current_operation() == operation::rotation;
+    const bool rotation = current_operation() == operation::rotation;
     if (operation_) operation_->setEnabled(!session);
     reference_->setEnabled(rotation);
     reference_label_->setEnabled(rotation);
@@ -133,6 +134,33 @@ void ui::tool::constraint::init(canvas::manager& canvases, mdl::project& model) 
     });
     QObject::connect(reference_, qOverload<int>(&QComboBox::currentIndexChanged), settings_, [this](int) {
         clear_pending();
+        if (!model_ || !model_->animation_mode() || !canvases_)
+            return;
+        auto& canv = canvases_->active_canvas();
+        auto selected = canv.selected_constraint_id();
+        if (!selected)
+            return;
+        auto current = model_->animation_session_rotation_constraint(*selected);
+        if (!current)
+            return;
+        const auto kind = current_reference_kind();
+        if (kind == current->reference.kind)
+            return;
+        if (kind == sm::rotation_reference_kind::bone) {
+            auto target = model_->topology().get<sm::bone>(current->target_bone);
+            if (!target)
+                return;
+            show_pending(canv, target->get(),
+                "Rotation constraint: click the reference bone (Esc cancels).");
+            pending_edit_constraint_ = *selected;
+            return;
+        }
+        current->reference = kind == sm::rotation_reference_kind::parent
+            ? sm::rotation_reference::parent() : sm::rotation_reference::world();
+        const auto result = model_->update_animation_rotation_constraint(*selected, *current);
+        if (result != sm::result::success)
+            report_failure(canv, result, "Cannot change transition rotation reference");
+        canv.sync_to_model();
     });
     QObject::connect(&model, &mdl::project::new_project_opened, settings_, [this](mdl::project&) {
         // Creation previews are editor state and must not survive a document swap.
@@ -156,12 +184,13 @@ void ui::tool::constraint::set_animation_mode(bool active) {
             canv->clear_constraint_selection();
         }
     }
-    if (active) operation_->setCurrentIndex(int(operation::select));
+    if (active) operation_->setCurrentIndex(int(operation::rotation));
     update_settings_state();
 }
 
 void ui::tool::constraint::clear_pending() {
     pending_bone_.reset();
+    pending_edit_constraint_.reset();
     if (pending_highlight_ && pending_scene_) {
         pending_scene_->removeItem(pending_highlight_);
         delete pending_highlight_;
@@ -317,14 +346,46 @@ void ui::tool::constraint::report_failure(canvas::scene& canv, sm::result result
 
 void ui::tool::constraint::create_rotation(canvas::scene& canv, sm::bone& target) {
     const auto kind = current_reference_kind();
+    const bool animation = model_ && model_->animation_mode();
+    if (animation && !pending_bone_) {
+        for (const auto& [id, c] : model_->animation_session_rotation_constraints()) {
+            if (c.rotation() && c.rotation()->target_bone == target.id()) {
+                const auto result = model_->remove_animation_rotation_constraint(id);
+                if (result != sm::result::success) report_failure(canv, result, "Cannot remove transition rotation constraint");
+                else canv.sync_to_model();
+                return;
+            }
+        }
+    }
     if (kind == sm::rotation_reference_kind::bone) {
         if (!pending_bone_) {
             show_pending(canv, target, "Rotation constraint: click the reference bone (Esc cancels).");
             return;
         }
         auto target_id = *pending_bone_;
-        auto result = model_->add_rotation_constraint(target_id, sm::rotation_reference::bone(target.id()),
-            {k_default_rot_constraint_min, k_default_rot_constraint_span});
+        if (animation && pending_edit_constraint_) {
+            const auto edit_id = *pending_edit_constraint_;
+            auto current = model_->animation_session_rotation_constraint(edit_id);
+            if (!current) {
+                clear_pending();
+                report_failure(canv, sm::result::not_found, "Cannot edit transition rotation constraint");
+                return;
+            }
+            current->reference = sm::rotation_reference::bone(target.id());
+            const auto status = model_->update_animation_rotation_constraint(edit_id, *current);
+            clear_pending();
+            if (status != sm::result::success)
+                report_failure(canv, status, "Cannot change transition rotation reference");
+            else
+                canv.select_constraint(edit_id);
+            canv.sync_to_model();
+            return;
+        }
+        auto result = animation
+            ? model_->add_animation_rotation_constraint(target_id, sm::rotation_reference::bone(target.id()),
+                {k_default_rot_constraint_min, k_default_rot_constraint_span})
+            : model_->add_rotation_constraint(target_id, sm::rotation_reference::bone(target.id()),
+                {k_default_rot_constraint_min, k_default_rot_constraint_span});
         if (!result) {
             report_failure(canv, result.error(), "Cannot create rotation constraint");
             return;
@@ -336,8 +397,11 @@ void ui::tool::constraint::create_rotation(canvas::scene& canv, sm::bone& target
 
     const auto reference = kind == sm::rotation_reference_kind::parent
         ? sm::rotation_reference::parent() : sm::rotation_reference::world();
-    auto result = model_->add_rotation_constraint(target.id(), reference,
-        {k_default_rot_constraint_min, k_default_rot_constraint_span});
+    auto result = animation
+        ? model_->add_animation_rotation_constraint(target.id(), reference,
+            {k_default_rot_constraint_min, k_default_rot_constraint_span})
+        : model_->add_rotation_constraint(target.id(), reference,
+            {k_default_rot_constraint_min, k_default_rot_constraint_span});
     if (!result) {
         report_failure(canv, result.error(), "Cannot create rotation constraint");
         return;
@@ -406,18 +470,28 @@ void ui::tool::constraint::mousePressEvent(canvas::scene& canv, QGraphicsSceneMo
     // priority over any constraint adornment that happens to overlap them.
     if (dynamic_cast<canvas::item::node*>(item))
         return;
-    if (model_ && model_->animation_mode())
-        return;
-
     if (auto hit = canv.constraint_at(event->scenePos())) {
+        if (model_ && model_->animation_mode() && !hit->transition_local)
+            return;
         clear_triangle_sweep();
         clear_pending();
         canv.select_constraint(hit->id);
+        if (model_ && model_->animation_mode() && hit->transition_local) {
+            if (auto current = model_->animation_session_rotation_constraint(hit->id)) {
+                QSignalBlocker blocker(reference_);
+                reference_->setCurrentIndex(int(current->reference.kind));
+            }
+        }
         press_handled_ = true;
         if (hit->part != canvas::constraint_part::body) {
-            auto current = model_->core().constraint_by_id(hit->id);
-            if (current)
-                drag_ = drag_state{ hit->id, hit->part, current->get().definition() };
+            if (model_ && model_->animation_mode()) {
+                if (auto current = model_->animation_session_rotation_constraint(hit->id))
+                    drag_ = drag_state{hit->id, hit->part, sm::constraint_definition{*current}};
+            } else {
+                auto current = model_->core().constraint_by_id(hit->id);
+                if (current)
+                    drag_ = drag_state{ hit->id, hit->part, current->get().definition() };
+            }
         }
         return;
     }
@@ -431,12 +505,16 @@ void ui::tool::constraint::mousePressEvent(canvas::scene& canv, QGraphicsSceneMo
 void ui::tool::constraint::update_drag(canvas::scene& canv, QPointF point) {
     if (!drag_)
         return;
-    auto current = model_->core().constraint_by_id(drag_->id);
-    if (!current) {
-        drag_.reset();
-        return;
+    sm::constraint_definition definition;
+    if (model_ && model_->animation_mode()) {
+        auto current = model_->animation_session_rotation_constraint(drag_->id);
+        if (!current) { drag_.reset(); return; }
+        definition = *current;
+    } else {
+        auto current = model_->core().constraint_by_id(drag_->id);
+        if (!current) { drag_.reset(); return; }
+        definition = current->get().definition();
     }
-    auto definition = current->get().definition();
 
     if (auto* rotation = std::get_if<sm::rotation_constraint>(&definition)) {
         auto target = model_->topology().get<sm::bone>(rotation->target_bone);
@@ -467,7 +545,11 @@ void ui::tool::constraint::update_drag(canvas::scene& canv, QPointF point) {
         triangle->relative_angle = sm::normalize_angle(world_angle - first->get().world_rotation());
     }
 
-    const auto result = model_->core().update_constraint(drag_->id, definition);
+    const auto result = model_ && model_->animation_mode()
+        ? (std::get_if<sm::rotation_constraint>(&definition)
+            ? model_->preview_animation_rotation_constraint(drag_->id, std::get<sm::rotation_constraint>(definition))
+            : sm::result::invalid_constraint)
+        : model_->core().update_constraint(drag_->id, definition);
     if (result == sm::result::success)
         canv.sync_to_model();
     else
@@ -477,7 +559,12 @@ void ui::tool::constraint::update_drag(canvas::scene& canv, QPointF point) {
 void ui::tool::constraint::cancel_drag(canvas::scene& canv) {
     if (!drag_)
         return;
-    model_->core().update_constraint(drag_->id, drag_->original);
+    if (model_ && model_->animation_mode()) {
+        if (auto* rotation = std::get_if<sm::rotation_constraint>(&drag_->original))
+            model_->preview_animation_rotation_constraint(drag_->id, *rotation);
+    } else {
+        model_->core().update_constraint(drag_->id, drag_->original);
+    }
     drag_.reset();
     canv.sync_to_model();
 }
@@ -485,14 +572,30 @@ void ui::tool::constraint::cancel_drag(canvas::scene& canv) {
 void ui::tool::constraint::finish_drag(canvas::scene& canv) {
     if (!drag_)
         return;
-    auto current = model_->core().constraint_by_id(drag_->id);
-    if (!current) {
-        drag_.reset();
-        return;
-    }
     const auto id = drag_->id;
     const auto before = drag_->original;
-    const auto after = current->get().definition();
+    sm::constraint_definition after;
+    if (model_ && model_->animation_mode()) {
+        auto current = model_->animation_session_rotation_constraint(id);
+        if (!current) { drag_.reset(); return; }
+        after = *current;
+        auto* before_rotation = std::get_if<sm::rotation_constraint>(&before);
+        auto* after_rotation = std::get_if<sm::rotation_constraint>(&after);
+        if (!before_rotation || !after_rotation) { drag_.reset(); return; }
+        model_->preview_animation_rotation_constraint(id, *before_rotation);
+        drag_.reset();
+        const auto result = model_->update_animation_rotation_constraint(id, *after_rotation);
+        if (result != sm::result::success) {
+            model_->preview_animation_rotation_constraint(id, *before_rotation);
+            report_failure(canv, result, "Cannot edit transition rotation constraint");
+        }
+        canv.select_constraint(id);
+        canv.sync_to_model();
+        return;
+    }
+    auto current = model_->core().constraint_by_id(id);
+    if (!current) { drag_.reset(); return; }
+    after = current->get().definition();
     model_->core().update_constraint(id, before);
     drag_.reset();
     const auto result = model_->update_constraint(id, after);
@@ -505,10 +608,6 @@ void ui::tool::constraint::finish_drag(canvas::scene& canv) {
 }
 
 void ui::tool::constraint::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
-    if (model_ && model_->animation_mode()) {
-        canv.set_hovered_constraint({});
-        return;
-    }
     if (drag_) {
         update_drag(canv, event->scenePos());
         return;
@@ -518,6 +617,7 @@ void ui::tool::constraint::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMou
         return;
     }
     auto hit = canv.constraint_at(event->scenePos());
+    if (model_ && model_->animation_mode() && hit && !hit->transition_local) hit.reset();
     canv.set_hovered_constraint(hit ? std::optional<sm::object_id>{hit->id} : std::nullopt);
 
     if (pending_bone_) {
@@ -564,8 +664,6 @@ void ui::tool::constraint::mouseReleaseEvent(canvas::scene& canv, QGraphicsScene
         canv.toggle_node_pinned_undoable(node->model().id());
         return;
     }
-    if (model_ && model_->animation_mode())
-        return;
     auto* bone = dynamic_cast<canvas::item::bone*>(item);
     if (!bone)
         return;

@@ -110,6 +110,9 @@ nlohmann::json sm::animation_assets_to_json(const animation_assets& assets) {
                         transition_json["pinned_nodes"] = json::array();
                         for (auto pin : pins) transition_json["pinned_nodes"].push_back(pin.to_string());
                     }
+                    if (!transition.rotation_constraints.empty()) {
+                        transition_json["rotation_constraints"] = constraints_to_json(transition.rotation_constraints);
+                    }
                     animation_json["transitions"].push_back(std::move(transition_json));
                 }
             }
@@ -163,6 +166,14 @@ sm::animation_assets sm::animation_assets_from_json(const nlohmann::json& j) {
                                 if (!transition.pinned_nodes.insert(id(pin_value)).second) {
                                     throw std::invalid_argument("Duplicate transition pin");
                                 }
+                            }
+                        }
+                        if (transition_value.contains("rotation_constraints")) {
+                            transition.rotation_constraints = constraints_from_json(
+                                transition_value.at("rotation_constraints"));
+                            for (const auto& [cid, c] : transition.rotation_constraints) {
+                                if (!c.rotation())
+                                    throw std::invalid_argument("Transition constraint must be rotational");
                             }
                         }
                         a.transitions.push_back(std::move(transition));

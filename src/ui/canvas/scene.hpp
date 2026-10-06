@@ -93,6 +93,7 @@ namespace ui {
             bool constraint_tool_active_ = false;
             bool show_constraints_in_view_ = true;
             std::optional<sm::object_id> selected_constraint_id_;
+            mutable std::optional<sm::constraint> selected_transition_constraint_cache_;
             std::unique_ptr<constraint_adornment_layer> constraint_adornments_;
             tool::input_handler& inp_handler_;
             item::rubber_band* rubber_band_;

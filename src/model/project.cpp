@@ -69,6 +69,19 @@ namespace {
         }
         return sm::result::success;
     }
+    sm::constraint_map clone_transition_rotation_constraints(const sm::constraint_map& source) {
+        sm::constraint_map result;
+        for (const auto& [old_id, c] : source) {
+            const auto* rotation = c.rotation();
+            if (!rotation)
+                continue;
+            sm::object_id id;
+            do id = sm::object_id::generate(); while (result.contains(id));
+            result.emplace(id, sm::constraint{id, c.name(), *rotation});
+        }
+        return result;
+    }
+
     bool same_constraint_definition(const sm::constraint_definition& a,
             const sm::constraint_definition& b) {
         if (a.index() != b.index())
@@ -955,6 +968,170 @@ std::unordered_set<sm::object_id> mdl::project::animation_session_pinned_nodes()
         : std::unordered_set<sm::object_id>{};
 }
 
+sm::constraint_map mdl::project::animation_session_rotation_constraints() const {
+    if (!animation_session_)
+        return {};
+    if (animation_preview_active())
+        return playback_rotation_constraints_;
+    if (!animation_session_->selected_keyframe)
+        return {};
+    const auto* animation = core_.animation_data(animation_session_->character).find_animation(
+        animation_session_->animation);
+    if (!animation)
+        return {};
+    const auto index = animation->keyframe_index(*animation_session_->selected_keyframe);
+    return index && *index < animation->transitions.size()
+        ? animation->transitions[*index].rotation_constraints : sm::constraint_map{};
+}
+
+std::expected<sm::object_id, sm::result> mdl::project::add_animation_rotation_constraint(
+        sm::object_id target, sm::rotation_reference reference, sm::angle_range allowed) {
+    exit_animation_preview();
+    if (!animation_session_ || !animation_session_->selected_keyframe)
+        return std::unexpected(sm::result::not_found);
+    const auto character_id = animation_session_->character;
+    const auto animation_id = animation_session_->animation;
+    const auto keyframe_id = *animation_session_->selected_keyframe;
+    auto* animation = core_.animation_data(character_id).find_animation(animation_id);
+    auto index = animation ? animation->keyframe_index(keyframe_id) : std::nullopt;
+    if (!animation || !index || *index >= animation->transitions.size())
+        return std::unexpected(sm::result::not_found);
+    auto& transition = animation->transitions[*index];
+    for (const auto& [id, c] : transition.rotation_constraints)
+        if (c.rotation() && c.rotation()->target_bone == target)
+            return std::unexpected(sm::result::invalid_constraint);
+
+    sm::object_id id;
+    do id = sm::object_id::generate();
+    while (core_.constraint_by_id(id).has_value() || transition.rotation_constraints.contains(id));
+    sm::constraint value{id, "Transition rotation constraint",
+        sm::rotation_constraint{target, reference, allowed}};
+    auto proposed = core_.constraints();
+    proposed.emplace(id, value);
+    for (const auto& [other_id, other] : transition.rotation_constraints)
+        proposed.emplace(other_id, other);
+    if (auto status = sm::validate_constraints(core_.topology(), proposed); status != sm::result::success)
+        return std::unexpected(status);
+
+    const auto transition_id = transition.id;
+    auto apply = [character_id, animation_id, keyframe_id, transition_id, value](project& p, bool add) {
+        auto* a = p.core_.animation_data(character_id).find_animation(animation_id);
+        if (!a) throw std::runtime_error("animation missing during transition constraint edit");
+        auto tr = std::ranges::find_if(a->transitions, [=](const auto& x){ return x.id == transition_id; });
+        if (tr == a->transitions.end()) throw std::runtime_error("transition missing during constraint edit");
+        if (add) tr->rotation_constraints.insert_or_assign(value.id(), value);
+        else tr->rotation_constraints.erase(value.id());
+        p.animation_session_->selected_keyframe = keyframe_id;
+        emit p.animation_preview_changed();
+        emit p.refresh_canvas(p, false);
+    };
+    command cmd{[apply](project& p){ apply(p, true); }, [apply](project& p){ apply(p, false); }};
+    cmd.animation_edit = true;
+    if (auto status = execute_session_command(cmd); status != sm::result::success)
+        return std::unexpected(status);
+    return id;
+}
+
+std::optional<sm::rotation_constraint> mdl::project::animation_session_rotation_constraint(sm::object_id id) const {
+    auto constraints = animation_session_rotation_constraints();
+    auto it = constraints.find(id);
+    if (it == constraints.end() || !it->second.rotation()) return {};
+    return *it->second.rotation();
+}
+
+sm::result mdl::project::preview_animation_rotation_constraint(
+        sm::object_id id, sm::rotation_constraint definition) {
+    if (!animation_session_ || animation_preview_active() || !animation_session_->selected_keyframe)
+        return sm::result::not_found;
+    auto* animation = core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
+    auto index = animation ? animation->keyframe_index(*animation_session_->selected_keyframe) : std::nullopt;
+    if (!animation || !index || *index >= animation->transitions.size()) return sm::result::not_found;
+    auto& transition = animation->transitions[*index];
+    auto it = transition.rotation_constraints.find(id);
+    if (it == transition.rotation_constraints.end()) return sm::result::not_found;
+    sm::constraint replacement{id, it->second.name(), definition};
+    auto proposed = core_.constraints();
+    for (const auto& [other_id, other] : transition.rotation_constraints)
+        proposed.emplace(other_id, other_id == id ? replacement : other);
+    if (auto status = sm::validate_constraints(core_.topology(), proposed); status != sm::result::success)
+        return status;
+    it->second = std::move(replacement);
+    emit refresh_canvas(*this, false);
+    return sm::result::success;
+}
+
+sm::result mdl::project::update_animation_rotation_constraint(
+        sm::object_id id, sm::rotation_constraint definition) {
+    exit_animation_preview();
+    if (!animation_session_ || !animation_session_->selected_keyframe)
+        return sm::result::not_found;
+    const auto character_id = animation_session_->character;
+    const auto animation_id = animation_session_->animation;
+    const auto keyframe_id = *animation_session_->selected_keyframe;
+    auto* animation = core_.animation_data(character_id).find_animation(animation_id);
+    auto index = animation ? animation->keyframe_index(keyframe_id) : std::nullopt;
+    if (!animation || !index || *index >= animation->transitions.size())
+        return sm::result::not_found;
+    auto& transition = animation->transitions[*index];
+    auto found = transition.rotation_constraints.find(id);
+    if (found == transition.rotation_constraints.end() || !found->second.rotation())
+        return sm::result::not_found;
+    const auto before = *found->second.rotation();
+    sm::constraint replacement{id, found->second.name(), definition};
+    auto proposed = core_.constraints();
+    for (const auto& [other_id, other] : transition.rotation_constraints)
+        proposed.emplace(other_id, other_id == id ? replacement : other);
+    if (auto status = sm::validate_constraints(core_.topology(), proposed); status != sm::result::success)
+        return status;
+    const auto transition_id = transition.id;
+    auto apply = [character_id, animation_id, keyframe_id, transition_id, id](project& p,
+            const sm::rotation_constraint& value) {
+        auto* a = p.core_.animation_data(character_id).find_animation(animation_id);
+        if (!a) throw std::runtime_error("animation missing during constraint edit");
+        auto tr = std::ranges::find_if(a->transitions, [=](const auto& x){ return x.id == transition_id; });
+        if (tr == a->transitions.end()) throw std::runtime_error("transition missing during constraint edit");
+        auto it = tr->rotation_constraints.find(id);
+        if (it == tr->rotation_constraints.end()) throw std::runtime_error("constraint missing during edit");
+        it->second = sm::constraint{id, it->second.name(), value};
+        p.animation_session_->selected_keyframe = keyframe_id;
+        emit p.animation_preview_changed(); emit p.refresh_canvas(p, false);
+    };
+    command cmd{[apply, definition](project& p){ apply(p, definition); },
+                [apply, before](project& p){ apply(p, before); }};
+    cmd.animation_edit = true;
+    return execute_session_command(cmd);
+}
+
+sm::result mdl::project::remove_animation_rotation_constraint(sm::object_id id) {
+    exit_animation_preview();
+    if (!animation_session_ || !animation_session_->selected_keyframe)
+        return sm::result::not_found;
+    const auto character_id = animation_session_->character;
+    const auto animation_id = animation_session_->animation;
+    const auto keyframe_id = *animation_session_->selected_keyframe;
+    auto* animation = core_.animation_data(character_id).find_animation(animation_id);
+    auto index = animation ? animation->keyframe_index(keyframe_id) : std::nullopt;
+    if (!animation || !index || *index >= animation->transitions.size()) return sm::result::not_found;
+    auto& transition = animation->transitions[*index];
+    auto it = transition.rotation_constraints.find(id);
+    if (it == transition.rotation_constraints.end()) return sm::result::not_found;
+    const auto saved = it->second;
+    const auto transition_id = transition.id;
+    auto apply = [character_id, animation_id, keyframe_id, transition_id, saved](project& p, bool present) {
+        auto* a = p.core_.animation_data(character_id).find_animation(animation_id);
+        if (!a) throw std::runtime_error("animation missing during constraint removal");
+        auto tr = std::ranges::find_if(a->transitions, [=](const auto& x){ return x.id == transition_id; });
+        if (tr == a->transitions.end()) throw std::runtime_error("transition missing during constraint removal");
+        if (present) tr->rotation_constraints.insert_or_assign(saved.id(), saved);
+        else tr->rotation_constraints.erase(saved.id());
+        p.animation_session_->selected_keyframe = keyframe_id;
+        emit p.animation_preview_changed(); emit p.refresh_canvas(p, false);
+    };
+    command cmd{[apply](project& p){ apply(p, false); }, [apply](project& p){ apply(p, true); }};
+    cmd.animation_edit = true;
+    return execute_session_command(cmd);
+}
+
 std::unordered_set<sm::object_id> mdl::project::animation_session_incoming_locked_nodes() const {
     if (!animation_session_ || animation_preview_active() || !animation_session_->selected_keyframe)
         return {};
@@ -1084,8 +1261,11 @@ sm::result mdl::project::add_animation_keyframe() {
         sm::pose_transition transition;
         // Carry the preceding interval's pins forward when appending a new
         // interval, without storing pending state on the terminal keyframe.
-        if (!after.transitions.empty())
+        if (!after.transitions.empty()) {
             transition.pinned_nodes = after.transitions.back().pinned_nodes;
+            transition.rotation_constraints = clone_transition_rotation_constraints(
+                after.transitions.back().rotation_constraints);
+        }
         after.transitions.push_back(std::move(transition));
     }
     after.keyframes.push_back(std::move(keyframe));
@@ -1161,11 +1341,16 @@ sm::result mdl::project::duplicate_animation_keyframe() {
     if (*index < after.transitions.size()) {
         sm::pose_transition inserted;
         inserted.pinned_nodes = after.transitions[*index].pinned_nodes;
+        inserted.rotation_constraints = clone_transition_rotation_constraints(
+            after.transitions[*index].rotation_constraints);
         after.transitions.insert(after.transitions.begin() + *index, std::move(inserted));
     } else {
         sm::pose_transition appended;
-        if (!after.transitions.empty())
+        if (!after.transitions.empty()) {
             appended.pinned_nodes = after.transitions.back().pinned_nodes;
+            appended.rotation_constraints = clone_transition_rotation_constraints(
+                after.transitions.back().rotation_constraints);
+        }
         after.transitions.push_back(std::move(appended));
     }
 
@@ -1286,11 +1471,13 @@ sm::result mdl::project::insert_animation_keyframe(double seconds) {
     inserted.pose = (**sampled).pose;
     const auto inserted_id = inserted.id;
     const auto split_pins = after.transitions[*interval].pinned_nodes;
+    const auto split_rotation_constraints = after.transitions[*interval].rotation_constraints;
     after.keyframes.insert(after.keyframes.begin() + *interval + 1, inserted);
     after.transitions[*interval].duration_seconds = first_duration; // preserve original ID and pins
     sm::pose_transition second;
     second.duration_seconds = second_duration;
     second.pinned_nodes = split_pins;
+    second.rotation_constraints = clone_transition_rotation_constraints(split_rotation_constraints);
     after.transitions.insert(after.transitions.begin() + *interval + 1, std::move(second));
     if (validate_pin_endpoints(after, core_.topology(), skeletons) != sm::result::success) {
         emit animation_authoring_error(QStringLiteral("The sampled pose cannot be inserted without violating pinned endpoints."));
@@ -1395,8 +1582,10 @@ sm::result mdl::project::delete_animation_keyframe() {
             // Retain the outgoing transition metadata, but carry the removed
             // interval's pin semantics onto the new interval explicitly.
             const auto resulting_pins = after.transitions[*index - 1].pinned_nodes;
+            const auto resulting_constraints = after.transitions[*index - 1].rotation_constraints;
             after.transitions.erase(after.transitions.begin() + (*index - 1));
             after.transitions[*index - 1].pinned_nodes = resulting_pins;
+            after.transitions[*index - 1].rotation_constraints = resulting_constraints;
         }
     }
 

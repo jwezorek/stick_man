@@ -74,7 +74,10 @@ struct fixture {
         for (std::size_t i = 0; i < a.transitions.size(); ++i)
             require(a.transitions[i].id == authored.transitions[i].id &&
                 a.transitions[i].duration_seconds == authored.transitions[i].duration_seconds &&
-                a.transitions[i].pinned_nodes == authored.transitions[i].pinned_nodes, "transition mutation");
+                a.transitions[i].pinned_nodes == authored.transitions[i].pinned_nodes &&
+                sm::constraints_to_json(a.transitions[i].rotation_constraints) ==
+                    sm::constraints_to_json(authored.transitions[i].rotation_constraints),
+                "transition mutation");
         return result;
     }
     // Independent authority: apply only returned successful poses, and validate
@@ -375,6 +378,97 @@ void multiple_roots_scope_and_roundtrip() {
     require(f.project.topology().to_json() == before, "scope failure mutation");
 }
 
+void transition_rotation_constraints_are_local_and_roundtrip() {
+    fixture f;
+    auto root = f.node({0, 0}), tip = f.node({10, 0});
+    auto bone = f.link(root, tip);
+    auto a = f.sequence();
+    a.keyframes[0].pose.bone_rotations[bone->id()] = -1.0;
+    a.keyframes[1].pose.bone_rotations[bone->id()] = 1.0;
+    a.keyframes[2].pose.bone_rotations[bone->id()] = 1.2;
+
+    const auto cid = sm::object_id::generate();
+    a.transitions[0].rotation_constraints.emplace(cid,
+        sm::constraint{cid, "local", sm::rotation_constraint{
+            bone->id(), sm::rotation_reference::world(), {0.4, 0.0}}});
+
+    auto interior = success(f.sample(a, 1.0));
+    near(interior.pose.bone_rotations.at(bone->id()), 0.4, 1e-6);
+    require(interior.rotation_constraints.contains(cid), "active transition constraint not reported");
+
+    auto exact0 = success(f.sample(a, 0.0));
+    same_pose(exact0.pose, a.keyframes[0].pose);
+    require(exact0.rotation_constraints.contains(cid), "outgoing constraint not reported at source key");
+    auto exact1 = success(f.sample(a, 2.0));
+    same_pose(exact1.pose, a.keyframes[1].pose);
+    require(exact1.rotation_constraints.empty(), "unrelated outgoing transition constraint leaked");
+    auto second = success(f.sample(a, 3.5));
+    require(second.rotation_constraints.empty(), "inactive transition constraint applied");
+    same_pose(second.pose, sm::sample_reference_pose(a, 3.5)->pose);
+
+    sm::animation_assets assets;
+    auto base = sm::capture_pose(f.project.topology(), f.rig, "Default");
+    assets.default_pose = base.id;
+    assets.poses.push_back(base);
+    assets.animations.push_back(a);
+    const auto json = sm::animation_assets_to_json(assets);
+    auto loaded = sm::animation_assets_from_json(json);
+    const auto& restored = loaded.animations.front().transitions.front().rotation_constraints.at(cid);
+    const auto* rotation = restored.rotation();
+    require(rotation && rotation->target_bone == bone->id(), "transition constraint target did not roundtrip");
+    require(rotation->reference.kind == sm::rotation_reference_kind::world, "transition constraint reference did not roundtrip");
+    near(rotation->allowed.start_angle, 0.4);
+    near(rotation->allowed.span_angle, 0.0);
+}
+
+void transition_rotation_constraints_combine_with_persistent_and_pins() {
+    fixture f;
+    auto root = f.node({0, 0}), tip = f.node({10, 0});
+    auto bone = f.link(root, tip);
+    f.limit(bone, sm::rotation_reference::world(), {-0.5, 1.0});
+    auto a = f.sequence();
+    a.keyframes[0].pose.bone_rotations[bone->id()] = -0.25;
+    a.keyframes[1].pose.bone_rotations[bone->id()] = 0.25;
+    a.transitions[0].pinned_nodes.insert(root->id());
+    const auto cid = sm::object_id::generate();
+    a.transitions[0].rotation_constraints.emplace(cid,
+        sm::constraint{cid, "local", sm::rotation_constraint{
+            bone->id(), sm::rotation_reference::world(), {0.2, 0.0}}});
+    auto sample = success(f.sample(a, 1.0));
+    near(sample.pose.bone_rotations.at(bone->id()), 0.2, 1e-6);
+    require(sample.pinned_nodes.contains(root->id()), "transition pin disappeared with local rotation constraint");
+
+    auto bad = a;
+    const auto bad_id = sm::object_id::generate();
+    bad.transitions[0].rotation_constraints.clear();
+    bad.transitions[0].rotation_constraints.emplace(bad_id,
+        sm::constraint{bad_id, "bad", sm::rotation_constraint{
+            sm::object_id::generate(), sm::rotation_reference::world(), {0, 1}}});
+    failed(f.sample(bad, 1.0), sm::result::invalid_constraint);
+}
+
+void transition_parent_relative_rotation_constraint() {
+    fixture f;
+    auto root = f.node({0, 0}), joint = f.node({10, 0}), tip = f.node({20, 0});
+    auto parent = f.link(root, joint);
+    auto child = f.link(joint, tip);
+    auto a = f.sequence();
+    a.keyframes[0].pose.bone_rotations[parent->id()] = 0.2;
+    a.keyframes[1].pose.bone_rotations[parent->id()] = 0.2;
+    a.keyframes[0].pose.bone_rotations[child->id()] = -0.4;
+    a.keyframes[1].pose.bone_rotations[child->id()] = 0.8;
+
+    const auto cid = sm::object_id::generate();
+    a.transitions[0].rotation_constraints.emplace(cid,
+        sm::constraint{cid, "relative", sm::rotation_constraint{
+            child->id(), sm::rotation_reference::parent(), {0.3, 0.0}}});
+
+    auto sample = success(f.sample(a, 1.0));
+    near(sample.pose.bone_rotations.at(child->id()), 0.3, 1e-6);
+    require(sample.rotation_constraints.contains(cid),
+        "parent-relative transition constraint not active");
+}
+
 void edge_cases_and_failure_isolation() {
     fixture roots;
     auto root1 = roots.node({1, 2}), root2 = roots.node({8, 9});
@@ -446,6 +540,9 @@ int main() {
         coupled_equality_cycle();
         triangles();
         multiple_roots_scope_and_roundtrip();
+        transition_rotation_constraints_are_local_and_roundtrip();
+        transition_rotation_constraints_combine_with_persistent_and_pins();
+        transition_parent_relative_rotation_constraint();
         edge_cases_and_failure_isolation();
         std::cout << "PASS animation_v2_phase3b\n";
     } catch (const std::exception& e) {

@@ -453,9 +453,14 @@ void ui::clipboard::paste(stick_man& main_wnd, bool in_place) {
 }
 
 void ui::clipboard::del(stick_man& main_wnd) {
-    if (main_wnd.project().animation_mode())
-        return;
     auto& canv = main_wnd.canvases().active_canvas();
+    if (main_wnd.project().animation_mode()) {
+        if (auto constraint_id = canv.selected_constraint_id()) {
+            if (main_wnd.project().remove_animation_rotation_constraint(*constraint_id) == sm::result::success)
+                canv.clear_constraint_selection();
+        }
+        return;
+    }
     if (auto constraint_id = canv.selected_constraint_id()) {
         if (main_wnd.project().remove_constraint(*constraint_id) == sm::result::success) {
             canv.clear_constraint_selection();

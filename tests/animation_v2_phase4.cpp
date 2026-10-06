@@ -61,12 +61,15 @@ struct fixture {
     sm::object_id animation_id;
     sm::object_id root;
     sm::object_id tip;
+    sm::object_id bone;
 
     fixture() {
         auto& core = project.core();
         sm::node_ref r = core.create_skeleton({0, 0}).root_node();
         sm::node_ref t = core.create_skeleton({10, 0}).root_node();
-        require(core.create_bone("bone", r, t).has_value(), "create bone");
+        auto created_bone = core.create_bone("bone", r, t);
+        require(created_bone.has_value(), "create bone");
+        bone = created_bone->get().id();
         root = r->id();
         tip = t->id();
         character = project.make_character(std::vector<sm::const_skel_ref>{r->owner()}).value();
@@ -119,6 +122,75 @@ void duration_and_insert() {
         "redo regenerated stable identities");
 }
 
+void transition_rotation_authoring_and_structure() {
+    fixture f;
+    auto* a = f.project.core().animation_data(f.character).find_animation(f.animation_id);
+    const auto first_key = a->keyframes[0].id;
+    auto added = f.project.add_animation_rotation_constraint(
+        f.bone, sm::rotation_reference::world(), {-0.25, 0.5});
+    require(added.has_value(), "transition rotation constraint create failed");
+    const auto cid = *added;
+    require(a->transitions[0].rotation_constraints.contains(cid), "constraint not owned by transition");
+    require(!f.project.core().constraints().contains(cid), "transition constraint leaked into persistent constraints");
+
+    require(f.project.update_animation_rotation_constraint(cid,
+        sm::rotation_constraint{f.bone, sm::rotation_reference::world(), {0.1, 0.2}}) == sm::result::success,
+        "transition constraint update failed");
+    near(a->transitions[0].rotation_constraints.at(cid).rotation()->allowed.start_angle, 0.1);
+    f.project.undo();
+    near(a->transitions[0].rotation_constraints.at(cid).rotation()->allowed.start_angle, -0.25);
+    require(f.project.redo() == sm::result::success, "transition constraint redo failed");
+    near(a->transitions[0].rotation_constraints.at(cid).rotation()->allowed.start_angle, 0.1);
+
+    const auto original_transition_id = a->transitions[0].id;
+    require(f.project.insert_animation_keyframe(1.0) == sm::result::success,
+        "split constrained transition failed");
+    require(a->transitions[0].id == original_transition_id, "split changed first transition ID");
+    require(a->transitions[0].rotation_constraints.contains(cid),
+        "split did not preserve original constraint on first half");
+    require(a->transitions[1].rotation_constraints.size() == 1,
+        "split did not preserve transition constraint on second half");
+    const auto second_cid = a->transitions[1].rotation_constraints.begin()->first;
+    require(second_cid != cid, "split reused transition-local constraint identity");
+    const auto* first_rotation = a->transitions[0].rotation_constraints.at(cid).rotation();
+    const auto* second_rotation = a->transitions[1].rotation_constraints.begin()->second.rotation();
+    require(first_rotation && second_rotation && first_rotation->target_bone == second_rotation->target_bone &&
+        first_rotation->reference == second_rotation->reference &&
+        first_rotation->allowed.start_angle == second_rotation->allowed.start_angle &&
+        first_rotation->allowed.span_angle == second_rotation->allowed.span_angle,
+        "split changed transition constraint semantics");
+
+    require(f.project.select_animation_keyframe(a->keyframes[1].id) == sm::result::success,
+        "select inserted key failed");
+    require(f.project.duplicate_animation_keyframe() == sm::result::success,
+        "duplicate constrained key failed");
+    require(a->transitions.size() == 3, "duplicate transition count wrong");
+    require(a->transitions[1].rotation_constraints.size() == 1 &&
+        a->transitions[2].rotation_constraints.size() == 1,
+        "duplicate lost transition constraint semantics");
+
+    require(f.project.select_animation_keyframe(a->keyframes[1].id) == sm::result::success,
+        "reselect key for delete failed");
+    require(f.project.delete_animation_keyframe() == sm::result::success,
+        "delete constrained key failed");
+    require(a->transitions.size() == 2 && a->transitions[0].rotation_constraints.contains(cid),
+        "delete lost resulting transition constraint");
+
+    require(f.project.select_animation_keyframe(a->keyframes.back().id) == sm::result::success,
+        "select terminal failed");
+    require(!f.project.add_animation_rotation_constraint(
+        f.bone, sm::rotation_reference::world(), {0, 1}).has_value(),
+        "terminal keyframe accepted hidden transition constraint");
+
+    require(f.project.select_animation_keyframe(first_key) == sm::result::success,
+        "reselect first key failed");
+    require(f.project.remove_animation_rotation_constraint(cid) == sm::result::success,
+        "transition constraint removal failed");
+    require(!a->transitions[0].rotation_constraints.contains(cid), "constraint removal did not apply");
+    f.project.undo();
+    require(a->transitions[0].rotation_constraints.contains(cid), "constraint removal undo failed");
+}
+
 void pin_endpoint_invariant() {
     fixture f;
     auto* a = f.project.core().animation_data(f.character).find_animation(f.animation_id);
@@ -163,6 +235,7 @@ int main(int argc, char** argv) {
         seek_contract();
         strip_mapping();
         duration_and_insert();
+        transition_rotation_authoring_and_structure();
         pin_endpoint_invariant();
         std::cout << "PASS Animation V2 Phase 4\n";
         return 0;

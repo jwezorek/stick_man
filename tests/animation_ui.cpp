@@ -100,12 +100,89 @@ void lock_on_existing_frame(QApplication& app) {
     require(contrasting_pixels >= 20, "lock indicator disappears over a dark bone");
     browser->leave_animation();
 }
+
+void transition_rotation_constraint_tool(QApplication& app) {
+    ui::stick_man window;
+    window.resize(1200, 800);
+    window.show();
+    app.processEvents();
+    auto& model = window.project();
+    const auto add_node = [&](sm::point pos) {
+        model.add_new_skeleton_root(pos);
+        for (auto skel : model.topology().skeletons())
+            if (skel->root_node().world_pos() == pos)
+                return skel->root_node().id();
+        throw std::runtime_error("missing fixture node");
+    };
+    const auto root = add_node({0, 0});
+    const auto tip = add_node({100, 0});
+    require(model.add_bone(root, tip) == sm::result::success, "create tool-test bone");
+    auto root_node = model.topology().get<sm::node>(root);
+    require(root_node && !root_node->get().child_bones().empty(), "tool-test bone missing");
+    const auto bone_id = root_node->get().child_bones().front()->id();
+    require(model.add_rotation_constraint(bone_id, sm::rotation_reference::world(), {-1.0, 2.0}).has_value(),
+        "create persistent comparison constraint");
+
+    auto skel = *model.topology().skeletons().begin();
+    const auto character = model.make_character(std::vector<sm::const_skel_ref>{skel}).value();
+    sm::animation animation;
+    const auto animation_id = animation.id;
+    model.edit_animation_data(character, [&](auto& data) { data.animations.push_back(animation); });
+    auto* browser = window.findChild<ui::pane::animation*>();
+    require(browser->open_animation(character, animation_id), "open tool-test animation");
+    require(model.add_animation_keyframe() == sm::result::success, "add tool-test first frame");
+    const auto first = *model.animation_session_keyframe();
+    require(model.add_animation_keyframe() == sm::result::success, "add tool-test second frame");
+    require(model.select_animation_keyframe(first) == sm::result::success, "select tool-test source");
+
+    auto& canvases = window.canvases();
+    auto& canvas = canvases.active_canvas();
+    window.tool_mgr().set_current_tool(canvases, ui::tool::id::constraint);
+    auto* reference = window.findChild<QComboBox*>("constraint_create_reference");
+    require(reference != nullptr, "constraint reference combo missing");
+    reference->setCurrentIndex(int(sm::rotation_reference_kind::world));
+    auto& tool = window.tool_mgr().current_tool();
+    QGraphicsSceneMouseEvent press(QEvent::GraphicsSceneMousePress);
+    press.setScenePos({50, 0});
+    press.setButton(Qt::LeftButton);
+    press.setButtons(Qt::LeftButton);
+    tool.mousePressEvent(canvas, &press);
+    QGraphicsSceneMouseEvent release(QEvent::GraphicsSceneMouseRelease);
+    release.setScenePos({50, 0});
+    release.setButton(Qt::LeftButton);
+    tool.mouseReleaseEvent(canvas, &release);
+    auto locals = model.animation_session_rotation_constraints();
+    require(locals.size() == 1, "Constraint Tool did not create transition-local rotation constraint");
+    require(model.core().constraints().size() == 1, "transition-local constraint modified persistent constraints");
+    const auto local_id = locals.begin()->first;
+    require(locals.begin()->second.rotation()->target_bone == bone_id, "transition-local constraint targeted wrong bone");
+
+    model.undo();
+    require(model.animation_session_rotation_constraints().empty(), "transition-local constraint create undo failed");
+    require(model.redo() == sm::result::success, "transition-local constraint create redo failed");
+    require(model.animation_session_rotation_constraints().contains(local_id), "transition-local constraint create redo lost identity");
+    canvas.clear_constraint_selection(false);
+    canvas.sync_to_model();
+
+    bool saw_persistent = false, saw_transition = false;
+    for (auto* item : canvas.items()) {
+        if (auto* path = dynamic_cast<QGraphicsPathItem*>(item)) {
+            if (path->pen().color() == QColor("mediumpurple")) saw_persistent = true;
+            if (path->pen().color() == QColor("deepskyblue")) saw_transition = true;
+        }
+    }
+    require(saw_persistent, "persistent constraint adornment disappeared in Animation Mode");
+    require(saw_transition, "transition-local constraint did not use alternate color");
+    browser->leave_animation();
+}
+
 }
 
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     try {
         lock_on_existing_frame(app);
+        transition_rotation_constraint_tool(app);
         ui::stick_man window;
         window.resize(1200, 800);
         window.show();

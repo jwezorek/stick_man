@@ -291,9 +291,13 @@ void ui::canvas::scene::set_zoom_level(int zoom, std::optional<QPointF> pt) {
 void ui::canvas::scene::sync_to_model() {
     if (model_) {
         const auto& constraints = model_->display_topology().constraints();
-        if (selected_constraint_id_ && !constraints.contains(*selected_constraint_id_))
+        const auto transition_constraints = model_->animation_session_rotation_constraints();
+        if (selected_constraint_id_ && !constraints.contains(*selected_constraint_id_)
+                && !transition_constraints.contains(*selected_constraint_id_)) {
             selected_constraint_id_.reset();
-        constraint_adornments_->sync(model_->display_topology(), constraints, scale());
+            selected_transition_constraint_cache_.reset();
+        }
+        constraint_adornments_->sync(model_->display_topology(), constraints, transition_constraints, scale());
         constraint_adornments_->set_visible(constraints_visible());
         constraint_adornments_->set_selected(selected_constraint_id_);
     }
@@ -461,7 +465,7 @@ bool ui::canvas::scene::constraints_visible() const {
 
 void ui::canvas::scene::set_constraint_tool_active(bool active) {
     constraint_tool_active_ = active;
-    constraint_adornments_->set_handles_visible(active && !(model_ && model_->animation_mode()));
+    constraint_adornments_->set_handles_visible(active);
     constraint_adornments_->set_visible(constraints_visible());
     if (!active)
         set_hovered_constraint({});
@@ -473,8 +477,6 @@ void ui::canvas::scene::set_constraints_view_visible(bool visible) {
 }
 
 std::optional<ui::canvas::constraint_hit> ui::canvas::scene::constraint_at(const QPointF& point) const {
-    if (model_ && model_->animation_mode())
-        return {};
     return constraint_adornments_->hit(point);
 }
 
@@ -482,11 +484,22 @@ const sm::constraint* ui::canvas::scene::selected_constraint() const {
     if (!selected_constraint_id_ || !model_)
         return nullptr;
     auto constraint = model_->core().constraint_by_id(*selected_constraint_id_);
-    return constraint ? &constraint->get() : nullptr;
+    if (constraint)
+        return &constraint->get();
+    auto locals = model_->animation_session_rotation_constraints();
+    auto it = locals.find(*selected_constraint_id_);
+    if (it == locals.end())
+        return nullptr;
+    selected_transition_constraint_cache_ = it->second;
+    return &*selected_transition_constraint_cache_;
 }
 
 void ui::canvas::scene::select_constraint(sm::object_id id) {
-    if (!model_ || !model_->core().constraint_by_id(id))
+    if (!model_)
+        return;
+    const bool persistent = model_->core().constraint_by_id(id).has_value();
+    const bool transition_local = model_->animation_session_rotation_constraints().contains(id);
+    if (!persistent && !transition_local)
         return;
     selection_.clear();
     selected_constraint_id_ = id;
@@ -498,6 +511,7 @@ void ui::canvas::scene::clear_constraint_selection(bool notify) {
     if (!selected_constraint_id_)
         return;
     selected_constraint_id_.reset();
+    selected_transition_constraint_cache_.reset();
     constraint_adornments_->set_selected({});
     if (notify) {
         emit manager().view_selection_changed(*this);

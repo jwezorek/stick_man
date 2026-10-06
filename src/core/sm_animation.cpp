@@ -46,6 +46,11 @@ void validate_animation(const sm::animation& a, std::unordered_set<sm::object_id
             if (id.is_nil())
                 throw std::invalid_argument("Invalid transition pin");
         }
+        for (const auto& [cid, c] : transition.rotation_constraints) {
+            if (cid.is_nil() || cid != c.id() || !c.rotation())
+                throw std::invalid_argument("Invalid transition rotation constraint");
+            add_asset_id(ids, cid);
+        }
     }
     if (!std::isfinite(a.duration_seconds())) {
         throw std::invalid_argument("Animation total duration is not finite");
@@ -230,6 +235,25 @@ void sm::animation_assets::validate(const topology& topology,
                     throw std::invalid_argument("Animation transition pin is outside the character rig");
                 }
             }
+            sm::constraint_map effective = topology.constraints();
+            for (const auto& [cid, c] : transition.rotation_constraints) {
+                const auto* rotation = c.rotation();
+                if (!rotation)
+                    throw std::invalid_argument("Animation transition contains a non-rotation constraint");
+                auto bone = topology.get<sm::bone>(rotation->target_bone);
+                if (!bone || !rig.contains(bone->get().owner().id()))
+                    throw std::invalid_argument("Animation transition rotation constraint is outside the character rig");
+                if (rotation->reference.kind == sm::rotation_reference_kind::bone) {
+                    auto reference = topology.get<sm::bone>(rotation->reference.bone_id);
+                    if (!reference || !rig.contains(reference->get().owner().id()))
+                        throw std::invalid_argument("Animation transition rotation reference is outside the character rig");
+                }
+                if (!effective.emplace(cid, c).second)
+                    throw std::invalid_argument("Animation transition constraint ID collides with a persistent constraint");
+            }
+            if (sm::validate_constraints(topology, effective) != sm::result::success)
+                throw std::invalid_argument("Invalid animation transition rotation constraint");
+
             if (transition.pinned_nodes.empty())
                 continue;
 
@@ -442,6 +466,13 @@ void sm::remap_animation_assets(animation_assets& assets,
                 }
             }
             transition.pinned_nodes = std::move(pins);
+            constraint_map constraints;
+            for (const auto& [cid, c] : transition.rotation_constraints) {
+                auto remapped = c.remapped(id_remap);
+                if (!constraints.emplace(remapped.id(), std::move(remapped)).second)
+                    throw std::invalid_argument("Transition remap produced duplicate constraint IDs");
+            }
+            transition.rotation_constraints = std::move(constraints);
         }
     }
 }

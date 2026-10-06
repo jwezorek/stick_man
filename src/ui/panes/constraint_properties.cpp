@@ -145,6 +145,18 @@ void ui::pane::props::constraint_properties::update_rotation(std::function<void(
     auto id = canv.selected_constraint_id();
     if (!id || !proj_)
         return;
+    if (proj_->animation_mode()) {
+        auto current = proj_->animation_session_rotation_constraint(*id);
+        if (!current)
+            return;
+        edit(*current);
+        const auto result = proj_->update_animation_rotation_constraint(*id, *current);
+        if (result != sm::result::success) {
+            canv.show_status_line("That rotation reference/range is not valid for this transition constraint.");
+            set_selection(canv);
+        }
+        return;
+    }
     auto current = proj_->core().constraint_by_id(*id);
     if (!current || !current->get().rotation())
         return;

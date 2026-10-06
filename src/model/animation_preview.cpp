@@ -12,6 +12,7 @@ void mdl::project::exit_animation_preview() {
         emit animation_display_changing(false);
         playback_topology_.reset();
         playback_pinned_node_ids_.clear();
+        playback_rotation_constraints_.clear();
         emit animation_display_changed();
     }
     playback_status_ = animation_display_status::editing;
@@ -71,6 +72,7 @@ mdl::animation_display_status mdl::project::preview_animation_time(double second
     emit animation_display_changing(true);
     playback_topology_ = std::move(candidate);
     playback_pinned_node_ids_ = (**sample).pinned_nodes;
+    playback_rotation_constraints_ = (**sample).rotation_constraints;
     playback_status_ = animation_display_status::sampled;
     playback_error_.reset();
     emit animation_display_changed();

@@ -21,6 +21,7 @@ enum class constraint_part {
 struct constraint_hit {
     sm::object_id id;
     constraint_part part = constraint_part::body;
+    bool transition_local = false;
 };
 
 class constraint_adornment_layer {
@@ -28,7 +29,8 @@ public:
     explicit constraint_adornment_layer(scene& owner);
     ~constraint_adornment_layer();
 
-    void sync(const sm::topology& topology, const sm::constraint_map& constraints, double scale);
+    void sync(const sm::topology& topology, const sm::constraint_map& constraints,
+        const sm::constraint_map& transition_constraints, double scale);
     void clear();
     void set_visible(bool visible);
     bool visible() const noexcept { return visible_; }
@@ -41,6 +43,7 @@ public:
 private:
     struct visual {
         std::vector<QGraphicsItem*> graphics;
+        bool transition_local = false;
     };
 
     scene& owner_;

@@ -31,6 +31,7 @@ class constraint : public base {
     QPointer<mdl::project> model_;
     canvas::manager* canvases_ = nullptr;
     std::optional<sm::object_id> pending_bone_;
+    std::optional<sm::object_id> pending_edit_constraint_;
     std::optional<drag_state> drag_;
     std::optional<triangle_sweep_state> triangle_sweep_;
     bool press_handled_ = false;

@@ -302,6 +302,7 @@ enum class translation_mode {
 struct kinematic_model {
     const region* source = nullptr;
     const sm::topology* topology = nullptr;
+    const sm::constraint_map* constraints = nullptr;
     std::vector<sm::bone*> bones;
     std::vector<sm::node*> nodes;
     std::unordered_map<sm::bone*, bone_coordinate> bone_coordinates;
@@ -800,7 +801,8 @@ std::optional<candidate> validate_candidate(
     };
 
     std::unordered_set<sm::bone*> active(model.bones.begin(), model.bones.end());
-    for (const auto& [id, constraint] : model.topology->constraints()) {
+    const auto& active_constraints = model.constraints ? *model.constraints : model.topology->constraints();
+    for (const auto& [id, constraint] : active_constraints) {
         const auto* rotation = constraint.rotation();
         if (!rotation)
             continue;
@@ -892,7 +894,8 @@ std::optional<candidate> validate_branch_candidate(
 sm::result build_angular_groups(
     const kinematic_model& model,
     std::span<const double> incoming_x,
-    std::vector<angular_group>& groups) {
+    std::vector<angular_group>& groups,
+    const sm::constraint_map* constraints = nullptr) {
 
     struct accumulation {
         circular_set allowed;
@@ -919,7 +922,8 @@ sm::result build_angular_groups(
         constant += coefficient * it->second.offset;
     };
 
-    for (const auto& [id, constraint] : model.topology->constraints()) {
+    const auto& active_constraints = constraints ? *constraints : model.topology->constraints();
+    for (const auto& [id, constraint] : active_constraints) {
         const auto* rotation = constraint.rotation();
         if (!rotation)
             continue;
@@ -1326,10 +1330,12 @@ sm::result eliminate_rigid_pin_coordinates(kinematic_model& model, solve_context
 sm::result configure_model(
     const region& source,
     kinematic_model& model,
-    solve_context& context) {
+    solve_context& context,
+    const sm::constraint_map* constraints = nullptr) {
 
     model.source = &source;
     model.topology = &std::get<0>(source.effectors.front())->owner().owner();
+    model.constraints = constraints;
     model.bones.assign(source.bones.begin(), source.bones.end());
     std::ranges::sort(model.bones, bone_id_less);
 
@@ -1465,19 +1471,20 @@ std::optional<candidate> exact_rigid_pose(solve_context& context) {
 
 sm::result solve_region(
     const region& source,
-    std::vector<std::pair<sm::node*, sm::point>>& writes) {
+    std::vector<std::pair<sm::node*, sm::point>>& writes,
+    const sm::constraint_map* constraints = nullptr) {
 
     if (source.effectors.empty())
         return sm::result::ik_target_reached;
 
     kinematic_model model;
     solve_context context;
-    auto status = configure_model(source, model, context);
+    auto status = configure_model(source, model, context, constraints);
     if (status != sm::result::success)
         return status;
 
     std::vector<angular_group> angular_groups;
-    status = build_angular_groups(model, context.incoming_x, angular_groups);
+    status = build_angular_groups(model, context.incoming_x, angular_groups, constraints);
     if (status != sm::result::success)
         return status;
 
@@ -1795,6 +1802,7 @@ struct animation_geometry {
     sm::topology topology;
     std::vector<sm::object_id> skeletons;
     std::map<sm::object_id, double> lengths;
+    sm::constraint_map constraints;
 
     sm::result validate(const sm::skeletal_pose& pose,
         std::map<sm::object_id, double>* world_rotations = nullptr) {
@@ -1835,13 +1843,13 @@ struct animation_geometry {
         // a conflicting absolute tolerance to those relative length checks.
         // Authoritative angular checks include the stored signed fan orientation.
         // Do not commit even a valid sample: this is only a validation transaction.
-        return sm::constraint_geometry(topology).validate(k_angular_feasibility_tolerance);
+        return sm::constraint_geometry(topology, constraints).validate(k_angular_feasibility_tolerance);
     }
 };
 
 sm::result prepare_animation_geometry(const sm::topology& source,
     std::span<const sm::object_id> skeletons, const sm::skeletal_pose& reference,
-    animation_geometry& scratch) {
+    const sm::constraint_map& constraints, animation_geometry& scratch) {
     scratch.skeletons.assign(skeletons.begin(), skeletons.end());
     std::ranges::sort(scratch.skeletons);
     if (scratch.skeletons.empty()
@@ -1865,10 +1873,11 @@ sm::result prepare_animation_geometry(const sm::topology& source,
     }
     if (!sm::skeletal_pose_compatible(reference, source, scratch.skeletons))
         return sm::result::invalid_membership;
-    if (auto status = sm::validate_constraints(source, source.constraints());
+    if (auto status = sm::validate_constraints(source, constraints);
         status != sm::result::success)
         return status;
-    for (const auto& [id, constraint] : source.constraints()) {
+    scratch.constraints = constraints;
+    for (const auto& [id, constraint] : constraints) {
         if (const auto* r = constraint.rotation()) {
             if (r->reference.kind == sm::rotation_reference_kind::bone
                 && bones.contains(r->target_bone) != bones.contains(r->reference.bone_id))
@@ -1927,6 +1936,7 @@ std::expected<sm::skeletal_pose, sm::result> project_animation_reference(
     animation_geometry& geometry) {
     kinematic_model model;
     model.topology = &geometry.topology;
+    model.constraints = &geometry.constraints;
     model.mode = translation_mode::pin_anchor; // angles only; no root variables
     for (auto s : geometry.topology.skeletons())
         for (auto b : s->bones())
@@ -1960,7 +1970,7 @@ std::expected<sm::skeletal_pose, sm::result> project_animation_reference(
         terms.push_back({std::move(key), offset});
     }
     std::vector<angular_group> groups;
-    if (auto status = build_angular_groups(model, incoming, groups); status != sm::result::success)
+    if (auto status = build_angular_groups(model, incoming, groups, &geometry.constraints); status != sm::result::success)
         return std::unexpected(status);
 
     std::optional<sm::skeletal_pose> best;
@@ -2032,6 +2042,11 @@ std::expected<sm::skeletal_pose, sm::result> project_animation_reference(
     return std::move(*best);
 }
 
+sm::result perform_ik_with_constraints(
+    const std::vector<std::tuple<sm::node_ref, sm::point>>& effectors,
+    const std::vector<sm::node_ref>& pins,
+    const sm::constraint_map* constraints);
+
 std::expected<sm::skeletal_pose, sm::result> apply_transition_pins(
     const sm::pose_keyframe& from, const sm::pose_transition& transition,
     const sm::skeletal_pose& candidate, animation_geometry& geometry) {
@@ -2039,12 +2054,8 @@ std::expected<sm::skeletal_pose, sm::result> apply_transition_pins(
     if (transition.pinned_nodes.empty())
         return candidate;
 
-    // Pin targets come from the exact source pose of the active transition. If
-    // that pose cannot be reconstructed under persistent constraints, the
-    // transition cannot use its node positions as pin targets.
-    if (auto status = geometry.validate(from.pose); status != sm::result::success)
-        return std::unexpected(status);
-
+    // Pin targets come from the exact source pose. Transition-local rotation
+    // constraints deliberately do not alter that endpoint pose.
     std::vector<sm::object_id> pin_ids(transition.pinned_nodes.begin(), transition.pinned_nodes.end());
     std::ranges::sort(pin_ids);
     std::map<sm::object_id, sm::point> targets;
@@ -2108,7 +2119,7 @@ std::expected<sm::skeletal_pose, sm::result> apply_transition_pins(
 
             const std::vector<std::tuple<sm::node_ref, sm::point>> effectors{
                 {*node, targets.at(id)}};
-            const auto outcome = sm::perform_ik(effectors, fixed);
+            const auto outcome = perform_ik_with_constraints(effectors, fixed, &geometry.constraints);
             if (outcome != sm::result::ik_target_reached
                 && sm::distance(node->get().world_pos(), targets.at(id)) > k_tolerance) {
                 if (outcome == sm::result::invalid_constraint
@@ -2150,9 +2161,27 @@ sm::constrained_pose_result sm::sample_constrained_pose(const animation& animati
     }
     if (!reference)
         return std::optional<constrained_pose_sample>{};
+    const bool interior = std::holds_alternative<reference_transition>(reference->location);
+    const pose_transition* effective_transition = nullptr;
+    if (interior) {
+        const auto& tr = std::get<reference_transition>(reference->location);
+        auto it = std::find_if(animation.transitions.begin(), animation.transitions.end(),
+            [&](const auto& candidate) { return candidate.id == tr.transition_id; });
+        if (it == animation.transitions.end())
+            return std::unexpected(result::invalid_animation);
+        effective_transition = &*it;
+    }
+    sm::constraint_map effective_constraints = topology.constraints();
+    if (effective_transition) {
+        for (const auto& [id, c] : effective_transition->rotation_constraints) {
+            if (!effective_constraints.emplace(id, c).second)
+                return std::unexpected(result::duplicate_id);
+        }
+    }
     animation_geometry geometry;
-    if (auto status = prepare_animation_geometry(topology, rig_skeletons, reference->pose, geometry);
-        status != result::success) return std::unexpected(status);
+    if (auto status = prepare_animation_geometry(topology, rig_skeletons, reference->pose,
+            effective_constraints, geometry); status != result::success)
+        return std::unexpected(status);
     const std::unordered_set<object_id> rig_ids(rig_skeletons.begin(), rig_skeletons.end());
     for (const auto& transition : animation.transitions) {
         for (auto id : transition.pinned_nodes) {
@@ -2160,12 +2189,30 @@ sm::constrained_pose_result sm::sample_constrained_pose(const animation& animati
             if (!node || !rig_ids.contains(node->get().owner().id()))
                 return std::unexpected(result::invalid_membership);
         }
+        sm::constraint_map transition_effective = topology.constraints();
+        for (const auto& [id, c] : transition.rotation_constraints) {
+            const auto* rotation = c.rotation();
+            if (!rotation)
+                return std::unexpected(result::invalid_constraint);
+            auto target = topology.get<sm::bone>(rotation->target_bone);
+            if (!target || !rig_ids.contains(target->get().owner().id()))
+                return std::unexpected(result::invalid_membership);
+            if (rotation->reference.kind == sm::rotation_reference_kind::bone) {
+                auto ref = topology.get<sm::bone>(rotation->reference.bone_id);
+                if (!ref || !rig_ids.contains(ref->get().owner().id()))
+                    return std::unexpected(result::invalid_membership);
+            }
+            if (!transition_effective.emplace(id, c).second)
+                return std::unexpected(result::duplicate_id);
+        }
+        if (auto status = sm::validate_constraints(topology, transition_effective);
+            status != result::success)
+            return std::unexpected(status);
     }
 
     const pose_keyframe* source_keyframe = nullptr;
     const pose_transition* active_transition = nullptr;
     const pose_transition* reported_transition = nullptr;
-    const bool interior = std::holds_alternative<reference_transition>(reference->location);
     if (interior) {
         const auto& tr = std::get<reference_transition>(reference->location);
         source_keyframe = animation.find_keyframe(tr.from_keyframe_id);
@@ -2237,41 +2284,46 @@ sm::constrained_pose_result sm::sample_constrained_pose(const animation& animati
         pose = std::move(*pinned);
     }
     return constrained_pose_sample{std::move(pose), reference->location,
-        reported_transition ? reported_transition->pinned_nodes : std::unordered_set<object_id>{}};
+        reported_transition ? reported_transition->pinned_nodes : std::unordered_set<object_id>{},
+        reported_transition ? reported_transition->rotation_constraints : constraint_map{}};
 }
 
-sm::result sm::perform_ik(
-    const std::vector<std::tuple<node_ref, point>>& effectors,
-    const std::vector<node_ref>& pins) {
+namespace {
+sm::result perform_ik_with_constraints(
+    const std::vector<std::tuple<sm::node_ref, sm::point>>& effectors,
+    const std::vector<sm::node_ref>& pins,
+    const sm::constraint_map* constraints) {
 
     auto validation = validate_ik_inputs(effectors, pins);
-    if (validation != result::success)
+    if (validation != sm::result::success)
         return validation;
 
-    std::vector<std::tuple<node_ref, point>> normalized_effectors;
-    std::vector<node_ref> normalized_pins;
+    std::vector<std::tuple<sm::node_ref, sm::point>> normalized_effectors;
+    std::vector<sm::node_ref> normalized_pins;
     validation = normalize_inputs(
         effectors, pins, k_tolerance, normalized_effectors, normalized_pins);
-    if (validation != result::success)
+    if (validation != sm::result::success)
         return validation;
 
-    std::unordered_set<node*> boundaries;
+    std::unordered_set<sm::node*> boundaries;
     for (auto pin : normalized_pins)
         boundaries.insert(mutable_ptr(pin));
     for (const auto& [effector, target] : normalized_effectors) {
         if (boundaries.contains(mutable_ptr(effector))
-            && distance(effector->world_pos(), target) > k_tolerance) {
-            return result::ik_no_solution_found;
+            && sm::distance(effector->world_pos(), target) > k_tolerance) {
+            return sm::result::ik_no_solution_found;
         }
     }
 
     auto& topology = std::get<0>(normalized_effectors.front())->owner().owner();
-    constraint_geometry geometry(topology);
-    if (geometry.status() != result::success)
+    sm::constraint_geometry geometry = constraints
+        ? sm::constraint_geometry(topology, *constraints)
+        : sm::constraint_geometry(topology);
+    if (geometry.status() != sm::result::success)
         return geometry.status();
 
     auto regions = discover_regions(normalized_effectors, normalized_pins, geometry);
-    geometry_batch batch(topology);
+    sm::geometry_batch batch(topology);
     pose_restore_guard invocation_guard;
     for (auto skeleton : topology.skeletons()) {
         for (auto node : skeleton->nodes()) {
@@ -2279,15 +2331,15 @@ sm::result sm::perform_ik(
         }
     }
 
-    std::vector<std::pair<node*, point>> writes;
+    std::vector<std::pair<sm::node*, sm::point>> writes;
     for (const auto& component : regions) {
         writes.clear();
-        const auto outcome = solve_region(component, writes);
-        if (outcome == result::invalid_constraint
-            || outcome == result::inconsistent_constraints
-            || outcome == result::unsatisfiable_constraints
-            || outcome == result::ik_no_solution_found
-            || outcome == result::out_of_bounds) {
+        const auto outcome = solve_region(component, writes, constraints);
+        if (outcome == sm::result::invalid_constraint
+            || outcome == sm::result::inconsistent_constraints
+            || outcome == sm::result::unsatisfiable_constraints
+            || outcome == sm::result::ik_no_solution_found
+            || outcome == sm::result::out_of_bounds) {
             return outcome;
         }
         for (auto [node, position] : writes) node->set_world_pos(position);
@@ -2299,32 +2351,39 @@ sm::result sm::perform_ik(
                                              : 1e-8),
             true,
             &active);
-        if (valid != result::success)
+        if (valid != sm::result::success)
             return valid;
         for (auto pin : component.pins) {
             auto saved = std::ranges::find_if(invocation_guard.saved,
                 [&](const auto& item) { return item.first == mutable_ptr(pin); });
             if (saved == invocation_guard.saved.end()
-                || distance(pin->world_pos(), saved->second)
+                || sm::distance(pin->world_pos(), saved->second)
                     > std::max(1e-9, k_position_feasibility_scale)) {
-                return result::unsatisfiable_constraints;
+                return sm::result::unsatisfiable_constraints;
             }
         }
     }
 
-    if (auto status = batch.commit(); status != result::success)
+    if (auto status = batch.commit(); status != sm::result::success)
         return status;
     invocation_guard.committed = true;
 
     std::size_t reached = 0;
     for (const auto& [effector, target] : normalized_effectors) {
-        if (distance(effector->world_pos(), target) <= k_tolerance) ++reached;
+        if (sm::distance(effector->world_pos(), target) <= k_tolerance) ++reached;
     }
     if (reached == normalized_effectors.size())
-        return result::ik_target_reached;
+        return sm::result::ik_target_reached;
     if (reached != 0)
-        return result::ik_mixed;
-    return result::ik_converged;
+        return sm::result::ik_mixed;
+    return sm::result::ik_converged;
+}
+} // namespace
+
+sm::result sm::perform_ik(
+    const std::vector<std::tuple<node_ref, point>>& effectors,
+    const std::vector<node_ref>& pins) {
+    return perform_ik_with_constraints(effectors, pins, nullptr);
 }
 
 sm::result sm::perform_ik(

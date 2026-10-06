@@ -1,6 +1,7 @@
 #pragma once
 #include "sm_types.hpp"
 #include "sm_object_id.hpp"
+#include "sm_constraint.hpp"
 #include "json_fwd.hpp"
 #include <cstddef>
 #include <optional>
@@ -37,6 +38,7 @@ namespace sm {
         object_id id = object_id::generate();
         double duration_seconds = 0.4;
         std::unordered_set<object_id> pinned_nodes;
+        constraint_map rotation_constraints;
     };
 
     struct animation {
@@ -107,6 +109,7 @@ namespace sm {
         // Interior samples report the active transition's pins. Exact non-terminal
         // keys report their outgoing transition's pins; the final key reports none.
         std::unordered_set<object_id> pinned_nodes;
+        constraint_map rotation_constraints;
     };
     using constrained_pose_result = std::expected<std::optional<constrained_pose_sample>, result>;
 
