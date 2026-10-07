@@ -2,6 +2,7 @@
 
 #include "sm_types.hpp"
 #include "sm_object_id.hpp"
+#include "sm_constraint.hpp"
 #include <variant>
 #include <optional>
 #include <ranges>
@@ -122,6 +123,8 @@ namespace sm {
 
         void set_world_rotation(double theta);
         void rotate_by(double theta, sm::maybe_node_ref axis = {}, bool just_this_bone = false);
+        void rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_bone,
+            const sm::constraint_map& constraints);
         void set_length(double len);
     };
 

@@ -55,4 +55,7 @@ namespace sm {
 
 	result rotate_constrained_bone(
 	    bone&, double theta, bool descendants = true, maybe_node_ref axis = {});
+	result rotate_constrained_bone(
+	    bone&, double theta, bool descendants, maybe_node_ref axis,
+	    const constraint_map& constraints);
 }

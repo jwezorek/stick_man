@@ -281,10 +281,13 @@ namespace {
     }
 
 
-    void do_ragdoll_rotate(double theta, ui::tool::rotation_state& state) {
+    void do_ragdoll_rotate(double theta, ui::tool::rotation_state& state,
+            const sm::constraint_map* constraints) {
         sm::point offset = state.radius() * sm::point(std::cos(theta), std::sin(theta));
         auto new_loc = state.axis().world_pos() + offset;
-        auto result = sm::perform_ik(state.rotating(), new_loc, state.axis());
+        auto result = constraints
+            ? sm::perform_ik(state.rotating(), new_loc, state.axis(), *constraints)
+            : sm::perform_ik(state.rotating(), new_loc, state.axis());
         //TODO: do something with 'result' here...
     }
 
@@ -338,10 +341,13 @@ namespace {
     }
 
     void do_rubber_band_translate(sm::node& src,
-        const sm::point& delta, const std::vector<sm::node_ref>& sel) {
+        const sm::point& delta, const std::vector<sm::node_ref>& sel,
+        const sm::constraint_map* constraints) {
         sm::geometry_batch batch(src.owner().owner());
         auto tbl = rubber_band_translation_table(src, delta, sel);
-        sm::constraint_geometry geometry(src.owner().owner());
+        sm::constraint_geometry geometry = constraints
+            ? sm::constraint_geometry(src.owner().owner(), *constraints)
+            : sm::constraint_geometry(src.owner().owner());
         if (geometry.status() != sm::result::success)
             return;
         std::unordered_map<sm::node*, sm::point> before;
@@ -368,7 +374,9 @@ namespace {
                     }
                     return sm::visit_result::continue_traversal;
                 }
-                new_v_pos = sm::apply_rotation_constraints(new_v_pos, src, maybe_prev, bone);
+                new_v_pos = constraints
+                    ? sm::apply_rotation_constraints(new_v_pos, src, maybe_prev, bone, *constraints)
+                    : sm::apply_rotation_constraints(new_v_pos, src, maybe_prev, bone);
 
                 curr_node.set_world_pos(new_v_pos);
 
@@ -382,7 +390,8 @@ namespace {
     }
     void do_ragdoll_translate(sm::skel_ref& skel,
         const sm::point& delta, const std::vector<sm::node_ref>& sel,
-        const std::unordered_set<sm::node*>& pinned) {
+        const std::unordered_set<sm::node*>& pinned,
+        const sm::constraint_map* constraints) {
 
         auto effectors = sel | rv::filter(
             [&](auto node) {
@@ -402,7 +411,9 @@ namespace {
             }
         ) | r::to<std::vector>();
 
-        auto result = sm::perform_ik(effectors, pinned_nodes);
+        auto result = constraints
+            ? sm::perform_ik(effectors, pinned_nodes, *constraints)
+            : sm::perform_ik(effectors, pinned_nodes);
 
         //TODO: do something with 'result' here...
     }
@@ -729,6 +740,14 @@ void ui::tool::rig_interaction::mouseReleaseEvent(canvas::scene& canv, QGraphics
 }
 
 void ui::tool::rig_interaction::handle_rotation(canvas::scene& c, QPointF pt, rotation_state& ri) {
+    std::optional<sm::constraint_map> animation_constraints;
+    if (project_ && project_->animation_mode()) {
+        auto constraints = project_->animation_edit_constraints();
+        if (!constraints)
+            return;
+        animation_constraints = std::move(*constraints);
+    }
+    const auto* constraints = animation_constraints ? &*animation_constraints : nullptr;
     auto theta = sm::normalize_angle(
         sm::angle_from_u_to_v(ri.axis().world_pos(), from_qt_pt(pt))
     );
@@ -737,18 +756,28 @@ void ui::tool::rig_interaction::handle_rotation(canvas::scene& c, QPointF pt, ro
         sm::angle_from_u_to_v(ri.axis().world_pos(), ri.rotating().world_pos());
     switch (ri.mode()) {
     case edit_drag_mode::rigid:
-        ri.bone().rotate_by(theta_diff, ri.axis(), false);
+        if (constraints) ri.bone().rotate_by(theta_diff, ri.axis(), false, *constraints);
+        else ri.bone().rotate_by(theta_diff, ri.axis(), false);
         break;
     case edit_drag_mode::unique:
-        ri.bone().rotate_by(theta_diff, ri.axis(), true);
+        if (constraints) ri.bone().rotate_by(theta_diff, ri.axis(), true, *constraints);
+        else ri.bone().rotate_by(theta_diff, ri.axis(), true);
         break;
     case edit_drag_mode::rag_doll:
-        do_ragdoll_rotate(theta, ri);
+        do_ragdoll_rotate(theta, ri, constraints);
         break;
     }
     c.sync_to_model();
 }
 void ui::tool::rig_interaction::handle_translation(canvas::scene& c, QPointF pt, translation_state& state) {
+    std::optional<sm::constraint_map> animation_constraints;
+    if (project_ && project_->animation_mode()) {
+        auto constraints = project_->animation_edit_constraints();
+        if (!constraints)
+            return;
+        animation_constraints = std::move(*constraints);
+    }
+    const auto* constraints = animation_constraints ? &*animation_constraints : nullptr;
     auto delta = from_qt_pt(pt) - (state.anchor->world_pos() + state.anchor_offset);
     auto active_skeletons = skeletons_from_nodes(state.moving);
 
@@ -762,7 +791,7 @@ void ui::tool::rig_interaction::handle_translation(canvas::scene& c, QPointF pt,
                              break;
     case edit_drag_mode::rubber_band: {
         for (auto skel : active_skeletons) {
-            do_rubber_band_translate(skel->root_node(), delta, state.moving);
+            do_rubber_band_translate(skel->root_node(), delta, state.moving, constraints);
         }
     }
                                    break;
@@ -772,7 +801,8 @@ void ui::tool::rig_interaction::handle_translation(canvas::scene& c, QPointF pt,
                 skel,
                 delta,
                 state.moving,
-                all_pinned_nodes(skel->root_node(), c)
+                all_pinned_nodes(skel->root_node(), c),
+                constraints
             );
         }
         break;

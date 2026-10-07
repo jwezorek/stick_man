@@ -395,10 +395,15 @@ void sm::bone::set_world_rotation(double theta) {
 	rotate_by(theta - world_rotation());
 }
 void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_bone) {
+	rotate_by(theta, axis, just_this_bone, owner().owner().constraints());
+}
 
-    constraint_geometry geometry(owner().owner());
+void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_bone,
+        const sm::constraint_map& constraints) {
+
+    constraint_geometry geometry(owner().owner(), constraints);
     if (geometry.fan_for(this)) {
-		if (rotate_constrained_bone(*this, theta, !just_this_bone, axis) != result::success)
+		if (rotate_constrained_bone(*this, theta, !just_this_bone, axis, constraints) != result::success)
 			throw std::invalid_argument("rotation conflicts with constraints");
         return;
     }
@@ -427,7 +432,8 @@ void sm::bone::rotate_by(double theta, sm::maybe_node_ref axis, bool just_this_b
 			        geometry.project_fan(*fan, bone, u, new_v_pos) != result::success)
 				    throw std::invalid_argument("rotation conflicts with fan limits");
             } else {
-                new_v_pos = sm::apply_rotation_constraints(new_v_pos, *axis, prev, bone);
+                new_v_pos = sm::apply_rotation_constraints(
+                    new_v_pos, *axis, prev, bone, constraints);
                 v.set_world_pos(new_v_pos);
             }
 			new_world_rotation[&bone] = angle_from_u_to_v(u.world_pos(), v.world_pos());

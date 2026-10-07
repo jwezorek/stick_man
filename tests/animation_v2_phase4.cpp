@@ -134,13 +134,13 @@ void transition_rotation_authoring_and_structure() {
     require(!f.project.core().constraints().contains(cid), "transition constraint leaked into persistent constraints");
 
     require(f.project.update_animation_rotation_constraint(cid,
-        sm::rotation_constraint{f.bone, sm::rotation_reference::world(), {0.1, 0.2}}) == sm::result::success,
+        sm::rotation_constraint{f.bone, sm::rotation_reference::world(), {-0.1, 0.2}}) == sm::result::success,
         "transition constraint update failed");
-    near(a->transitions[0].rotation_constraints.at(cid).rotation()->allowed.start_angle, 0.1);
+    near(a->transitions[0].rotation_constraints.at(cid).rotation()->allowed.start_angle, -0.1);
     f.project.undo();
     near(a->transitions[0].rotation_constraints.at(cid).rotation()->allowed.start_angle, -0.25);
     require(f.project.redo() == sm::result::success, "transition constraint redo failed");
-    near(a->transitions[0].rotation_constraints.at(cid).rotation()->allowed.start_angle, 0.1);
+    near(a->transitions[0].rotation_constraints.at(cid).rotation()->allowed.start_angle, -0.1);
 
     const auto original_transition_id = a->transitions[0].id;
     require(f.project.insert_animation_keyframe(1.0) == sm::result::success,
@@ -191,6 +191,68 @@ void transition_rotation_authoring_and_structure() {
     require(a->transitions[0].rotation_constraints.contains(cid), "constraint removal undo failed");
 }
 
+void transition_rotation_endpoint_invariant() {
+    fixture f;
+    auto* a = f.project.core().animation_data(f.character).find_animation(f.animation_id);
+    require(a != nullptr, "animation missing");
+
+    // Author the destination outside the range before the transition-local
+    // constraint exists. Creating the constraint must repair both endpoints.
+    a->keyframes[0].pose.bone_rotations[f.bone] = -1.0;
+    a->keyframes[1].pose.bone_rotations[f.bone] = 1.0;
+    const auto source_before = a->keyframes[0].pose;
+    const auto destination_before = a->keyframes[1].pose;
+    auto added = f.project.add_animation_rotation_constraint(
+        f.bone, sm::rotation_reference::world(), {-0.25, 0.5});
+    require(added.has_value(), "endpoint-constraining rotation constraint create failed");
+    const auto cid = *added;
+    require(std::abs(a->keyframes[0].pose.bone_rotations.at(f.bone)) <= 0.25001,
+        "constraint creation left source endpoint outside range");
+    require(std::abs(a->keyframes[1].pose.bone_rotations.at(f.bone)) <= 0.25001,
+        "constraint creation left destination endpoint outside range");
+
+    f.project.undo();
+    require(!a->transitions[0].rotation_constraints.contains(cid),
+        "constraint creation undo did not remove constraint");
+    near(a->keyframes[0].pose.bone_rotations.at(f.bone),
+        source_before.bone_rotations.at(f.bone));
+    near(a->keyframes[1].pose.bone_rotations.at(f.bone),
+        destination_before.bone_rotations.at(f.bone));
+    require(f.project.redo() == sm::result::success, "constraint creation redo failed");
+
+    const auto before_update_source = a->keyframes[0].pose;
+    const auto before_update_destination = a->keyframes[1].pose;
+    require(f.project.update_animation_rotation_constraint(cid,
+        sm::rotation_constraint{f.bone, sm::rotation_reference::world(), {0.5, 0.2}})
+            != sm::result::success,
+        "constraint update that excludes existing endpoints should be rejected, not snap poses");
+    near(a->keyframes[0].pose.bone_rotations.at(f.bone),
+        before_update_source.bone_rotations.at(f.bone), 1e-7);
+    near(a->keyframes[1].pose.bone_rotations.at(f.bone),
+        before_update_destination.bone_rotations.at(f.bone), 1e-7);
+
+    // A direct model edit that bypasses the Edit Tool must be rejected rather
+    // than projected at commit time. Interactive constraint honoring belongs in
+    // the same live edit path used for persistent constraints.
+    require(f.project.select_animation_keyframe(a->keyframes[1].id) == sm::result::success,
+        "select constrained destination failed");
+    auto root = f.project.topology().get<sm::node>(f.root);
+    auto tip = f.project.topology().get<sm::node>(f.tip);
+    require(root && tip, "working endpoint nodes missing");
+    const auto old_root = root->get().world_pos();
+    const auto old_tip = tip->get().world_pos();
+    const double requested = 1.5;
+    const sm::point requested_tip{old_root.x + 10.0 * std::cos(requested),
+        old_root.y + 10.0 * std::sin(requested)};
+    f.project.transform_node_positions({{f.root, old_root}, {f.tip, old_tip}},
+        {{f.root, old_root}, {f.tip, requested_tip}});
+
+    const auto edited_angle = a->keyframes[1].pose.bone_rotations.at(f.bone);
+    near(edited_angle, before_update_destination.bone_rotations.at(f.bone), 1e-7);
+    const auto working_angle = f.project.topology().get<sm::bone>(f.bone)->get().world_rotation();
+    near(working_angle, before_update_destination.bone_rotations.at(f.bone), 1e-7);
+}
+
 void pin_endpoint_invariant() {
     fixture f;
     auto* a = f.project.core().animation_data(f.character).find_animation(f.animation_id);
@@ -236,6 +298,7 @@ int main(int argc, char** argv) {
         strip_mapping();
         duration_and_insert();
         transition_rotation_authoring_and_structure();
+        transition_rotation_endpoint_invariant();
         pin_endpoint_invariant();
         std::cout << "PASS Animation V2 Phase 4\n";
         return 0;

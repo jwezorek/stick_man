@@ -7,9 +7,11 @@
 #include "ui/canvas/node_item.hpp"
 #include "ui/tools/tool_manager.hpp"
 #include "ui/tools/constraint_tool.hpp"
+#include "ui/tools/edit_tool_panel.hpp"
 
 #include <QtWidgets>
 #include <iostream>
+#include <cmath>
 #include <ranges>
 #include <stdexcept>
 #include <vector>
@@ -133,6 +135,7 @@ void transition_rotation_constraint_tool(QApplication& app) {
     require(model.add_animation_keyframe() == sm::result::success, "add tool-test first frame");
     const auto first = *model.animation_session_keyframe();
     require(model.add_animation_keyframe() == sm::result::success, "add tool-test second frame");
+    const auto second = *model.animation_session_keyframe();
     require(model.select_animation_keyframe(first) == sm::result::success, "select tool-test source");
 
     auto& canvases = window.canvases();
@@ -173,6 +176,52 @@ void transition_rotation_constraint_tool(QApplication& app) {
     }
     require(saw_persistent, "persistent constraint adornment disappeared in Animation Mode");
     require(saw_transition, "transition-local constraint did not use alternate color");
+
+    auto narrow_local = model.animation_session_rotation_constraint(local_id);
+    require(narrow_local.has_value(), "transition-local constraint disappeared before Edit Tool test");
+    narrow_local->allowed = {-0.25, 0.5};
+    require(model.update_animation_rotation_constraint(local_id, *narrow_local) == sm::result::success,
+        "could not narrow transition-local constraint for Edit Tool test");
+
+    // The destination keyframe sees this constraint as an incoming transition
+    // constraint. The Edit Tool must honor it during the drag, not repair the
+    // pose only when the mouse is released.
+    require(model.select_animation_keyframe(second) == sm::result::success,
+        "select transition-constraint destination");
+    canvas.clear_constraint_selection(false);
+    canvas.clear_selection();
+    window.tool_mgr().set_current_tool(canvases, ui::tool::id::edit);
+    auto* edit_panel = dynamic_cast<ui::tool::edit_tool_panel*>(
+        window.tool_mgr().current_tool().settings_widget());
+    require(edit_panel != nullptr, "Edit Tool settings panel missing");
+    QComboBox* drag_behavior = nullptr;
+    for (auto* combo : edit_panel->findChildren<QComboBox*>())
+        if (combo->findText("Rotate") >= 0) drag_behavior = combo;
+    require(drag_behavior != nullptr, "Edit Tool drag behavior selector missing");
+    drag_behavior->setCurrentIndex(drag_behavior->findText("Rotate"));
+    canvas.sync_to_model();
+
+    auto& edit_tool = window.tool_mgr().current_tool();
+    QGraphicsSceneMouseEvent edit_press(QEvent::GraphicsSceneMousePress);
+    edit_press.setScenePos({100, 0});
+    edit_press.setButton(Qt::LeftButton);
+    edit_press.setButtons(Qt::LeftButton);
+    edit_tool.mousePressEvent(canvas, &edit_press);
+    QGraphicsSceneMouseEvent edit_move(QEvent::GraphicsSceneMouseMove);
+    edit_move.setScenePos({-100, 0});
+    edit_move.setButtons(Qt::LeftButton);
+    edit_tool.mouseMoveEvent(canvas, &edit_move);
+    const auto live_angle = model.topology().get<sm::bone>(bone_id)->get().world_rotation();
+    require(live_angle >= -0.25001 && live_angle <= 0.25001,
+        "Edit Tool allowed an incoming transition-local constraint to be violated during drag");
+
+    QGraphicsSceneMouseEvent edit_release(QEvent::GraphicsSceneMouseRelease);
+    edit_release.setScenePos({-100, 0});
+    edit_release.setButton(Qt::LeftButton);
+    edit_tool.mouseReleaseEvent(canvas, &edit_release);
+    const auto committed_angle = model.topology().get<sm::bone>(bone_id)->get().world_rotation();
+    require(std::abs(sm::angular_distance(live_angle, committed_angle)) < 1e-7,
+        "transition-local constraint snapped only when the Edit Tool drag was committed");
     browser->leave_animation();
 }
 

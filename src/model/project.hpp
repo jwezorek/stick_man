@@ -98,6 +98,7 @@ namespace mdl {
         std::optional<sm::object_id> animation_session_keyframe() const;
         std::unordered_set<sm::object_id> animation_session_pinned_nodes() const;
         sm::constraint_map animation_session_rotation_constraints() const;
+        std::expected<sm::constraint_map, sm::result> animation_edit_constraints() const;
         std::expected<sm::object_id, sm::result> add_animation_rotation_constraint(
             sm::object_id target, sm::rotation_reference reference, sm::angle_range allowed);
         std::optional<sm::rotation_constraint> animation_session_rotation_constraint(sm::object_id id) const;

@@ -2047,28 +2047,19 @@ sm::result perform_ik_with_constraints(
     const std::vector<sm::node_ref>& pins,
     const sm::constraint_map* constraints);
 
-std::expected<sm::skeletal_pose, sm::result> apply_transition_pins(
-    const sm::pose_keyframe& from, const sm::pose_transition& transition,
+std::expected<sm::skeletal_pose, sm::result> apply_pinned_node_positions(
+    const std::map<sm::object_id, sm::point>& targets,
     const sm::skeletal_pose& candidate, animation_geometry& geometry) {
 
-    if (transition.pinned_nodes.empty())
+    if (targets.empty())
         return candidate;
 
-    // Pin targets come from the exact source pose. Transition-local rotation
-    // constraints deliberately do not alter that endpoint pose.
-    std::vector<sm::object_id> pin_ids(transition.pinned_nodes.begin(), transition.pinned_nodes.end());
-    std::ranges::sort(pin_ids);
-    std::map<sm::object_id, sm::point> targets;
-    try {
-        sm::apply_skeletal_pose(from.pose, geometry.topology, geometry.skeletons);
-    } catch (const std::invalid_argument&) {
-        return std::unexpected(sm::result::unsatisfiable_constraints);
-    }
-    for (auto id : pin_ids) {
-        auto node = geometry.topology.get<sm::node>(id);
-        if (!node)
-            return std::unexpected(sm::result::invalid_membership);
-        targets.emplace(id, node->get().world_pos());
+    std::vector<sm::object_id> pin_ids;
+    pin_ids.reserve(targets.size());
+    for (const auto& [id, target] : targets) {
+        if (!finite(target))
+            return std::unexpected(sm::result::out_of_bounds);
+        pin_ids.push_back(id);
     }
 
     auto pinned_pose = candidate;
@@ -2139,6 +2130,31 @@ std::expected<sm::skeletal_pose, sm::result> apply_transition_pins(
     return result;
 }
 
+std::expected<sm::skeletal_pose, sm::result> apply_transition_pins(
+    const sm::pose_keyframe& from, const sm::pose_transition& transition,
+    const sm::skeletal_pose& candidate, animation_geometry& geometry) {
+
+    if (transition.pinned_nodes.empty())
+        return candidate;
+
+    // A transition pin is anchored at the exact authored source position. Endpoint
+    // authoring uses the same hard-pin solve, so adding a local rotation constraint
+    // cannot silently move an already-pinned node.
+    std::map<sm::object_id, sm::point> targets;
+    try {
+        sm::apply_skeletal_pose(from.pose, geometry.topology, geometry.skeletons);
+    } catch (const std::invalid_argument&) {
+        return std::unexpected(sm::result::unsatisfiable_constraints);
+    }
+    for (auto id : transition.pinned_nodes) {
+        auto node = geometry.topology.get<sm::node>(id);
+        if (!node)
+            return std::unexpected(sm::result::invalid_membership);
+        targets.emplace(id, node->get().world_pos());
+    }
+    return apply_pinned_node_positions(targets, candidate, geometry);
+}
+
 struct pose_restore_guard {
     std::vector<std::pair<sm::node*, sm::point>> saved;
     bool committed = false;
@@ -2150,6 +2166,41 @@ struct pose_restore_guard {
 };
 
 } // namespace
+
+std::expected<sm::skeletal_pose, sm::result> sm::project_constrained_pose(
+    const skeletal_pose& reference, const topology& topology,
+    std::span<const object_id> rig_skeletons, const constraint_map& constraints,
+    const std::map<object_id, point>& pinned_node_positions) {
+
+    animation_geometry geometry;
+    if (auto status = prepare_animation_geometry(
+            topology, rig_skeletons, reference, constraints, geometry);
+        status != result::success) {
+        return std::unexpected(status);
+    }
+
+    std::map<object_id, double> world;
+    const auto feasibility = geometry.validate(reference, &world);
+    skeletal_pose pose;
+    if (feasibility == result::success) {
+        pose = reference;
+    } else {
+        if (feasibility != result::unsatisfiable_constraints)
+            return std::unexpected(feasibility);
+        auto projected = project_animation_reference(reference, world, geometry);
+        if (!projected)
+            return std::unexpected(projected.error());
+        pose = std::move(*projected);
+    }
+
+    if (!pinned_node_positions.empty()) {
+        auto pinned = apply_pinned_node_positions(pinned_node_positions, pose, geometry);
+        if (!pinned)
+            return std::unexpected(pinned.error());
+        pose = std::move(*pinned);
+    }
+    return pose;
+}
 
 sm::constrained_pose_result sm::sample_constrained_pose(const animation& animation,
     double time_seconds, const sm::topology& topology, std::span<const object_id> rig_skeletons) {
@@ -2387,6 +2438,13 @@ sm::result sm::perform_ik(
 }
 
 sm::result sm::perform_ik(
+    const std::vector<std::tuple<node_ref, point>>& effectors,
+    const std::vector<node_ref>& pins,
+    const constraint_map& constraints) {
+    return perform_ik_with_constraints(effectors, pins, &constraints);
+}
+
+sm::result sm::perform_ik(
     node_ref effector,
     point effector_target,
     std::optional<sm::node_ref> pin) {
@@ -2396,6 +2454,19 @@ sm::result sm::perform_ik(
     if (pin)
         pinned.push_back(*pin);
     return sm::perform_ik(one_effector, pinned);
+}
+
+sm::result sm::perform_ik(
+    node_ref effector,
+    point effector_target,
+    std::optional<sm::node_ref> pin,
+    const constraint_map& constraints) {
+
+    std::vector<std::tuple<sm::node_ref, sm::point>> one_effector{{effector, effector_target}};
+    std::vector<sm::node_ref> pinned;
+    if (pin)
+        pinned.push_back(*pin);
+    return sm::perform_ik(one_effector, pinned, constraints);
 }
 
 double sm::constrain_rotation(sm::bone& bone, double theta) {
@@ -2415,6 +2486,21 @@ sm::point sm::apply_rotation_constraints(
     double max_ang_delta,
     double old_bone_rotation) {
 
+    return apply_rotation_constraints(curr_pos, start_node, prev, current_bone,
+        current_bone.owner().owner().constraints(), apply_rot_constraints,
+        max_ang_delta, old_bone_rotation);
+}
+
+sm::point sm::apply_rotation_constraints(
+    const sm::point& curr_pos,
+    sm::node& start_node,
+    sm::maybe_bone_ref prev,
+    sm::bone& current_bone,
+    const constraint_map& constraints,
+    bool apply_rot_constraints,
+    double max_ang_delta,
+    double old_bone_rotation) {
+
     ik_neighborhood neighborhood{start_node, prev, current_bone};
     return apply_all_constraints(
         curr_pos,
@@ -2422,5 +2508,5 @@ sm::point sm::apply_rotation_constraints(
         apply_rot_constraints,
         max_ang_delta,
         old_bone_rotation,
-        constraint_geometry(current_bone.owner().owner()));
+        constraint_geometry(current_bone.owner().owner(), constraints));
 }

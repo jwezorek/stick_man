@@ -247,8 +247,13 @@ namespace sm {
 	}
 
 	result rotate_constrained_bone(bone& b, double theta, bool descendants, maybe_node_ref axis) {
+		return rotate_constrained_bone(b, theta, descendants, axis, b.owner().owner().constraints());
+	}
+
+	result rotate_constrained_bone(bone& b, double theta, bool descendants, maybe_node_ref axis,
+	        const constraint_map& constraints) {
 		geometry_batch batch(b.owner().owner());
-		constraint_geometry g(b.owner().owner());
+		constraint_geometry g(b.owner().owner(), constraints);
 		if (g.status() != result::success) {
 			return g.status();
 		}

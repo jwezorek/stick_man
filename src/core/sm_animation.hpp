@@ -5,6 +5,7 @@
 #include "json_fwd.hpp"
 #include <cstddef>
 #include <optional>
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -140,6 +141,15 @@ namespace sm {
     // fails. No invalid reference/candidate is committed, including on exact keys.
     constrained_pose_result sample_constrained_pose(const animation& animation,
         double time_seconds, const topology& topology, std::span<const object_id> rig_skeletons);
+
+    // Project an authored pose to the nearest pose satisfying the supplied effective
+    // rotation/rigid constraints while optionally holding specific nodes at fixed
+    // world positions. This is the same projection machinery used by constrained
+    // animation sampling and is intended for animation-authoring endpoint repair.
+    std::expected<skeletal_pose, result> project_constrained_pose(
+        const skeletal_pose& reference, const topology& topology,
+        std::span<const object_id> rig_skeletons, const constraint_map& constraints,
+        const std::map<object_id, point>& pinned_node_positions = {});
 
     pose capture_pose(const topology& topology, const std::vector<object_id>& skeletons, std::string name);
     skeletal_pose capture_skeletal_pose(const topology& topology, std::span<const object_id> skeletons);
