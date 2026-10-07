@@ -91,7 +91,7 @@ namespace sm {
                 return bones_.contains(id);
             }
         }
-        void apply(matrix& mat);
+        void apply(const matrix& mat);
         template <is_node_or_bone T>
         std::optional<sm::ref<T>> get(const object_id& id) const {
             if constexpr (std::is_same_v<T, sm::node>) {
@@ -192,6 +192,6 @@ namespace sm {
         expected_bone create_bone(object_id id, const std::string& name, node& u, node& v);
         result from_json(const nlohmann::json& js);
         nlohmann::json to_json() const;
-        void apply(matrix& mat);
+        void apply(const matrix& mat);
     };
 }

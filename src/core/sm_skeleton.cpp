@@ -315,7 +315,7 @@ void sm::skeleton::register_bone(sm::bone& new_bone) {
 }
 bool sm::skeleton::empty() const { return !root_.has_value(); }
 const sm::topology& sm::skeleton::owner() const { return owner_; }
-void sm::skeleton::apply(matrix& mat) {
+void sm::skeleton::apply(const matrix& mat) {
     geometry_batch batch(owner());
     for (auto node : nodes()) {
         node->apply(mat);
@@ -588,7 +588,7 @@ json sm::topology::to_json() const {
     return { {"version", 2.0}, {"skeletons", skeleton_json}, {"constraints", constraints_to_json(constraints_)} };
 }
 
-void sm::topology::apply(matrix& mat) {
+void sm::topology::apply(const matrix& mat) {
     geometry_batch batch(*this);
     for (auto skel : skeletons()) {
         skel->apply(mat);

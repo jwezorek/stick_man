@@ -6,7 +6,7 @@ const sm::topology& mdl::project::display_topology() const {
 }
 
 void mdl::project::exit_animation_preview() {
-    // Synchronous: the transport must stop without evaluating another timer tick.
+    // Stop transport before another preview tick can run.
     emit animation_editing_requested();
     if (playback_topology_) {
         emit animation_display_changing(false);
@@ -36,8 +36,7 @@ mdl::animation_display_status mdl::project::preview_animation_time(double second
     if (!animation)
         return fail(animation_display_status::sampling_failed, sm::result::not_found);
     const auto skeletons = character->get().rig().skeleton_ids();
-    // Always sample against authoritative persistent rig geometry, never the last
-    // displayed sample or the selected keyframe's editing geometry.
+    // Sample against persistent rig geometry, not the current display topology.
     auto sample = sm::sample_constrained_pose(*animation, seconds, core_.topology(), skeletons);
     if (!sample)
         return fail(animation_display_status::sampling_failed, sample.error());
@@ -55,10 +54,8 @@ mdl::animation_display_status mdl::project::preview_animation_time(double second
             for (auto n : copy->get().nodes()) n->clear_user_data();
             for (auto b : copy->get().bones()) b->clear_user_data();
         }
-        // Public reconstruction has its own transactional constraint checks.
         auto display_pose = (**sample).pose;
-        // Core samples retain authored scalars at exact keys. Reduce only this
-        // rendering copy to avoid losing precision in FK with large windings.
+        // Normalize only the rendering copy; keep authored key values untouched.
         for (auto& [id, angle] : display_pose.bone_rotations)
             angle = sm::normalize_angle(angle);
         sm::apply_skeletal_pose(display_pose, *candidate, skeletons);
@@ -68,7 +65,7 @@ mdl::animation_display_status mdl::project::preview_animation_time(double second
     } catch (const std::exception&) {
         return fail(animation_display_status::reconstruction_failed, sm::result::out_of_bounds);
     }
-    // Nothing visible is touched until both sampling and reconstruction succeed.
+    // Publish the sample only after reconstruction succeeds.
     emit animation_display_changing(true);
     playback_topology_ = std::move(candidate);
     playback_pinned_node_ids_ = (**sample).pinned_nodes;

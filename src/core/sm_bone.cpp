@@ -8,8 +8,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <cmath>
+#include <utility>
 
-using namespace std::placeholders;
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
 
@@ -105,7 +105,6 @@ sm::maybe_bone_ref sm::node::parent_bone() {
 		parent_
 	);
 }
-// TODO: get rid of duplicate code
 sm::maybe_const_bone_ref sm::node::parent_bone() const {
 	return std::visit(
 		overloaded{
@@ -134,14 +133,18 @@ std::vector<sm::bone_ref> sm::node::adjacent_bones() {
 		bones.push_back(*parent_bone());
 	}
 	r::copy(children_, std::back_inserter(bones));
-	bones.shrink_to_fit();
 	return bones;
 }
 std::vector<sm::const_bone_ref> sm::node::adjacent_bones() const {
-	auto* non_const_this = const_cast<sm::node*>(this);
-	return non_const_this->adjacent_bones() |
-		rv::transform([](const auto& c) {return sm::const_bone_ref(c); }) |
-		r::to< std::vector<sm::const_bone_ref>>();
+	std::vector<sm::const_bone_ref> bones;
+	bones.reserve(children_.size() + 1);
+	if (!is_root()) {
+		bones.push_back(*parent_bone());
+	}
+	for (const auto& child : children_) {
+		bones.emplace_back(child.get());
+	}
+	return bones;
 }
 sm::skeleton& sm::node::owner() {
 	return std::visit(
@@ -158,8 +161,13 @@ sm::skeleton& sm::node::owner() {
 }
 
 const sm::skeleton& sm::node::owner() const {
-	auto non_const_this = const_cast<sm::node*>(this);
-	return non_const_this->owner();
+	return std::visit(
+		overloaded{
+			[](const skel_ref& skel)->const sm::skeleton& { return *skel; },
+			[](const bone_ref& bone)->const sm::skeleton& { return bone->owner(); }
+		},
+		parent_
+	);
 }
 
 double sm::node::world_x() const {
@@ -188,7 +196,7 @@ void sm::node::set_world_pos(const point& pt) {
 	y_ = pt.y;
 }
 
-void sm::node::apply(matrix& mat) {
+void sm::node::apply(const matrix& mat) {
     set_world_pos(
         transform(world_pos(), mat)
     );
@@ -260,8 +268,7 @@ sm::node& sm::bone::parent_node() {
 	return u_;
 }
 const sm::node& sm::bone::parent_node() const {
-	auto* non_const_this = const_cast<sm::bone*>(this);
-	return non_const_this->parent_node();
+	return u_;
 }
 
 sm::node& sm::bone::child_node() {
@@ -269,8 +276,7 @@ sm::node& sm::bone::child_node() {
 }
 
 const sm::node& sm::bone::child_node() const {
-	auto* non_const_this = const_cast<sm::bone*>(this);
-	return non_const_this->child_node();
+	return v_;
 }
 
 sm::node& sm::bone::opposite_node(const node& j) {
@@ -289,7 +295,7 @@ std::vector<sm::bone_ref> sm::bone::child_bones() {
 }
 
 std::vector<sm::const_bone_ref> sm::bone::child_bones() const {
-	return const_cast<const sm::node&>(v_).child_bones();
+	return std::as_const(v_).child_bones();
 }
 
 std::vector<sm::bone_ref> sm::bone::sibling_bones() {
@@ -306,8 +312,7 @@ bool sm::bone::is_sibling(const bone& b) const
 }
 
 const sm::node& sm::bone::opposite_node(const node& j) const {
-	auto* non_const_this = const_cast<sm::bone*>(this);
-	return non_const_this->opposite_node(j);
+	return &j == &u_ ? v_ : u_;
 }
 
 sm::skeleton& sm::bone::owner() {
@@ -330,8 +335,15 @@ sm::maybe_node_ref sm::bone::shared_node(const bone& b) {
 }
 
 sm::maybe_const_node_ref sm::bone::shared_node(const bone& b) const {
-	auto* non_const_this = const_cast<sm::bone*>(this);
-	return non_const_this->shared_node(b);
+	auto* b_u = &b.parent_node();
+	auto* b_v = &b.child_node();
+	if (&u_ == b_u || &u_ == b_v) {
+		return sm::const_node_ref(u_);
+	}
+	if (&v_ == b_u || &v_ == b_v) {
+		return sm::const_node_ref(v_);
+	}
+	return {};
 }
 std::tuple<sm::point, sm::point> sm::bone::line_segment() const {
 	return { u_.world_pos(), v_.world_pos() };

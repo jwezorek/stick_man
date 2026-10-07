@@ -50,8 +50,8 @@ namespace sm {
         double x;
         double y;
 
-        point operator+=(const point& p);
-        point operator-=(const point& p);
+        point& operator+=(const point& p);
+        point& operator-=(const point& p);
     };
 
     point operator+(const point& p1, const point& p2);

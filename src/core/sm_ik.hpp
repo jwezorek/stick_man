@@ -36,7 +36,7 @@ namespace sm {
         sm::node& start_node,
         sm::maybe_bone_ref prev,
         sm::bone& current_bone,
-        bool apply_rot_constaints = true,
+        bool apply_rot_constraints = true,
         double max_ang_delta = 0.0,
         double old_bone_rotation = 0.0);
 
@@ -46,7 +46,7 @@ namespace sm {
         sm::maybe_bone_ref prev,
         sm::bone& current_bone,
         const constraint_map& constraints,
-        bool apply_rot_constaints = true,
+        bool apply_rot_constraints = true,
         double max_ang_delta = 0.0,
         double old_bone_rotation = 0.0);
 }

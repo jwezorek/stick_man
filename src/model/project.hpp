@@ -24,10 +24,8 @@ namespace mdl {
     class project;
     enum class animation_display_status { editing, empty, sampled, sampling_failed, reconstruction_failed };
     struct command {
-        std::function<void(project&)> redo;
+        std::function<sm::result(project&)> redo;
         std::function<void(project&)> undo;
-        // Only commands with ordinary user failures need to report an outcome.
-        std::function<sm::result()> outcome;
         bool document_edit = true;
         bool animation_edit = false;
         std::optional<sm::object_id> artwork_character;
@@ -120,7 +118,7 @@ namespace mdl {
         void apply_pose(sm::object_id character, sm::object_id pose);
         const sm::project& core() const;
         sm::project& core();
-        // Validate on an independent semantic snapshot, then record one undoable edit.
+        // Validate before recording the undoable edit.
         void edit_artwork(const sm::object_id& character, const std::function<void(sm::artwork&)>& edit);
         void edit_backgrounds(const std::function<void(std::vector<sm::background_image>&)>& edit);
         const sm::topology& topology() const;

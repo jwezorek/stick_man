@@ -55,7 +55,7 @@ namespace sm {
         double world_y() const;
         void set_world_pos(const point& pt);
         point world_pos() const;
-        void apply(matrix& mat);
+        void apply(const matrix& mat);
 
         std::any get_user_data() const;
         void set_user_data(std::any data);

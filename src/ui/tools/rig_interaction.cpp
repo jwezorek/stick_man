@@ -24,7 +24,6 @@
 #include <functional>
 #include <cmath>
 #include <qDebug>
-using namespace std::placeholders;
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
 

@@ -240,7 +240,7 @@ namespace {
     }
     // returns the the set of skeletons that are either selected or contain at least one
     // node or bone that is selected,
-    std::unordered_set<const sm::skeleton*> relavent_skeleton_set(ui::canvas::scene& canv) {
+    std::unordered_set<const sm::skeleton*> relevant_skeleton_set(ui::canvas::scene& canv) {
         return canv.selection() |
             rv::transform(
                 [](ui::canvas::item::base* itm)->const sm::skeleton* {
@@ -305,12 +305,12 @@ namespace {
             }
             return payload;
         }
-        auto relavent_skels = relavent_skeleton_set(canv);
+        auto relevant_skels = relevant_skeleton_set(canv);
 
-        auto regenerate_ids = selected_node_ids(canv, relavent_skels);
-        auto [unselected, selected] = split_skeletons_by_selection(canv, relavent_skels);
+        auto regenerate_ids = selected_node_ids(canv, relevant_skels);
+        auto [unselected, selected] = split_skeletons_by_selection(canv, relevant_skels);
         if (op == selection_operation::cut || op == selection_operation::del) {
-            auto replacees = relavent_skels | rv::transform(
+            auto replacees = relevant_skels | rv::transform(
                     [](const auto* skel) {
                         return skel->id();
                     }

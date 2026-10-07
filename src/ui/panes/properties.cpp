@@ -20,7 +20,6 @@
 
 /*------------------------------------------------------------------------------------------------*/
 
-using namespace std::placeholders;
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
 

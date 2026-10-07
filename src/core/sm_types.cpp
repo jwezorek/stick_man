@@ -9,12 +9,12 @@ namespace {
 
 }
 
-sm::point sm::point::operator += (const point& p) {
+sm::point& sm::point::operator += (const point& p) {
     *this = *this + p;
     return *this;
 }
 
-sm::point sm::point::operator-=(const point& p) {
+sm::point& sm::point::operator-=(const point& p) {
     *this = *this - p;
     return *this;
 }

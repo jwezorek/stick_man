@@ -1,8 +1,6 @@
 #pragma once
 #include <vector>
 #include <string>
-#include <expected>
-#include <variant>
 #include "../core/sm_types.hpp"
 #include "../core/sm_visit.hpp"
 #include "project.hpp"
@@ -43,13 +41,11 @@ namespace mdl {
             sm::membership_state membership;
             sm::constraint_map before_constraints;
             std::optional<sm::constraint_map> after_constraints;
-            sm::result status = sm::result::success;
             sm::object_id merged;
             std::optional<sm::object_id> bone_id;
             add_bone_state(const std::string& bone_name,
                 const handle& u_hnd,
-                const handle& v_hnd,
-                const sm::topology_edit_effects& effects);
+                const handle& v_hnd);
         };
         struct replace_skeleton_state {
             std::vector<sm::object_id> replacee_ids;
@@ -60,13 +56,11 @@ namespace mdl {
             std::optional<sm::membership_state> after_membership;
             sm::constraint_map before_constraints;
             std::optional<sm::constraint_map> after_constraints;
-            sm::result status = sm::result::success;
             std::unordered_set<sm::object_id> regenerate_ids;
             replace_skeleton_state(
                 const std::vector<sm::object_id>& replacees,
                 const std::vector<sm::skel_ref>& replacements,
-                const std::unordered_set<sm::object_id>& regenerate_ids,
-                const sm::topology_edit_effects& effects);
+                const std::unordered_set<sm::object_id>& regenerate_ids);
         };
         struct transform_nodes_and_bones_state {
             std::function<void(sm::node&)> transform_nodes;
@@ -89,13 +83,11 @@ namespace mdl {
         static command make_create_node_command(
             const sm::point& pt, const std::string& node_name);
         static command make_add_bone_command(
-            const handle& u_hnd, const handle& v_hnd, const std::string& bone_name,
-            const sm::topology_edit_effects& effects);
+            const handle& u_hnd, const handle& v_hnd, const std::string& bone_name);
         static command make_replace_skeletons_command(
             const std::vector<sm::object_id>& replacees,
             const std::vector<sm::skel_ref>& replacements,
-            const std::unordered_set<sm::object_id>& regenerate_ids,
-            const sm::topology_edit_effects& effects
+            const std::unordered_set<sm::object_id>& regenerate_ids
         );
         static command make_transform_bones_or_nodes_command(
             project& proj,
