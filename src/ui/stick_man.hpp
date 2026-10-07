@@ -11,6 +11,7 @@ namespace ui {
     namespace pane {
         class animation;
         class skeleton;
+        class selection_properties_pane;
         class tools;
     }
 
@@ -38,6 +39,7 @@ namespace ui {
         mdl::project& project();
         pane::tool_settings& tool_pane();
         pane::skeleton& skel_pane();
+        pane::selection_properties_pane& selection_pane();
         canvas::manager& canvases();
 
     private:
@@ -62,11 +64,13 @@ namespace ui {
         pane::animation* anim_pane_;
         pane::tool_settings* tool_pane_;
         pane::skeleton * skel_pane_;
+        pane::selection_properties_pane* selection_pane_;
         canvas::manager* canvases_;
         mdl::project project_;
         QString current_file_path_;
         bool was_shown_;
         bool has_fully_layed_out_widgets_;
+        bool default_dock_sizes_pending_ = false;
         QAction* undo_action_;
         QAction* redo_action_;
         QAction* show_constraints_action_ = nullptr;

@@ -111,7 +111,7 @@ ui::tool::edit_tool_panel::edit_tool_panel() : QWidget() {
 
 void ui::tool::edit_tool_panel::init() {
     rotate_mode_ = edit_drag_mode::rigid;
-    trans_mode_ = edit_drag_mode::rigid;
+    trans_mode_ = edit_drag_mode::rag_doll;
     rotate_on_pin_->setChecked(false);
     drag_behavior_->setCurrentIndex(drag_behavior_->findData(drag_translate));
     update_controls();

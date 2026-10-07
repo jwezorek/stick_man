@@ -2,6 +2,7 @@
 #include "panes/artwork_browser.hpp"
 #include "canvas/artwork_layer.hpp"
 #include "panes/skeleton_pane.hpp"
+#include "panes/selection_properties_pane.hpp"
 #include "panes/animation_pane.hpp"
 #include "panes/tools_pane.hpp"
 #include "panes/tool_settings_pane.hpp"
@@ -35,7 +36,9 @@
 namespace r = std::ranges;
 namespace rv = std::ranges::views;
 namespace {
-    constexpr int layout_state_version = 1;
+    // The default dock arrangement has changed: reject saved layouts from before
+    // Selection Properties became an independent dock.
+    constexpr int layout_state_version = 2;
     constexpr auto layout_settings_organization = "jwezorek";
     constexpr auto layout_settings_application = "stick_man";
     constexpr auto layout_settings_key = "main_window/state";
@@ -77,12 +80,13 @@ namespace {
 }
 ui::stick_man::stick_man(QWidget* parent) :
         QMainWindow(parent),
-        was_shown_(false),
-        has_fully_layed_out_widgets_(false),
         tool_pal_(new pane::tools(this)),
         anim_pane_(new pane::animation(this)),
         tool_pane_(new pane::tool_settings(this)),
-        skel_pane_(new pane::skeleton(this)) {
+        skel_pane_(new pane::skeleton(this)),
+        selection_pane_(new pane::selection_properties_pane(this)),
+        was_shown_(false),
+        has_fully_layed_out_widgets_(false) {
 #ifdef Q_OS_WIN
     setDarkTitleBar(winId());
 #endif
@@ -91,11 +95,17 @@ ui::stick_man::stick_man(QWidget* parent) :
     tool_pal_->setObjectName("tools_toolbar");
     tool_pane_->setObjectName("tool_settings_pane");
     skel_pane_->setObjectName("skeleton_pane");
+    selection_pane_->setObjectName("selection_properties_pane");
     anim_pane_->setObjectName("animation_pane");
 
     addToolBar(Qt::LeftToolBarArea, tool_pal_);
     addDockWidget(Qt::RightDockWidgetArea, tool_pane_);
     addDockWidget(Qt::RightDockWidgetArea, skel_pane_);
+    addDockWidget(Qt::RightDockWidgetArea, selection_pane_);
+    // Top: tool settings. Middle: Skeleton/Animation/Artwork tabs.
+    // Bottom: independent Selection Properties.
+    splitDockWidget(tool_pane_, skel_pane_, Qt::Vertical);
+    splitDockWidget(skel_pane_, selection_pane_, Qt::Vertical);
     addDockWidget(Qt::RightDockWidgetArea, anim_pane_);
     auto* center = new QWidget(this);
     auto* center_layout = new QVBoxLayout(center);
@@ -107,13 +117,15 @@ ui::stick_man::stick_man(QWidget* parent) :
 
     auto* artwork_browser = new pane::artwork_browser(project_, *canvases_, this);
     addDockWidget(Qt::RightDockWidgetArea, artwork_browser);
-    tabifyDockWidget(skel_pane_, artwork_browser);
     tabifyDockWidget(skel_pane_, anim_pane_);
+    tabifyDockWidget(skel_pane_, artwork_browser);
+    resizeDocks({tool_pane_, skel_pane_, selection_pane_}, {220, 340, 260}, Qt::Vertical);
 
     QSettings settings(layout_settings_organization, layout_settings_application);
     const auto saved_layout = settings.value(layout_settings_key).toByteArray();
     if (saved_layout.isEmpty() || !restoreState(saved_layout, layout_state_version)) {
         skel_pane_->raise();
+        default_dock_sizes_pending_ = true;
     }
 
     connect(qApp, &QCoreApplication::aboutToQuit, this, [this] {
@@ -124,6 +136,7 @@ ui::stick_man::stick_man(QWidget* parent) :
     createMainMenu();
     connect(&project_, &mdl::project::dirty_changed, this, [this](bool) { update_window_title(); });
     skel_pane_->init(*canvases_, project_);
+    selection_pane_->init(*canvases_, project_);
     anim_pane_->init(*canvases_, project_);
     tool_mgr_.init(*canvases_, project_);
     tool_pane_->init(tool_mgr_);
@@ -328,6 +341,9 @@ ui::pane::tool_settings& ui::stick_man::tool_pane() {
 ui::pane::skeleton& ui::stick_man::skel_pane() {
     return *skel_pane_;
 }
+ui::pane::selection_properties_pane& ui::stick_man::selection_pane() {
+    return *selection_pane_;
+}
 ui::canvas::manager& ui::stick_man::canvases() {
     return *canvases_;
 }
@@ -429,6 +445,7 @@ void ui::stick_man::insert_view_menu() {
     tool_settings_action->setText(tr("Tool settings"));
     panes_menu->addAction(tool_settings_action);
     panes_menu->addAction(skel_pane_->toggleViewAction());
+    panes_menu->addAction(selection_pane_->toggleViewAction());
     if (auto* artwork = findChild<pane::artwork_browser*>()) {
         auto* action = artwork->toggleViewAction();
         action->setText(tr("Artwork"));
@@ -508,21 +525,27 @@ void ui::stick_man::reset_view() {
     };
     remove_dock(tool_pane_);
     remove_dock(skel_pane_);
+    remove_dock(selection_pane_);
     remove_dock(anim_pane_);
     if (artwork)
         remove_dock(artwork);
 
     addDockWidget(Qt::RightDockWidgetArea, tool_pane_);
     addDockWidget(Qt::RightDockWidgetArea, skel_pane_);
+    addDockWidget(Qt::RightDockWidgetArea, selection_pane_);
+    splitDockWidget(tool_pane_, skel_pane_, Qt::Vertical);
+    splitDockWidget(skel_pane_, selection_pane_, Qt::Vertical);
     addDockWidget(Qt::RightDockWidgetArea, anim_pane_);
+    tabifyDockWidget(skel_pane_, anim_pane_);
     if (artwork) {
         addDockWidget(Qt::RightDockWidgetArea, artwork);
         tabifyDockWidget(skel_pane_, artwork);
     }
-    tabifyDockWidget(skel_pane_, anim_pane_);
+    resizeDocks({tool_pane_, skel_pane_, selection_pane_}, {220, 340, 260}, Qt::Vertical);
 
     tool_pane_->show();
     skel_pane_->show();
+    selection_pane_->show();
     anim_pane_->show();
     if (artwork) artwork->show();
     skel_pane_->raise();
@@ -557,6 +580,10 @@ void ui::stick_man::createMainMenu()
 }
 void ui::stick_man::showEvent(QShowEvent* event) {
     QMainWindow::showEvent(event);
+    if (default_dock_sizes_pending_) {
+        resizeDocks({tool_pane_, skel_pane_, selection_pane_}, {220, 340, 260}, Qt::Vertical);
+        default_dock_sizes_pending_ = false;
+    }
     was_shown_ = true;
 }
 void ui::stick_man::resizeEvent(QResizeEvent* event) {

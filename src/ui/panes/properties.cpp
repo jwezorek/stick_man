@@ -10,7 +10,6 @@
 #include "../canvas/canvas_manager.hpp"
 #include "../util.hpp"
 #include "../stick_man.hpp"
-#include "main_skeleton_pane.hpp"
 #include "../../model/project.hpp"
 #include "../../model/handle.hpp"
 #include <unordered_map>
@@ -57,8 +56,8 @@ namespace {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::pane::selection_properties::selection_properties(const props::current_canvas_fn& fn,
-            pane::skeleton* sp) :
-        skel_pane_(sp),
+            QWidget* parent) :
+        QStackedWidget(parent),
 		props_{
 			{selection_type::none, new props::no_properties(fn, this)},
 			{selection_type::node, new props::nodes(fn, this)},
@@ -67,7 +66,8 @@ ui::pane::selection_properties::selection_properties(const props::current_canvas
             {selection_type::character, new props::character(fn, this)},
             {selection_type::constraint, new props::constraint_properties(fn, this)},
 			{selection_type::mixed, new props::mixed_properties(fn, this)}
-		} {
+		},
+        current_canvas_(fn) {
 	for (const auto& [key, prop_box] : props_) {
         QScrollArea* scroller = new QScrollArea();
         scroller->setWidget(prop_box);
@@ -145,6 +145,6 @@ void ui::pane::selection_properties::init(canvas::manager& canvases, mdl::projec
     );
 }
 
-ui::pane::skeleton& ui::pane::selection_properties::skel_pane() {
-    return *skel_pane_;
+bool ui::pane::selection_properties::validate_props_name_change(const std::string&) const {
+    return !read_only_ && canvas::selected_single_model(current_canvas_()).has_value();
 }

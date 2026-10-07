@@ -27,18 +27,11 @@ namespace rv = std::ranges::views;
 ui::pane::skeleton::skeleton(ui::stick_man* mw) :
 	QDockWidget(tr("Skeleton"), mw) {
 	setWindowIcon(QIcon(":/images/add_bone_icon.png"));
-	setWidget(main_skel_pane_ = new main_skeleton_pane(this, mw));
+	setWidget(main_skel_pane_ = new main_skeleton_pane(this));
 }
-ui::pane::selection_properties& ui::pane::skeleton::sel_properties() {
-	return main_skel_pane_->sel_properties();
-}
-
 void ui::pane::skeleton::init(canvas::manager& canvases, mdl::project& proj) {
 	main_skel_pane_->init(canvases, proj);
 }
 void ui::pane::skeleton::set_animation_mode(bool active) {
     main_skel_pane_->set_animation_mode(active);
-}
-bool ui::pane::skeleton::validate_props_name_change(const std::string& new_name) {
-	return main_skel_pane_->validate_props_name_change(new_name);
 }

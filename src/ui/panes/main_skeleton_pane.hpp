@@ -5,15 +5,12 @@
 #include <QWidget>
 #include <QtWidgets>
 #include "../../core/sm_types.hpp"
-#include "properties.hpp"
 #include "tree_view.hpp"
 #include <functional>
 
 /*------------------------------------------------------------------------------------------------*/
 
 namespace ui {
-
-    class stick_man;
 
     namespace canvas {
         class manager;
@@ -24,12 +21,7 @@ namespace ui {
         class skeleton;
 
         class main_skeleton_pane : public abstract_skeleton_pane {
-            friend class skeleton;
-
             tree_view* skeleton_tree_;
-            selection_properties* sel_properties_;
-            skeleton* skeleton_pane_;
-            ui::stick_man* main_wnd_;
             bool animation_mode_ = false;
             bool tree_enabled_before_ = true;
 
@@ -52,10 +44,8 @@ namespace ui {
 
         public:
 
-            main_skeleton_pane(skeleton* parent, ui::stick_man* mgr);
-            selection_properties& sel_properties();
+            explicit main_skeleton_pane(skeleton* parent);
             void set_animation_mode(bool active);
-            bool validate_props_name_change(const std::string& new_name);
         };
 
     }

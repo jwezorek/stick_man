@@ -8,7 +8,6 @@
 #include "../canvas/scene.hpp"
 #include "../canvas/canvas_manager.hpp"
 #include "../tools/tool.hpp"
-#include "../stick_man.hpp"
 #include "../../model/project.hpp"
 #include "../../core/sm_bone.hpp"
 #include "../../core/sm_skeleton.hpp"
@@ -375,37 +374,14 @@ const ui::pane::tree_view& ui::pane::main_skeleton_pane::skel_tree() const {
 }
 
 QWidget* ui::pane::main_skeleton_pane::create_content() {
-	QSplitter* splitter = new QSplitter();
-	splitter->setOrientation(Qt::Vertical);
-	splitter->addWidget(
-		skeleton_tree_ = new tree_view()
-	);
-	splitter->addWidget(
-		sel_properties_ = new selection_properties(
-			[this]()->ui::canvas::scene& {
-				return main_wnd_->canvases().active_canvas();
-			},
-			skeleton_pane_
-		)
-	);
-    // Leave enough initial space for character authoring controls below the tree.
-    splitter->setSizes({300, 200});
-	return splitter;
+    return skeleton_tree_ = new tree_view();
 }
 
-ui::pane::main_skeleton_pane::main_skeleton_pane(ui::pane::skeleton* parent, ui::stick_man* mw) :
-	abstract_skeleton_pane(parent),
-	skeleton_pane_(parent),
-	main_wnd_(mw) {
-	
+ui::pane::main_skeleton_pane::main_skeleton_pane(ui::pane::skeleton* parent) :
+    abstract_skeleton_pane(parent) {
 }
 
-ui::pane::selection_properties& ui::pane::main_skeleton_pane::sel_properties() {
-	return *sel_properties_;
-}
-
-void ui::pane::main_skeleton_pane::init_aux(canvas::manager& canvases, mdl::project& proj) {
-	sel_properties_->init(canvases, proj);
+void ui::pane::main_skeleton_pane::init_aux(canvas::manager&, mdl::project&) {
 	connect(project_, &mdl::project::name_changed, this, &main_skeleton_pane::handle_rename);
     skeleton_tree_->setContextMenuPolicy(Qt::CustomContextMenu);
 	connect(skeleton_tree_, &QWidget::customContextMenuRequested, this, [this](QPoint point) {
@@ -440,16 +416,6 @@ void ui::pane::main_skeleton_pane::set_animation_mode(bool active) {
         skeleton_tree_->setEnabled(tree_enabled_before_);
     }
 
-    sel_properties_->set_read_only(active);
-    // set_selection() can change context-sensitive enabled state (for example,
-    // a constraint's reference-bone combo), so refresh once normal editing is
-    // restored rather than blindly enabling everything.
-    if (!active) {
+    if (!active)
         handle_canv_sel_change();
-        sel_properties_->set(canvas());
-    }
-}
-
-bool ui::pane::main_skeleton_pane::validate_props_name_change(const std::string&) {
-    return !animation_mode_ && selected_single_model(canvas()).has_value();
 }

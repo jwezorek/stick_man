@@ -4,8 +4,6 @@
 #include "../canvas/bone_item.hpp"
 #include "../canvas/node_item.hpp"
 #include "../canvas/skel_item.hpp"
-#include "../panes/skeleton_pane.hpp"
-#include "../panes/main_skeleton_pane.hpp"
 #include "../../core/sm_visit.hpp"
 #include <ranges>
 #include <functional>
@@ -100,7 +98,7 @@ void ui::pane::props::bones::populate(mdl::project& proj) {
     layout_->addWidget(name_ = new ui::labeled_field("   name", ""));
     name_->set_color(QColor("yellow"));
     name_->value()->set_validator([this](const std::string& new_name) {
-        return parent_->skel_pane().validate_props_name_change(new_name);
+        return parent_->validate_props_name_change(new_name);
     });
 
     nodes_ = new QWidget();

@@ -30,7 +30,7 @@ namespace ui {
             QCheckBox* rotate_on_pin_;
 
             edit_drag_mode rotate_mode_ = edit_drag_mode::rigid;
-            edit_drag_mode trans_mode_ = edit_drag_mode::rigid;
+            edit_drag_mode trans_mode_ = edit_drag_mode::rag_doll;
 
             drag_behavior current_drag_behavior() const;
             edit_drag_mode selected_mode() const;

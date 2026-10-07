@@ -2,8 +2,6 @@
 #include "properties.hpp"
 #include "../canvas/scene.hpp"
 #include "../canvas/skel_item.hpp"
-#include "skeleton_pane.hpp"
-#include "main_skeleton_pane.hpp"
 #include "../character_actions.hpp"
 #include <functional>
 
@@ -26,7 +24,7 @@ void ui::pane::props::skeletons::populate(mdl::project & proj) {
     name_->set_color(QColor("yellow"));
     name_->value()->set_validator(
         [this](const std::string& new_name)->bool {
-            return parent_->skel_pane().validate_props_name_change(new_name);
+            return parent_->validate_props_name_change(new_name);
         }
     );
 
