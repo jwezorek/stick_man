@@ -70,7 +70,6 @@ namespace mdl {
         sm::result execute_session_command(const command& cmd);
         void notify_command_change(const command& cmd);
         void rename_aux(handle id, const std::string& new_name);
-        bool can_rename(skel_piece piece, const std::string& new_name);
         sm::topology_change replace_skeletons_aux(
             const std::vector<sm::object_id>& replacees,
             const std::vector<sm::skel_ref>& replacements,
@@ -193,5 +192,4 @@ namespace mdl {
         void refresh_undo_redo_state(bool, bool);
         void dirty_changed(bool dirty);
     };
-    bool identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2);
 }

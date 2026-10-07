@@ -24,7 +24,7 @@ void ui::pane::abstract_skeleton_pane::disconnect_canv_sel_handler() {
 }
 
 void ui::pane::abstract_skeleton_pane::connect_canv_cont_handler() {
-    canv_content_conn_ = connect(canvases_, &canvas::manager::canvas_refresh,
+    connect(canvases_, &canvas::manager::canvas_refresh,
         this, &abstract_skeleton_pane::sync_with_model
     );
 }

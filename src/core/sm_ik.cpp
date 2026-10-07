@@ -2469,14 +2469,6 @@ sm::result sm::perform_ik(
     return sm::perform_ik(one_effector, pinned, constraints);
 }
 
-double sm::constrain_rotation(sm::bone& bone, double theta) {
-    constraint_geometry geometry(bone.owner().owner());
-    auto clamped = geometry.allowed_angles(bone).closest_angle(theta);
-    if (!clamped)
-        throw std::invalid_argument("unsatisfiable rotation constraints");
-    return *clamped;
-}
-
 sm::point sm::apply_rotation_constraints(
     const sm::point& curr_pos,
     sm::node& start_node,

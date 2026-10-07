@@ -247,10 +247,6 @@ void ui::canvas::scene::drawForeground(QPainter* painter, const QRectF& rect) {
 }
 
 void ui::canvas::scene::focusOutEvent(QFocusEvent* focusEvent) {
-    if (interactive_adornment_) {
-        auto adornment = interactive_adornment_;
-        adornment->cancel();
-    }
     if (manager().animation_session_active()) {
         QKeyEvent cancel(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
         inp_handler_.keyPressEvent(*this, &cancel);
@@ -603,7 +599,6 @@ void ui::canvas::scene::clear_selection() {
 }
 
 void ui::canvas::scene::clear() {
-    clear_interactive_adornment();
     constraint_adornments_->clear();
     selected_constraint_id_.reset();
     cancel_bone_pick();
@@ -619,14 +614,6 @@ void ui::canvas::scene::clear() {
         }
 		delete item;
 	}
-}
-
-void ui::canvas::scene::set_interactive_adornment(std::shared_ptr<interactive_adornment> adornment) {
-    interactive_adornment_ = std::move(adornment);
-}
-
-void ui::canvas::scene::clear_interactive_adornment() {
-    interactive_adornment_.reset();
 }
 
 void ui::canvas::scene::sync_selection() {
@@ -898,13 +885,6 @@ void ui::canvas::scene::keyPressEvent(QKeyEvent* event) {
         event->accept();
         return;
     }
-    if (interactive_adornment_) {
-        auto adornment = interactive_adornment_;
-        if (adornment->keyPressEvent(event)) {
-            event->accept();
-            return;
-        }
-    }
     if (artwork_ && artwork_->transform_editing() && !manager().animation_session_active()) {
         if (event->key() == Qt::Key_Escape) artwork_->cancel_transform();
         event->accept();
@@ -941,13 +921,6 @@ void ui::canvas::scene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
         event->accept();
         return;
     }
-    if (interactive_adornment_) {
-        auto adornment = interactive_adornment_;
-        if (adornment->mousePressEvent(event)) {
-            event->accept();
-            return;
-        }
-    }
     if (artwork_ && artwork_->transform_editing() && !manager().animation_session_active()) {
         if (event->button() == Qt::LeftButton) artwork_->begin_transform(event->scenePos());
         event->accept();
@@ -966,13 +939,6 @@ void ui::canvas::scene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
         event->accept();
         return;
     }
-    if (interactive_adornment_) {
-        auto adornment = interactive_adornment_;
-        if (adornment->mouseMoveEvent(event)) {
-            event->accept();
-            return;
-        }
-    }
     if (artwork_ && artwork_->transform_editing() && !manager().animation_session_active()) {
         artwork_->update_transform(event->scenePos());
         event->accept();
@@ -989,13 +955,6 @@ void ui::canvas::scene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
     if (bone_pick_active()) {
         event->accept();
         return;
-    }
-    if (interactive_adornment_) {
-        auto adornment = interactive_adornment_;
-        if (adornment->mouseReleaseEvent(event)) {
-            event->accept();
-            return;
-        }
     }
     if (artwork_ && artwork_->transform_editing() && !manager().animation_session_active()) {
         if (event->button() == Qt::LeftButton) artwork_->end_transform(event->scenePos());

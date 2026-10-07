@@ -51,11 +51,6 @@ namespace mdl {
                 const handle& v_hnd,
                 const sm::topology_edit_effects& effects);
         };
-        struct rename_state {
-            handle object;
-            std::string old_name;
-            std::string new_name;
-        };
         struct replace_skeleton_state {
             std::vector<sm::object_id> replacee_ids;
             sm::topology replacees;

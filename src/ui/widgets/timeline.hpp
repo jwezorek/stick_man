@@ -64,7 +64,6 @@ namespace ui {
             viewport()->update();
         }
         const std::vector<timeline_item>& items() const { return items_; }
-        void set_visible_range(qint64 first, qint64 last);
         qint64 time_at(double x) const;
         double x_at(qint64 time) const;
         void set_head_time(qint64 time);

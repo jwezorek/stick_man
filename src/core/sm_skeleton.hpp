@@ -190,9 +190,7 @@ namespace sm {
         void set_name(sm::skeleton& skel, const std::string& new_name);
         expected_bone create_bone(const std::string& name, node& u, node& v);
         expected_bone create_bone(object_id id, const std::string& name, node& u, node& v);
-        result from_json_str(const std::string& js);
         result from_json(const nlohmann::json& js);
-        std::string to_json_str() const;
         nlohmann::json to_json() const;
         void apply(matrix& mat);
     };

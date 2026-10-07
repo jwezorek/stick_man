@@ -31,8 +31,6 @@ namespace sm {
         const constraint_map& constraints
     );
 
-    double constrain_rotation(sm::bone& b, double theta);
-
     sm::point apply_rotation_constraints(
         const sm::point& curr_pos,
         sm::node& start_node,

@@ -26,7 +26,6 @@ namespace ui {
             QMetaObject::Connection tree_sel_conn_;
             QMetaObject::Connection tree_conn_;
             QMetaObject::Connection canv_sel_conn_;
-            QMetaObject::Connection canv_content_conn_;
 
             void connect_tree_sel_handler();
             void disconnect_tree_sel_handler();

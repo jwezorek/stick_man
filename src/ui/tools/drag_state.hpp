@@ -32,9 +32,6 @@ namespace ui {
             sm::node_ref axis_;
             sm::node_ref rotating_;
             sm::bone_ref bone_;
-            double initial_theta_;
-            double previous_pointer_theta_;
-            double gesture_angle_ = 0.0;
             std::unique_ptr<node_locs> old_locs_;
             edit_drag_mode mode_;
             double radius_;
@@ -55,9 +52,6 @@ namespace ui {
             sm::node& rotating();
             sm::bone& bone();
 
-            double initial_theta() const;
-            void update_pointer_theta(double theta);
-            double gesture_angle() const;
             const node_locs& old_node_locs() const;
             node_locs current_node_locs() const;
             edit_drag_mode mode() const;

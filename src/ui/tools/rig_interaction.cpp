@@ -751,7 +751,6 @@ void ui::tool::rig_interaction::handle_rotation(canvas::scene& c, QPointF pt, ro
     auto theta = sm::normalize_angle(
         sm::angle_from_u_to_v(ri.axis().world_pos(), from_qt_pt(pt))
     );
-    ri.update_pointer_theta(theta);
     auto theta_diff = theta -
         sm::angle_from_u_to_v(ri.axis().world_pos(), ri.rotating().world_pos());
     switch (ri.mode()) {

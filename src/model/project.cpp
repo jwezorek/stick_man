@@ -811,9 +811,6 @@ void mdl::project::rename_aux(handle id, const std::string& new_name) {
         }
     }, std::as_const(core_).get(id));
 }
-bool mdl::project::can_rename(skel_piece, const std::string&) {
-    return true;
-}
 bool mdl::project::rename(skel_piece piece, const std::string& new_name) {
     return rename(to_handle(piece), new_name);
 }
@@ -1012,10 +1009,6 @@ sm::result mdl::project::replace_skeletons(
         return preview.error();
     return execute_command(commands::make_replace_skeletons_command(
         replacees, replacements, regenerate_ids, *preview));
-}
-
-bool mdl::identical_pieces(mdl::skel_piece p1, mdl::skel_piece p2) {
-    return mdl::to_handle(p1) == mdl::to_handle(p2);
 }
 
 sm::result mdl::project::begin_animation_session(sm::object_id character_id, sm::object_id animation_id) {

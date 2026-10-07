@@ -1,4 +1,5 @@
 #include "model/project.hpp"
+#include "json.hpp"
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
@@ -72,7 +73,7 @@ void rejected_merges() {
     auto& b = p.create_skeleton({1, 0});
     own(p, { a });
     own(p, { b });
-    const auto before = p.topology().to_json_str();
+    const auto before = p.topology().to_json();
     const auto u = a.root_node().id(), v = b.root_node().id();
     require(p.can_create_bone(a.root_node(), b.root_node()) == sm::result::different_characters, "merge preflight");
     auto result = p.create_bone("bad", a.root_node(), b.root_node());
@@ -83,7 +84,7 @@ void rejected_merges() {
     model.undo();
     require(model.can_redo(), "redo fixture");
     require(model.add_bone(v, u) == sm::result::different_characters && model.can_redo(), "failure cleared redo");
-    require(before == p.topology().to_json_str(), "failed merge changed topology");
+    require(before == p.topology().to_json(), "failed merge changed topology");
     sm::topology scratch;
     require(!scratch.create_bone("bypass", a.root_node(), b.root_node()), "scratch accepted live endpoints");
     check(p);
@@ -184,10 +185,10 @@ void mixed_replacements() {
     auto sb = p.topology().skeleton(other_new)->get().copy_to(bad);
     require(sa && sb, "bad replacement fixture");
     require(bad.create_bone("bad", sa->get().root_node(), sb->get().root_node()).has_value(), "scratch merge fixture");
-    const auto before = p.topology().to_json_str();
+    const auto before = p.topology().to_json();
     auto change = p.replace_skeletons({sa->get().id(), other_new}, {sm::skel_ref(sa->get())});
     require(change.status == sm::result::different_characters, "cross-character replacement");
-    require(before == p.topology().to_json_str(), "invalid replacement mutated project");
+    require(before == p.topology().to_json(), "invalid replacement mutated project");
     check(p);
 }
 void adoption() {
@@ -197,7 +198,7 @@ void adoption() {
     auto& c = p.create_skeleton({2, 0});
     auto& f = foreign.create_skeleton({3, 0});
     const auto cid = own(p, {a});
-    const auto before = p.topology().to_json_str();
+    const auto before = p.topology().to_json();
     std::vector<sm::const_skel_ref> candidates{b, f};
     require(p.adopt_skeletons(cid, candidates) == sm::result::foreign_skeleton && b.is_loose(), "foreign adoption atomicity");
     candidates = {b, a};
@@ -206,7 +207,7 @@ void adoption() {
     require(p.adopt_skeletons(cid, candidates) == sm::result::duplicate_skeleton && b.is_loose(), "duplicate adoption atomicity");
     candidates = {b, c};
     require(p.adopt_skeletons(cid, candidates) == sm::result::success, "adoption");
-    require(p.character(cid)->get().rig().size() == 3 && before == p.topology().to_json_str(), "adoption changed topology");
+    require(p.character(cid)->get().rig().size() == 3 && before == p.topology().to_json(), "adoption changed topology");
     check(p);
     sm::topology copies;
     auto copy = b.copy_to(copies);
@@ -245,10 +246,10 @@ void explicit_replacement_state() {
     auto acopy = a.copy_to(scratch), bcopy = b.copy_to(scratch);
     require(acopy && bcopy, "explicit replacement fixture");
     require(scratch.create_bone("join", acopy->get().root_node(), bcopy->get().root_node()).has_value(), "scratch combine");
-    const auto before = p.topology().to_json_str();
+    const auto before = p.topology().to_json();
     auto result = p.replace_skeletons({aid, bid}, {*acopy}, {}, &state);
     require(result.status == sm::result::different_characters, "explicit state bypassed cross-character policy");
-    require(before == p.topology().to_json_str() && p.character(ca) && p.character(cb), "invalid explicit state changed project");
+    require(before == p.topology().to_json() && p.character(ca) && p.character(cb), "invalid explicit state changed project");
     check(p);
 }
 void remapped_split() {
@@ -286,9 +287,9 @@ void ambiguous_replacement() {
     const auto original = a.id(), cid = own(p, {a});
     sm::topology scratch;
     auto& replacement = scratch.create_skeleton(sm::point{2, 0});
-    const auto before = p.topology().to_json_str();
+    const auto before = p.topology().to_json();
     auto change = p.replace_skeletons({original}, {replacement});
-    require(change.status == sm::result::ambiguous_membership && before == p.topology().to_json_str(), "ambiguous ownership guessed");
+    require(change.status == sm::result::ambiguous_membership && before == p.topology().to_json(), "ambiguous ownership guessed");
     auto state = p.snapshot_membership({original});
     state.parents.clear();
     state.parents[replacement.id()] = cid;

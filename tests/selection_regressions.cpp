@@ -1,4 +1,5 @@
 #include "ui/stick_man.hpp"
+#include "json.hpp"
 #include "ui/panes/artwork_browser.hpp"
 #include "ui/canvas/artwork_layer.hpp"
 #include "ui/canvas/canvas_manager.hpp"
@@ -183,7 +184,7 @@ void artwork_canvas_test(fixture& f, bool visual) {
         "sprite orientation or painter order incorrect");
     require(
         layer.hit_test({ 35, 35 })->slot == "a_front", "sprite hit test must select front layer");
-    auto pose = model.topology().to_json_str();
+    auto pose = model.topology().to_json();
     auto current = [&]() { return model.core().artwork(id).appearances().at("Default").appearance_slots[1].transform; };
     require(layer.begin_transform({ 35, 35 }, ui::canvas::sprite_drag::translate),
         "sprite translate did not start");
@@ -191,7 +192,7 @@ void artwork_canvas_test(fixture& f, bool visual) {
     require(current().translation == sm::point{ 30, 30 }, "drag preview prematurely mutated Core");
     layer.end_transform({ 45, 55 });
     require(current().translation == sm::point{ 40, 50 }, "sprite translation incorrect");
-    require(model.topology().to_json_str() == pose, "sprite tool changed rig");
+    require(model.topology().to_json() == pose, "sprite tool changed rig");
     model.undo();
     require(current().translation == sm::point{ 30, 30 }, "drag did not undo in one step");
     model.redo();
@@ -272,7 +273,7 @@ void artwork_canvas_test(fixture& f, bool visual) {
     f.window.tool_mgr().mousePressEvent(f.canvas(), &press);
     QKeyEvent escape(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
     f.window.tool_mgr().keyPressEvent(f.canvas(), &escape);
-    require(!layer.dragging() && model.topology().to_json_str() == pose, "Sprite Transform Escape changed rig");
+    require(!layer.dragging() && model.topology().to_json() == pose, "Sprite Transform Escape changed rig");
     layer.begin_transform({ 500, 500 }, ui::canvas::sprite_drag::translate);
     require(!layer.selected_slot(), "empty canvas click should deselect the sprite");
     QTimer::singleShot(0, [] {
@@ -731,7 +732,7 @@ void character_test(fixture& f, const std::string& mode) {
         require(second.has_value(), "second character fixture");
         model.rename(*second, "Bob");
         model.undo(); // keep a redo entry through the rejected command
-        const auto before = model.topology().to_json_str();
+        const auto before = model.topology().to_json();
         ui::tool::add_bone tool;
         tool.init(f.window.canvases(), model);
         QGraphicsSceneMouseEvent press(QEvent::GraphicsSceneMousePress), release(QEvent::GraphicsSceneMouseRelease);
@@ -749,7 +750,7 @@ void character_test(fixture& f, const std::string& mode) {
                 }
         });
         tool.mouseReleaseEvent(f.canvas(), &release);
-        require(seen && model.topology().to_json_str() == before && model.can_redo(), "rejected Add Bone must show normal error, preserve project and redo");
+        require(seen && model.topology().to_json() == before && model.can_redo(), "rejected Add Bone must show normal error, preserve project and redo");
         model.undo();
         require(!model.core().character(*second) && model.core().character(id), "failed Add Bone must not create undo entry");
     } else throw std::runtime_error("unknown character test");

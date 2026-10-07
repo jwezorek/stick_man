@@ -1,5 +1,4 @@
 #include <cmath>
-#include <numbers>
 #include "sm_types.hpp"
 
 /*------------------------------------------------------------------------------------------------*/
@@ -88,10 +87,6 @@ sm::matrix sm::scale_matrix(double scale) {
     return mat;
 }
 
-sm::matrix sm::identity_matrix() {
-    return scale_matrix(1.0);
-}
-
 sm::matrix sm::translation_matrix(double x, double y) {
     matrix translation;
     translation <<
@@ -131,49 +126,4 @@ sm::matrix sm::rotate_about_point_matrix(const sm::point& pt, double theta) {
 double sm::angle_from_u_to_v(const sm::point& u, const sm::point& v) {
 	auto diff = v - u;
 	return std::atan2(diff.y, diff.x);
-}
-
-std::vector<sm::angle_range> sm::intersect_angle_ranges(
-		const angle_range& a, const angle_range& b) {
-	std::vector<angle_range> intersections;
-
-	constexpr double k_two_pi = 2.0 * std::numbers::pi;
-	double greaterAngle;
-	double greaterSweep;
-	double originAngle;
-	double originSweep;
-
-	if (a.start_angle < b.start_angle) {
-		originAngle = a.start_angle;
-		originSweep = a.span_angle;
-		greaterSweep = b.span_angle;
-		greaterAngle = b.start_angle;
-	}
-	else {
-		originAngle = b.start_angle;
-		originSweep = b.span_angle;
-		greaterSweep = a.span_angle;
-		greaterAngle = a.start_angle;
-	}
-	double greaterAngleRel = greaterAngle - originAngle;
-	if (greaterAngleRel < originSweep) {
-		intersections.emplace_back(greaterAngle, std::min(greaterSweep, originSweep - greaterAngleRel));
-	}
-	double rouno = greaterAngleRel + greaterSweep;
-	if (rouno > k_two_pi) {
-		intersections.emplace_back(originAngle, std::min(rouno - k_two_pi, originSweep));
-	}
-	return intersections;
-}
-
-bool sm::angle_in_range(double theta, const angle_range& range) {
-	auto end_angle = range.start_angle + range.span_angle;
-	if (end_angle <= std::numbers::pi) {
-		return theta >= range.start_angle && theta <= end_angle;
-	}
-	if (theta >= range.start_angle && theta <= std::numbers::pi) {
-		return true;
-	}
-	auto wrap_around = (end_angle - 2*std::numbers::pi);
-	return (theta >= -std::numbers::pi && theta <= wrap_around);
 }

@@ -551,14 +551,6 @@ sm::expected_bone sm::topology::create_bone(object_id id, const std::string& bon
     skel_u.on_new_bone(*bones_.back());
     return *bones_.back();
 }
-sm::result sm::topology::from_json_str(const std::string& str) {
-    try {
-        return from_json(json::parse(str));
-    }
-    catch (...) {
-        return sm::result::invalid_json;
-    }
-}
 sm::result sm::topology::from_json(const json& topology_json) {
     try {
         clear();
@@ -588,7 +580,6 @@ sm::result sm::topology::from_json(const json& topology_json) {
     }
     return sm::result::success;
 }
-std::string sm::topology::to_json_str() const { return to_json().dump(4); }
 json sm::topology::to_json() const {
     json skeleton_json = json::array();
     for (auto skel : skeletons()) {

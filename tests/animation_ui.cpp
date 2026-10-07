@@ -276,8 +276,6 @@ int main(int argc, char** argv) {
         require(editor->findChild<ui::pose_strip*>() != nullptr, "Pose Strip custom widget missing");
         require(editor->findChild<ui::timeline*>("artwork_timeline") != nullptr,
             "Artwork tab does not contain generic timeline");
-        require(editor->findChild<QPushButton*>("edit_pose_domain") != nullptr,
-            "Edit Pose Domain stub missing");
         require(editor->findChild<QPushButton*>("new_pose") != nullptr, "New Pose stub missing");
         require(editor->findChild<QToolButton*>("animation_transport_start") != nullptr &&
             editor->findChild<QToolButton*>("animation_transport_play") != nullptr &&

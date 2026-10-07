@@ -70,7 +70,6 @@ namespace sm {
     matrix scale_matrix(double scale);
     matrix translation_matrix(double x, double y);
     matrix translation_matrix(const point& pt);
-    matrix identity_matrix();
     double distance(const point& u, const point& v);
 	double normalize_angle(double theta);
 	double angular_distance(double theta1, double theta2);
@@ -81,10 +80,6 @@ namespace sm {
 		double span_angle;
 	};
 
-	bool angle_in_range(double theta, const angle_range& range);
-
-	std::vector<sm::angle_range> intersect_angle_ranges(
-		const angle_range& a, const angle_range& b);
 	enum class result {
 		success,
 		multi_parent_node,

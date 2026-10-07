@@ -149,11 +149,11 @@ void invalid_character_data_is_atomic() {
         const auto survivor_id = survivor.id();
         const auto survivor_character_id = make_character(destination, {&survivor});
         destination.rename(survivor_character_id, "Survivor");
-        const auto before_topology = destination.topology().to_json_str();
+        const auto before_topology = destination.topology().to_json();
 
         auto archive = archive_with_project_json(bad);
         require(destination.deserialize(archive) == expected, message);
-        require(destination.topology().to_json_str() == before_topology,
+        require(destination.topology().to_json() == before_topology,
             "rejected load changed existing topology");
         auto survivor_character = destination.character(survivor_character_id);
         require(survivor_character.has_value() && survivor_character->get().name() == "Survivor",

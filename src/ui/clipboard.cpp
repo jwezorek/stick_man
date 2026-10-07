@@ -364,9 +364,9 @@ namespace {
             (!payload.contains("topology") || !payload.contains("name") ||
                 !payload["name"].is_string()))
             return;
-        std::string topology_json_str = (character ? payload["topology"] : payload).dump();
+        const auto& topology_json = character ? payload["topology"] : payload;
         sm::topology clipboard_topology;
-        if (clipboard_topology.from_json_str(topology_json_str) != sm::result::success)
+        if (clipboard_topology.from_json(topology_json) != sm::result::success)
             return;
 
         auto& canvases = main_wnd.canvases();

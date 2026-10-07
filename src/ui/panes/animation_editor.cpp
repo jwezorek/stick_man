@@ -46,11 +46,6 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
     auto* body = new QHBoxLayout;
     auto* controls = new QVBoxLayout;
 
-    auto* edit_domain = new QPushButton(tr("Edit Pose Domain"), content);
-    edit_domain->setObjectName("edit_pose_domain");
-    edit_domain->setEnabled(false);
-    controls->addWidget(edit_domain);
-
     add_pose_ = new QPushButton(tr("Add Pose"), content);
     add_pose_->setObjectName("new_pose");
     controls->addWidget(add_pose_);

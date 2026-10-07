@@ -57,17 +57,6 @@ void ui::timeline::set_items(std::vector<timeline_item> items) {
     update_scrollbars();
 }
 
-void ui::timeline::set_visible_range(qint64 first, qint64 last) {
-    if (first < 0 || last <= first)
-        throw std::invalid_argument("Invalid visible time range");
-    origin_ = 0;
-    pixels_per_ms_ = double(qMax(1, viewport()->width() - gutter)) / double(last - first);
-    update_scrollbars();
-    const int offset = int(std::min(double(INT_MAX - 1), double(first) * pixels_per_ms_));
-    horizontalScrollBar()->setMaximum(qMax(horizontalScrollBar()->maximum(), offset));
-    horizontalScrollBar()->setValue(offset);
-}
-
 qint64 ui::timeline::time_at(double x) const {
     long double value = origin_ + (x - gutter + horizontalScrollBar()->value()) / pixels_per_ms_;
     return qint64(std::round(std::clamp(value, 0.0L,
