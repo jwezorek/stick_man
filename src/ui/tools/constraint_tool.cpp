@@ -65,9 +65,8 @@ sm::rotation_reference_kind ui::tool::constraint::current_reference_kind() const
 void ui::tool::constraint::update_settings_state() {
     if (!model_)
         return;
-    const bool session = model_ && model_->animation_mode();
     const bool rotation = current_operation() == operation::rotation;
-    if (operation_) operation_->setEnabled(!session);
+    if (operation_) operation_->setEnabled(true);
     reference_->setEnabled(rotation);
     reference_label_->setEnabled(rotation);
 }
@@ -171,7 +170,7 @@ void ui::tool::constraint::init(canvas::manager& canvases, mdl::project& model) 
     update_settings_state();
 }
 
-void ui::tool::constraint::set_animation_mode(bool active) {
+void ui::tool::constraint::set_animation_mode(bool) {
     if (!settings_)
         return;
     if (canvases_) {
@@ -184,7 +183,6 @@ void ui::tool::constraint::set_animation_mode(bool active) {
             canv->clear_constraint_selection();
         }
     }
-    if (active) operation_->setCurrentIndex(int(operation::rotation));
     update_settings_state();
 }
 
@@ -496,7 +494,8 @@ void ui::tool::constraint::mousePressEvent(canvas::scene& canv, QGraphicsSceneMo
         return;
     }
 
-    if (current_operation() == operation::rigid_triangle && !item) {
+    if (current_operation() == operation::rigid_triangle && !item &&
+            !(model_ && model_->animation_mode())) {
         begin_triangle_sweep(canv, event->scenePos());
         press_handled_ = true;
     }
@@ -675,6 +674,10 @@ void ui::tool::constraint::mouseReleaseEvent(canvas::scene& canv, QGraphicsScene
         create_rotation(canv, bone->model());
         return;
     case operation::rigid_triangle:
+        // Transition-local rigid triangles are not implemented yet.  Keep the
+        // operation selectable in Animation Mode, but make creation a no-op.
+        if (model_ && model_->animation_mode())
+            return;
         create_triangle(canv, bone->model());
         return;
     }

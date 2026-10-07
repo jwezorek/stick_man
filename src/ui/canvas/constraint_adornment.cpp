@@ -19,32 +19,54 @@ constexpr double k_hit_width_px = 12.0;
 constexpr double k_z = 40.0;
 constexpr double k_triangle_z = 4.0; // Below bones (z=5) and nodes (z=10).
 
-QColor normal_color(bool transition_local) { return transition_local ? QColor("deepskyblue") : QColor("mediumpurple"); }
-QColor hover_color(bool transition_local) { return transition_local ? QColor("cyan") : QColor("orange"); }
-QColor selected_color(bool transition_local) { return transition_local ? QColor("cyan") : ui::canvas::k_sel_color; }
+enum class adornment_role {
+    persistent,
+    outgoing_transition,
+    incoming_lock
+};
+
+QColor normal_color(adornment_role role) {
+    if (role == adornment_role::incoming_lock) return QColor(128, 128, 128);
+    return role == adornment_role::outgoing_transition ? QColor("deepskyblue") : QColor("mediumpurple");
+}
+QColor hover_color(adornment_role role) {
+    if (role == adornment_role::incoming_lock) return QColor(128, 128, 128);
+    return role == adornment_role::outgoing_transition ? QColor("cyan") : QColor("orange");
+}
+QColor selected_color(adornment_role role) {
+    if (role == adornment_role::incoming_lock) return QColor(128, 128, 128);
+    return role == adornment_role::outgoing_transition ? QColor("cyan") : ui::canvas::k_sel_color;
+}
 
 class constraint_graphic {
 public:
-    constraint_graphic(sm::object_id id, ui::canvas::constraint_part part, bool transition_local)
-        : id_(id), part_(part), transition_local_(transition_local) {}
+    constraint_graphic(sm::object_id id, ui::canvas::constraint_part part, adornment_role role,
+        bool interactive = true)
+        : id_(id), part_(part), role_(role), interactive_(interactive) {}
     virtual ~constraint_graphic() = default;
     sm::object_id constraint_id() const { return id_; }
     ui::canvas::constraint_part part() const { return part_; }
-    bool transition_local() const { return transition_local_; }
+    bool transition_local() const { return role_ == adornment_role::outgoing_transition; }
+    adornment_role role() const { return role_; }
+    bool interactive() const { return interactive_; }
     virtual void set_constraint_state(bool selected, bool hovered) = 0;
 private:
     sm::object_id id_;
     ui::canvas::constraint_part part_;
-    bool transition_local_ = false;
+    adornment_role role_ = adornment_role::persistent;
+    bool interactive_ = true;
 };
 
 class path_graphic final : public QGraphicsPathItem, public constraint_graphic {
 public:
     path_graphic(sm::object_id id, ui::canvas::constraint_part part, double scale,
-        bool filled = false, bool transition_local = false)
-        : constraint_graphic(id, part, transition_local), hit_width_(k_hit_width_px / scale), scale_(scale), filled_(filled) {
+        bool filled = false, adornment_role role = adornment_role::persistent, bool interactive = true)
+        : constraint_graphic(id, part, role, interactive), hit_width_(k_hit_width_px / scale),
+          scale_(scale), filled_(filled) {
         setZValue(k_z);
         setBrush(Qt::NoBrush);
+        if (!interactive)
+            setAcceptedMouseButtons(Qt::NoButton);
     }
     QPainterPath shape() const override {
         QPainterPathStroker stroker;
@@ -57,7 +79,7 @@ public:
         return result;
     }
     void set_constraint_state(bool selected, bool hovered) override {
-        const QColor color = selected ? selected_color(transition_local()) : hovered ? hover_color(transition_local()) : normal_color(transition_local());
+        const QColor color = selected ? selected_color(role()) : hovered ? hover_color(role()) : normal_color(role());
         const double width = (selected ? 3.5 : hovered ? 3.0 : 2.0) / scale_;
         setPen(QPen(color, width, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         if (filled_) {
@@ -77,14 +99,14 @@ private:
 class handle_graphic final : public QGraphicsEllipseItem, public constraint_graphic {
 public:
     handle_graphic(sm::object_id id, ui::canvas::constraint_part part, QPointF center, double scale,
-        bool transition_local = false)
-        : constraint_graphic(id, part, transition_local), scale_(scale) {
+        adornment_role role = adornment_role::persistent)
+        : constraint_graphic(id, part, role), scale_(scale) {
         const double r = k_handle_radius_px / scale;
         setRect(QRectF(center - QPointF(r, r), QSizeF(2 * r, 2 * r)));
         setZValue(k_z + 1.0);
     }
     void set_constraint_state(bool selected, bool hovered) override {
-        const QColor color = selected ? selected_color(transition_local()) : hovered ? hover_color(transition_local()) : normal_color(transition_local());
+        const QColor color = selected ? selected_color(role()) : hovered ? hover_color(role()) : normal_color(role());
         setBrush(color);
         setPen(QPen(Qt::black, 1.0 / scale_));
     }
@@ -95,13 +117,14 @@ private:
 class triangle_graphic final : public QGraphicsPolygonItem, public constraint_graphic {
 public:
     triangle_graphic(sm::object_id id, const QPolygonF& polygon, double scale)
-        : constraint_graphic(id, ui::canvas::constraint_part::body, false), scale_(scale) {
+        : constraint_graphic(id, ui::canvas::constraint_part::body, adornment_role::persistent), scale_(scale) {
         setPolygon(polygon);
         setZValue(k_triangle_z);
     }
     void set_constraint_state(bool selected, bool hovered) override {
         setBrush(QColor(128, 128, 128));
-        const QColor outline = selected ? selected_color(false) : hovered ? hover_color(false) : QColor(90, 90, 90);
+        const QColor outline = selected ? selected_color(adornment_role::persistent) :
+            hovered ? hover_color(adornment_role::persistent) : QColor(90, 90, 90);
         const double width = (selected ? 2.5 : hovered ? 2.0 : 1.0) / scale_;
         setPen(QPen(outline, width, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     }
@@ -115,7 +138,7 @@ private:
 class triangle_angle_hit_graphic final : public QGraphicsEllipseItem, public constraint_graphic {
 public:
     triangle_angle_hit_graphic(sm::object_id id, QPointF center, double scale)
-        : constraint_graphic(id, ui::canvas::constraint_part::triangle_angle, false) {
+        : constraint_graphic(id, ui::canvas::constraint_part::triangle_angle, adornment_role::persistent) {
         const double r = ui::canvas::k_node_radius / scale;
         setRect(QRectF(center - QPointF(r, r), QSizeF(2 * r, 2 * r)));
         setZValue(k_triangle_z + 0.5);
@@ -182,6 +205,23 @@ double rotation_reference_angle(const sm::topology& topology, const sm::rotation
     return 0.0;
 }
 
+QGraphicsPathItem* make_lock_badge(QPointF position) {
+    auto* lock = new QGraphicsPathItem;
+    QPainterPath path;
+    path.addRoundedRect(QRectF(-4, -2, 8, 7), 1, 1);
+    path.moveTo(-2, -2);
+    path.arcTo(QRectF(-2, -7, 4, 8), 0, 180);
+    lock->setPath(path);
+    lock->setPos(position);
+    lock->setBrush(Qt::white);
+    lock->setPen(QPen(QColor(80, 80, 80), 1.4));
+    lock->setZValue(k_z + 2.0);
+    lock->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+    lock->setAcceptedMouseButtons(Qt::NoButton);
+    lock->setToolTip(QStringLiteral("Rotation locked by previous transition."));
+    return lock;
+}
+
 } // namespace
 
 ui::canvas::constraint_adornment_layer::constraint_adornment_layer(scene& owner) : owner_(owner) {}
@@ -199,12 +239,13 @@ void ui::canvas::constraint_adornment_layer::clear() {
 
 void ui::canvas::constraint_adornment_layer::sync(
         const sm::topology& topology, const sm::constraint_map& constraints,
-        const sm::constraint_map& transition_constraints, double scale) {
+        const sm::constraint_map& transition_constraints,
+        const sm::constraint_map& incoming_locked_constraints, double scale) {
     clear();
-    auto add = [&](const sm::constraint_map& source, bool transition_local) {
+    auto add = [&](const sm::constraint_map& source, adornment_role role) {
     for (const auto& [id, constraint] : source) {
         visual v;
-        v.transition_local = transition_local;
+        v.transition_local = role == adornment_role::outgoing_transition;
         if (auto rotation = constraint.rotation()) {
             auto target = topology.get<sm::bone>(rotation->target_bone);
             if (!target) continue;
@@ -212,21 +253,31 @@ void ui::canvas::constraint_adornment_layer::sync(
                 rotation->reference.kind == sm::rotation_reference_kind::parent;
             const QPointF pivot = rotation->reference.kind == sm::rotation_reference_kind::world
                 ? bone_midpoint(target->get()) : ui::to_qt_pt(target->get().parent_node().world_pos());
+            const double radial_offset_px = role == adornment_role::outgoing_transition ? 8.0 :
+                role == adornment_role::incoming_lock ? 16.0 : 0.0;
             const double radius = ((filled_wedge ? k_rotation_wedge_radius_px : k_rotation_arc_radius_px)
-                + (transition_local ? 8.0 : 0.0)) / scale;
+                + radial_offset_px) / scale;
             const double start = rotation_reference_angle(topology, *rotation) + rotation->allowed.start_angle;
             const double end = start + rotation->allowed.span_angle;
-            auto* body = new path_graphic(id, constraint_part::body, scale, filled_wedge, transition_local);
+            const bool incoming_lock = role == adornment_role::incoming_lock;
+            auto* body = new path_graphic(id, constraint_part::body, scale, filled_wedge, role, !incoming_lock);
             body->setPath(filled_wedge ? wedge_path(pivot, radius, start, rotation->allowed.span_angle)
                                       : arc_path(pivot, radius, start, rotation->allowed.span_angle));
             owner_.addItem(body); v.graphics.push_back(body);
-            auto* min_handle = new handle_graphic(id, constraint_part::rotation_min,
-                radial(pivot, radius, start), scale, transition_local);
-            auto* max_handle = new handle_graphic(id, constraint_part::rotation_max,
-                radial(pivot, radius, end), scale, transition_local);
-            owner_.addItem(min_handle); owner_.addItem(max_handle);
-            v.graphics.push_back(min_handle); v.graphics.push_back(max_handle);
-        } else if (!transition_local) {
+            if (incoming_lock) {
+                const double badge_angle = start + rotation->allowed.span_angle / 2.0;
+                auto* badge = make_lock_badge(radial(pivot, radius + 12.0 / scale, badge_angle));
+                owner_.addItem(badge);
+                v.graphics.push_back(badge);
+            } else {
+                auto* min_handle = new handle_graphic(id, constraint_part::rotation_min,
+                    radial(pivot, radius, start), scale, role);
+                auto* max_handle = new handle_graphic(id, constraint_part::rotation_max,
+                    radial(pivot, radius, end), scale, role);
+                owner_.addItem(min_handle); owner_.addItem(max_handle);
+                v.graphics.push_back(min_handle); v.graphics.push_back(max_handle);
+            }
+        } else if (role == adornment_role::persistent) {
             auto triangle = constraint.triangle();
             auto first = topology.get<sm::bone>(triangle->first_bone);
             auto second = topology.get<sm::bone>(triangle->second_bone);
@@ -246,8 +297,9 @@ void ui::canvas::constraint_adornment_layer::sync(
         }
         visuals_.emplace(id, std::move(v));
     }};
-    add(constraints, false);
-    add(transition_constraints, true);
+    add(constraints, adornment_role::persistent);
+    add(transition_constraints, adornment_role::outgoing_transition);
+    add(incoming_locked_constraints, adornment_role::incoming_lock);
     if (selected_ && !visuals_.contains(*selected_)) selected_.reset();
     if (hovered_ && !visuals_.contains(*hovered_)) hovered_.reset();
     update_styles();
@@ -307,7 +359,7 @@ std::optional<ui::canvas::constraint_hit> ui::canvas::constraint_adornment_layer
         return {};
     for (auto* graphic : owner_.items(point, Qt::IntersectsItemShape, Qt::DescendingOrder,
             owner_.views().isEmpty() ? QTransform{} : owner_.views().first()->viewportTransform())) {
-        if (auto* item = dynamic_cast<const constraint_graphic*>(graphic))
+        if (auto* item = dynamic_cast<const constraint_graphic*>(graphic); item && item->interactive())
             return constraint_hit{item->constraint_id(), item->part(), item->transition_local()};
     }
     return {};

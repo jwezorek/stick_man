@@ -288,12 +288,14 @@ void ui::canvas::scene::sync_to_model() {
     if (model_) {
         const auto& constraints = model_->display_topology().constraints();
         const auto transition_constraints = model_->animation_session_rotation_constraints();
+        const auto incoming_locked_constraints = model_->animation_session_incoming_rotation_constraints();
         if (selected_constraint_id_ && !constraints.contains(*selected_constraint_id_)
                 && !transition_constraints.contains(*selected_constraint_id_)) {
             selected_constraint_id_.reset();
             selected_transition_constraint_cache_.reset();
         }
-        constraint_adornments_->sync(model_->display_topology(), constraints, transition_constraints, scale());
+        constraint_adornments_->sync(model_->display_topology(), constraints, transition_constraints,
+            incoming_locked_constraints, scale());
         constraint_adornments_->set_visible(constraints_visible());
         constraint_adornments_->set_selected(selected_constraint_id_);
     }

@@ -30,7 +30,8 @@ public:
     ~constraint_adornment_layer();
 
     void sync(const sm::topology& topology, const sm::constraint_map& constraints,
-        const sm::constraint_map& transition_constraints, double scale);
+        const sm::constraint_map& transition_constraints,
+        const sm::constraint_map& incoming_locked_constraints, double scale);
     void clear();
     void set_visible(bool visible);
     bool visible() const noexcept { return visible_; }

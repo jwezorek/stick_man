@@ -45,6 +45,10 @@ namespace mdl {
             sm::topology working_topology;
             sm::animation_assets original_animation_data;
             std::optional<sm::object_id> selected_keyframe;
+            // The final keyframe has no Core transition yet, but pins still need
+            // to participate in authoring/IK there.  Keep the would-be outgoing
+            // transition pins in session state until a transition is created.
+            std::unordered_set<sm::object_id> terminal_pinned_nodes;
             std::size_t authored_depth = 0;
             std::stack<command> redo_stack;
             std::stack<command> undo_stack;
@@ -103,6 +107,7 @@ namespace mdl {
         sm::result update_animation_rotation_constraint(sm::object_id id, sm::rotation_constraint definition);
         sm::result remove_animation_rotation_constraint(sm::object_id id);
         std::unordered_set<sm::object_id> animation_session_incoming_locked_nodes() const;
+        sm::constraint_map animation_session_incoming_rotation_constraints() const;
         std::optional<std::string> animation_session_incoming_lock_source_label(sm::object_id node) const;
         sm::result set_animation_transition_duration(sm::object_id transition, double seconds);
         sm::result insert_animation_keyframe(double seconds);

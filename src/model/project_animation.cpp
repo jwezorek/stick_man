@@ -376,6 +376,11 @@ sm::result mdl::project::begin_animation_session(sm::object_id character_id, sm:
     }
     if (!source_animation->keyframes.empty())
         session.selected_keyframe = source_animation->keyframes.front().id;
+    // Match the existing append behavior: a newly appended transition inherits
+    // the preceding transition's pins unless the user changes them on the final
+    // frame first.  Unlike a real transition, this terminal state is editor-only.
+    if (!source_animation->transitions.empty())
+        session.terminal_pinned_nodes = source_animation->transitions.back().pinned_nodes;
     animation_session_ = std::move(session);
     if (animation_session_->selected_keyframe) {
         const auto* a = core_.animation_data(character_id).find_animation(animation_id);
@@ -437,9 +442,13 @@ std::unordered_set<sm::object_id> mdl::project::animation_session_pinned_nodes()
     if (!animation)
         return {};
     const auto index = animation->keyframe_index(*animation_session_->selected_keyframe);
-    return index && *index < animation->transitions.size()
-        ? animation->transitions[*index].pinned_nodes
-        : std::unordered_set<sm::object_id>{};
+    if (!index)
+        return {};
+    if (*index < animation->transitions.size())
+        return animation->transitions[*index].pinned_nodes;
+    if (*index + 1 == animation->keyframes.size())
+        return animation_session_->terminal_pinned_nodes;
+    return {};
 }
 
 sm::constraint_map mdl::project::animation_session_rotation_constraints() const {
@@ -659,6 +668,19 @@ std::unordered_set<sm::object_id> mdl::project::animation_session_incoming_locke
     return animation->transitions[*index - 1].pinned_nodes;
 }
 
+sm::constraint_map mdl::project::animation_session_incoming_rotation_constraints() const {
+    if (!animation_session_ || animation_preview_active() || !animation_session_->selected_keyframe)
+        return {};
+    const auto* animation = core_.animation_data(animation_session_->character).find_animation(
+        animation_session_->animation);
+    if (!animation)
+        return {};
+    const auto index = animation->keyframe_index(*animation_session_->selected_keyframe);
+    if (!index || *index == 0)
+        return {};
+    return animation->transitions[*index - 1].rotation_constraints;
+}
+
 std::optional<std::string> mdl::project::animation_session_incoming_lock_source_label(sm::object_id node) const {
     if (!animation_session_ || !animation_session_->selected_keyframe)
         return {};
@@ -687,8 +709,38 @@ sm::result mdl::project::set_animation_outgoing_transition_node_pinned(sm::objec
     if (!animation)
         return sm::result::not_found;
     const auto index = animation->keyframe_index(keyframe_id);
-    if (!index || *index >= animation->transitions.size())
+    if (!index)
         return sm::result::not_found;
+
+    // The final keyframe has no outgoing Core transition.  Pins there are still
+    // useful to the pose editor/IK solver, so store them as an undoable piece of
+    // animation-session state.  They become the pins of the transition when a
+    // new keyframe is appended or the final keyframe is duplicated.
+    if (*index == animation->transitions.size()) {
+        if (*index + 1 != animation->keyframes.size())
+            return sm::result::invalid_animation;
+        const bool before = animation_session_->terminal_pinned_nodes.contains(node_id);
+        if (before == pinned)
+            return sm::result::success;
+        auto apply = [keyframe_id, node_id](project& p, bool value) {
+            if (value) p.animation_session_->terminal_pinned_nodes.insert(node_id);
+            else p.animation_session_->terminal_pinned_nodes.erase(node_id);
+            p.animation_session_->selected_keyframe = keyframe_id;
+            emit p.animation_preview_changed();
+            emit p.refresh_canvas(p, false);
+        };
+        command cmd{
+            [apply, pinned](project& p) { apply(p, pinned); return sm::result::success; },
+            [apply, before](project& p) { apply(p, before); }
+        };
+        // This state is intentionally not persisted unless/until an actual
+        // transition is created, so it must not make the document dirty by itself.
+        cmd.animation_edit = false;
+        return execute_session_command(cmd);
+    }
+    if (*index > animation->transitions.size())
+        return sm::result::invalid_animation;
+
     auto& transition = animation->transitions[*index];
     const auto transition_id = transition.id;
     const bool before = transition.pinned_nodes.contains(node_id);
@@ -774,9 +826,10 @@ sm::result mdl::project::add_animation_keyframe() {
     const auto keyframe_id = keyframe.id;
     if (!after.keyframes.empty()) {
         sm::pose_transition transition;
-        // Carry the preceding transition constraints onto the new interval.
+        // Pins on the terminal frame describe this not-yet-created interval.
+        // Rotation constraints still use the existing carry-forward behavior.
+        transition.pinned_nodes = animation_session_->terminal_pinned_nodes;
         if (!after.transitions.empty()) {
-            transition.pinned_nodes = after.transitions.back().pinned_nodes;
             transition.rotation_constraints = clone_transition_rotation_constraints(
                 after.transitions.back().rotation_constraints);
         }
@@ -861,8 +914,8 @@ sm::result mdl::project::duplicate_animation_keyframe() {
         after.transitions.insert(after.transitions.begin() + *index, std::move(inserted));
     } else {
         sm::pose_transition appended;
+        appended.pinned_nodes = animation_session_->terminal_pinned_nodes;
         if (!after.transitions.empty()) {
-            appended.pinned_nodes = after.transitions.back().pinned_nodes;
             appended.rotation_constraints = clone_transition_rotation_constraints(
                 after.transitions.back().rotation_constraints);
         }
