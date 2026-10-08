@@ -8,14 +8,14 @@ namespace ui {
     namespace canvas { class manager; }
     namespace pane {
         // Dock/visibility ownership is independent of the Skeleton tree.
-        class selection_properties_pane : public QDockWidget {
-            selection_properties* properties_;
+        class properties_pane : public QDockWidget {
+            properties_widget* properties_;
             canvas::manager* canvases_ = nullptr;
         public:
-            explicit selection_properties_pane(ui::stick_man* window);
+            explicit properties_pane(ui::stick_man* window);
             void init(canvas::manager& canvases, mdl::project& project);
             void set_animation_mode(bool active);
-            selection_properties& properties() const { return *properties_; }
+            properties_widget& properties() const { return *properties_; }
         };
     }
 }

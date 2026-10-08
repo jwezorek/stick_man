@@ -31,7 +31,7 @@ namespace ui {
 
     namespace pane {
 
-        class selection_properties : public QStackedWidget {
+        class properties_widget : public QStackedWidget {
             std::unordered_map<selection_type, props::props_box*> props_;
             props::current_canvas_fn current_canvas_;
             bool read_only_ = false;
@@ -40,7 +40,7 @@ namespace ui {
             void apply_read_only(props::props_box& props);
 
         public:
-            selection_properties(const props::current_canvas_fn& fn, QWidget* parent = nullptr);
+            properties_widget(const props::current_canvas_fn& fn, QWidget* parent = nullptr);
             props::props_box* current_props() const;
             void set(const canvas::scene& canv);
             void init(canvas::manager& canvases, mdl::project& proj);

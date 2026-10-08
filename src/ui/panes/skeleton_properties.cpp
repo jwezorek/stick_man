@@ -8,7 +8,7 @@
 /*------------------------------------------------------------------------------------------------*/
 
 ui::pane::props::skeletons::skeletons(
-        const current_canvas_fn& fn,  selection_properties* parent) :
+        const current_canvas_fn& fn,  properties_widget* parent) :
     props_box(fn, parent, "skeleton selection") {
 }
 
@@ -75,7 +75,7 @@ void ui::pane::props::skeletons::set_selection(const ui::canvas::scene& canv) {
     }
 }
 
-ui::pane::props::character::character(const current_canvas_fn& fn, selection_properties* parent) :
+ui::pane::props::character::character(const current_canvas_fn& fn, properties_widget* parent) :
     props_box(fn, parent, "character selection") {}
 
 void ui::pane::props::character::populate(mdl::project&) {

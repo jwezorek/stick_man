@@ -55,7 +55,7 @@ namespace {
 
 /*------------------------------------------------------------------------------------------------*/
 
-ui::pane::selection_properties::selection_properties(const props::current_canvas_fn& fn,
+ui::pane::properties_widget::properties_widget(const props::current_canvas_fn& fn,
             QWidget* parent) :
         QStackedWidget(parent),
 		props_{
@@ -76,13 +76,13 @@ ui::pane::selection_properties::selection_properties(const props::current_canvas
 	}
 }
 
-ui::pane::props::props_box* ui::pane::selection_properties::current_props() const {
+ui::pane::props::props_box* ui::pane::properties_widget::current_props() const {
 	return static_cast<props::props_box*>(
         static_cast<QScrollArea*>(currentWidget())->widget()
     );
 }
 
-void ui::pane::selection_properties::set(const ui::canvas::scene& canv) {
+void ui::pane::properties_widget::set(const ui::canvas::scene& canv) {
 	auto* old_props = current_props();
 
     QScrollArea* scroller = nullptr;
@@ -106,11 +106,11 @@ void ui::pane::selection_properties::set(const ui::canvas::scene& canv) {
 	}
 }
 
-void ui::pane::selection_properties::handle_selection_changed(canvas::scene& canv) {
+void ui::pane::properties_widget::handle_selection_changed(canvas::scene& canv) {
     set(canv);
 }
 
-void ui::pane::selection_properties::apply_read_only(props::props_box& props) {
+void ui::pane::properties_widget::apply_read_only(props::props_box& props) {
     for (auto* edit : props.findChildren<QLineEdit*>())
         edit->setReadOnly(read_only_);
 
@@ -124,13 +124,13 @@ void ui::pane::selection_properties::apply_read_only(props::props_box& props) {
             button->setEnabled(!read_only_);
 }
 
-void ui::pane::selection_properties::set_read_only(bool read_only) {
+void ui::pane::properties_widget::set_read_only(bool read_only) {
     read_only_ = read_only;
     for (const auto& [_, prop_box] : props_)
         apply_read_only(*prop_box);
 }
 
-void ui::pane::selection_properties::init(canvas::manager& canvases, mdl::project& proj)
+void ui::pane::properties_widget::init(canvas::manager& canvases, mdl::project& proj)
 {
     for (const auto& [key, prop_box] : props_) {
         prop_box->init(proj);
@@ -141,10 +141,10 @@ void ui::pane::selection_properties::init(canvas::manager& canvases, mdl::projec
     // use the view-selection signal rather than the persistent-project-only one.
     connect(&canvases, &canvas::manager::view_selection_changed,
         this,
-        &selection_properties::handle_selection_changed
+        &properties_widget::handle_selection_changed
     );
 }
 
-bool ui::pane::selection_properties::validate_props_name_change(const std::string&) const {
+bool ui::pane::properties_widget::validate_props_name_change(const std::string&) const {
     return !read_only_ && canvas::selected_single_model(current_canvas_()).has_value();
 }

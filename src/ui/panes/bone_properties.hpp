@@ -17,7 +17,7 @@ namespace ui {
                 rotation_tab* rotation_;
 
             public:
-                bones(const current_canvas_fn& fn, selection_properties* parent);
+                bones(const current_canvas_fn& fn, properties_widget* parent);
 
                 void populate(mdl::project& proj) override;
                 bool is_multi(const ui::canvas::scene& canv) override;

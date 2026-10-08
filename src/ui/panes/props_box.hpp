@@ -13,7 +13,7 @@ namespace ui {
     }
 
     namespace pane {
-        class selection_properties;
+        class properties_widget;
 
         namespace props {
 
@@ -26,7 +26,7 @@ namespace ui {
                 QVBoxLayout* layout_;
                 QLabel* title_;
                 current_canvas_fn get_current_canv_;
-                ui::pane::selection_properties* parent_;
+                ui::pane::properties_widget* parent_;
                 mdl::project* proj_;
 
                 void do_property_name_change(const std::string& new_name);
@@ -35,7 +35,7 @@ namespace ui {
 
             public:
                 props_box(const current_canvas_fn& fn,
-                    ui::pane::selection_properties* parent, QString title);
+                    ui::pane::properties_widget* parent, QString title);
                 void set_title(QString title);
                 void init(mdl::project& proj);
                 virtual void populate(mdl::project& proj);
@@ -45,7 +45,7 @@ namespace ui {
 
             class single_or_multi_props_widget : public props_box {
             public:
-                single_or_multi_props_widget(const current_canvas_fn& fn, selection_properties* parent,
+                single_or_multi_props_widget(const current_canvas_fn& fn, properties_widget* parent,
                     QString title);
                 void set_selection(const ui::canvas::scene& canv) override;
                 virtual void set_selection_common(const ui::canvas::scene& canv) = 0;
@@ -56,7 +56,7 @@ namespace ui {
 
             class no_properties : public props_box {
             public:
-                no_properties(const current_canvas_fn& fn, selection_properties* parent);
+                no_properties(const current_canvas_fn& fn, properties_widget* parent);
                 void set_selection(const ui::canvas::scene& canv) override;
             };
 
@@ -65,7 +65,7 @@ namespace ui {
                 nodes* nodes_;
                 bones* bones_;
             public:
-                mixed_properties(const current_canvas_fn& fn, selection_properties* parent);
+                mixed_properties(const current_canvas_fn& fn, properties_widget* parent);
                 void populate(mdl::project& proj) override;
                 void set_selection(const ui::canvas::scene& canv) override;
                 void lose_selection() override;

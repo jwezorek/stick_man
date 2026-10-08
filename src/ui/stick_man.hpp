@@ -11,7 +11,7 @@ namespace ui {
     namespace pane {
         class animation;
         class skeleton;
-        class selection_properties_pane;
+        class properties_pane;
         class tools;
     }
 
@@ -39,7 +39,7 @@ namespace ui {
         mdl::project& project();
         pane::tool_settings& tool_pane();
         pane::skeleton& skel_pane();
-        pane::selection_properties_pane& selection_pane();
+        pane::properties_pane& properties_pane();
         canvas::manager& canvases();
 
     private:
@@ -64,7 +64,7 @@ namespace ui {
         pane::animation* anim_pane_;
         pane::tool_settings* tool_pane_;
         pane::skeleton * skel_pane_;
-        pane::selection_properties_pane* selection_pane_;
+        pane::properties_pane* properties_pane_;
         canvas::manager* canvases_;
         mdl::project project_;
         QString current_file_path_;

@@ -27,7 +27,7 @@ class constraint_properties : public props_box {
     void update_triangle(std::function<void(sm::rigid_triangle_constraint&)> edit);
 
 public:
-    constraint_properties(const current_canvas_fn& fn, selection_properties* parent);
+    constraint_properties(const current_canvas_fn& fn, properties_widget* parent);
     void populate(mdl::project& proj) override;
     void set_selection(const ui::canvas::scene& canv) override;
     void lose_selection() override;

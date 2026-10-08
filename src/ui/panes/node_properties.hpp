@@ -16,7 +16,7 @@ namespace ui {
                 node_position_tab* positions_;
 
             public:
-                nodes(const current_canvas_fn& fn, selection_properties* parent);
+                nodes(const current_canvas_fn& fn, properties_widget* parent);
 
                 void populate(mdl::project& proj) override;
                 void set_selection_common(const ui::canvas::scene& canv) override;

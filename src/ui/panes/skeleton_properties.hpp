@@ -12,7 +12,7 @@ namespace ui {
                 labeled_hyperlink* character_;
                 QPushButton* make_;
             public:
-                skeletons(const current_canvas_fn& fn, selection_properties* parent);
+                skeletons(const current_canvas_fn& fn, properties_widget* parent);
                 void populate(mdl::project& proj) override;
                 void set_selection(const ui::canvas::scene& canv) override;
             };
@@ -21,7 +21,7 @@ namespace ui {
                 QLabel* count_;
                 QScrollArea* skeletons_;
             public:
-                character(const current_canvas_fn& fn, selection_properties* parent);
+                character(const current_canvas_fn& fn, properties_widget* parent);
                 void populate(mdl::project& proj) override;
                 void set_selection(const ui::canvas::scene& canv) override;
             };

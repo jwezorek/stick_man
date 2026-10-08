@@ -6,7 +6,7 @@
 
 ui::pane::props::props_box::props_box(
         const current_canvas_fn& fn,
-        selection_properties* parent, QString title) :
+        properties_widget* parent, QString title) :
     QWidget(parent),
     get_current_canv_(fn),
     parent_(parent),
@@ -59,7 +59,7 @@ void ui::pane::props::props_box::lose_selection() {
 /*------------------------------------------------------------------------------------------------*/
 
 ui::pane::props::single_or_multi_props_widget::single_or_multi_props_widget(
-        const props::current_canvas_fn& fn, selection_properties* parent, QString title) :
+        const props::current_canvas_fn& fn, properties_widget* parent, QString title) :
     props::props_box(fn, parent, title)
 {}
 
@@ -76,7 +76,7 @@ void ui::pane::props::single_or_multi_props_widget::set_selection(const ui::canv
 /*------------------------------------------------------------------------------------------------*/
 
 ui::pane::props::no_properties::no_properties(const props::current_canvas_fn& fn,
-        selection_properties* parent) :
+        properties_widget* parent) :
         props_box(fn, parent, "no selection") {
 }
 
@@ -86,7 +86,7 @@ void ui::pane::props::no_properties::set_selection(const ui::canvas::scene& canv
 /*------------------------------------------------------------------------------------------------*/
 
 ui::pane::props::mixed_properties::mixed_properties::mixed_properties(
-        const current_canvas_fn& fn, selection_properties* parent) :
+        const current_canvas_fn& fn, properties_widget* parent) :
     props_box(fn, parent, "") {
 }
 

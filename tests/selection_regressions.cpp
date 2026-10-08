@@ -13,7 +13,7 @@
 #include "ui/panes/bone_properties.hpp"
 #include "ui/panes/constraint_properties.hpp"
 #include "ui/panes/skeleton_pane.hpp"
-#include "ui/panes/selection_properties_pane.hpp"
+#include "ui/panes/properties_pane.hpp"
 #include "ui/tools/edit_tool_panel.hpp"
 #include "ui/clipboard.hpp"
 #include "ui/character_actions.hpp"
@@ -826,9 +826,9 @@ void run(const std::string& mode) {
         const auto rotation_id = model.core().constraints().begin()->first;
         require(canvas.selected_constraint_id() == rotation_id && canvas.selection().empty(),
             "new rotation constraint must become separate constraint selection");
-        auto& selection_pane = f.window.selection_pane();
+        auto& properties_pane = f.window.properties_pane();
         require(dynamic_cast<ui::pane::props::constraint_properties*>(
-                selection_pane.properties().current_props()),
+                properties_pane.properties().current_props()),
             "constraint selection must populate the constraint Properties UI");
 
         auto hit = canvas.constraint_at({ 40, 52 });
@@ -917,7 +917,7 @@ void run(const std::string& mode) {
                 horizontal_item = item;
         require(horizontal_item != nullptr, "horizontal bone canvas item missing");
         canvas.set_selection(horizontal_item, true);
-        auto* bone_props = dynamic_cast<ui::pane::props::bones*>(selection_pane.properties().current_props());
+        auto* bone_props = dynamic_cast<ui::pane::props::bones*>(properties_pane.properties().current_props());
         require(bone_props != nullptr, "bone selection must return to topology Properties UI");
         for (auto* box : bone_props->findChildren<QGroupBox*>())
             require(box->title() != "Rotation Constraint", "bone Properties must not retain legacy constraint editor");
@@ -1038,19 +1038,19 @@ void run(const std::string& mode) {
         }
         require(skeleton_dock != nullptr, "missing Skeleton dock");
         require(animation_dock != nullptr, "missing Animation dock");
-        auto& selection_pane = f.window.selection_pane();
-        require(selection_pane.windowTitle() == "Selection Properties", "selection dock title incorrect");
-        require(selection_pane.objectName() == "selection_properties_pane", "selection dock missing persistent ID");
-        require(selection_pane.widget() == &selection_pane.properties(), "selection dock must own properties");
-        require(!skeleton_dock->isAncestorOf(&selection_pane), "selection dock must be independent");
-        require(f.window.dockWidgetArea(&selection_pane) == Qt::RightDockWidgetArea,
-            "selection dock must start in the right column");
+        auto& properties_pane = f.window.properties_pane();
+        require(properties_pane.windowTitle() == "Properties", "properties dock title incorrect");
+        require(properties_pane.objectName() == "properties_pane", "properties dock missing persistent ID");
+        require(properties_pane.widget() == &properties_pane.properties(), "properties dock must own properties");
+        require(!skeleton_dock->isAncestorOf(&properties_pane), "properties dock must be independent");
+        require(f.window.dockWidgetArea(&properties_pane) == Qt::RightDockWidgetArea,
+            "properties dock must start in the right column");
         require(f.window.tabifiedDockWidgets(skeleton_dock).contains(animation_dock),
             "animation must share Skeleton's tab stack");
-        require(!f.window.tabifiedDockWidgets(skeleton_dock).contains(&selection_pane),
-            "selection properties must not share Skeleton's tabs");
-        auto* selection_action = selection_pane.toggleViewAction();
-        require(selection_action->isCheckable(), "selection dock must be toggleable");
+        require(!f.window.tabifiedDockWidgets(skeleton_dock).contains(&properties_pane),
+            "properties must not share Skeleton's tabs");
+        auto* properties_action = properties_pane.toggleViewAction();
+        require(properties_action->isCheckable(), "properties dock must be toggleable");
         auto* panel = dynamic_cast<ui::tool::edit_tool_panel*>(f.tool.settings_widget());
         require(panel != nullptr && panel->settings().trans_mode_ == ui::tool::edit_drag_mode::rag_doll,
             "edit tool must default to rag doll translation");

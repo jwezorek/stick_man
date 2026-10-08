@@ -75,7 +75,7 @@ namespace ui {
 }
 
 
-ui::pane::props::nodes::nodes(const current_canvas_fn& fn, selection_properties* parent) :
+ui::pane::props::nodes::nodes(const current_canvas_fn& fn, properties_widget* parent) :
     single_or_multi_props_widget(
         fn,
         parent,

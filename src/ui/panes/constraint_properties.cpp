@@ -27,7 +27,7 @@ QWidget* labeled_widget(const QString& label, QWidget* value) {
 } // namespace
 
 ui::pane::props::constraint_properties::constraint_properties(
-        const current_canvas_fn& fn, selection_properties* parent) :
+        const current_canvas_fn& fn, properties_widget* parent) :
     props_box(fn, parent, "Constraint") {}
 
 void ui::pane::props::constraint_properties::populate(mdl::project& proj) {

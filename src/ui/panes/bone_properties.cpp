@@ -89,7 +89,7 @@ public:
 
 } // namespace ui::pane::props
 
-ui::pane::props::bones::bones(const current_canvas_fn& fn, selection_properties* parent) :
+ui::pane::props::bones::bones(const current_canvas_fn& fn, properties_widget* parent) :
     single_or_multi_props_widget(fn, parent, "selected bones"),
     length_(nullptr), name_(nullptr), u_(nullptr), v_(nullptr), nodes_(nullptr),
     rotation_(nullptr) {}
