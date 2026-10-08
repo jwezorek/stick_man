@@ -10,9 +10,7 @@ QString bone_label(const mdl::project& project, sm::object_id id) {
     auto bone = project.topology().get<sm::bone>(id);
     if (!bone)
         return "<missing>";
-    auto text = QString::fromStdString(bone->get().name());
-    auto short_id = QString::fromStdString(id.to_string()).left(8);
-    return QString("%1  [%2]").arg(text, short_id);
+    return QString::fromStdString(bone->get().name());
 }
 
 QWidget* labeled_widget(const QString& label, QWidget* value) {
