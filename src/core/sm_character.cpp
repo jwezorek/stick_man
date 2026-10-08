@@ -48,3 +48,6 @@ const sm::object_id& sm::character::id() const noexcept { return id_; }
 std::string sm::character::name() const { return name_; }
 const sm::project& sm::character::owner() const noexcept { return owner_.get(); }
 const sm::rig& sm::character::rig() const noexcept { return rig_; }
+std::optional<sm::object_id> sm::character::character_root_bone() const noexcept {
+    return character_root_bone_;
+}

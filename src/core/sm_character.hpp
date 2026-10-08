@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,9 @@ namespace sm {
         std::string name_;
         std::reference_wrapper<project> owner_;
         sm::rig rig_;
+        // A bone ID, rather than a pointer: topology replacement can move bones
+        // between skeletons without changing their identity.
+        std::optional<object_id> character_root_bone_;
         sm::artwork artwork_;
         animation_assets animation_data_;
 
@@ -60,6 +64,7 @@ namespace sm {
         std::string name() const;
         const project& owner() const noexcept;
         const sm::rig& rig() const noexcept;
+        std::optional<object_id> character_root_bone() const noexcept;
         const animation_assets& animation_data() const noexcept { return animation_data_; }
         const sm::artwork& artwork() const noexcept { return artwork_; }
     };

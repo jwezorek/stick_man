@@ -40,6 +40,7 @@ namespace sm {
         std::string name;
         sm::artwork artwork;
         animation_assets animation_data;
+        std::optional<object_id> character_root_bone;
     };
     struct membership_state {
         std::unordered_map<object_id, std::optional<object_id>> parents;
@@ -87,6 +88,7 @@ namespace sm {
             std::vector<object_id> bones,
             std::vector<object_id> skeletons) const;
         void reconcile_character_animation_poses();
+        void reconcile_character_roots();
 
     public:
         project();
@@ -142,6 +144,8 @@ namespace sm {
         result adopt_skeletons(const object_id& character_id, std::span<const const_skel_ref> skeletons);
         result remove_character(const object_id& id);
         expected_const_character character(const object_id& id) const;
+        // The selected bone must belong to one of the character's skeletons.
+        result set_character_root_bone(object_id character_id, object_id bone_id);
         animation_assets& animation_data(const object_id& character_id);
         const animation_assets& animation_data(const object_id& character_id) const;
         sm::artwork& artwork(const object_id& character_id);

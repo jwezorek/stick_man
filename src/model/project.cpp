@@ -589,6 +589,25 @@ bool mdl::project::rename(const sm::object_id& id, const std::string& new_name) 
     });
     return true;
 }
+
+sm::result mdl::project::set_character_root_bone(
+        sm::object_id character_id, sm::object_id bone_id) {
+    if (animation_mode()) return sm::result::invalid_membership;
+    const auto character = core_.character(character_id);
+    if (!character) return character.error();
+    const auto previous = character->get().character_root_bone();
+    if (previous == bone_id) return sm::result::success;
+    if (!previous) return core_.set_character_root_bone(character_id, bone_id);
+    return execute_command({
+        [character_id, bone_id](project& proj) {
+            return proj.core_.set_character_root_bone(character_id, bone_id);
+        },
+        [character_id, previous](project& proj) {
+            if (proj.core_.set_character_root_bone(character_id, *previous) != sm::result::success)
+                throw std::runtime_error("unable to restore character root bone");
+        }
+    });
+}
 void mdl::project::rename_aux(handle id, const std::string& new_name) {
     core_.rename(id, new_name);
     advance_default_name_counters_from_topology();

@@ -156,6 +156,7 @@ namespace mdl {
         sm::result remove_constraint(sm::object_id id);
         void record_transient_edit(std::function<void()> redo, std::function<void()> undo);
         bool rename(const sm::object_id& id, const std::string& new_name);
+        sm::result set_character_root_bone(sm::object_id character_id, sm::object_id bone_id);
         void add_new_skeleton_root(sm::point loc);
         bool rename(skel_piece piece, const std::string& new_name);
         sm::result replace_skeletons(
