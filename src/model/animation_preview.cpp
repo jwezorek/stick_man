@@ -37,7 +37,8 @@ mdl::animation_display_status mdl::project::preview_animation_time(double second
         return fail(animation_display_status::sampling_failed, sm::result::not_found);
     const auto skeletons = character->get().rig().skeleton_ids();
     // Sample against persistent rig geometry, not the current display topology.
-    auto sample = sm::sample_constrained_pose(*animation, seconds, core_.topology(), skeletons);
+    auto sample = sm::sample_constrained_pose(*animation, seconds, core_.topology(), skeletons,
+        character->get().character_root_bone());
     if (!sample)
         return fail(animation_display_status::sampling_failed, sample.error());
     if (!*sample)

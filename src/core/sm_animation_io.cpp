@@ -113,6 +113,17 @@ nlohmann::json sm::animation_assets_to_json(const animation_assets& assets) {
                     if (!transition.rotation_constraints.empty()) {
                         transition_json["rotation_constraints"] = constraints_to_json(transition.rotation_constraints);
                     }
+                    if (!transition.paths.empty()) {
+                        transition_json["paths"] = json::array();
+                        for (const auto& [node_id, path] : transition.paths) {
+                            json knots = json::array();
+                            for (const auto& k : path.knots)
+                                knots.push_back({{"position",point_json(k.position)},
+                                    {"in",point_json(k.handle_in)},{"out",point_json(k.handle_out)}});
+                            transition_json["paths"].push_back({{"node",node_id.to_string()},
+                                {"shape",static_cast<int>(path.shape)},{"knots",std::move(knots)}});
+                        }
+                    }
                     animation_json["transitions"].push_back(std::move(transition_json));
                 }
             }
@@ -174,6 +185,20 @@ sm::animation_assets sm::animation_assets_from_json(const nlohmann::json& j) {
                             for (const auto& [cid, c] : transition.rotation_constraints) {
                                 if (!c.rotation())
                                     throw std::invalid_argument("Transition constraint must be rotational");
+                            }
+                        }
+                        if (transition_value.contains("paths")) {
+                            for (const auto& item : transition_value.at("paths")) {
+                                animation_path path;
+                                path.node=id(item.at("node"));
+                                const auto shape=item.at("shape").get<int>();
+                                if (shape < 0 || shape > 2) throw std::invalid_argument("Invalid animation path shape");
+                                path.shape=static_cast<path_shape>(shape);
+                                for (const auto& k : item.at("knots"))
+                                    path.knots.push_back({read_point(k.at("position")),
+                                        read_point(k.at("in")),read_point(k.at("out"))});
+                                if (!transition.paths.emplace(path.node,std::move(path)).second)
+                                    throw std::invalid_argument("Duplicate transition path node");
                             }
                         }
                         a.transitions.push_back(std::move(transition));

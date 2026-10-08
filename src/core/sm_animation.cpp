@@ -42,6 +42,19 @@ void validate_animation(const sm::animation& a, std::unordered_set<sm::object_id
                 !std::isfinite(transition.duration_seconds)) {
             throw std::invalid_argument("Invalid transition duration");
         }
+        for (const auto& [node_id, path] : transition.paths) {
+            if (node_id.is_nil() || path.node != node_id ||
+                (path.shape != sm::path_shape::line && path.shape != sm::path_shape::cubic &&
+                 path.shape != sm::path_shape::spline) ||
+                (path.shape == sm::path_shape::cubic && path.knots.size()!=2) ||
+                (path.shape == sm::path_shape::spline && path.knots.size()<2))
+                throw std::invalid_argument("Invalid animation path");
+            for (const auto& knot : path.knots) {
+                for (auto pt : {knot.position, knot.handle_in, knot.handle_out})
+                    if (!std::isfinite(pt.x) || !std::isfinite(pt.y))
+                        throw std::invalid_argument("Non-finite animation path geometry");
+            }
+        }
         for (const auto id : transition.pinned_nodes) {
             if (id.is_nil())
                 throw std::invalid_argument("Invalid transition pin");
@@ -229,6 +242,11 @@ void sm::animation_assets::validate(const topology& topology,
         }
         for (std::size_t i = 0; i < a.transitions.size(); ++i) {
             const auto& transition = a.transitions[i];
+            for (const auto& [id, path] : transition.paths) {
+                auto node = topology.get<sm::node>(id);
+                if (!node || !rig.contains(node->get().owner().id()))
+                    throw std::invalid_argument("Animation path node is outside character rig");
+            }
             for (const auto id : transition.pinned_nodes) {
                 auto node = topology.get<sm::node>(id);
                 if (!node || !rig.contains(node->get().owner().id())) {
@@ -406,6 +424,13 @@ void sm::reconcile_animation_poses(animation_assets& assets, const topology& top
         }
     }
 
+    // Structural edits can remove nodes from a character. Drop transition-local
+    // paths to those nodes as part of the same reconciliation rather than leave
+    // dangling object IDs that would invalidate the project on next save.
+    for (auto& a : assets.animations)
+        for (auto& tr : a.transitions)
+            std::erase_if(tr.paths,[&](const auto& entry) {return !members.contains(entry.first);});
+
     for (auto& p : assets.poses) {
         if (p.id == assets.default_pose) {
             std::erase_if(p.node_positions,
@@ -473,6 +498,14 @@ void sm::remap_animation_assets(animation_assets& assets,
                     throw std::invalid_argument("Transition remap produced duplicate constraint IDs");
             }
             transition.rotation_constraints = std::move(constraints);
+            std::map<object_id, animation_path> remapped_paths;
+            for (auto& [old_id, path] : transition.paths) {
+                path.node = remap_id(old_id);
+                path.invalidate();
+                if (!remapped_paths.emplace(path.node, std::move(path)).second)
+                    throw std::invalid_argument("Transition remap produced duplicate path node IDs");
+            }
+            transition.paths = std::move(remapped_paths);
         }
     }
 }
@@ -502,4 +535,45 @@ bool sm::pose_compatible(const pose& pose, const topology& topology,
         }
     }
     return count == pose.node_positions.size();
+}
+
+std::optional<sm::point> sm::animation_pose_node(const skeletal_pose& pose,
+    const topology& source, std::span<const object_id> rig, object_id id) {
+    try {
+        topology copy;
+        for (auto sid : rig) {
+            auto skel=source.skeleton(sid);
+            if (!skel || !skel->get().copy_to(copy)) return {};
+        }
+        apply_skeletal_pose(pose,copy,rig);
+        if (auto n=copy.get<node>(id)) return n->get().world_pos();
+    } catch (...) {}
+    return {};
+}
+std::optional<sm::animation_root_frame> sm::fixed_animation_root(const animation& a,
+    const topology& source, std::span<const object_id> rig,
+    std::optional<object_id> root_bone) {
+    if (a.keyframes.empty()) return {};
+    try {
+        topology copy;
+        for (auto sid : rig) {
+            auto skel=source.skeleton(sid);
+            if (!skel || !skel->get().copy_to(copy)) return {};
+        }
+        apply_skeletal_pose(a.keyframes.front().pose,copy,rig);
+        if (!root_bone) {
+            for (auto sid : rig) {
+                auto skel=copy.skeleton(sid);
+                if (!skel) continue;
+                for (auto bone : skel->get().bones()) {
+                    root_bone=bone->id(); break;
+                }
+                if (root_bone) break;
+            }
+        }
+        if (!root_bone) return {};
+        auto b=copy.get<bone>(*root_bone);
+        if (!b) return {};
+        return animation_root_frame{b->get().parent_node().world_pos(),b->get().world_rotation()};
+    } catch (...) { return {}; }
 }

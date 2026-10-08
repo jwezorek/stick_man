@@ -2203,7 +2203,8 @@ std::expected<sm::skeletal_pose, sm::result> sm::project_constrained_pose(
 }
 
 sm::constrained_pose_result sm::sample_constrained_pose(const animation& animation,
-    double time_seconds, const sm::topology& topology, std::span<const object_id> rig_skeletons) {
+    double time_seconds, const sm::topology& topology, std::span<const object_id> rig_skeletons,
+    std::optional<object_id> character_root_bone) {
     std::optional<reference_pose_sample> reference;
     try {
         reference = sample_reference_pose(animation, time_seconds);
@@ -2333,6 +2334,71 @@ sm::constrained_pose_result sm::sample_constrained_pose(const animation& animati
         if (!pinned)
             return std::unexpected(pinned.error());
         pose = std::move(*pinned);
+    }
+    // Path targets are only active inside the transition. The reference frame is
+    // derived from the FIRST keyframe, not the current or source pose. Group all
+    // effectors for each skeleton into one IK solve so targets compete fairly.
+    if (interior && !active_transition->paths.empty()) {
+        const auto tr = std::get<reference_transition>(reference->location);
+        const auto* destination = animation.find_keyframe(tr.to_keyframe_id);
+        const auto frame = fixed_animation_root(animation, topology, rig_skeletons, character_root_bone);
+        if (!destination || !frame)
+            return std::unexpected(result::invalid_animation);
+        try {
+            apply_skeletal_pose(pose, geometry.topology, geometry.skeletons);
+            sm::topology start_geometry, end_geometry;
+            for (auto sid : rig_skeletons) {
+                auto source=topology.skeleton(sid);
+                if (!source || !source->get().copy_to(start_geometry) ||
+                    !source->get().copy_to(end_geometry))
+                    return std::unexpected(result::invalid_membership);
+            }
+            apply_skeletal_pose(source_keyframe->pose,start_geometry,rig_skeletons);
+            apply_skeletal_pose(destination->pose,end_geometry,rig_skeletons);
+            std::map<object_id,std::vector<std::tuple<node_ref,point>>> effectors;
+            for (const auto& [id, path] : active_transition->paths) {
+                auto node = geometry.topology.get<sm::node>(id);
+                if (!node) return std::unexpected(result::invalid_membership);
+                auto from=start_geometry.get<sm::node>(id);
+                auto to=end_geometry.get<sm::node>(id);
+                if (!from || !to) return std::unexpected(result::invalid_membership);
+                // Pins retain their existing hard constraint semantics.
+                if (active_transition->pinned_nodes.contains(id)) continue;
+                const auto target = frame->to_world(path.evaluate(tr.progress,
+                    frame->to_local(from->get().world_pos()),frame->to_local(to->get().world_pos())));
+                effectors[node->get().owner().id()].emplace_back(*node,target);
+            }
+            for (auto& [sid, targets] : effectors) {
+                auto skeleton=geometry.topology.skeleton(sid);
+                if (!skeleton) return std::unexpected(result::invalid_membership);
+                auto root=skeleton->get().root_node();
+                std::vector<node_ref> fixed;
+                for (const auto& [node,target] : targets) {
+                    if (node->id()==root.id()) {
+                        // A root target is purely translational in skeletal pose space.
+                        auto current=capture_skeletal_pose(geometry.topology,geometry.skeletons);
+                        current.root_positions.at(root.id())=target;
+                        apply_skeletal_pose(current,geometry.topology,geometry.skeletons);
+                        break;
+                    }
+                }
+                fixed.push_back(root); // keep the evaluated root stable during the IK pass
+                for (auto id : active_transition->pinned_nodes) {
+                    auto pinned=geometry.topology.get<sm::node>(id);
+                    if (pinned && pinned->get().owner().id()==sid && pinned->get().id()!=root.id())
+                        fixed.push_back(*pinned);
+                }
+                std::erase_if(targets,[&](const auto& t) {return std::get<0>(t)->id()==root.id();});
+                if (!targets.empty()) {
+                    // The solver commits even when not every effector reaches its
+                    // target. Do not turn ordinary geometric miss into playback failure.
+                    (void)perform_ik_with_constraints(targets,fixed,&geometry.constraints);
+                }
+            }
+            pose=capture_skeletal_pose(geometry.topology,geometry.skeletons);
+        } catch (const std::exception&) {
+            return std::unexpected(result::invalid_animation);
+        }
     }
     return constrained_pose_sample{std::move(pose), reference->location,
         reported_transition ? reported_transition->pinned_nodes : std::unordered_set<object_id>{},

@@ -98,6 +98,15 @@ namespace mdl {
         std::optional<sm::object_id> animation_session_animation() const;
         std::optional<sm::object_id> animation_session_keyframe() const;
         std::unordered_set<sm::object_id> animation_session_pinned_nodes() const;
+        struct animation_path_context {
+            sm::animation_path path;
+            sm::point start, end; // animation-root-local endpoint positions
+            sm::animation_root_frame frame;
+        };
+        bool animation_has_outgoing_transition() const;
+        std::vector<sm::object_id> animation_session_path_nodes() const;
+        std::optional<animation_path_context> animation_session_path_context(sm::object_id node) const;
+        sm::result set_animation_path(sm::object_id node, std::optional<sm::animation_path> path);
         sm::constraint_map animation_session_rotation_constraints() const;
         std::expected<sm::constraint_map, sm::result> animation_edit_constraints() const;
         std::expected<sm::object_id, sm::result> add_animation_rotation_constraint(

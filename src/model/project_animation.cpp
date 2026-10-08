@@ -1030,7 +1030,8 @@ sm::result mdl::project::insert_animation_keyframe(double seconds) {
             std::abs((first_duration + second_duration) - original_duration) > duration_tolerance)
         return sm::result::invalid_animation;
 
-    auto sampled = sm::sample_constrained_pose(*animation, seconds, core_.topology(), skeletons);
+    auto sampled = sm::sample_constrained_pose(*animation, seconds, core_.topology(), skeletons,
+        core_.character(animation_session_->character)->get().character_root_bone());
     if (!sampled || !*sampled || !std::holds_alternative<sm::reference_transition>((**sampled).location))
         return sampled ? sm::result::invalid_animation : sampled.error();
 
@@ -1248,4 +1249,83 @@ void mdl::project::apply_pose(sm::object_id character, sm::object_id id) {
         after.emplace_back(nid, pt);
     }
     transform_node_positions(before, after);
+}
+
+// A path edit is one session command; drag previews stay entirely in the editor.
+// Unlike terminal pins, paths never create an implicit outgoing transition.
+bool mdl::project::animation_has_outgoing_transition() const {
+    if (!animation_session_ || animation_preview_active() || !animation_session_->selected_keyframe) return false;
+    const auto* a=core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
+    const auto i=a ? a->keyframe_index(*animation_session_->selected_keyframe) : std::nullopt;
+    return i && *i<a->transitions.size();
+}
+std::vector<sm::object_id> mdl::project::animation_session_path_nodes() const {
+    std::vector<sm::object_id> ids;
+    if (!animation_has_outgoing_transition()) return ids;
+    const auto* a=core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
+    const auto i=*a->keyframe_index(*animation_session_->selected_keyframe);
+    for (const auto& [id,path] : a->transitions[i].paths) ids.push_back(id);
+    return ids;
+}
+std::optional<mdl::project::animation_path_context> mdl::project::animation_session_path_context(sm::object_id node) const {
+    if (!animation_has_outgoing_transition()) return {};
+    const auto* a=core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
+    const auto i=*a->keyframe_index(*animation_session_->selected_keyframe);
+    const auto* c=&a->transitions[i];
+    auto char_ref=core_.character(animation_session_->character);
+    if (!char_ref) return {};
+    const auto skeletons=char_ref->get().rig().skeleton_ids();
+    auto frame=sm::fixed_animation_root(*a,core_.topology(),skeletons,char_ref->get().character_root_bone());
+    auto start=sm::animation_pose_node(a->keyframes[i].pose,core_.topology(),skeletons,node);
+    auto end=sm::animation_pose_node(a->keyframes[i+1].pose,core_.topology(),skeletons,node);
+    if (!frame || !start || !end) return {};
+    const auto it=c->paths.find(node);
+    sm::animation_path path;
+    if (it!=c->paths.end()) path=it->second;
+    path.node=node;
+    return animation_path_context{std::move(path),frame->to_local(*start),frame->to_local(*end),*frame};
+}
+sm::result mdl::project::set_animation_path(sm::object_id node,std::optional<sm::animation_path> path) {
+    if (!animation_has_outgoing_transition()) return sm::result::invalid_animation;
+    const auto cid=animation_session_->character;
+    const auto aid=animation_session_->animation;
+    const auto kid=*animation_session_->selected_keyframe;
+    auto* a=core_.animation_data(cid).find_animation(aid);
+    const auto i=*a->keyframe_index(kid);
+    if (!animation_session_->working_topology.get<sm::node>(node)) return sm::result::invalid_membership;
+    if (path && path->node!=node) return sm::result::invalid_constraint;
+    if (path) {
+        if ((path->shape==sm::path_shape::cubic && path->knots.size()!=2) ||
+            (path->shape==sm::path_shape::spline && path->knots.size()<2) ||
+            (path->shape!=sm::path_shape::line && path->shape!=sm::path_shape::cubic &&
+             path->shape!=sm::path_shape::spline)) return sm::result::invalid_constraint;
+        for (const auto& knot : path->knots)
+            for (auto p : {knot.position,knot.handle_in,knot.handle_out})
+                if (!std::isfinite(p.x) || !std::isfinite(p.y)) return sm::result::out_of_bounds;
+    }
+    // A path and a hard pin at the same node have incompatible meanings.
+    if (path && a->transitions[i].pinned_nodes.contains(node)) return sm::result::invalid_constraint;
+    const auto before=a->transitions[i].paths;
+    auto after=before;
+    if (path) after.insert_or_assign(node,std::move(*path));
+    else after.erase(node);
+    auto apply=[cid,aid,kid,i](project& p,const std::map<sm::object_id,sm::animation_path>& paths) {
+        auto* animation=p.core_.animation_data(cid).find_animation(aid);
+        if (!animation || i>=animation->transitions.size() ||
+            animation->keyframes[i].id!=kid)
+            throw std::runtime_error("animation transition missing during path undo/redo");
+        animation->transitions[i].paths=paths;
+        if (p.animation_session_->selected_keyframe!=kid) {
+            p.animation_session_->selected_keyframe=kid;
+            const auto rig=p.core_.character(cid)->get().rig().skeleton_ids();
+            sm::apply_skeletal_pose(animation->keyframes[i].pose,p.topology(),rig);
+            emit p.animation_keyframe_selected(kid);
+        }
+        emit p.animation_preview_changed();
+        emit p.refresh_canvas(p,false);
+    };
+    command cmd{[apply,after](project& p){apply(p,after);return sm::result::success;},
+        [apply,before](project& p){apply(p,before);}};
+    cmd.animation_edit=true;
+    return execute_session_command(cmd);
 }

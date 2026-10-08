@@ -161,3 +161,11 @@ else()
         "QT_QPA_PLATFORM=offscreen" $<TARGET_FILE:animation_v2_phase4>)
 endif()
 set_tests_properties(animation_v2_phase4 PROPERTIES TIMEOUT 60)
+
+add_executable(animation_paths animation_paths.cpp)
+target_link_libraries(animation_paths PRIVATE stick_man_core)
+add_test(NAME animation_paths COMMAND $<TARGET_FILE:animation_paths>)
+
+add_executable(animation_path_integration animation_path_integration.cpp)
+target_link_libraries(animation_path_integration PRIVATE stick_man_model)
+add_test(NAME animation_path_integration COMMAND $<TARGET_FILE:animation_path_integration>)

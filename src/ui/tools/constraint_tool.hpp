@@ -7,7 +7,7 @@
 namespace ui::tool {
 
 class constraint : public base {
-    enum class operation { select, rotation, rigid_triangle };
+    enum class operation { select, rotation, rigid_triangle, path };
 
     struct drag_state {
         sm::object_id id;
@@ -24,6 +24,27 @@ class constraint : public base {
         QGraphicsLineItem* first_highlight = nullptr;
     };
 
+    struct path_gesture {
+        sm::object_id node;
+        sm::animation_path before;
+        sm::animation_path edited;
+        int control = -1; // knot index * 3 + {0: knot,1: in,2: out}
+        QPointF press_point;
+        bool creating = false;
+    };
+    QComboBox* path_shape_ = nullptr;
+    QLabel* path_label_ = nullptr;
+    QPointer<canvas::scene> path_scene_;
+    std::vector<QGraphicsItem*> path_graphics_;
+    std::optional<sm::object_id> selected_path_;
+    std::optional<path_gesture> path_gesture_;
+    bool active_ = false;
+    void clear_path_graphics();
+    void redraw_paths(canvas::scene& canv);
+    std::optional<std::pair<sm::object_id,int>> hit_path(canvas::scene& canv, QPointF where) const;
+    void move_path_gesture(canvas::scene& canv, QPointF where);
+    void finish_path_gesture(canvas::scene& canv);
+    void select_path(canvas::scene& canv, sm::object_id id);
     QWidget* settings_ = nullptr;
     QComboBox* operation_ = nullptr;
     QComboBox* reference_ = nullptr;
@@ -65,6 +86,7 @@ public:
     void mousePressEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
     void mouseMoveEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
     void mouseReleaseEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
+    void mouseDoubleClickEvent(canvas::scene& c, QGraphicsSceneMouseEvent* event) override;
     QWidget* settings_widget() override;
     void set_animation_mode(bool active);
 };

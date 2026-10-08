@@ -2,6 +2,7 @@
 #include "sm_types.hpp"
 #include "sm_object_id.hpp"
 #include "sm_constraint.hpp"
+#include "sm_animation_path.hpp"
 #include "json_fwd.hpp"
 #include <cstddef>
 #include <optional>
@@ -38,6 +39,7 @@ namespace sm {
         double duration_seconds = 0.4;
         std::unordered_set<object_id> pinned_nodes;
         constraint_map rotation_constraints;
+        std::map<object_id, animation_path> paths; // key = constrained node ID
     };
 
     struct animation {
@@ -106,13 +108,21 @@ namespace sm {
     // Errors distinguish invalid data/membership, infeasible constraints, and
     // numerical projection failure; no failed result contains a pose.
     constrained_pose_result sample_constrained_pose(const animation& animation,
-        double time_seconds, const topology& topology, std::span<const object_id> rig_skeletons);
+        double time_seconds, const topology& topology, std::span<const object_id> rig_skeletons,
+        std::optional<object_id> character_root_bone = std::nullopt);
 
     // Project a pose onto the supplied constraints and optional fixed node positions.
     std::expected<skeletal_pose, result> project_constrained_pose(
         const skeletal_pose& reference, const topology& topology,
         std::span<const object_id> rig_skeletons, const constraint_map& constraints,
         const std::map<object_id, point>& pinned_node_positions = {});
+
+    // Resolve a node in an authored keyframe without changing caller geometry.
+    std::optional<point> animation_pose_node(const skeletal_pose& pose,
+        const topology& topology, std::span<const object_id> rig_skeletons, object_id node);
+    std::optional<animation_root_frame> fixed_animation_root(const animation& animation,
+        const topology& topology, std::span<const object_id> rig_skeletons,
+        std::optional<object_id> character_root_bone);
 
     pose capture_pose(const topology& topology, const std::vector<object_id>& skeletons, std::string name);
     skeletal_pose capture_skeletal_pose(const topology& topology, std::span<const object_id> skeletons);

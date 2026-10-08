@@ -7,7 +7,10 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <limits>
 #include <QSignalBlocker>
+#include <QStandardItemModel>
+#include <QPainterPath>
 
 namespace {
 constexpr double k_default_rot_constraint_min = -std::numbers::pi / 2.0;
@@ -66,20 +69,35 @@ void ui::tool::constraint::update_settings_state() {
     if (!model_)
         return;
     const bool rotation = current_operation() == operation::rotation;
-    if (operation_) operation_->setEnabled(true);
+    if (operation_) {
+        operation_->setEnabled(true);
+        if (auto* entries=qobject_cast<QStandardItemModel*>(operation_->model()))
+            entries->item(int(operation::path))->setEnabled(model_->animation_has_outgoing_transition());
+        if (current_operation()==operation::path && !model_->animation_has_outgoing_transition())
+            operation_->setCurrentIndex(int(operation::select));
+    }
+    if (path_shape_) path_shape_->setEnabled(model_->animation_has_outgoing_transition() &&
+        (current_operation()==operation::path || selected_path_.has_value()));
+    if (path_label_) path_label_->setEnabled(path_shape_ && path_shape_->isEnabled());
     reference_->setEnabled(rotation);
     reference_label_->setEnabled(rotation);
 }
 
 void ui::tool::constraint::activate(canvas::manager& canvases) {
     canvases_ = &canvases;
+    active_ = true;
     for (auto* canv : canvases.canvases()) {
         canv->set_constraint_tool_active(true);
         canv->sync_to_model();
     }
+    redraw_paths(canvases.active_canvas());
 }
 
 void ui::tool::constraint::deactivate(canvas::manager& canvases) {
+    active_ = false;
+    path_gesture_.reset();
+    selected_path_.reset();
+    clear_path_graphics();
     if (drag_)
         cancel_drag(canvases.active_canvas());
     clear_triangle_sweep();
@@ -101,7 +119,7 @@ void ui::tool::constraint::init(canvas::manager& canvases, mdl::project& model) 
 
     operation_ = new QComboBox;
     operation_->setObjectName("constraint_operation");
-    operation_->addItems({"Select / Edit", "Rotation", "Rigid Triangle"});
+    operation_->addItems({"Select / Edit", "Rotation", "Rigid Triangle", "Path"});
     auto* operation_row = new QHBoxLayout;
     operation_row->addWidget(new QLabel("Operation:"));
     operation_row->addWidget(operation_, 1);
@@ -114,12 +132,21 @@ void ui::tool::constraint::init(canvas::manager& canvases, mdl::project& model) 
     reference_->setCurrentIndex(int(sm::rotation_reference_kind::parent));
     layout->addWidget(reference_label_);
     layout->addWidget(reference_);
+    path_label_ = new QLabel("Path shape:");
+    path_shape_ = new QComboBox;
+    path_shape_->setObjectName("constraint_path_shape");
+    path_shape_->addItems({"Line segment", "Cubic Bezier", "Bezier spline"});
+    layout->addWidget(path_label_);
+    layout->addWidget(path_shape_);
     layout->addWidget(new QLabel(
         "Select/Edit: click adornments; drag handles.\n"
         "Nodes: click to pin/unpin in every operation.\n"
         "Bone reference: click target, then reference bone.\n"
         "Rigid Triangle: click two sibling bones, or drag\n"
-        "from empty space through both siblings."));
+        "from empty space through both siblings.\n"
+        "Path: click a node (drag to bend curves).\n"
+        "Drag handles; double-click spline to add knot.\n"
+        "Right-click interior knot to remove; Delete removes path."));
     layout->addStretch();
 
     QObject::connect(operation_, qOverload<int>(&QComboBox::currentIndexChanged), settings_, [this](int) {
@@ -129,6 +156,25 @@ void ui::tool::constraint::init(canvas::manager& canvases, mdl::project& model) 
             clear_triangle_sweep();
             clear_pending();
         }
+        update_settings_state();
+    });
+    QObject::connect(path_shape_, qOverload<int>(&QComboBox::currentIndexChanged), settings_, [this](int value) {
+        if (!model_ || !model_->animation_has_outgoing_transition() || !selected_path_ || !canvases_ || path_gesture_)
+            return;
+        auto ctx=model_->animation_session_path_context(*selected_path_);
+        if (!ctx || !model_->animation_session_path_nodes().size()) return;
+        if (ctx->path.shape==static_cast<sm::path_shape>(value)) return;
+        ctx->path.reset_shape(static_cast<sm::path_shape>(value),ctx->start,ctx->end);
+        (void)model_->set_animation_path(*selected_path_,ctx->path);
+        select_path(canvases_->active_canvas(),*selected_path_);
+    });
+    QObject::connect(&model,&mdl::project::animation_keyframe_selected,settings_,[this](sm::object_id) {
+        selected_path_.reset(); path_gesture_.reset();
+        if (active_ && canvases_) redraw_paths(canvases_->active_canvas());
+        update_settings_state();
+    });
+    QObject::connect(&model,&mdl::project::refresh_canvas,settings_,[this](mdl::project&,bool) {
+        if (active_ && canvases_ && !path_gesture_) redraw_paths(canvases_->active_canvas());
         update_settings_state();
     });
     QObject::connect(reference_, qOverload<int>(&QComboBox::currentIndexChanged), settings_, [this](int) {
@@ -166,11 +212,13 @@ void ui::tool::constraint::init(canvas::manager& canvases, mdl::project& model) 
         clear_triangle_sweep();
         clear_pending();
         drag_.reset();
+        path_gesture_.reset(); selected_path_.reset(); clear_path_graphics();
     });
     update_settings_state();
 }
 
 void ui::tool::constraint::set_animation_mode(bool) {
+    selected_path_.reset(); path_gesture_.reset(); clear_path_graphics();
     if (!settings_)
         return;
     if (canvases_) {
@@ -184,6 +232,7 @@ void ui::tool::constraint::set_animation_mode(bool) {
         }
     }
     update_settings_state();
+    if (active_ && canvases_) redraw_paths(canvases_->active_canvas());
 }
 
 void ui::tool::constraint::clear_pending() {
@@ -448,6 +497,14 @@ void ui::tool::constraint::create_triangle(canvas::scene& canv, sm::bone& bone) 
 }
 
 void ui::tool::constraint::keyPressEvent(canvas::scene& canv, QKeyEvent* event) {
+    if (event->key()==Qt::Key_Delete && selected_path_ && model_ && model_->animation_has_outgoing_transition()) {
+        model_->set_animation_path(*selected_path_,std::nullopt);
+        selected_path_.reset(); redraw_paths(canv); return;
+    }
+    if (event->key()==Qt::Key_Escape && path_gesture_) {
+        path_gesture_.reset(); redraw_paths(canv); return;
+    }
+
     if (event->key() == Qt::Key_Escape) {
         if (drag_)
             cancel_drag(canv);
@@ -459,6 +516,46 @@ void ui::tool::constraint::keyPressEvent(canvas::scene& canv, QKeyEvent* event) 
 
 void ui::tool::constraint::mousePressEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
     press_handled_ = false;
+    if (model_ && model_->animation_has_outgoing_transition()) {
+        // Nodes retain pin/unpin priority in the pre-existing operations.
+        auto hit=(canv.top_node(event->scenePos()) && current_operation()!=operation::path)
+            ? std::optional<std::pair<sm::object_id,int>>{}
+            : hit_path(canv,event->scenePos());
+        if (event->button()==Qt::RightButton && hit && hit->second>=0 && hit->second%3==0) {
+            auto ctx=model_->animation_session_path_context(hit->first);
+            const auto k=static_cast<std::size_t>(hit->second/3);
+            if (ctx && ctx->path.shape==sm::path_shape::spline && k>0 && k+1<ctx->path.knots.size()) {
+                ctx->path.remove_knot(k);
+                model_->set_animation_path(hit->first,ctx->path);
+                redraw_paths(canv);
+            }
+            return;
+        }
+        if (event->button()==Qt::LeftButton && hit) {
+            select_path(canv,hit->first);
+            if (hit->second>=0) {
+                auto ctx=model_->animation_session_path_context(hit->first);
+                if (ctx) path_gesture_=path_gesture{hit->first,ctx->path,ctx->path,hit->second,event->scenePos(),false};
+            }
+            press_handled_=true;
+            return;
+        }
+        if (event->button()==Qt::LeftButton && current_operation()==operation::path) {
+            if (auto* node=canv.top_node(event->scenePos())) {
+                auto id=node->model().id();
+                auto ctx=model_->animation_session_path_context(id);
+                if (ctx) {
+                    auto path=ctx->path;
+                    path.reset_shape(static_cast<sm::path_shape>(path_shape_->currentIndex()),ctx->start,ctx->end);
+                    selected_path_=id;
+                    path_gesture_=path_gesture{id,ctx->path,path,-1,event->scenePos(),true};
+                    redraw_paths(canv);
+                    press_handled_=true;
+                    return;
+                }
+            }
+        }
+    }
     if (event->button() != Qt::LeftButton)
         return;
 
@@ -607,6 +704,7 @@ void ui::tool::constraint::finish_drag(canvas::scene& canv) {
 }
 
 void ui::tool::constraint::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
+    if (path_gesture_) { move_path_gesture(canv,event->scenePos()); return; }
     if (drag_) {
         update_drag(canv, event->scenePos());
         return;
@@ -634,6 +732,12 @@ void ui::tool::constraint::mouseMoveEvent(canvas::scene& canv, QGraphicsSceneMou
 }
 
 void ui::tool::constraint::mouseReleaseEvent(canvas::scene& canv, QGraphicsSceneMouseEvent* event) {
+    if (path_gesture_ && event->button()==Qt::LeftButton) {
+        move_path_gesture(canv,event->scenePos());
+        finish_path_gesture(canv);
+        press_handled_=false;
+        return;
+    }
     if (event->button() != Qt::LeftButton)
         return;
     if (drag_) {
@@ -673,6 +777,8 @@ void ui::tool::constraint::mouseReleaseEvent(canvas::scene& canv, QGraphicsScene
     case operation::rotation:
         create_rotation(canv, bone->model());
         return;
+    case operation::path:
+        return;
     case operation::rigid_triangle:
         // Transition-local rigid triangles are not implemented yet.  Keep the
         // operation selectable in Animation Mode, but make creation a no-op.
@@ -684,3 +790,206 @@ void ui::tool::constraint::mouseReleaseEvent(canvas::scene& canv, QGraphicsScene
 }
 
 QWidget* ui::tool::constraint::settings_widget() { return settings_; }
+
+namespace {
+QPointF path_world(const mdl::project::animation_path_context& ctx, sm::point local) {
+    return ui::to_qt_pt(ctx.frame.to_world(local));
+}
+sm::point knot_local(const mdl::project::animation_path_context& ctx,
+    const sm::animation_path& path,std::size_t i) {
+    if (i==0) return ctx.start;
+    if (i+1==path.knots.size()) return ctx.end;
+    return path.knots[i].position;
+}
+QPointF control_world(const mdl::project::animation_path_context& ctx,
+    const sm::animation_path& path,int control) {
+    const auto i=static_cast<std::size_t>(control/3);
+    const auto part=control%3;
+    const auto origin=knot_local(ctx,path,i);
+    if (part==1) return path_world(ctx,origin+path.knots[i].handle_in);
+    if (part==2) return path_world(ctx,origin+path.knots[i].handle_out);
+    return path_world(ctx,origin);
+}
+}
+
+void ui::tool::constraint::clear_path_graphics() {
+    if (path_scene_) {
+        for (auto* g : path_graphics_) {
+            path_scene_->removeItem(g);
+            delete g;
+        }
+    }
+    path_graphics_.clear();
+    path_scene_.clear();
+}
+
+void ui::tool::constraint::redraw_paths(canvas::scene& canv) {
+    clear_path_graphics();
+    if (!active_ || !model_ || !model_->animation_has_outgoing_transition()) return;
+    path_scene_=&canv;
+    auto draw=[&](QGraphicsItem* item) {
+        item->setZValue(3500);
+        canv.addItem(item);
+        path_graphics_.push_back(item);
+    };
+    auto draw_circle=[&](QPointF p,QColor color,double radius,bool ghost=false) {
+        const double r=radius/std::max(0.01,canv.scale());
+        auto* circle=new QGraphicsEllipseItem(p.x()-r,p.y()-r,2*r,2*r);
+        circle->setPen(QPen(color,1.5));
+        circle->setBrush(ghost ? QBrush(Qt::NoBrush) : QBrush(color));
+        circle->setZValue(3501);
+        canv.addItem(circle);
+        path_graphics_.push_back(circle);
+    };
+    auto ids=model_->animation_session_path_nodes();
+    if (path_gesture_ && std::ranges::find(ids,path_gesture_->node)==ids.end())
+        ids.push_back(path_gesture_->node);
+    for (const auto id : ids) {
+        auto ctx=model_->animation_session_path_context(id);
+        if (!ctx) continue;
+        auto path=ctx->path;
+        if (path_gesture_ && path_gesture_->node==id) path=path_gesture_->edited;
+        const bool selected=selected_path_ && *selected_path_==id;
+        QPainterPath curve(path_world(*ctx,ctx->start));
+        constexpr int samples=120;
+        for (int i=1;i<=samples;++i)
+            curve.lineTo(path_world(*ctx,path.at_parameter(double(i)/samples,ctx->start,ctx->end)));
+        auto* line=new QGraphicsPathItem(curve);
+        QPen pen(selected ? QColor(0,160,235) : QColor(70,170,205),2,Qt::DashLine);
+        pen.setCosmetic(true);
+        line->setPen(pen);
+        draw(line);
+        if (!selected) continue;
+        // The destination is always pose-owned; the hollow ghost is not a handle.
+        draw_circle(path_world(*ctx,ctx->end),QColor(0,170,240),7,true);
+        draw_circle(path_world(*ctx,ctx->start),QColor(0,170,240),4,true);
+        if (path.shape==sm::path_shape::line || path.knots.size()<2) continue;
+        for (std::size_t k=0;k<path.knots.size();++k) {
+            const auto origin=knot_local(*ctx,path,k);
+            if (k>0 && k+1<path.knots.size()) draw_circle(path_world(*ctx,origin),QColor(255,180,30),5);
+            for (int side=1;side<=2;++side) {
+                if ((side==1 && k==0) || (side==2 && k+1==path.knots.size())) continue;
+                const auto handle=control_world(*ctx,path,static_cast<int>(k*3+side));
+                auto* guide=new QGraphicsLineItem(QLineF(path_world(*ctx,origin),handle));
+                QPen thin(QColor(90,150,210),1,Qt::DotLine); thin.setCosmetic(true);
+                guide->setPen(thin); draw(guide);
+                draw_circle(handle,QColor(50,135,235),4);
+            }
+        }
+    }
+}
+
+std::optional<std::pair<sm::object_id,int>> ui::tool::constraint::hit_path(
+    canvas::scene& canv,QPointF where) const {
+    if (!model_ || !model_->animation_has_outgoing_transition()) return {};
+    const double handle_radius=9.0/std::max(0.01,canv.scale());
+    if (selected_path_) {
+        auto ctx=model_->animation_session_path_context(*selected_path_);
+        if (ctx && ctx->path.shape!=sm::path_shape::line) {
+            const auto& path=ctx->path;
+            for (std::size_t i=0;i<path.knots.size();++i) {
+                for (int side=0;side<3;++side) {
+                    if (side==0 && (i==0 || i+1==path.knots.size())) continue;
+                    if (side==1 && i==0) continue;
+                    if (side==2 && i+1==path.knots.size()) continue;
+                    const int control=static_cast<int>(3*i+side);
+                    if (QLineF(control_world(*ctx,path,control),where).length()<=handle_radius)
+                        return std::pair{*selected_path_,control};
+                }
+            }
+        }
+    }
+    const double path_radius=7.0/std::max(0.01,canv.scale());
+    for (const auto id : model_->animation_session_path_nodes()) {
+        auto ctx=model_->animation_session_path_context(id);
+        if (!ctx) continue;
+        auto previous=path_world(*ctx,ctx->start);
+        for (int i=1;i<=120;++i) {
+            const auto next=path_world(*ctx,ctx->path.at_parameter(double(i)/120,ctx->start,ctx->end));
+            QLineF section(previous,next);
+            const auto v=next-previous,w=where-previous;
+            const double square=QPointF::dotProduct(v,v);
+            const double u=square>0 ? std::clamp(QPointF::dotProduct(v,w)/square,0.0,1.0) : 0;
+            if (QLineF(previous+u*v,where).length()<=path_radius)
+                return std::pair{id,-1};
+            previous=next;
+        }
+    }
+    return {};
+}
+
+void ui::tool::constraint::select_path(canvas::scene& canv,sm::object_id node) {
+    selected_path_=node;
+    canv.clear_constraint_selection();
+    auto ctx=model_->animation_session_path_context(node);
+    if (ctx) {
+        QSignalBlocker blocker(path_shape_);
+        path_shape_->setCurrentIndex(static_cast<int>(ctx->path.shape));
+    }
+    update_settings_state();
+    redraw_paths(canv);
+}
+
+void ui::tool::constraint::move_path_gesture(canvas::scene& canv,QPointF world) {
+    if (!path_gesture_) return;
+    auto ctx=model_->animation_session_path_context(path_gesture_->node);
+    if (!ctx) return;
+    auto& g=*path_gesture_;
+    if (g.creating) {
+        if (g.edited.shape!=sm::path_shape::line) {
+            const auto start=ctx->frame.to_local(ui::from_qt_pt(g.press_point));
+            const auto current=ctx->frame.to_local(ui::from_qt_pt(world));
+            const auto bend=current-start;
+            g.edited.reset_shape(static_cast<sm::path_shape>(path_shape_->currentIndex()),ctx->start,ctx->end);
+            if (g.edited.knots.size()==2) {
+                g.edited.knots.front().handle_out+=bend;
+                g.edited.knots.back().handle_in+=bend;
+            }
+        }
+    } else if (g.control>=0) {
+        const auto i=static_cast<std::size_t>(g.control/3);
+        const auto part=g.control%3;
+        if (i>=g.edited.knots.size()) return;
+        const auto p=ctx->frame.to_local(ui::from_qt_pt(world));
+        auto& knot=g.edited.knots[i];
+        if (part==0 && i>0 && i+1<g.edited.knots.size()) knot.position=p;
+        if (part==1) knot.handle_in=p-knot_local(*ctx,g.edited,i);
+        if (part==2) knot.handle_out=p-knot_local(*ctx,g.edited,i);
+    }
+    g.edited.invalidate();
+    redraw_paths(canv);
+}
+
+void ui::tool::constraint::finish_path_gesture(canvas::scene& canv) {
+    if (!path_gesture_) return;
+    auto gesture=std::move(*path_gesture_);
+    path_gesture_.reset();
+    const auto result=model_->set_animation_path(gesture.node,std::move(gesture.edited));
+    if (result!=sm::result::success)
+        report_failure(canv,result,"Cannot edit transition path");
+    select_path(canv,gesture.node);
+}
+
+void ui::tool::constraint::mouseDoubleClickEvent(canvas::scene& canv,QGraphicsSceneMouseEvent* event) {
+    if (event->button()!=Qt::LeftButton || !model_ || !model_->animation_has_outgoing_transition()) return;
+    auto hit=hit_path(canv,event->scenePos());
+    if (!hit || hit->second!=-1) return;
+    path_gesture_.reset();
+    auto ctx=model_->animation_session_path_context(hit->first);
+    if (!ctx || ctx->path.shape!=sm::path_shape::spline) return;
+    // Insert into the closest segment, preserving its geometry by subdivision.
+    std::size_t segment=0;
+    double best=std::numeric_limits<double>::infinity();
+    const auto count=ctx->path.knots.size()-1;
+    for (std::size_t i=0;i<count;++i) {
+        for (int k=0;k<=24;++k) {
+            const auto u=(i+double(k)/24)/count;
+            const auto pt=path_world(*ctx,ctx->path.at_parameter(u,ctx->start,ctx->end));
+            const auto d=QLineF(pt,event->scenePos()).length();
+            if (d<best) {best=d;segment=i;}
+        }
+    }
+    ctx->path.insert_knot(segment,ctx->start,ctx->end);
+    if (model_->set_animation_path(hit->first,ctx->path)==sm::result::success)
+        select_path(canv,hit->first);
+}
