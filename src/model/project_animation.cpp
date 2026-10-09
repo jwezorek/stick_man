@@ -1295,10 +1295,7 @@ sm::result mdl::project::set_animation_path(sm::object_id node,std::optional<sm:
     if (!animation_session_->working_topology.get<sm::node>(node)) return sm::result::invalid_membership;
     if (path && path->node!=node) return sm::result::invalid_constraint;
     if (path) {
-        if ((path->shape==sm::path_shape::cubic && path->knots.size()!=2) ||
-            (path->shape==sm::path_shape::spline && path->knots.size()<2) ||
-            (path->shape!=sm::path_shape::line && path->shape!=sm::path_shape::cubic &&
-             path->shape!=sm::path_shape::spline)) return sm::result::invalid_constraint;
+        if (!path->is_smooth()) return sm::result::invalid_constraint;
         for (const auto& knot : path->knots)
             for (auto p : {knot.position,knot.handle_in,knot.handle_out})
                 if (!std::isfinite(p.x) || !std::isfinite(p.y)) return sm::result::out_of_bounds;

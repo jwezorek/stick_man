@@ -47,7 +47,7 @@ void authoring_persistence_and_scrubbing() {
 
     sm::animation_path path;
     path.node=tip_id;
-    path.reset_shape(sm::path_shape::cubic,geometry->start,geometry->end);
+    path.reset(geometry->start,geometry->end);
     path.knots[0].handle_out={0,8};
     path.knots[1].handle_in={-4,0};
     require(model.set_animation_path(tip_id,path)==sm::result::success,"create path");
@@ -57,14 +57,23 @@ void authoring_persistence_and_scrubbing() {
     require(model.redo()==sm::result::success,"creation redo failed");
     require(a->transitions[0].paths.contains(tip_id),"creation redo lost path");
 
+    // All paths are cubic Bezier splines. Adding a knot edits a one-segment
+    // curve into a two-segment spline without changing its geometry.
     auto changed=path;
-    changed.reset_shape(sm::path_shape::spline,geometry->start,geometry->end);
-    changed.insert_knot(0,geometry->start,geometry->end);
-    require(model.set_animation_path(tip_id,changed)==sm::result::success,"edit path shape");
-    require(a->transitions[0].paths.at(tip_id).shape==sm::path_shape::spline,"path shape edit failed");
+    constexpr double split=0.35;
+    const auto insertion_point=path.at_parameter(split,geometry->start,geometry->end);
+    changed.insert_knot(0,split,geometry->start,geometry->end);
+    require(changed.knots.size()==3 && changed.is_smooth(),"knot insertion failed");
+    near(changed.knots[1].position,insertion_point,1e-8,"insertion moved the curve");
+    require(model.set_animation_path(tip_id,changed)==sm::result::success,"edit spline knots");
+    require(a->transitions[0].paths.at(tip_id).knots.size()==3,"knot insertion edit failed");
+    require(a->transitions[0].paths.at(tip_id).is_smooth(),"inserted knot is not G1-smooth");
     model.undo();
-    require(a->transitions[0].paths.at(tip_id).shape==sm::path_shape::cubic,"path shape undo failed");
-    require(model.redo()==sm::result::success,"path shape redo failed");
+    require(a->transitions[0].paths.at(tip_id).knots.size()==2,"knot insertion undo failed");
+    near(a->transitions[0].paths.at(tip_id).knots[0].handle_out,path.knots[0].handle_out,
+        1e-8,"undo did not restore original path geometry");
+    require(model.redo()==sm::result::success,"knot insertion redo failed");
+    require(a->transitions[0].paths.at(tip_id).knots.size()==3,"redo lost inserted knot");
 
     const auto& rig=character->get().rig().skeleton_ids();
     auto evaluated=sm::sample_constrained_pose(*a,0.2,model.core().topology(),rig,bone_id);

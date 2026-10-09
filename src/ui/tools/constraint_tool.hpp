@@ -32,8 +32,6 @@ class constraint : public base {
         QPointF press_point;
         bool creating = false;
     };
-    QComboBox* path_shape_ = nullptr;
-    QLabel* path_label_ = nullptr;
     QPointer<canvas::scene> path_scene_;
     std::vector<QGraphicsItem*> path_graphics_;
     std::optional<sm::object_id> selected_path_;
@@ -45,6 +43,7 @@ class constraint : public base {
     void move_path_gesture(canvas::scene& canv, QPointF where);
     void finish_path_gesture(canvas::scene& canv);
     void select_path(canvas::scene& canv, sm::object_id id);
+    void insert_path_knot(canvas::scene& canv, sm::object_id id, QPointF click);
     QWidget* settings_ = nullptr;
     QComboBox* operation_ = nullptr;
     QComboBox* reference_ = nullptr;

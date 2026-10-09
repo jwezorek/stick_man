@@ -43,11 +43,7 @@ void validate_animation(const sm::animation& a, std::unordered_set<sm::object_id
             throw std::invalid_argument("Invalid transition duration");
         }
         for (const auto& [node_id, path] : transition.paths) {
-            if (node_id.is_nil() || path.node != node_id ||
-                (path.shape != sm::path_shape::line && path.shape != sm::path_shape::cubic &&
-                 path.shape != sm::path_shape::spline) ||
-                (path.shape == sm::path_shape::cubic && path.knots.size()!=2) ||
-                (path.shape == sm::path_shape::spline && path.knots.size()<2))
+            if (node_id.is_nil() || path.node != node_id || !path.is_smooth())
                 throw std::invalid_argument("Invalid animation path");
             for (const auto& knot : path.knots) {
                 for (auto pt : {knot.position, knot.handle_in, knot.handle_out})

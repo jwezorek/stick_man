@@ -12,6 +12,10 @@ sm::point cubic(sm::point a, sm::point b, sm::point c, sm::point d, double t) {
 sm::point knot_position(const sm::animation_path& path, std::size_t i, sm::point start, sm::point end) {
     return i==0 ? start : (i+1==path.knots.size() ? end : path.knots[i].position);
 }
+double length(sm::point p) { return std::hypot(p.x,p.y); }
+// A zero-length handle has no tangent direction. Keep editor-created interior
+// handles nonzero even when dragged directly onto their knot.
+constexpr double min_handle_length = 1e-6;
 constexpr std::size_t samples_per_segment = 96;
 }
 
@@ -31,7 +35,7 @@ void sm::animation_path::invalidate() const {
 
 sm::point sm::animation_path::at_parameter(double u, point start, point end) const {
     u=std::clamp(u,0.0,1.0);
-    if (shape==path_shape::line || knots.size()<2) return mix(start,end,u);
+    if (knots.size()<2) return mix(start,end,u);
     const auto segments=knots.size()-1;
     const double scaled=u*segments;
     const auto i=std::min(static_cast<std::size_t>(scaled),segments-1);
@@ -46,7 +50,7 @@ sm::point sm::animation_path::evaluate(double fraction, point start, point end) 
     fraction=std::clamp(fraction,0.0,1.0);
     if (fraction==0) return start;
     if (fraction==1) return end;
-    if (shape==path_shape::line || knots.size()<2) return mix(start,end,fraction);
+    if (knots.size()<2) return mix(start,end,fraction);
     std::vector<point> signature{start,end};
     for(const auto& k:knots) {
         signature.push_back(k.position);
@@ -77,25 +81,80 @@ sm::point sm::animation_path::evaluate(double fraction, point start, point end) 
     return at_parameter((idx-1+alpha)/(cumulative_lengths_.size()-1),start,end);
 }
 
-void sm::animation_path::reset_shape(path_shape new_shape, point start, point end) {
-    shape=new_shape;
-    knots.clear();
-    if (shape!=path_shape::line) {
-        const auto d=end-start;
-        knots.resize(2);
-        knots.front().handle_out=(1.0/3)*d;
-        knots.back().handle_in=(-1.0/3)*d;
+void sm::animation_path::reset(point start, point end) {
+    knots.resize(2);
+    knots.front()={}; knots.back()={};
+    const auto d=end-start;
+    knots.front().handle_out=(1.0/3)*d;
+    knots.back().handle_in=(-1.0/3)*d;
+    invalidate();
+}
+
+void sm::animation_path::set_handle(std::size_t i, bool incoming, point offset) {
+    if (i>=knots.size()) throw std::out_of_range("path knot");
+    auto& k=knots[i];
+    auto& moved=incoming ? k.handle_in : k.handle_out;
+    auto& opposite=incoming ? k.handle_out : k.handle_in;
+    if (i==0 || i+1==knots.size()) {
+        moved=offset;
+    } else {
+        const auto opposite_length=length(opposite);
+        auto moved_length=length(offset);
+        if (moved_length<min_handle_length) {
+            // Preserve the previous tangent when the cursor is at the knot.
+            const auto old_length=length(moved);
+            offset=old_length>min_handle_length ? (1.0/old_length)*moved :
+                opposite_length>min_handle_length ? (-1.0/opposite_length)*opposite : point{1,0};
+            moved_length=1;
+            offset=min_handle_length*offset;
+            moved_length=min_handle_length;
+        }
+        moved=offset;
+        opposite=(-opposite_length/moved_length)*offset;
+        // A degenerate opposite handle cannot specify a smooth tangent either.
+        if (opposite_length<min_handle_length)
+            opposite=(-min_handle_length/moved_length)*offset;
     }
     invalidate();
 }
-void sm::animation_path::insert_knot(std::size_t i, point start, point end) {
-    if (shape==path_shape::line) reset_shape(path_shape::spline,start,end);
-    if (knots.size()<2 || i>=knots.size()-1) throw std::out_of_range("path segment");
-    shape=path_shape::spline;
+
+void sm::animation_path::smooth_interior_knots() {
+    for (std::size_t i=1;i+1<knots.size();++i) {
+        const auto incoming=knots[i].handle_in;
+        const auto outgoing=knots[i].handle_out;
+        // Prefer the incoming tangent when converting legacy corner knots.
+        const auto in_length=length(incoming), out_length=length(outgoing);
+        if (in_length>=min_handle_length) {
+            knots[i].handle_out=(-std::max(out_length,min_handle_length)/in_length)*incoming;
+        } else if (out_length>=min_handle_length) {
+            knots[i].handle_in=(-min_handle_length/out_length)*outgoing;
+        } else {
+            knots[i].handle_in={-min_handle_length,0};
+            knots[i].handle_out={min_handle_length,0};
+        }
+    }
+    invalidate();
+}
+
+bool sm::animation_path::is_smooth() const {
+    if (knots.size()<2) return false;
+    for (std::size_t i=1;i+1<knots.size();++i) {
+        const auto a=knots[i].handle_in, b=knots[i].handle_out;
+        const auto al=length(a), bl=length(b);
+        if (!(al>0) || !(bl>0) || !std::isfinite(al) || !std::isfinite(bl)) return false;
+        const auto cross=a.x*b.y-a.y*b.x;
+        if (std::abs(cross)>1e-9*al*bl || a.x*b.x+a.y*b.y>=0) return false;
+    }
+    return true;
+}
+
+void sm::animation_path::insert_knot(std::size_t i, double t, point start, point end) {
+    if (knots.size()<2 || i>=knots.size()-1 || !std::isfinite(t) || t<=0 || t>=1)
+        throw std::out_of_range("path segment or subdivision parameter");
     const auto a=knot_position(*this,i,start,end), b=knot_position(*this,i+1,start,end);
     const auto p0=a, p1=a+knots[i].handle_out, p2=b+knots[i+1].handle_in, p3=b;
-    const auto a1=mix(p0,p1,.5), a2=mix(p1,p2,.5), a3=mix(p2,p3,.5);
-    const auto b1=mix(a1,a2,.5), b2=mix(a2,a3,.5), mid=mix(b1,b2,.5);
+    const auto a1=mix(p0,p1,t), a2=mix(p1,p2,t), a3=mix(p2,p3,t);
+    const auto b1=mix(a1,a2,t), b2=mix(a2,a3,t), mid=mix(b1,b2,t);
     knots[i].handle_out=a1-a;
     knots[i+1].handle_in=a3-b;
     knots.insert(knots.begin()+i+1,path_knot{mid,b1-mid,b2-mid});

@@ -7,7 +7,6 @@
 namespace sm {
 // Coordinates are in the fixed animation-start root frame. Endpoints are supplied
 // by poses, never persisted with this object. Handles are offsets from knots.
-enum class path_shape { line, cubic, spline };
 struct path_knot {
     point position{};       // only authoritative for interior knots
     point handle_in{};      // offset from this knot
@@ -16,14 +15,18 @@ struct path_knot {
 
 struct animation_path {
     object_id node;
-    path_shape shape = path_shape::line;
-    std::vector<path_knot> knots; // includes two endpoint *handles*, not endpoint positions
+    std::vector<path_knot> knots; // includes two endpoint handles, not endpoint positions
 
-    // A cached arc-length table is derived data only, and never serialized.
+    // A path always consists of one or more cubic Bezier segments. Interior
+    // knots have opposite, collinear handles (G1 continuity); their lengths
+    // can be adjusted independently.
     point at_parameter(double parameter, point start, point end) const;
     point evaluate(double arc_fraction, point start, point end) const;
-    void reset_shape(path_shape new_shape, point start, point end);
-    void insert_knot(std::size_t segment, point start, point end);
+    void reset(point start, point end);
+    void set_handle(std::size_t knot, bool incoming, point offset);
+    void smooth_interior_knots(); // normalize imported legacy geometry
+    bool is_smooth() const;
+    void insert_knot(std::size_t segment, double t, point start, point end);
     void remove_knot(std::size_t index);
     void invalidate() const;
 

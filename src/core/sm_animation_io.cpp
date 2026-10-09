@@ -121,7 +121,7 @@ nlohmann::json sm::animation_assets_to_json(const animation_assets& assets) {
                                 knots.push_back({{"position",point_json(k.position)},
                                     {"in",point_json(k.handle_in)},{"out",point_json(k.handle_out)}});
                             transition_json["paths"].push_back({{"node",node_id.to_string()},
-                                {"shape",static_cast<int>(path.shape)},{"knots",std::move(knots)}});
+                                {"knots",std::move(knots)}});
                         }
                     }
                     animation_json["transitions"].push_back(std::move(transition_json));
@@ -191,12 +191,19 @@ sm::animation_assets sm::animation_assets_from_json(const nlohmann::json& j) {
                             for (const auto& item : transition_value.at("paths")) {
                                 animation_path path;
                                 path.node=id(item.at("node"));
-                                const auto shape=item.at("shape").get<int>();
-                                if (shape < 0 || shape > 2) throw std::invalid_argument("Invalid animation path shape");
-                                path.shape=static_cast<path_shape>(shape);
+                                // Older packages stored a separate line/cubic/spline shape.
+                                // A line has no knots; two zero-handle knots reproduce it
+                                // geometrically without needing pose endpoints here.
+                                const int shape=item.value("shape",2);
+                                if (shape<0 || shape>2)
+                                    throw std::invalid_argument("Invalid legacy animation path shape");
                                 for (const auto& k : item.at("knots"))
                                     path.knots.push_back({read_point(k.at("position")),
                                         read_point(k.at("in")),read_point(k.at("out"))});
+                                if (shape==0) path.knots.resize(2); // old line: ignore old handles
+                                if (path.knots.size()<2 || (shape==1 && path.knots.size()!=2))
+                                    throw std::invalid_argument("Invalid animation path knots");
+                                path.smooth_interior_knots();
                                 if (!transition.paths.emplace(path.node,std::move(path)).second)
                                     throw std::invalid_argument("Duplicate transition path node");
                             }
