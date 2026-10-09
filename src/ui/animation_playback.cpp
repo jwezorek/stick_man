@@ -28,11 +28,15 @@ void ui::animation_playback::play() {
 void ui::animation_playback::tick() {
     // Sample a monotonic clock, never accumulate timer intervals or paint calls.
     time_ = std::min(duration_, anchor_ + elapsed_.nsecsElapsed() / 1e9);
-    if (time_ >= duration_) {
+    const bool reached_end = time_ >= duration_;
+    if (reached_end)
         timer_.stop();
-        emit playing_changed(false);
-    }
+    // Publish the last playback sample before returning the editor to its pose.
     emit time_changed(time_);
+    if (reached_end) {
+        emit playing_changed(false);
+        emit finished();
+    }
 }
 
 

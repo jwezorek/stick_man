@@ -4,6 +4,7 @@
 #include "../core/sm_constraint_geometry.hpp"
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <map>
 #include <stdexcept>
 #include <unordered_set>
@@ -460,6 +461,9 @@ std::unordered_set<sm::object_id> mdl::project::animation_session_pinned_nodes()
 sm::constraint_map mdl::project::animation_session_rotation_constraints() const {
     if (!animation_session_)
         return {};
+    // While previewing playback (including a pause or scrub), the widgets belong
+    // to the transition sampled at the displayed time. When preview ends, they
+    // return to the selected keyframe's outgoing transition below.
     if (animation_preview_active())
         return playback_rotation_constraints_;
     if (!animation_session_->selected_keyframe)
@@ -1322,22 +1326,48 @@ bool mdl::project::animation_has_outgoing_transition() const {
     return i && *i < a->transitions.size();
 }
 
+// Paths are transition-local display widgets, like rotation constraints.
+// Editing uses the selected keyframe's outgoing transition; playback and scrub
+// use the sampled frame's effective transition.  Editing APIs still reject
+// changes during playback via animation_has_outgoing_transition().
+std::optional<std::size_t> mdl::project::animation_display_transition_index() const {
+    if (!animation_session_)
+        return {};
+    const auto* a = core_.animation_data(animation_session_->character).find_animation(
+        animation_session_->animation);
+    if (!a)
+        return {};
+    if (animation_preview_active()) {
+        if (!playback_transition_id_)
+            return {};
+        const auto it = std::find_if(a->transitions.begin(), a->transitions.end(),
+            [this](const sm::pose_transition& tr) { return tr.id == *playback_transition_id_; });
+        return it == a->transitions.end() ? std::nullopt
+            : std::optional<std::size_t>(std::distance(a->transitions.begin(), it));
+    }
+    if (!animation_session_->selected_keyframe)
+        return {};
+    const auto index = a->keyframe_index(*animation_session_->selected_keyframe);
+    return index && *index < a->transitions.size() ? index : std::nullopt;
+}
+
 std::vector<sm::object_id> mdl::project::animation_session_path_nodes() const {
     std::vector<sm::object_id> ids;
-    if (!animation_has_outgoing_transition())
+    const auto index = animation_display_transition_index();
+    if (!index)
         return ids;
     const auto* a = core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
-    const auto i = *a->keyframe_index(*animation_session_->selected_keyframe);
-    for (const auto& [id, path] : a->transitions[i].paths)
+    for (const auto& [id, path] : a->transitions[*index].paths)
         ids.push_back(id);
     return ids;
 }
 
 std::optional<mdl::project::animation_path_context> mdl::project::animation_session_path_context(sm::object_id node) const {
-    if (!animation_has_outgoing_transition())
+    const auto index = animation_display_transition_index();
+    if (!index)
         return {};
     const auto* a = core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
-    const auto i = *a->keyframe_index(*animation_session_->selected_keyframe);
+    const auto i = *index;
     const auto* c = &a->transitions[i];
     auto char_ref = core_.character(animation_session_->character);
     if (!char_ref)

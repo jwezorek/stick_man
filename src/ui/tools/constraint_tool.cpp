@@ -101,7 +101,6 @@ void ui::tool::constraint::deactivate(canvas::manager& canvases) {
     active_ = false;
     path_gesture_.reset();
     selected_path_.reset();
-    clear_path_graphics();
     if (drag_)
         cancel_drag(canvases.active_canvas());
     clear_triangle_sweep();
@@ -111,6 +110,9 @@ void ui::tool::constraint::deactivate(canvas::manager& canvases) {
         canv->clear_constraint_selection();
         canv->set_constraint_tool_active(false);
     }
+    // Only editing handles disappear when leaving the tool.  The paths
+    // themselves remain visible if the global View option is enabled.
+    redraw_paths(canvases.active_canvas());
 }
 
 void ui::tool::constraint::init(canvas::manager& canvases, mdl::project& model) {
@@ -136,16 +138,6 @@ void ui::tool::constraint::init(canvas::manager& canvases, mdl::project& model) 
     reference_->setCurrentIndex(int(sm::rotation_reference_kind::parent));
     layout->addWidget(reference_label_);
     layout->addWidget(reference_);
-    layout->addWidget(new QLabel(
-        "Select/Edit: click adornments; drag handles.\n"
-        "Nodes: click to pin/unpin in every operation.\n"
-        "Bone reference: click target, then reference bone.\n"
-        "Rigid Triangle: click two sibling bones, or drag\n"
-        "from empty space through both siblings.\n"
-        "Path: click a node (drag to bend curves).\n"
-        "Drag handles; double-click a path to add a knot.\n"
-        "Right-click path to insert or knot to remove.\n"
-        "Delete removes the selected path."));
     layout->addStretch();
 
     QObject::connect(operation_, qOverload<int>(&QComboBox::currentIndexChanged), settings_, [this](int) {
@@ -160,15 +152,26 @@ void ui::tool::constraint::init(canvas::manager& canvases, mdl::project& model) 
     QObject::connect(&model, &mdl::project::animation_keyframe_selected, settings_, [this](sm::object_id) {
         selected_path_.reset();
         path_gesture_.reset();
-        if (active_ && canvases_)
+        if (canvases_)
             redraw_paths(canvases_->active_canvas());
         update_settings_state();
     });
     QObject::connect(&model, &mdl::project::refresh_canvas, settings_, [this](mdl::project&, bool) {
-        if (active_ && canvases_ && !path_gesture_)
+        if (canvases_ && !path_gesture_)
             redraw_paths(canvases_->active_canvas());
         update_settings_state();
     });
+    // Preview rebuilds the display topology without emitting refresh_canvas.
+    // Follow the current sampled transition even when another tool is active.
+    QObject::connect(&model, &mdl::project::animation_display_changed, settings_, [this] {
+        if (canvases_)
+            redraw_paths(canvases_->active_canvas());
+    });
+    QObject::connect(&canvases.active_canvas(), &canvas::scene::constraints_visibility_changed,
+        settings_, [this] {
+            if (canvases_ && !path_gesture_)
+                redraw_paths(canvases_->active_canvas());
+        });
     QObject::connect(reference_, qOverload<int>(&QComboBox::currentIndexChanged), settings_, [this](int) {
         clear_pending();
         if (!model_ || !model_->animation_mode() || !canvases_)
@@ -228,7 +231,7 @@ void ui::tool::constraint::set_animation_mode(bool) {
         }
     }
     update_settings_state();
-    if (active_ && canvases_)
+    if (canvases_)
         redraw_paths(canvases_->active_canvas());
 }
 
@@ -870,11 +873,12 @@ void ui::tool::constraint::clear_path_graphics() {
 
 void ui::tool::constraint::redraw_paths(canvas::scene& canv) {
     clear_path_graphics();
-    if (!active_ || !model_ || !model_->animation_has_outgoing_transition())
+    if (!model_ || !model_->animation_mode() || !canv.constraints_visible())
         return;
     path_scene_ = &canv;
     auto draw = [&](QGraphicsItem* item) {
         item->setZValue(3500);
+        item->setAcceptedMouseButtons(Qt::NoButton); // decorative; tool hit-tests explicitly
         canv.addItem(item);
         path_graphics_.push_back(item);
     };
@@ -884,6 +888,7 @@ void ui::tool::constraint::redraw_paths(canvas::scene& canv) {
         circle->setPen(QPen(color, 1.5));
         circle->setBrush(ghost ? QBrush(Qt::NoBrush) : QBrush(color));
         circle->setZValue(3501);
+        circle->setAcceptedMouseButtons(Qt::NoButton);
         canv.addItem(circle);
         path_graphics_.push_back(circle);
     };
@@ -897,7 +902,8 @@ void ui::tool::constraint::redraw_paths(canvas::scene& canv) {
         auto path = ctx->path;
         if (path_gesture_ && path_gesture_->node == id)
             path = path_gesture_->edited;
-        const bool selected = selected_path_ && *selected_path_ == id;
+        const bool selected = active_ && !model_->animation_preview_active()
+            && selected_path_ && *selected_path_ == id;
         QPainterPath curve(path_world(*ctx, ctx->start));
         const int samples = std::max(120, static_cast<int>(path.knots.size() > 1 ? path.knots.size() - 1 : 1) * 96);
         for (int i = 1; i <= samples; ++i)

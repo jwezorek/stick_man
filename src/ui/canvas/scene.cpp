@@ -472,6 +472,7 @@ void ui::canvas::scene::set_constraint_tool_active(bool active) {
 void ui::canvas::scene::set_constraints_view_visible(bool visible) {
     show_constraints_in_view_ = visible;
     constraint_adornments_->set_visible(constraints_visible());
+    emit constraints_visibility_changed();
 }
 
 std::optional<ui::canvas::constraint_hit> ui::canvas::scene::constraint_at(const QPointF& point) const {

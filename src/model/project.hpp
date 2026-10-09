@@ -57,6 +57,7 @@ namespace mdl {
         std::unique_ptr<sm::topology> playback_topology_;
         std::unordered_set<sm::object_id> playback_pinned_node_ids_;
         sm::constraint_map playback_rotation_constraints_;
+        std::optional<sm::object_id> playback_transition_id_;
         animation_display_status playback_status_ = animation_display_status::editing;
         std::optional<sm::result> playback_error_;
         bool show_previous_pose_ = false;
@@ -65,6 +66,7 @@ namespace mdl {
         history_state history_;
         std::size_t next_node_name_ = 1;
         std::size_t next_bone_name_ = 1;
+        std::optional<std::size_t> animation_display_transition_index() const;
         void clear_redo_stack();
         void clear_session_redo_stack();
         void emit_history_state(bool was_dirty);

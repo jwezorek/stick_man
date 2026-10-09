@@ -13,6 +13,7 @@ void mdl::project::exit_animation_preview() {
         playback_topology_.reset();
         playback_pinned_node_ids_.clear();
         playback_rotation_constraints_.clear();
+        playback_transition_id_.reset();
         emit animation_display_changed();
     }
     playback_status_ = animation_display_status::editing;
@@ -66,11 +67,23 @@ mdl::animation_display_status mdl::project::preview_animation_time(double second
     } catch (const std::exception&) {
         return fail(animation_display_status::reconstruction_failed, sm::result::out_of_bounds);
     }
+    // Remember the transition associated with the sampled frame, including
+    // the outgoing transition at an exact (non-terminal) keyframe.  Path
+    // adornments use the same transition selection as pins and rotations.
+    std::optional<sm::object_id> sampled_transition;
+    if (const auto* tr = std::get_if<sm::reference_transition>(&(**sample).location)) {
+        sampled_transition = tr->transition_id;
+    } else if (const auto* key = std::get_if<sm::reference_keyframe>(&(**sample).location)) {
+        if (const auto index = animation->keyframe_index(key->keyframe_id);
+                index && *index < animation->transitions.size())
+            sampled_transition = animation->transitions[*index].id;
+    }
     // Publish the sample only after reconstruction succeeds.
     emit animation_display_changing(true);
     playback_topology_ = std::move(candidate);
     playback_pinned_node_ids_ = (**sample).pinned_nodes;
     playback_rotation_constraints_ = (**sample).rotation_constraints;
+    playback_transition_id_ = sampled_transition;
     playback_status_ = animation_display_status::sampled;
     playback_error_.reset();
     emit animation_display_changed();

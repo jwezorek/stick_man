@@ -29,12 +29,15 @@ public:
     std::vector<card> cards;
     std::vector<transition> transitions;
     double width = 300;
+    double pixels_per_second = 160.0;
     static constexpr int height = 136;
     std::optional<position> at_time(double seconds) const;
     // Inverse presentation mapping. Card pixels map to their exact key time;
     // transition pixels map linearly across that transition.
     std::optional<double> time_at_x(double x) const;
     bool same_timing(const pose_strip_layout& other) const;
+    // Resize without changing the authored animation; used for interactive drag preview.
+    void preview_duration(std::size_t index, double seconds, bool from_left);
 };
 
 QString pose_keyframe_label(const sm::animation& animation, std::size_t index);

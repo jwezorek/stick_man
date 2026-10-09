@@ -5,6 +5,7 @@
 #include <QWidget>
 #include <optional>
 #include <string>
+#include <utility>
 #include <unordered_map>
 
 namespace mdl { class project; }
@@ -26,6 +27,7 @@ signals:
     void keyframe_selected(sm::object_id id);
     void transition_selected(sm::object_id id);
     void scrub_requested(double seconds);
+    void transition_duration_requested(sm::object_id id, double seconds);
     void playback_focus_changed(QRectF region);
 protected:
     bool event(QEvent* event) override;
@@ -33,6 +35,7 @@ protected:
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
 private:
     mdl::project* project_ = nullptr;
     canvas::manager* canvases_ = nullptr;
@@ -48,6 +51,20 @@ private:
     double playback_time_ = 0;
     std::optional<sm::object_id> selected_transition_;
     bool scrubbing_ = false;
+    struct duration_drag {
+        sm::object_id id;
+        std::size_t index;
+        bool from_left;
+        double press_x;
+        double original_duration;
+        double proposed_duration;
+        pose_strip_layout original_layout;
+    };
+    std::optional<duration_drag> duration_drag_;
+    // Which end, if any, is currently under the pointer.
+    std::optional<std::pair<std::size_t, bool>> resize_handle_at(QPointF point) const;
+    void update_duration_drag(double x);
+    void finish_duration_drag(bool commit);
     QPixmap thumbnail(const sm::pose_keyframe& keyframe);
 };
 }

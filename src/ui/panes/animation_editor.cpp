@@ -110,6 +110,13 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
     connect(playback_, &animation_playback::playing_changed, this, [this](bool playing) {
         play_->setText(playing ? tr("Pause") : tr("Play"));
     });
+    connect(playback_, &animation_playback::finished, this, [this] {
+        // At natural completion restore the selected keyframe's editing pose
+        // and outgoing-transition constraint widgets. Pause/seek keep their
+        // sampled preview (and therefore the sampled constraints) visible.
+        if (project_ && preview_requested_)
+            project_->exit_animation_preview();
+    });
     connect(playback_, &animation_playback::time_changed,
         pose_strip_, &pose_strip::set_playback_time);
     connect(playback_, &animation_playback::time_changed, this, [this](double seconds) {
@@ -176,6 +183,16 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
         playback_->hold();
         refresh();
     });
+    connect(pose_strip_, &pose_strip::transition_duration_requested,
+        this, [this](sm::object_id id, double seconds) {
+            if (!project_)
+                return;
+            playback_->hold();
+            selected_transition_ = id;
+            pose_strip_->set_selected_transition(id);
+            if (project_->set_animation_transition_duration(id, seconds) == sm::result::success)
+                preview_requested_ = false;
+        });
     connect(transition_duration_, &QDoubleSpinBox::editingFinished, this, [this] {
         if (!project_ || !selected_transition_)
             return;

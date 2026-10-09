@@ -26,6 +26,8 @@ public:
 signals:
     void time_changed(double seconds);
     void playing_changed(bool playing);
+    // Emitted only when running playback reaches its natural end (after last sample).
+    void finished();
 private:
     QTimer timer_;
     QElapsedTimer elapsed_;

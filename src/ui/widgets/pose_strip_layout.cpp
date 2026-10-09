@@ -8,7 +8,6 @@ ui::pose_strip_layout::pose_strip_layout(const sm::animation* animation, double 
     if (!animation || animation->keyframes.empty())
         return;
     constexpr double margin = 10;
-    constexpr double pixels_per_second = 160;
     constexpr double minimum_transition_width = 12;
     // Qt cannot create a widget wider than QWIDGETSIZE_MAX. Only clips beyond
     // that platform limit reduce the scale; the viewport never determines it.
@@ -16,7 +15,7 @@ ui::pose_strip_layout::pose_strip_layout(const sm::animation* animation, double 
         animation->transitions.size() * minimum_transition_width;
     const double available = std::max(0.0, QWIDGETSIZE_MAX - fixed_width);
     const double duration = animation->duration_seconds();
-    const double scale = duration > 0 ? std::min(pixels_per_second, available / duration) :
+    pixels_per_second = duration > 0 ? std::min(pixels_per_second, available / duration) :
         pixels_per_second;
     double x = margin;
     double time = 0;
@@ -26,13 +25,46 @@ ui::pose_strip_layout::pose_strip_layout(const sm::animation* animation, double 
         if (i < animation->transitions.size()) {
             const auto& source = animation->transitions[i];
             const double w = std::max(minimum_transition_width,
-                source.duration_seconds * scale);
+                source.duration_seconds * pixels_per_second);
             transitions.push_back({source.id, {x, 55, w, 38}, time, source.duration_seconds});
             x += w;
             time += source.duration_seconds;
         }
     }
     width = x + margin;
+}
+
+void ui::pose_strip_layout::preview_duration(std::size_t index, double seconds, bool from_left) {
+    if (index >= transitions.size() || !(seconds > 0) || !std::isfinite(seconds))
+        return;
+    constexpr double minimum_transition_width = 12.0;
+    auto& resized = transitions[index];
+    const double time_delta = seconds - resized.duration;
+    const double new_width = std::max(minimum_transition_width, seconds * pixels_per_second);
+    const double pixel_delta = new_width - resized.rect.width();
+    resized.duration = seconds;
+    resized.rect.setWidth(new_width);
+
+    // Both ends are true resize handles. When dragging the left end, temporarily
+    // keep the destination pose in place and move the source/earlier poses.
+    // Right-end dragging keeps the source fixed and moves the destination/later poses.
+    if (from_left) {
+        resized.rect.translate(-pixel_delta, 0);
+        for (std::size_t i = 0; i <= index; ++i)
+            cards[i].rect.translate(-pixel_delta, 0);
+        for (std::size_t i = 0; i < index; ++i)
+            transitions[i].rect.translate(-pixel_delta, 0);
+    } else {
+        for (std::size_t i = index + 1; i < cards.size(); ++i)
+            cards[i].rect.translate(pixel_delta, 0);
+        for (std::size_t i = index + 1; i < transitions.size(); ++i)
+            transitions[i].rect.translate(pixel_delta, 0);
+        width += pixel_delta;
+    }
+    for (std::size_t i = index + 1; i < cards.size(); ++i)
+        cards[i].time += time_delta;
+    for (std::size_t i = index + 1; i < transitions.size(); ++i)
+        transitions[i].start += time_delta;
 }
 
 std::optional<ui::pose_strip_layout::position> ui::pose_strip_layout::at_time(double seconds) const {

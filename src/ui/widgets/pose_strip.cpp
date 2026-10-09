@@ -4,6 +4,7 @@
 #include "../util.hpp"
 #include "../../model/project.hpp"
 #include <QMouseEvent>
+#include <QKeyEvent>
 #include <QPainter>
 #include <QHelpEvent>
 #include <QToolTip>
@@ -55,6 +56,8 @@ sm::topology posed_topology(const sm::character& character,
 ui::pose_strip::pose_strip(QWidget* parent) : QWidget(parent) {
     setObjectName("pose_strip");
     setMinimumHeight(130);
+    setFocusPolicy(Qt::StrongFocus);
+    setMouseTracking(true);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 }
 
@@ -65,6 +68,7 @@ void ui::pose_strip::set_context(mdl::project* project, canvas::manager* canvase
     character_ = character;
     animation_ = animation;
     playback_time_ = 0;
+    duration_drag_.reset();
     refresh();
 }
 
@@ -246,6 +250,50 @@ QPixmap ui::pose_strip::thumbnail(const sm::pose_keyframe& keyframe) {
     return pixmap;
 }
 
+std::optional<std::pair<std::size_t, bool>> ui::pose_strip::resize_handle_at(QPointF point) const {
+    for (std::size_t i = 0; i < layout_.transitions.size(); ++i) {
+        const auto& rect = layout_.transitions[i].rect;
+        const double handle_width = std::min(7.0, rect.width() / 3.0);
+        if (!rect.contains(point))
+            continue;
+        const double left_distance = point.x() - rect.left();
+        const double right_distance = rect.right() - point.x();
+        if (std::min(left_distance, right_distance) <= handle_width)
+            return std::pair{i, left_distance <= right_distance};
+    }
+    return {};
+}
+
+void ui::pose_strip::update_duration_drag(double x) {
+    if (!duration_drag_)
+        return;
+    const auto& drag = *duration_drag_;
+    const double signed_delta = (x - drag.press_x) * (drag.from_left ? -1.0 : 1.0);
+    const double scale = std::max(1.e-9, drag.original_layout.pixels_per_second);
+    const double duration = std::clamp(drag.original_duration + signed_delta / scale, 0.000001, 1.0e9);
+    duration_drag_->proposed_duration = duration;
+    layout_ = drag.original_layout;
+    layout_.preview_duration(drag.index, duration, drag.from_left);
+    setMinimumWidth(int(std::ceil(layout_.width)));
+    updateGeometry();
+    update();
+}
+
+void ui::pose_strip::finish_duration_drag(bool commit) {
+    if (!duration_drag_)
+        return;
+    auto drag = std::move(*duration_drag_);
+    duration_drag_.reset();
+    layout_ = std::move(drag.original_layout);
+    setMinimumWidth(int(std::ceil(layout_.width)));
+    updateGeometry();
+    QToolTip::hideText();
+    unsetCursor();
+    update();
+    if (commit && drag.proposed_duration != drag.original_duration)
+        emit transition_duration_requested(drag.id, drag.proposed_duration);
+}
+
 void ui::pose_strip::paintEvent(QPaintEvent*) {
     QPainter painter(this);
     painter.fillRect(rect(), palette().base());
@@ -304,6 +352,12 @@ void ui::pose_strip::paintEvent(QPaintEvent*) {
             selected_transition ? 3 : 1));
         painter.setBrush(palette().alternateBase());
         painter.drawRect(transition.rect);
+        // Narrow grip marks make the resizable ends discoverable without
+        // obscuring the duration label on wider bars.
+        painter.setPen(QPen(palette().mid().color(), 1.5));
+        for (double edge : {transition.rect.left() + 3.0, transition.rect.right() - 3.0})
+            painter.drawLine(QPointF(edge, transition.rect.top() + 7.0),
+                QPointF(edge, transition.rect.bottom() - 7.0));
         const auto label = transition_duration_label(transition.duration);
         if (painter.fontMetrics().horizontalAdvance(label) + 12 <= transition.rect.width()) {
             painter.setPen(palette().text().color());
@@ -395,6 +449,16 @@ void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
         if (auto time = layout_.time_at_x(event->position().x())) emit scrub_requested(*time);
         return;
     }
+    if (auto handle = resize_handle_at(event->position())) {
+        const auto& transition = layout_.transitions[handle->first];
+        duration_drag_ = duration_drag{transition.id, handle->first, handle->second,
+            event->position().x(), transition.duration, transition.duration, layout_};
+        setFocus();
+        setCursor(Qt::SizeHorCursor);
+        emit transition_selected(transition.id);
+        event->accept();
+        return;
+    }
     for (std::size_t i = 0; i < animation->keyframes.size(); ++i) {
         if (layout_.cards[i].rect.contains(event->position())) {
             emit keyframe_selected(animation->keyframes[i].id);
@@ -410,14 +474,40 @@ void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
 }
 
 void ui::pose_strip::mouseMoveEvent(QMouseEvent* event) {
-    if (!scrubbing_)
+    if (duration_drag_) {
+        update_duration_drag(event->position().x());
+        QToolTip::showText(event->globalPosition().toPoint(),
+            tr("%1 s").arg(QString::number(duration_drag_->proposed_duration, 'g', 6)), this);
+        event->accept();
         return;
-    if (auto time = layout_.time_at_x(event->position().x())) emit scrub_requested(*time);
+    }
+    if (scrubbing_) {
+        if (auto time = layout_.time_at_x(event->position().x())) emit scrub_requested(*time);
+        return;
+    }
+    setCursor(resize_handle_at(event->position()) ? Qt::SizeHorCursor : Qt::ArrowCursor);
 }
 
 void ui::pose_strip::mouseReleaseEvent(QMouseEvent* event) {
-    if (!scrubbing_ || event->button() != Qt::LeftButton)
+    if (event->button() != Qt::LeftButton)
         return;
-    if (auto time = layout_.time_at_x(event->position().x())) emit scrub_requested(*time);
-    scrubbing_ = false;
+    if (duration_drag_) {
+        update_duration_drag(event->position().x());
+        finish_duration_drag(true);
+        event->accept();
+        return;
+    }
+    if (scrubbing_) {
+        if (auto time = layout_.time_at_x(event->position().x())) emit scrub_requested(*time);
+        scrubbing_ = false;
+    }
+}
+
+void ui::pose_strip::keyPressEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_Escape && duration_drag_) {
+        finish_duration_drag(false);
+        event->accept();
+        return;
+    }
+    QWidget::keyPressEvent(event);
 }

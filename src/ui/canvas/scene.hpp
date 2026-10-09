@@ -204,6 +204,8 @@ namespace ui {
             const canvas::manager& manager() const;
             canvas::manager& manager();
             std::optional<sm::point> cursor_pos() const;
+        signals:
+            void constraints_visibility_changed();
         };
 
         std::optional<mdl::skel_piece> selected_single_model(const scene& canv);
