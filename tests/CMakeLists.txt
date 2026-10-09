@@ -169,3 +169,9 @@ add_test(NAME animation_paths COMMAND $<TARGET_FILE:animation_paths>)
 add_executable(animation_path_integration animation_path_integration.cpp)
 target_link_libraries(animation_path_integration PRIVATE stick_man_model)
 add_test(NAME animation_path_integration COMMAND $<TARGET_FILE:animation_path_integration>)
+
+add_executable(animation_path_continuity animation_path_continuity.cpp)
+target_link_libraries(animation_path_continuity PRIVATE stick_man_core)
+target_compile_definitions(animation_path_continuity PRIVATE
+    PATH_CONTINUITY_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/path_continuity.stickman")
+add_test(NAME animation_path_continuity COMMAND $<TARGET_FILE:animation_path_continuity>)

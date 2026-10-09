@@ -1534,12 +1534,13 @@ sm::result solve_region(
 
             // A target-only solve can travel along a redundant chain's feasible
             // manifold before refinement ever sees it. Start a competing local
-            // pose solve from the incoming configuration for nearby targets.
-            // All escape seeds below still run and compete with this candidate.
-            if (model.mode != translation_mode::effector_anchor && best
-                && std::ranges::all_of(best->target_errors, [&](double error) {
-                    return error <= model.characteristic_length * 0.25;
-                })) {
+            // pose solve from the incoming configuration, even for distant
+            // targets. Refinement from an exact target hit can stall at the
+            // zero gradient of a squared-distance target cap. Omitting this
+            // candidate then causes nearby animation samples to alternate
+            // between refined and unrefined poses. All escape seeds below
+            // still run and compete with this candidate.
+            if (model.mode != translation_mode::effector_anchor && best) {
                 std::vector<double> caps(context.targets.size(), k_tolerance * 0.5);
                 auto warm_x = context.incoming_x;
                 const int allocation = std::min(80, std::max(1, remaining_budget / 4));
@@ -2371,7 +2372,7 @@ sm::constrained_pose_result sm::sample_constrained_pose(const animation& animati
             for (auto& [sid, targets] : effectors) {
                 auto skeleton=geometry.topology.skeleton(sid);
                 if (!skeleton) return std::unexpected(result::invalid_membership);
-                auto root=skeleton->get().root_node();
+                auto& root = skeleton->get().root_node();
                 std::vector<node_ref> fixed;
                 for (const auto& [node,target] : targets) {
                     if (node->id()==root.id()) {
