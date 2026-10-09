@@ -42,8 +42,6 @@ private:
     std::optional<sm::object_id> playback_return_keyframe_;
     QPushButton* add_pose_ = nullptr;
     QPushButton* insert_pose_ = nullptr;
-    QPushButton* duplicate_ = nullptr;
-    QPushButton* delete_ = nullptr;
     QCheckBox* previous_pose_ = nullptr;
     QDoubleSpinBox* transition_duration_ = nullptr;
     std::optional<sm::object_id> selected_transition_;

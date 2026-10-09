@@ -455,7 +455,20 @@ void ui::clipboard::paste(stick_man& main_wnd, bool in_place) {
 void ui::clipboard::del(stick_man& main_wnd) {
     auto& canv = main_wnd.canvases().active_canvas();
     if (main_wnd.project().animation_mode()) {
-        if (auto constraint_id = canv.selected_constraint_id()) {
+        // Animation Mode's global Delete is for the canvas selection only.
+        // The focused pose strip handles keyframe deletion independently.
+        const auto* focused = QApplication::focusWidget();
+        const bool canvas_focused = focused && std::ranges::any_of(canv.views(),
+            [focused](const QGraphicsView* view) {
+                return focused == view || view->isAncestorOf(focused);
+            });
+        if (!canvas_focused)
+            return;
+
+        // Only outgoing transition-local rotation constraints can be removed
+        // in Animation Mode; never delete a persistent project constraint.
+        if (auto constraint_id = canv.selected_constraint_id();
+                constraint_id && main_wnd.project().animation_session_rotation_constraint(*constraint_id)) {
             if (main_wnd.project().remove_animation_rotation_constraint(*constraint_id) == sm::result::success)
                 canv.clear_constraint_selection();
         }

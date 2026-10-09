@@ -21,6 +21,13 @@
 #include <charconv>
 
 namespace {
+// The pose strip owns these keys only while it has focus. The application's
+// Delete action remains available to the canvas for transition-local constraints.
+bool is_delete_keyframe_shortcut(const QKeyEvent* event) {
+    return (event->key() == Qt::Key_Delete && event->modifiers() == Qt::NoModifier) ||
+        (event->key() == Qt::Key_D && event->modifiers() == Qt::ControlModifier);
+}
+
 QTransform qt_matrix(const sm::matrix& m) {
     return {m(0, 0), m(1, 0), m(0, 1), m(1, 1), m(0, 2), m(1, 2)};
 }
@@ -650,6 +657,13 @@ void ui::pose_strip::paintEvent(QPaintEvent*) {
 }
 
 bool ui::pose_strip::event(QEvent* event) {
+    // Qt delivers ShortcutOverride before KeyPress. Stop the main window's
+    // Delete QAction from acting on the canvas when this widget has focus.
+    if (event->type() == QEvent::ShortcutOverride && hasFocus() &&
+            is_delete_keyframe_shortcut(static_cast<QKeyEvent*>(event))) {
+        event->accept();
+        return true;
+    }
     // A lost mouse grab (e.g. switching windows mid-drag) must not leave
     // the transient card highlight latched on.
     if ((event->type() == QEvent::UngrabMouse ||
@@ -733,13 +747,17 @@ void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
     }
     for (std::size_t i = 0; i < animation->keyframes.size(); ++i) {
         if (layout_.cards[i].rect.contains(event->position())) {
+            setFocus(Qt::MouseFocusReason);
             emit keyframe_selected(animation->keyframes[i].id);
+            event->accept();
             return;
         }
     }
     for (const auto& transition : layout_.transitions) {
         if (transition.rect.contains(event->position())) {
+            setFocus(Qt::MouseFocusReason);
             emit transition_selected(transition.id);
+            event->accept();
             return;
         }
     }
@@ -795,6 +813,14 @@ void ui::pose_strip::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void ui::pose_strip::keyPressEvent(QKeyEvent* event) {
+    // Require focus on the strip itself, not on its inline name QLineEdit:
+    // an unhandled Ctrl+D from the editor must not delete its keyframe.
+    if (hasFocus() && is_delete_keyframe_shortcut(event)) {
+        if (project_ && project_->animation_session_keyframe())
+            project_->delete_animation_keyframe();
+        event->accept();
+        return;
+    }
     if (event->key() == Qt::Key_Escape && scrubbing_) {
         scrubbing_ = false;
         unsetCursor();

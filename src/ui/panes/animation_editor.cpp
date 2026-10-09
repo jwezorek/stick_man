@@ -55,14 +55,6 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
     insert_pose_->setEnabled(false);
     controls->addWidget(insert_pose_);
 
-    duplicate_ = new QPushButton(tr("Duplicate"), content);
-    duplicate_->setObjectName("duplicate_pose");
-    controls->addWidget(duplicate_);
-
-    delete_ = new QPushButton(tr("Delete"), content);
-    delete_->setObjectName("delete_pose");
-    controls->addWidget(delete_);
-
     previous_pose_ = new QCheckBox(tr("Show previous pose"), content);
     previous_pose_->setObjectName("show_previous_pose");
     controls->addWidget(previous_pose_);
@@ -162,12 +154,6 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
             selected_transition_.reset();
             pose_strip_->set_selected_transition({});
         }
-    });
-    connect(duplicate_, &QPushButton::clicked, this, [this] {
-        if (project_) project_->duplicate_animation_keyframe();
-    });
-    connect(delete_, &QPushButton::clicked, this, [this] {
-        if (project_) project_->delete_animation_keyframe();
     });
     connect(previous_pose_, &QCheckBox::toggled, this, [this](bool show) {
         if (project_) project_->set_show_previous_pose(show);
@@ -324,9 +310,6 @@ void ui::pane::animation_editor::refresh() {
     play_->setEnabled(has_poses);
     start_->setEnabled(has_poses);
     end_->setEnabled(has_poses);
-    const bool has_selection = project_ && project_->animation_session_keyframe().has_value();
-    duplicate_->setEnabled(has_selection);
-    delete_->setEnabled(has_selection);
 
     bool interior = false;
     if (animation) {
