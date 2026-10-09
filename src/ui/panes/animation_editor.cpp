@@ -59,10 +59,6 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
     duplicate_->setObjectName("duplicate_pose");
     controls->addWidget(duplicate_);
 
-    rename_ = new QPushButton(tr("Rename"), content);
-    rename_->setObjectName("rename_pose");
-    controls->addWidget(rename_);
-
     delete_ = new QPushButton(tr("Delete"), content);
     delete_->setObjectName("delete_pose");
     controls->addWidget(delete_);
@@ -170,7 +166,6 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
     connect(duplicate_, &QPushButton::clicked, this, [this] {
         if (project_) project_->duplicate_animation_keyframe();
     });
-    connect(rename_, &QPushButton::clicked, this, &animation_editor::rename_selected);
     connect(delete_, &QPushButton::clicked, this, [this] {
         if (project_) project_->delete_animation_keyframe();
     });
@@ -331,7 +326,6 @@ void ui::pane::animation_editor::refresh() {
     end_->setEnabled(has_poses);
     const bool has_selection = project_ && project_->animation_session_keyframe().has_value();
     duplicate_->setEnabled(has_selection);
-    rename_->setEnabled(has_selection);
     delete_->setEnabled(has_selection);
 
     bool interior = false;
@@ -361,35 +355,3 @@ void ui::pane::animation_editor::refresh() {
     }
 }
 
-void ui::pane::animation_editor::rename_selected() {
-    if (!project_)
-        return;
-
-    const auto selected = project_->animation_session_keyframe();
-    if (!selected)
-        return;
-
-    auto character = project_->core().character(character_);
-    auto* animation = character ?
-        character->get().animation_data().find_animation(animation_) : nullptr;
-    auto* keyframe = animation ? animation->find_keyframe(*selected) : nullptr;
-    if (!keyframe)
-        return;
-
-    bool ok = false;
-    const QString current = keyframe->name ?
-        QString::fromStdString(*keyframe->name) : QString{};
-    const QString value = QInputDialog::getText(this, tr("Rename pose"),
-        tr("Name (leave empty for automatic Pose N label):"),
-        QLineEdit::Normal, current, &ok);
-    if (!ok)
-        return;
-
-    const auto trimmed = value.trimmed();
-    if (trimmed.isEmpty()) {
-        project_->rename_animation_keyframe(std::nullopt);
-    } else {
-        project_->rename_animation_keyframe(
-            std::optional<std::string>{trimmed.toStdString()});
-    }
-}

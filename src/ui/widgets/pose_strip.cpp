@@ -8,6 +8,9 @@
 #include <QPainter>
 #include <QPolygonF>
 #include <QHelpEvent>
+#include <QContextMenuEvent>
+#include <QLineEdit>
+#include <QMenu>
 #include <QToolTip>
 #include <algorithm>
 #include <array>
@@ -60,10 +63,20 @@ ui::pose_strip::pose_strip(QWidget* parent) : QWidget(parent) {
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    rename_editor_ = new QLineEdit(this);
+    rename_editor_->setObjectName("pose_strip_name_editor");
+    rename_editor_->setAlignment(Qt::AlignCenter);
+    rename_editor_->setStyleSheet(
+        "QLineEdit { background: palette(base); border: 1px solid palette(highlight); "
+        "border-radius: 4px; padding: 0px 3px; }");
+    rename_editor_->installEventFilter(this);
+    rename_editor_->hide();
 }
 
 void ui::pose_strip::set_context(mdl::project* project, canvas::manager* canvases,
         sm::object_id character, sm::object_id animation) {
+    finish_rename(false);
+    hovered_name_.reset();
     project_ = project;
     canvases_ = canvases;
     character_ = character;
@@ -86,6 +99,19 @@ bool ui::pose_strip::refresh() {
     pose_strip_layout next(animation);
     const bool timing_changed = !layout_.same_timing(next);
     layout_ = std::move(next);
+    // Refreshes also happen on selection and preview changes. Keep an active
+    // editor (and its uncommitted text) intact if the keyframe still exists.
+    if (editing_keyframe_) {
+        const auto it = std::find_if(layout_.cards.begin(), layout_.cards.end(),
+            [this](const auto& card) { return card.id == *editing_keyframe_; });
+        if (it == layout_.cards.end())
+            finish_rename(false);
+        else
+            position_rename_editor();
+    }
+    if (hovered_name_ && std::none_of(layout_.cards.begin(), layout_.cards.end(),
+            [this](const auto& card) { return card.id == *hovered_name_; }))
+        hovered_name_.reset();
     if (timing_changed)
         playback_time_ = 0;
     thumbnails_.clear();
@@ -261,6 +287,180 @@ QPixmap ui::pose_strip::thumbnail(const sm::pose_keyframe& keyframe) {
     return pixmap;
 }
 
+QRectF ui::pose_strip::name_rect(const pose_strip_layout::card& card) const {
+    const auto& rect = card.rect;
+    return {rect.x() + 8, rect.bottom() - 23, rect.width() - 16, 19};
+}
+
+std::optional<sm::object_id> ui::pose_strip::card_at(QPointF point) const {
+    for (const auto& card : layout_.cards) {
+        if (card.rect.contains(point))
+            return card.id;
+    }
+    return {};
+}
+
+std::optional<sm::object_id> ui::pose_strip::name_at(QPointF point) const {
+    for (const auto& card : layout_.cards) {
+        if (name_rect(card).contains(point))
+            return card.id;
+    }
+    return {};
+}
+
+void ui::pose_strip::update_name_hover(QPointF point) {
+    const auto next = name_at(point);
+    if (hovered_name_ == next)
+        return;
+    hovered_name_ = next;
+    update();
+}
+
+void ui::pose_strip::position_rename_editor() {
+    if (!editing_keyframe_)
+        return;
+    const auto it = std::find_if(layout_.cards.begin(), layout_.cards.end(),
+        [this](const auto& card) { return card.id == *editing_keyframe_; });
+    if (it == layout_.cards.end())
+        return;
+    rename_editor_->setGeometry(name_rect(*it).adjusted(-1, -1, 1, 1).toAlignedRect());
+}
+
+void ui::pose_strip::begin_rename(sm::object_id id) {
+    if (!project_)
+        return;
+    if (editing_keyframe_)
+        finish_rename(true);
+
+    // The project's rename command operates on the selected frame. Select
+    // the clicked frame first, including when invoked from its context menu.
+    if (project_->animation_session_keyframe() != id)
+        emit keyframe_selected(id);
+
+    auto character = project_->core().character(character_);
+    const auto* animation = character ?
+        character->get().animation_data().find_animation(animation_) : nullptr;
+    if (!animation || project_->animation_session_keyframe() != id)
+        return;
+    const auto index = animation->keyframe_index(id);
+    if (!index)
+        return;
+    const auto& frame = animation->keyframes[*index];
+    editing_keyframe_ = id;
+    hovered_name_.reset();
+    rename_editor_->setText(frame.name ? QString::fromStdString(*frame.name) : QString{});
+    rename_editor_->setPlaceholderText(pose_keyframe_label(*animation, *index));
+    position_rename_editor();
+    rename_editor_->show();
+    rename_editor_->setFocus(Qt::OtherFocusReason);
+    rename_editor_->selectAll();
+    update();
+}
+
+void ui::pose_strip::finish_rename(bool commit) {
+    if (!editing_keyframe_)
+        return;
+    const auto id = *editing_keyframe_;
+    const QString value = rename_editor_->text().trimmed();
+    // Clear state before hiding the editor or invoking model callbacks; both
+    // can cause focus changes and synchronous pose-strip refreshes.
+    editing_keyframe_.reset();
+    rename_editor_->hide();
+    update();
+    if (!commit || !project_)
+        return;
+
+    auto character = project_->core().character(character_);
+    const auto* animation = character ?
+        character->get().animation_data().find_animation(animation_) : nullptr;
+    const auto* keyframe = animation ? animation->find_keyframe(id) : nullptr;
+    if (!keyframe)
+        return;
+    const std::optional<std::string> name = value.isEmpty() ? std::nullopt :
+        std::optional<std::string>{value.toStdString()};
+    if (name == keyframe->name)
+        return;
+    if (project_->animation_session_keyframe() != id)
+        emit keyframe_selected(id);
+    if (project_->animation_session_keyframe() == id)
+        project_->rename_animation_keyframe(name);
+}
+
+bool ui::pose_strip::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == rename_editor_) {
+        if (event->type() == QEvent::KeyPress) {
+            const auto* key = static_cast<QKeyEvent*>(event);
+            if (key->key() == Qt::Key_Escape) {
+                finish_rename(false);
+                return true;
+            }
+            if (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) {
+                finish_rename(true);
+                return true;
+            }
+        } else if (event->type() == QEvent::FocusOut) {
+            finish_rename(true);
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
+void ui::pose_strip::leaveEvent(QEvent* event) {
+    hovered_name_.reset();
+    if (!scrubbing_ && !duration_drag_)
+        unsetCursor();
+    update();
+    QWidget::leaveEvent(event);
+}
+
+void ui::pose_strip::mouseDoubleClickEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        if (const auto id = name_at(event->position())) {
+            begin_rename(*id);
+            event->accept();
+            return;
+        }
+    }
+    QWidget::mouseDoubleClickEvent(event);
+}
+
+void ui::pose_strip::contextMenuEvent(QContextMenuEvent* event) {
+    const auto id = card_at(QPointF(event->pos()));
+    if (!project_ || !id) {
+        event->ignore();
+        return;
+    }
+    if (editing_keyframe_)
+        finish_rename(true);
+    // Right-click selects the target card even if it was already the active
+    // editing frame (e.g. a transition was subsequently selected).
+    emit keyframe_selected(*id);
+    if (project_->animation_session_keyframe() != *id) {
+        event->ignore();
+        return;
+    }
+
+    QMenu menu(this);
+    auto* rename = menu.addAction(tr("Rename"));
+    auto* duplicate = menu.addAction(tr("Duplicate"));
+    menu.addSeparator();
+    auto* remove = menu.addAction(tr("Delete"));
+    auto* selected = menu.exec(event->globalPos());
+    // A nested menu event loop can change selection. Never apply a menu
+    // command to a different frame than the one that was right-clicked.
+    if (selected && project_ && project_->animation_session_keyframe() != *id)
+        emit keyframe_selected(*id);
+    if (selected && project_ && project_->animation_session_keyframe() == *id) {
+        if (selected == rename)
+            begin_rename(*id);
+        else if (selected == duplicate)
+            project_->duplicate_animation_keyframe();
+        else if (selected == remove)
+            project_->delete_animation_keyframe();
+    }
+    event->accept();
+}
+
 bool ui::pose_strip::scrub_hit(QPointF point) const {
     if (layout_.cards.empty() || point.y() < 0)
         return false;
@@ -414,11 +614,22 @@ void ui::pose_strip::paintEvent(QPaintEvent*) {
         }
         painter.drawPixmap(QPointF(card.x() + 7, card.y() + 7), thumbnail(keyframe));
 
+        const auto label_rect = name_rect(layout_.cards[i]);
+        if (editing_keyframe_ && *editing_keyframe_ == keyframe.id)
+            continue; // The temporary QLineEdit draws the name while editing.
+        if (hovered_name_ && *hovered_name_ == keyframe.id) {
+            auto tint = palette().highlight().color();
+            tint.setAlpha(32);
+            auto outline = palette().highlight().color();
+            outline.setAlpha(110);
+            painter.setPen(QPen(outline, 1));
+            painter.setBrush(tint);
+            painter.drawRoundedRect(label_rect.adjusted(-1, -1, 1, 1), 4, 4);
+        }
         painter.setPen(palette().text().color());
         const auto label = painter.fontMetrics().elidedText(pose_keyframe_label(*animation, i),
-            Qt::ElideRight, int(card.width() - 16));
-        painter.drawText(QRectF(card.x() + 8, card.bottom() - 23, card.width() - 16, 19),
-            Qt::AlignCenter, label);
+            Qt::ElideRight, int(label_rect.width()));
+        painter.drawText(label_rect, Qt::AlignCenter, label);
     }
     if (position) {
         // The filled downward-pointing grip makes the draggable playhead
@@ -471,7 +682,10 @@ bool ui::pose_strip::event(QEvent* event) {
             for (std::size_t i = 0; animation && i < layout_.cards.size(); ++i) {
                 const auto& card = layout_.cards[i];
                 if (card.rect.contains(help->pos())) {
-                    QToolTip::showText(help->globalPos(), tr("%1\nReached at %2 s")
+                    const bool on_name = name_rect(card).contains(help->pos());
+                    QToolTip::showText(help->globalPos(),
+                        (on_name ? tr("%1\nReached at %2 s\nDouble-click to rename") :
+                            tr("%1\nReached at %2 s"))
                         .arg(pose_keyframe_label(*animation, i))
                         .arg(QString::number(card.time, 'g', 12)), this);
                     return true;
@@ -496,6 +710,7 @@ void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
         return;
 
     if (scrub_hit(event->position())) {
+        update_name_hover(QPointF(-1, -1));
         scrubbing_ = true;
         scrub_grip_x_ = event->position().x();
         setFocus();
@@ -506,6 +721,7 @@ void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
         return;
     }
     if (auto handle = resize_handle_at(event->position())) {
+        update_name_hover(QPointF(-1, -1));
         const auto& transition = layout_.transitions[handle->first];
         duration_drag_ = duration_drag{transition.id, handle->first, handle->second,
             event->position().x(), transition.duration, transition.duration, layout_};
@@ -531,6 +747,7 @@ void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
 
 void ui::pose_strip::mouseMoveEvent(QMouseEvent* event) {
     if (duration_drag_) {
+        update_name_hover(QPointF(-1, -1));
         update_duration_drag(event->position().x());
         QToolTip::showText(event->globalPosition().toPoint(),
             tr("%1 s").arg(QString::number(duration_drag_->proposed_duration, 'g', 6)), this);
@@ -538,16 +755,20 @@ void ui::pose_strip::mouseMoveEvent(QMouseEvent* event) {
         return;
     }
     if (scrubbing_) {
+        update_name_hover(QPointF(-1, -1));
         scrub_grip_x_ = event->position().x();
         update(); // The pointer can move while keyframe time stays unchanged.
         if (auto time = layout_.time_at_x(event->position().x())) emit scrub_requested(*time);
         event->accept();
         return;
     }
+    update_name_hover(event->position());
     if (scrub_hit(event->position()))
         setCursor(Qt::OpenHandCursor);
+    else if (resize_handle_at(event->position()))
+        setCursor(Qt::SizeHorCursor);
     else
-        setCursor(resize_handle_at(event->position()) ? Qt::SizeHorCursor : Qt::ArrowCursor);
+        setCursor(name_at(event->position()) ? Qt::IBeamCursor : Qt::ArrowCursor);
 }
 
 void ui::pose_strip::mouseReleaseEvent(QMouseEvent* event) {

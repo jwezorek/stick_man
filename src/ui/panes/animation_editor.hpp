@@ -43,7 +43,6 @@ private:
     QPushButton* add_pose_ = nullptr;
     QPushButton* insert_pose_ = nullptr;
     QPushButton* duplicate_ = nullptr;
-    QPushButton* rename_ = nullptr;
     QPushButton* delete_ = nullptr;
     QCheckBox* previous_pose_ = nullptr;
     QDoubleSpinBox* transition_duration_ = nullptr;
@@ -55,6 +54,5 @@ private:
 
     void refresh();
     void update_preview_status();
-    void rename_selected();
 };
 }
