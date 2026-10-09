@@ -9,6 +9,7 @@
 #include <QPolygonF>
 #include <QHelpEvent>
 #include <QContextMenuEvent>
+#include <QDoubleSpinBox>
 #include <QLineEdit>
 #include <QMenu>
 #include <QToolTip>
@@ -18,7 +19,6 @@
 #include <stdexcept>
 #include <string>
 #include <cmath>
-#include <charconv>
 
 namespace {
 // The pose strip owns these keys only while it has focus. The application's
@@ -78,12 +78,28 @@ ui::pose_strip::pose_strip(QWidget* parent) : QWidget(parent) {
         "border-radius: 4px; padding: 0px 3px; }");
     rename_editor_->installEventFilter(this);
     rename_editor_->hide();
+
+    duration_editor_ = new QDoubleSpinBox(this);
+    duration_editor_->setObjectName("pose_strip_duration_editor");
+    duration_editor_->setDecimals(6);
+    duration_editor_->setRange(0.000001, 1.0e9);
+    duration_editor_->setSuffix(tr(" s"));
+    duration_editor_->setKeyboardTracking(false);
+    duration_editor_->installEventFilter(this);
+    // QAbstractSpinBox delegates keyboard focus to its internal line edit.
+    // Watch that child as well so Enter/Escape and focus-out always work.
+    duration_value_editor_ = duration_editor_->findChild<QLineEdit*>();
+    if (duration_value_editor_)
+        duration_value_editor_->installEventFilter(this);
+    duration_editor_->hide();
 }
 
 void ui::pose_strip::set_context(mdl::project* project, canvas::manager* canvases,
         sm::object_id character, sm::object_id animation) {
     finish_rename(false);
+    finish_duration_edit(false);
     hovered_name_.reset();
+    hovered_duration_.reset();
     project_ = project;
     canvases_ = canvases;
     character_ = character;
@@ -116,13 +132,24 @@ bool ui::pose_strip::refresh() {
         else
             position_rename_editor();
     }
+    if (editing_transition_) {
+        const auto it = std::find_if(layout_.transitions.begin(), layout_.transitions.end(),
+            [this](const auto& transition) { return transition.id == *editing_transition_; });
+        if (it == layout_.transitions.end())
+            finish_duration_edit(false);
+    }
     if (hovered_name_ && std::none_of(layout_.cards.begin(), layout_.cards.end(),
             [this](const auto& card) { return card.id == *hovered_name_; }))
         hovered_name_.reset();
+    if (hovered_duration_ && std::none_of(layout_.transitions.begin(), layout_.transitions.end(),
+            [this](const auto& transition) { return transition.id == *hovered_duration_; }))
+        hovered_duration_.reset();
     if (timing_changed)
         playback_time_ = 0;
     thumbnails_.clear();
     setMinimumWidth(int(std::ceil(layout_.width)));
+    if (editing_transition_)
+        position_duration_editor();
     updateGeometry();
     update();
     return timing_changed;
@@ -145,13 +172,6 @@ void ui::pose_strip::set_playback_active(bool active) {
     if (playback_active_ == active)
         return;
     playback_active_ = active;
-    update();
-}
-
-void ui::pose_strip::set_selected_transition(std::optional<sm::object_id> id) {
-    if (selected_transition_ == id)
-        return;
-    selected_transition_ = id;
     update();
 }
 
@@ -299,10 +319,26 @@ QRectF ui::pose_strip::name_rect(const pose_strip_layout::card& card) const {
     return {rect.x() + 8, rect.bottom() - 23, rect.width() - 16, 19};
 }
 
+QRectF ui::pose_strip::duration_label_rect(const pose_strip_layout::transition& transition) const {
+    const auto width = fontMetrics().horizontalAdvance(transition_duration_label(transition.duration)) + 12;
+    if (width > transition.rect.width())
+        return {}; // No label is drawn on transitions too narrow to show it.
+    return {transition.rect.center().x() - width / 2.0,
+        transition.rect.center().y() - 10, double(width), 20};
+}
+
 std::optional<sm::object_id> ui::pose_strip::card_at(QPointF point) const {
     for (const auto& card : layout_.cards) {
         if (card.rect.contains(point))
             return card.id;
+    }
+    return {};
+}
+
+std::optional<sm::object_id> ui::pose_strip::transition_at(QPointF point) const {
+    for (const auto& transition : layout_.transitions) {
+        if (transition.rect.contains(point))
+            return transition.id;
     }
     return {};
 }
@@ -315,11 +351,25 @@ std::optional<sm::object_id> ui::pose_strip::name_at(QPointF point) const {
     return {};
 }
 
-void ui::pose_strip::update_name_hover(QPointF point) {
-    const auto next = name_at(point);
-    if (hovered_name_ == next)
+std::optional<sm::object_id> ui::pose_strip::duration_at(QPointF point) const {
+    // The resize grips win over the inline duration editing affordance.
+    if (resize_handle_at(point))
+        return {};
+    for (const auto& transition : layout_.transitions) {
+        if ((!editing_transition_ || *editing_transition_ != transition.id) &&
+                duration_label_rect(transition).contains(point))
+            return transition.id;
+    }
+    return {};
+}
+
+void ui::pose_strip::update_label_hover(QPointF point) {
+    const auto next_name = name_at(point);
+    const auto next_duration = duration_at(point);
+    if (hovered_name_ == next_name && hovered_duration_ == next_duration)
         return;
-    hovered_name_ = next;
+    hovered_name_ = next_name;
+    hovered_duration_ = next_duration;
     update();
 }
 
@@ -393,6 +443,59 @@ void ui::pose_strip::finish_rename(bool commit) {
         project_->rename_animation_keyframe(name);
 }
 
+void ui::pose_strip::position_duration_editor() {
+    if (!editing_transition_)
+        return;
+    const auto it = std::find_if(layout_.transitions.begin(), layout_.transitions.end(),
+        [this](const auto& transition) { return transition.id == *editing_transition_; });
+    if (it == layout_.transitions.end())
+        return;
+    // A short interval may be narrower than a usable spin box. Center the
+    // editor over the bar and let it overlap neighboring items temporarily.
+    const int width = std::max(110, duration_editor_->sizeHint().width());
+    const int x = std::clamp(int(std::round(it->rect.center().x() - width / 2.0)),
+        0, std::max(0, this->width() - width));
+    duration_editor_->setGeometry(x, int(it->rect.center().y() - 13), width, 26);
+}
+
+void ui::pose_strip::begin_duration_edit(sm::object_id id) {
+    if (!project_)
+        return;
+    if (editing_keyframe_)
+        finish_rename(true);
+    if (editing_transition_)
+        finish_duration_edit(true);
+    const auto it = std::find_if(layout_.transitions.begin(), layout_.transitions.end(),
+        [id](const auto& transition) { return transition.id == id; });
+    if (it == layout_.transitions.end())
+        return;
+    editing_transition_ = id;
+    hovered_duration_.reset();
+    duration_editor_->setValue(it->duration);
+    position_duration_editor();
+    duration_editor_->show();
+    duration_editor_->raise();
+    duration_editor_->setFocus(Qt::OtherFocusReason);
+    duration_editor_->selectAll();
+    update();
+}
+
+void ui::pose_strip::finish_duration_edit(bool commit) {
+    if (!editing_transition_)
+        return;
+    const auto id = *editing_transition_;
+    const double duration = duration_editor_->value();
+    editing_transition_.reset();
+    duration_editor_->hide();
+    update();
+    if (!commit)
+        return;
+    const auto it = std::find_if(layout_.transitions.begin(), layout_.transitions.end(),
+        [id](const auto& transition) { return transition.id == id; });
+    if (it != layout_.transitions.end() && duration != it->duration)
+        emit transition_duration_requested(id, duration);
+}
+
 bool ui::pose_strip::eventFilter(QObject* watched, QEvent* event) {
     if (watched == rename_editor_) {
         if (event->type() == QEvent::KeyPress) {
@@ -408,12 +511,30 @@ bool ui::pose_strip::eventFilter(QObject* watched, QEvent* event) {
         } else if (event->type() == QEvent::FocusOut) {
             finish_rename(true);
         }
+    } else if (watched == duration_editor_ || watched == duration_value_editor_) {
+        if (event->type() == QEvent::KeyPress) {
+            const auto* key = static_cast<QKeyEvent*>(event);
+            if (key->key() == Qt::Key_Escape) {
+                finish_duration_edit(false);
+                return true;
+            }
+            if (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) {
+                // Let the spin box interpret the text before reading value().
+                duration_editor_->interpretText();
+                finish_duration_edit(true);
+                return true;
+            }
+        } else if (event->type() == QEvent::FocusOut) {
+            duration_editor_->interpretText();
+            finish_duration_edit(true);
+        }
     }
     return QWidget::eventFilter(watched, event);
 }
 
 void ui::pose_strip::leaveEvent(QEvent* event) {
     hovered_name_.reset();
+    hovered_duration_.reset();
     if (!scrubbing_ && !duration_drag_)
         unsetCursor();
     update();
@@ -422,6 +543,12 @@ void ui::pose_strip::leaveEvent(QEvent* event) {
 
 void ui::pose_strip::mouseDoubleClickEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
+        if (const auto id = transition_at(event->position())) {
+            finish_duration_drag(false);
+            begin_duration_edit(*id);
+            event->accept();
+            return;
+        }
         if (const auto id = name_at(event->position())) {
             begin_rename(*id);
             event->accept();
@@ -432,15 +559,26 @@ void ui::pose_strip::mouseDoubleClickEvent(QMouseEvent* event) {
 }
 
 void ui::pose_strip::contextMenuEvent(QContextMenuEvent* event) {
+    if (!project_) {
+        event->ignore();
+        return;
+    }
+    if (const auto transition = transition_at(QPointF(event->pos()))) {
+        QMenu menu(this);
+        auto* edit_duration = menu.addAction(tr("Set Duration…"));
+        if (menu.exec(event->globalPos()) == edit_duration)
+            begin_duration_edit(*transition);
+        event->accept();
+        return;
+    }
     const auto id = card_at(QPointF(event->pos()));
-    if (!project_ || !id) {
+    if (!id) {
         event->ignore();
         return;
     }
     if (editing_keyframe_)
         finish_rename(true);
-    // Right-click selects the target card even if it was already the active
-    // editing frame (e.g. a transition was subsequently selected).
+    // Right-click selects the target pose so the commands act on that pose.
     emit keyframe_selected(*id);
     if (project_->animation_session_keyframe() != *id) {
         event->ignore();
@@ -577,9 +715,7 @@ void ui::pose_strip::paintEvent(QPaintEvent*) {
     painter.drawLine(QPointF(10, 12), QPointF(std::max(10.0, layout_.width - 10), 12));
 
     for (const auto& transition : layout_.transitions) {
-        const bool selected_transition = selected_transition_ && *selected_transition_ == transition.id;
-        painter.setPen(QPen(selected_transition ? palette().highlight().color() : palette().mid().color(),
-            selected_transition ? 3 : 1));
+        painter.setPen(QPen(palette().mid().color(), 1));
         painter.setBrush(palette().alternateBase());
         painter.drawRect(transition.rect);
         // Narrow grip marks make the resizable ends discoverable without
@@ -588,10 +724,20 @@ void ui::pose_strip::paintEvent(QPaintEvent*) {
         for (double edge : {transition.rect.left() + 3.0, transition.rect.right() - 3.0})
             painter.drawLine(QPointF(edge, transition.rect.top() + 7.0),
                 QPointF(edge, transition.rect.bottom() - 7.0));
-        const auto label = transition_duration_label(transition.duration);
-        if (painter.fontMetrics().horizontalAdvance(label) + 12 <= transition.rect.width()) {
+        const auto label_rect = duration_label_rect(transition);
+        if ((!editing_transition_ || *editing_transition_ != transition.id) &&
+                !label_rect.isEmpty()) {
+            if (hovered_duration_ && *hovered_duration_ == transition.id) {
+                auto tint = palette().highlight().color();
+                tint.setAlpha(32);
+                auto outline = palette().highlight().color();
+                outline.setAlpha(110);
+                painter.setPen(QPen(outline, 1));
+                painter.setBrush(tint);
+                painter.drawRoundedRect(label_rect.adjusted(-1, -1, 1, 1), 4, 4);
+            }
             painter.setPen(palette().text().color());
-            painter.drawText(transition.rect, Qt::AlignCenter, label);
+            painter.drawText(transition.rect, Qt::AlignCenter, transition_duration_label(transition.duration));
         }
     }
 
@@ -675,15 +821,10 @@ bool ui::pose_strip::event(QEvent* event) {
     }
     if (event->type() == QEvent::ToolTip) {
         auto* help = static_cast<QHelpEvent*>(event);
-        for (const auto& transition : layout_.transitions) {
-            if (transition.rect.contains(help->pos())) {
-                char duration[64];
-                const auto result = std::to_chars(std::begin(duration), std::end(duration),
-                    transition.duration);
-                QToolTip::showText(help->globalPos(), tr("%1 s").arg(
-                    QString::fromLatin1(duration, result.ptr - duration)), this);
-                return true;
-            }
+        // The duration label itself highlights on hover; no instructional tooltip is needed.
+        if (transition_at(help->pos())) {
+            QToolTip::hideText();
+            return true;
         }
         if (scrub_hit(help->pos())) {
             QToolTip::showText(help->globalPos(), tr("Drag playhead to scrub"), this);
@@ -724,7 +865,7 @@ void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
         return;
 
     if (scrub_hit(event->position())) {
-        update_name_hover(QPointF(-1, -1));
+        update_label_hover(QPointF(-1, -1));
         scrubbing_ = true;
         scrub_grip_x_ = event->position().x();
         setFocus();
@@ -735,13 +876,12 @@ void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
         return;
     }
     if (auto handle = resize_handle_at(event->position())) {
-        update_name_hover(QPointF(-1, -1));
+        update_label_hover(QPointF(-1, -1));
         const auto& transition = layout_.transitions[handle->first];
         duration_drag_ = duration_drag{transition.id, handle->first, handle->second,
             event->position().x(), transition.duration, transition.duration, layout_};
         setFocus();
         setCursor(Qt::SizeHorCursor);
-        emit transition_selected(transition.id);
         event->accept();
         return;
     }
@@ -756,7 +896,6 @@ void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
     for (const auto& transition : layout_.transitions) {
         if (transition.rect.contains(event->position())) {
             setFocus(Qt::MouseFocusReason);
-            emit transition_selected(transition.id);
             event->accept();
             return;
         }
@@ -765,7 +904,7 @@ void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
 
 void ui::pose_strip::mouseMoveEvent(QMouseEvent* event) {
     if (duration_drag_) {
-        update_name_hover(QPointF(-1, -1));
+        update_label_hover(QPointF(-1, -1));
         update_duration_drag(event->position().x());
         QToolTip::showText(event->globalPosition().toPoint(),
             tr("%1 s").arg(QString::number(duration_drag_->proposed_duration, 'g', 6)), this);
@@ -773,20 +912,21 @@ void ui::pose_strip::mouseMoveEvent(QMouseEvent* event) {
         return;
     }
     if (scrubbing_) {
-        update_name_hover(QPointF(-1, -1));
+        update_label_hover(QPointF(-1, -1));
         scrub_grip_x_ = event->position().x();
         update(); // The pointer can move while keyframe time stays unchanged.
         if (auto time = layout_.time_at_x(event->position().x())) emit scrub_requested(*time);
         event->accept();
         return;
     }
-    update_name_hover(event->position());
+    update_label_hover(event->position());
     if (scrub_hit(event->position()))
         setCursor(Qt::OpenHandCursor);
     else if (resize_handle_at(event->position()))
         setCursor(Qt::SizeHorCursor);
     else
-        setCursor(name_at(event->position()) ? Qt::IBeamCursor : Qt::ArrowCursor);
+        setCursor((name_at(event->position()) || duration_at(event->position())) ?
+            Qt::IBeamCursor : Qt::ArrowCursor);
 }
 
 void ui::pose_strip::mouseReleaseEvent(QMouseEvent* event) {

@@ -6,7 +6,6 @@
 #include "../../model/project.hpp"
 #include <QtWidgets>
 #include <cmath>
-#include <algorithm>
 #include <variant>
 
 ui::pane::animation_editor::animation_editor(QWidget* parent) :
@@ -58,15 +57,6 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
     previous_pose_ = new QCheckBox(tr("Show previous pose"), content);
     previous_pose_->setObjectName("show_previous_pose");
     controls->addWidget(previous_pose_);
-
-    controls->addSpacing(8);
-    controls->addWidget(new QLabel(tr("Transition duration (s)"), content));
-    transition_duration_ = new QDoubleSpinBox(content);
-    transition_duration_->setObjectName("transition_duration");
-    transition_duration_->setDecimals(6);
-    transition_duration_->setRange(0.000001, 1.0e9);
-    transition_duration_->setEnabled(false);
-    controls->addWidget(transition_duration_);
 
     controls->addStretch();
     body->addLayout(controls);
@@ -150,47 +140,25 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
     connect(insert_pose_, &QPushButton::clicked, this, [this] {
         if (!project_)
             return;
-        if (project_->insert_animation_keyframe(playback_->time()) == sm::result::success) {
-            selected_transition_.reset();
-            pose_strip_->set_selected_transition({});
-        }
+        project_->insert_animation_keyframe(playback_->time());
     });
     connect(previous_pose_, &QCheckBox::toggled, this, [this](bool show) {
         if (project_) project_->set_show_previous_pose(show);
     });
     connect(pose_strip_, &pose_strip::keyframe_selected, this, [this](sm::object_id id) {
-        selected_transition_.reset();
-        pose_strip_->set_selected_transition({});
-        transition_duration_->setEnabled(false);
         if (project_) project_->select_animation_keyframe(id);
     });
     connect(pose_strip_, &pose_strip::scrub_requested, this, [this](double seconds) {
         preview_time(seconds);
-    });
-    connect(pose_strip_, &pose_strip::transition_selected, this, [this](sm::object_id id) {
-        selected_transition_ = id;
-        pose_strip_->set_selected_transition(id);
-        playback_->hold();
-        refresh();
     });
     connect(pose_strip_, &pose_strip::transition_duration_requested,
         this, [this](sm::object_id id, double seconds) {
             if (!project_)
                 return;
             playback_->hold();
-            selected_transition_ = id;
-            pose_strip_->set_selected_transition(id);
             if (project_->set_animation_transition_duration(id, seconds) == sm::result::success)
                 preview_requested_ = false;
         });
-    connect(transition_duration_, &QDoubleSpinBox::editingFinished, this, [this] {
-        if (!project_ || !selected_transition_)
-            return;
-        if (project_->set_animation_transition_duration(*selected_transition_, transition_duration_->value())
-                == sm::result::success) {
-            preview_requested_ = false;
-        }
-    });
 }
 
 void ui::pane::animation_editor::begin(mdl::project& project, canvas::manager& canvases,
@@ -238,8 +206,6 @@ void ui::pane::animation_editor::begin(mdl::project& project, canvas::manager& c
 void ui::pane::animation_editor::end() {
     preview_requested_ = false;
     playback_return_keyframe_.reset();
-    selected_transition_.reset();
-    pose_strip_->set_selected_transition({});
     if (project_) project_->exit_animation_preview();
     playback_->set_duration(0);
     if (project_) {
@@ -319,22 +285,5 @@ void ui::pane::animation_editor::refresh() {
         } catch (...) { interior = false; }
     }
     insert_pose_->setEnabled(interior && project_ && project_->preview_status() == mdl::animation_display_status::sampled);
-
-    const sm::pose_transition* selected = nullptr;
-    if (animation && selected_transition_) {
-        auto it = std::find_if(animation->transitions.begin(), animation->transitions.end(),
-            [this](const auto& t) { return t.id == *selected_transition_; });
-        if (it != animation->transitions.end())
-            selected = &*it;
-        else {
-            selected_transition_.reset();
-            pose_strip_->set_selected_transition({});
-        }
-    }
-    transition_duration_->setEnabled(selected != nullptr);
-    if (selected) {
-        QSignalBlocker blocker(transition_duration_);
-        transition_duration_->setValue(selected->duration_seconds);
-    }
 }
 

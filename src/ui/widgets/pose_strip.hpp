@@ -12,6 +12,7 @@
 namespace mdl { class project; }
 namespace ui::canvas { class manager; }
 class QLineEdit;
+class QDoubleSpinBox;
 class QContextMenuEvent;
 
 namespace ui {
@@ -24,12 +25,10 @@ public:
     bool refresh();
     void set_playback_time(double seconds);
     void set_playback_active(bool active);
-    void set_selected_transition(std::optional<sm::object_id> id);
     QPixmap render_preview(sm::object_id keyframe);
     QSize minimumSizeHint() const override;
 signals:
     void keyframe_selected(sm::object_id id);
-    void transition_selected(sm::object_id id);
     void scrub_requested(double seconds);
     void transition_duration_requested(sm::object_id id, double seconds);
     void playback_focus_changed(QRectF region);
@@ -58,10 +57,13 @@ private:
     pose_strip_layout layout_;
     double playback_time_ = 0;
     bool playback_active_ = false;
-    std::optional<sm::object_id> selected_transition_;
     QLineEdit* rename_editor_ = nullptr;
     std::optional<sm::object_id> editing_keyframe_;
+    QDoubleSpinBox* duration_editor_ = nullptr;
+    QLineEdit* duration_value_editor_ = nullptr;
+    std::optional<sm::object_id> editing_transition_;
     std::optional<sm::object_id> hovered_name_;
+    std::optional<sm::object_id> hovered_duration_;
     bool scrubbing_ = false;
     // While scrubbing, the triangle follows the pointer even over a pose card,
     // whose entire width maps to a single animation time.
@@ -80,12 +82,18 @@ private:
     std::optional<std::pair<std::size_t, bool>> resize_handle_at(QPointF point) const;
     bool scrub_hit(QPointF point) const;
     QRectF name_rect(const pose_strip_layout::card& card) const;
+    QRectF duration_label_rect(const pose_strip_layout::transition& transition) const;
     std::optional<sm::object_id> name_at(QPointF point) const;
+    std::optional<sm::object_id> duration_at(QPointF point) const;
     std::optional<sm::object_id> card_at(QPointF point) const;
-    void update_name_hover(QPointF point);
+    std::optional<sm::object_id> transition_at(QPointF point) const;
+    void update_label_hover(QPointF point);
     void begin_rename(sm::object_id id);
     void finish_rename(bool commit);
     void position_rename_editor();
+    void begin_duration_edit(sm::object_id id);
+    void finish_duration_edit(bool commit);
+    void position_duration_editor();
     void update_duration_drag(double x);
     void finish_duration_drag(bool commit);
     QPixmap thumbnail(const sm::pose_keyframe& keyframe);

@@ -15,7 +15,6 @@ class QTabWidget;
 class QPushButton;
 class QCheckBox;
 class QToolButton;
-class QDoubleSpinBox;
 
 namespace ui::pane {
 class animation_editor : public QDockWidget {
@@ -43,8 +42,6 @@ private:
     QPushButton* add_pose_ = nullptr;
     QPushButton* insert_pose_ = nullptr;
     QCheckBox* previous_pose_ = nullptr;
-    QDoubleSpinBox* transition_duration_ = nullptr;
-    std::optional<sm::object_id> selected_transition_;
     animation_playback* playback_ = nullptr;
     QToolButton* play_ = nullptr;
     QToolButton* start_ = nullptr;
