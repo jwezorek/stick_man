@@ -53,6 +53,9 @@ private:
     bool playback_active_ = false;
     std::optional<sm::object_id> selected_transition_;
     bool scrubbing_ = false;
+    // While scrubbing, the triangle follows the pointer even over a pose card,
+    // whose entire width maps to a single animation time.
+    double scrub_grip_x_ = 0;
     struct duration_drag {
         sm::object_id id;
         std::size_t index;

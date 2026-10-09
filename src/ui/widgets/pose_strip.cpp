@@ -425,12 +425,15 @@ void ui::pose_strip::paintEvent(QPaintEvent*) {
         // visible in the otherwise sparse ruler lane.
         painter.setPen(QPen(accent, 2));
         painter.drawLine(QPointF(position->x, 18), QPointF(position->x, 131));
+        // The line remains tied to animation time. While dragging, let only
+        // the triangle follow the pointer across time-collapsed pose cards.
+        const double grip_x = scrubbing_ ? scrub_grip_x_ : position->x;
         painter.setPen(QPen(palette().base().color(), 1));
         painter.setBrush(accent);
         painter.drawPolygon(QPolygonF{
-            QPointF(position->x - 7, 3),
-            QPointF(position->x + 7, 3),
-            QPointF(position->x, 18)
+            QPointF(grip_x - 7, 3),
+            QPointF(grip_x + 7, 3),
+            QPointF(grip_x, 18)
         });
     }
 }
@@ -494,6 +497,7 @@ void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
 
     if (scrub_hit(event->position())) {
         scrubbing_ = true;
+        scrub_grip_x_ = event->position().x();
         setFocus();
         setCursor(Qt::ClosedHandCursor);
         update();
@@ -534,6 +538,8 @@ void ui::pose_strip::mouseMoveEvent(QMouseEvent* event) {
         return;
     }
     if (scrubbing_) {
+        scrub_grip_x_ = event->position().x();
+        update(); // The pointer can move while keyframe time stays unchanged.
         if (auto time = layout_.time_at_x(event->position().x())) emit scrub_requested(*time);
         event->accept();
         return;
