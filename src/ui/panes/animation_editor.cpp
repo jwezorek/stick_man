@@ -109,6 +109,7 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
     connect(end_, &QToolButton::clicked, this, [this] { preview_time(playback_->duration()); });
     connect(playback_, &animation_playback::playing_changed, this, [this](bool playing) {
         play_->setText(playing ? tr("Pause") : tr("Play"));
+        pose_strip_->set_playback_active(playing);
     });
     connect(playback_, &animation_playback::finished, this, [this] {
         // At natural completion restore the selected keyframe's editing pose

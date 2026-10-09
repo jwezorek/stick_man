@@ -20,6 +20,7 @@ public:
         sm::object_id character, sm::object_id animation);
     bool refresh();
     void set_playback_time(double seconds);
+    void set_playback_active(bool active);
     void set_selected_transition(std::optional<sm::object_id> id);
     QPixmap render_preview(sm::object_id keyframe);
     QSize minimumSizeHint() const override;
@@ -49,6 +50,7 @@ private:
 
     pose_strip_layout layout_;
     double playback_time_ = 0;
+    bool playback_active_ = false;
     std::optional<sm::object_id> selected_transition_;
     bool scrubbing_ = false;
     struct duration_drag {
@@ -63,6 +65,7 @@ private:
     std::optional<duration_drag> duration_drag_;
     // Which end, if any, is currently under the pointer.
     std::optional<std::pair<std::size_t, bool>> resize_handle_at(QPointF point) const;
+    bool scrub_hit(QPointF point) const;
     void update_duration_drag(double x);
     void finish_duration_drag(bool commit);
     QPixmap thumbnail(const sm::pose_keyframe& keyframe);

@@ -6,6 +6,7 @@
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QPainter>
+#include <QPolygonF>
 #include <QHelpEvent>
 #include <QToolTip>
 #include <algorithm>
@@ -68,7 +69,10 @@ void ui::pose_strip::set_context(mdl::project* project, canvas::manager* canvase
     character_ = character;
     animation_ = animation;
     playback_time_ = 0;
+    playback_active_ = false;
+    scrubbing_ = false;
     duration_drag_.reset();
+    unsetCursor();
     refresh();
 }
 
@@ -102,6 +106,13 @@ void ui::pose_strip::set_playback_time(double seconds) {
         }
         emit playback_focus_changed(focus);
     }
+}
+
+void ui::pose_strip::set_playback_active(bool active) {
+    if (playback_active_ == active)
+        return;
+    playback_active_ = active;
+    update();
 }
 
 void ui::pose_strip::set_selected_transition(std::optional<sm::object_id> id) {
@@ -250,6 +261,18 @@ QPixmap ui::pose_strip::thumbnail(const sm::pose_keyframe& keyframe) {
     return pixmap;
 }
 
+bool ui::pose_strip::scrub_hit(QPointF point) const {
+    if (layout_.cards.empty() || point.y() < 0)
+        return false;
+    // The entire ruler supports seeking. Give the playhead's triangular grip
+    // an additional hit area below the ruler so it is easy to pick up.
+    if (point.y() <= 20.0)
+        return true;
+    const auto position = layout_.at_time(playback_time_);
+    return position && point.y() <= 26.0 &&
+        std::abs(point.x() - position->x) <= 11.0;
+}
+
 std::optional<std::pair<std::size_t, bool>> ui::pose_strip::resize_handle_at(QPointF point) const {
     for (std::size_t i = 0; i < layout_.transitions.size(); ++i) {
         const auto& rect = layout_.transitions[i].rect;
@@ -372,7 +395,10 @@ void ui::pose_strip::paintEvent(QPaintEvent*) {
         const auto& keyframe = animation->keyframes[i];
         const auto card = layout_.cards[i].rect;
         const bool is_selected = selected && *selected == keyframe.id;
-        const bool is_current = position && position->current_pose == i;
+        // Only running playback or an active playhead drag highlights a card.
+        // Neither state changes the editor's persistent keyframe selection.
+        const bool is_current = (playback_active_ || scrubbing_) &&
+            position && position->current_pose == i;
 
         painter.setPen(QPen(is_selected ? palette().highlight().color() :
             palette().mid().color(), is_selected ? 3 : 1));
@@ -395,12 +421,30 @@ void ui::pose_strip::paintEvent(QPaintEvent*) {
             Qt::AlignCenter, label);
     }
     if (position) {
+        // The filled downward-pointing grip makes the draggable playhead
+        // visible in the otherwise sparse ruler lane.
         painter.setPen(QPen(accent, 2));
-        painter.drawLine(QPointF(position->x, 5), QPointF(position->x, 131));
+        painter.drawLine(QPointF(position->x, 18), QPointF(position->x, 131));
+        painter.setPen(QPen(palette().base().color(), 1));
+        painter.setBrush(accent);
+        painter.drawPolygon(QPolygonF{
+            QPointF(position->x - 7, 3),
+            QPointF(position->x + 7, 3),
+            QPointF(position->x, 18)
+        });
     }
 }
 
 bool ui::pose_strip::event(QEvent* event) {
+    // A lost mouse grab (e.g. switching windows mid-drag) must not leave
+    // the transient card highlight latched on.
+    if ((event->type() == QEvent::UngrabMouse ||
+            event->type() == QEvent::WindowDeactivate ||
+            event->type() == QEvent::Hide) && scrubbing_) {
+        scrubbing_ = false;
+        unsetCursor();
+        update();
+    }
     if (event->type() == QEvent::ToolTip) {
         auto* help = static_cast<QHelpEvent*>(event);
         for (const auto& transition : layout_.transitions) {
@@ -412,6 +456,10 @@ bool ui::pose_strip::event(QEvent* event) {
                     QString::fromLatin1(duration, result.ptr - duration)), this);
                 return true;
             }
+        }
+        if (scrub_hit(help->pos())) {
+            QToolTip::showText(help->globalPos(), tr("Drag playhead to scrub"), this);
+            return true;
         }
         if (project_) {
             auto character = project_->core().character(character_);
@@ -444,9 +492,13 @@ void ui::pose_strip::mousePressEvent(QMouseEvent* event) {
     if (!animation)
         return;
 
-    if (event->position().y() <= 20.0) {
+    if (scrub_hit(event->position())) {
         scrubbing_ = true;
+        setFocus();
+        setCursor(Qt::ClosedHandCursor);
+        update();
         if (auto time = layout_.time_at_x(event->position().x())) emit scrub_requested(*time);
+        event->accept();
         return;
     }
     if (auto handle = resize_handle_at(event->position())) {
@@ -483,9 +535,13 @@ void ui::pose_strip::mouseMoveEvent(QMouseEvent* event) {
     }
     if (scrubbing_) {
         if (auto time = layout_.time_at_x(event->position().x())) emit scrub_requested(*time);
+        event->accept();
         return;
     }
-    setCursor(resize_handle_at(event->position()) ? Qt::SizeHorCursor : Qt::ArrowCursor);
+    if (scrub_hit(event->position()))
+        setCursor(Qt::OpenHandCursor);
+    else
+        setCursor(resize_handle_at(event->position()) ? Qt::SizeHorCursor : Qt::ArrowCursor);
 }
 
 void ui::pose_strip::mouseReleaseEvent(QMouseEvent* event) {
@@ -500,10 +556,20 @@ void ui::pose_strip::mouseReleaseEvent(QMouseEvent* event) {
     if (scrubbing_) {
         if (auto time = layout_.time_at_x(event->position().x())) emit scrub_requested(*time);
         scrubbing_ = false;
+        setCursor(scrub_hit(event->position()) ? Qt::OpenHandCursor : Qt::ArrowCursor);
+        update();
+        event->accept();
     }
 }
 
 void ui::pose_strip::keyPressEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_Escape && scrubbing_) {
+        scrubbing_ = false;
+        unsetCursor();
+        update();
+        event->accept();
+        return;
+    }
     if (event->key() == Qt::Key_Escape && duration_drag_) {
         finish_duration_drag(false);
         event->accept();
