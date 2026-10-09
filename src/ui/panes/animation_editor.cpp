@@ -98,8 +98,15 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
 
     playback_ = new animation_playback(this);
     connect(play_, &QToolButton::clicked, this, [this] {
-        if (playback_->playing()) playback_->pause();
-        else {
+        if (playback_->playing()) {
+            // Pausing leaves us in preview; do not restore the pre-playback selection.
+            playback_return_keyframe_.reset();
+            playback_->pause();
+        } else {
+            // Remember the editing frame only for uninterrupted playback.
+            // Sampling deliberately clears the visible selection while playing.
+            playback_return_keyframe_ = project_ && playback_->duration() > 0
+                ? project_->animation_session_keyframe() : std::nullopt;
             preview_requested_ = true;
             if (playback_->duration() > 0) playback_->play();
             else preview_time(0);
@@ -112,11 +119,12 @@ ui::pane::animation_editor::animation_editor(QWidget* parent) :
         pose_strip_->set_playback_active(playing);
     });
     connect(playback_, &animation_playback::finished, this, [this] {
-        // At natural completion restore the selected keyframe's editing pose
-        // and outgoing-transition constraint widgets. Pause/seek keep their
-        // sampled preview (and therefore the sampled constraints) visible.
-        if (project_ && preview_requested_)
-            project_->exit_animation_preview();
+        // An ordinary play-through started from a selected editing frame returns
+        // to that frame. Playback started from preview (no selection) stays in preview.
+        const auto keyframe = playback_return_keyframe_;
+        playback_return_keyframe_.reset();
+        if (project_ && preview_requested_ && keyframe)
+            project_->select_animation_keyframe(*keyframe);
     });
     connect(playback_, &animation_playback::time_changed,
         pose_strip_, &pose_strip::set_playback_time);
@@ -222,6 +230,7 @@ void ui::pane::animation_editor::begin(mdl::project& project, canvas::manager& c
         &animation_editor::refresh, Qt::UniqueConnection);
     connect(&project, &mdl::project::animation_editing_requested, this, [this] {
         preview_requested_ = false;
+        playback_return_keyframe_.reset();
         playback_->hold();
     });
     connect(&project, &mdl::project::animation_display_status_changed,
@@ -247,6 +256,7 @@ void ui::pane::animation_editor::begin(mdl::project& project, canvas::manager& c
 
 void ui::pane::animation_editor::end() {
     preview_requested_ = false;
+    playback_return_keyframe_.reset();
     selected_transition_.reset();
     pose_strip_->set_selected_transition({});
     if (project_) project_->exit_animation_preview();
@@ -270,6 +280,8 @@ ui::pane::animation_editor::~animation_editor() { end(); }
 void ui::pane::animation_editor::preview_time(double seconds) {
     if (!project_ || !std::isfinite(seconds))
         return;
+    // Seeking/scrubbing breaks the play-through return-to-editing behavior.
+    playback_return_keyframe_.reset();
     preview_requested_ = true;
     playback_->seek(seconds);
 }

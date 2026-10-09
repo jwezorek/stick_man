@@ -86,6 +86,9 @@ mdl::animation_display_status mdl::project::preview_animation_time(double second
     playback_transition_id_ = sampled_transition;
     playback_status_ = animation_display_status::sampled;
     playback_error_.reset();
+    // The canvas now displays a sampled pose, not the authored editing pose.
+    // A keyframe remains selected only when it is explicitly returned to for editing.
+    animation_session_->selected_keyframe.reset();
     emit animation_display_changed();
     emit animation_display_status_changed();
     return playback_status_;

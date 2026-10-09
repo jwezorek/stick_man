@@ -395,8 +395,8 @@ void ui::pose_strip::paintEvent(QPaintEvent*) {
         const auto& keyframe = animation->keyframes[i];
         const auto card = layout_.cards[i].rect;
         const bool is_selected = selected && *selected == keyframe.id;
-        // Only running playback or an active playhead drag highlights a card.
-        // Neither state changes the editor's persistent keyframe selection.
+        // Playback and scrubbing use a transient highlight, independent of
+        // the persistent selection border used for editing a keyframe.
         const bool is_current = (playback_active_ || scrubbing_) &&
             position && position->current_pose == i;
 
@@ -558,6 +558,11 @@ void ui::pose_strip::mouseReleaseEvent(QMouseEvent* event) {
         scrubbing_ = false;
         setCursor(scrub_hit(event->position()) ? Qt::OpenHandCursor : Qt::ArrowCursor);
         update();
+        // Releasing at an exact keyframe returns to editing that pose.
+        // Interior times remain read-only previews with no selected keyframe.
+        if (const auto position = layout_.at_time(playback_time_);
+                position && position->at_keyframe)
+            emit keyframe_selected(layout_.cards[position->current_pose].id);
         event->accept();
     }
 }

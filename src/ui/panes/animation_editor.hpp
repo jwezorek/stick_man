@@ -39,6 +39,7 @@ private:
     QLabel* time_display_ = nullptr;
     QLabel* preview_status_ = nullptr;
     bool preview_requested_ = false;
+    std::optional<sm::object_id> playback_return_keyframe_;
     QPushButton* add_pose_ = nullptr;
     QPushButton* insert_pose_ = nullptr;
     QPushButton* duplicate_ = nullptr;

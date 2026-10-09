@@ -31,7 +31,7 @@ void ui::animation_playback::tick() {
     const bool reached_end = time_ >= duration_;
     if (reached_end)
         timer_.stop();
-    // Publish the last playback sample before returning the editor to its pose.
+    // Publish the final sample so the editor can retain its preview at the endpoint.
     emit time_changed(time_);
     if (reached_end) {
         emit playing_changed(false);
