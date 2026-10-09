@@ -538,38 +538,47 @@ std::optional<sm::point> sm::animation_pose_node(const skeletal_pose& pose,
     try {
         topology copy;
         for (auto sid : rig) {
-            auto skel=source.skeleton(sid);
-            if (!skel || !skel->get().copy_to(copy)) return {};
+            auto skel = source.skeleton(sid);
+            if (!skel || !skel->get().copy_to(copy))
+                return {};
         }
-        apply_skeletal_pose(pose,copy,rig);
-        if (auto n=copy.get<node>(id)) return n->get().world_pos();
+        apply_skeletal_pose(pose, copy, rig);
+        if (auto n = copy.get<node>(id))
+            return n->get().world_pos();
     } catch (...) {}
     return {};
 }
 std::optional<sm::animation_root_frame> sm::fixed_animation_root(const animation& a,
     const topology& source, std::span<const object_id> rig,
     std::optional<object_id> root_bone) {
-    if (a.keyframes.empty()) return {};
+    if (a.keyframes.empty())
+        return {};
     try {
         topology copy;
         for (auto sid : rig) {
-            auto skel=source.skeleton(sid);
-            if (!skel || !skel->get().copy_to(copy)) return {};
+            auto skel = source.skeleton(sid);
+            if (!skel || !skel->get().copy_to(copy))
+                return {};
         }
-        apply_skeletal_pose(a.keyframes.front().pose,copy,rig);
+        apply_skeletal_pose(a.keyframes.front().pose, copy, rig);
         if (!root_bone) {
             for (auto sid : rig) {
-                auto skel=copy.skeleton(sid);
-                if (!skel) continue;
+                auto skel = copy.skeleton(sid);
+                if (!skel)
+                    continue;
                 for (auto bone : skel->get().bones()) {
-                    root_bone=bone->id(); break;
+                    root_bone = bone->id();
+                    break;
                 }
-                if (root_bone) break;
+                if (root_bone)
+                    break;
             }
         }
-        if (!root_bone) return {};
-        auto b=copy.get<bone>(*root_bone);
-        if (!b) return {};
-        return animation_root_frame{b->get().parent_node().world_pos(),b->get().world_rotation()};
+        if (!root_bone)
+            return {};
+        auto b = copy.get<bone>(*root_bone);
+        if (!b)
+            return {};
+        return animation_root_frame{b->get().parent_node().world_pos(), b->get().world_rotation()};
     } catch (...) { return {}; }
 }

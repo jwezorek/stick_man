@@ -103,11 +103,14 @@ void ui::pane::props::character::populate(mdl::project& proj) {
             proj_->rename(selected->id(), name_->text().toStdString());
     });
     connect(root_bone_, QOverload<int>::of(&QComboBox::activated), this, [this](int index) {
-        if (parent_->read_only() || index < 0) return;
+        if (parent_->read_only() || index < 0)
+            return;
         auto* selected = get_current_canv_().selected_character();
-        if (!selected) return;
+        if (!selected)
+            return;
         const auto parsed = sm::object_id::from_string(root_bone_->itemData(index).toString().toStdString());
-        if (!parsed) return;
+        if (!parsed)
+            return;
         if (proj_->set_character_root_bone(selected->id(), *parsed) != sm::result::success)
             set_selection(get_current_canv_());
     });
@@ -135,14 +138,17 @@ void ui::pane::props::character::set_selection(const canvas::scene& canv) {
                 root_bone_->addItem(multiple
                     ? QString::fromStdString(skel->name()) + " / " + label : label,
                     QString::fromStdString(bone.id().to_string()));
-                for (auto child : bone.child_bones()) self(self, child.get());
+                for (auto child : bone.child_bones())
+                    self(self, child.get());
             };
-            for (auto bone : skel->root_node().child_bones()) add_bone(add_bone, bone.get());
+            for (auto bone : skel->root_node().child_bones())
+                add_bone(add_bone, bone.get());
         }
         const auto root = selected->model().character_root_bone();
         if (root) root_bone_->setCurrentIndex(
             root_bone_->findData(QString::fromStdString(root->to_string())));
-        if (root_bone_->count() == 0) root_bone_->addItem("(no bones)");
+        if (root_bone_->count() == 0)
+            root_bone_->addItem("(no bones)");
         root_bone_->setEnabled(root_bone_->count() > 0 && root.has_value() && !parent_->read_only());
 
 

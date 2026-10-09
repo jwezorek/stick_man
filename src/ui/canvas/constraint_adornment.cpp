@@ -26,15 +26,18 @@ enum class adornment_role {
 };
 
 QColor normal_color(adornment_role role) {
-    if (role == adornment_role::incoming_lock) return QColor(128, 128, 128);
+    if (role == adornment_role::incoming_lock)
+        return QColor(128, 128, 128);
     return role == adornment_role::outgoing_transition ? QColor("deepskyblue") : QColor("mediumpurple");
 }
 QColor hover_color(adornment_role role) {
-    if (role == adornment_role::incoming_lock) return QColor(128, 128, 128);
+    if (role == adornment_role::incoming_lock)
+        return QColor(128, 128, 128);
     return role == adornment_role::outgoing_transition ? QColor("cyan") : QColor("orange");
 }
 QColor selected_color(adornment_role role) {
-    if (role == adornment_role::incoming_lock) return QColor(128, 128, 128);
+    if (role == adornment_role::incoming_lock)
+        return QColor(128, 128, 128);
     return role == adornment_role::outgoing_transition ? QColor("cyan") : ui::canvas::k_sel_color;
 }
 
@@ -248,7 +251,8 @@ void ui::canvas::constraint_adornment_layer::sync(
         v.transition_local = role == adornment_role::outgoing_transition;
         if (auto rotation = constraint.rotation()) {
             auto target = topology.get<sm::bone>(rotation->target_bone);
-            if (!target) continue;
+            if (!target)
+                continue;
             const bool filled_wedge = rotation->reference.kind == sm::rotation_reference_kind::world ||
                 rotation->reference.kind == sm::rotation_reference_kind::parent;
             const QPointF pivot = rotation->reference.kind == sm::rotation_reference_kind::world
@@ -263,7 +267,8 @@ void ui::canvas::constraint_adornment_layer::sync(
             auto* body = new path_graphic(id, constraint_part::body, scale, filled_wedge, role, !incoming_lock);
             body->setPath(filled_wedge ? wedge_path(pivot, radius, start, rotation->allowed.span_angle)
                                       : arc_path(pivot, radius, start, rotation->allowed.span_angle));
-            owner_.addItem(body); v.graphics.push_back(body);
+            owner_.addItem(body);
+            v.graphics.push_back(body);
             if (incoming_lock) {
                 const double badge_angle = start + rotation->allowed.span_angle / 2.0;
                 auto* badge = make_lock_badge(radial(pivot, radius + 12.0 / scale, badge_angle));
@@ -274,21 +279,26 @@ void ui::canvas::constraint_adornment_layer::sync(
                     radial(pivot, radius, start), scale, role);
                 auto* max_handle = new handle_graphic(id, constraint_part::rotation_max,
                     radial(pivot, radius, end), scale, role);
-                owner_.addItem(min_handle); owner_.addItem(max_handle);
-                v.graphics.push_back(min_handle); v.graphics.push_back(max_handle);
+                owner_.addItem(min_handle);
+                owner_.addItem(max_handle);
+                v.graphics.push_back(min_handle);
+                v.graphics.push_back(max_handle);
             }
         } else if (role == adornment_role::persistent) {
             auto triangle = constraint.triangle();
             auto first = topology.get<sm::bone>(triangle->first_bone);
             auto second = topology.get<sm::bone>(triangle->second_bone);
-            if (!first || !second) continue;
+            if (!first || !second)
+                continue;
             const QPointF root = ui::to_qt_pt(first->get().parent_node().world_pos());
             const QPointF first_tip = ui::to_qt_pt(first->get().child_node().world_pos());
             const QPointF second_tip = ui::to_qt_pt(second->get().child_node().world_pos());
             auto* body = new triangle_graphic(id, QPolygonF{root, first_tip, second_tip}, scale);
-            owner_.addItem(body); v.graphics.push_back(body);
+            owner_.addItem(body);
+            v.graphics.push_back(body);
             auto* handle = new triangle_angle_hit_graphic(id, second_tip, scale);
-            owner_.addItem(handle); v.graphics.push_back(handle);
+            owner_.addItem(handle);
+            v.graphics.push_back(handle);
         }
         for (auto* graphic : v.graphics) {
             const auto* item = dynamic_cast<constraint_graphic*>(graphic);
@@ -300,8 +310,10 @@ void ui::canvas::constraint_adornment_layer::sync(
     add(constraints, adornment_role::persistent);
     add(transition_constraints, adornment_role::outgoing_transition);
     add(incoming_locked_constraints, adornment_role::incoming_lock);
-    if (selected_ && !visuals_.contains(*selected_)) selected_.reset();
-    if (hovered_ && !visuals_.contains(*hovered_)) hovered_.reset();
+    if (selected_ && !visuals_.contains(*selected_))
+        selected_.reset();
+    if (hovered_ && !visuals_.contains(*hovered_))
+        hovered_.reset();
     update_styles();
 }
 

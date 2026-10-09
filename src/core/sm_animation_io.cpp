@@ -190,21 +190,22 @@ sm::animation_assets sm::animation_assets_from_json(const nlohmann::json& j) {
                         if (transition_value.contains("paths")) {
                             for (const auto& item : transition_value.at("paths")) {
                                 animation_path path;
-                                path.node=id(item.at("node"));
+                                path.node = id(item.at("node"));
                                 // Older packages stored a separate line/cubic/spline shape.
                                 // A line has no knots; two zero-handle knots reproduce it
                                 // geometrically without needing pose endpoints here.
-                                const int shape=item.value("shape",2);
-                                if (shape<0 || shape>2)
+                                const int shape = item.value("shape", 2);
+                                if (shape < 0 || shape > 2)
                                     throw std::invalid_argument("Invalid legacy animation path shape");
                                 for (const auto& k : item.at("knots"))
                                     path.knots.push_back({read_point(k.at("position")),
-                                        read_point(k.at("in")),read_point(k.at("out"))});
-                                if (shape==0) path.knots.resize(2); // old line: ignore old handles
-                                if (path.knots.size()<2 || (shape==1 && path.knots.size()!=2))
+                                        read_point(k.at("in")), read_point(k.at("out"))});
+                                if (shape == 0)
+                                    path.knots.resize(2); // old line: ignore old handles
+                                if (path.knots.size() < 2 || (shape == 1 && path.knots.size() != 2))
                                     throw std::invalid_argument("Invalid animation path knots");
                                 path.smooth_interior_knots();
-                                if (!transition.paths.emplace(path.node,std::move(path)).second)
+                                if (!transition.paths.emplace(path.node, std::move(path)).second)
                                     throw std::invalid_argument("Duplicate transition path node");
                             }
                         }

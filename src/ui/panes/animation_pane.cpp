@@ -439,9 +439,12 @@ bool ui::pane::animation::open_animation(sm::object_id cid, sm::object_id aid) {
     auto* tools_toolbar = main->findChild<ui::pane::tools*>("tools_toolbar");
     auto* tool_settings = window ? &window->tool_pane() : nullptr;
     auto* skeleton_pane = window ? &window->skel_pane() : nullptr;
-    if (tools_toolbar) tools_toolbar->set_animation_mode(true);
-    if (skeleton_pane) skeleton_pane->set_animation_mode(true);
-    if (window) window->properties_pane().set_animation_mode(true);
+    if (tools_toolbar)
+        tools_toolbar->set_animation_mode(true);
+    if (skeleton_pane)
+        skeleton_pane->set_animation_mode(true);
+    if (window)
+        window->properties_pane().set_animation_mode(true);
     if (window) {
         auto& constraint = static_cast<tool::constraint&>(window->tool_mgr().tool_from_id(tool::id::constraint));
         constraint.set_animation_mode(true);
@@ -489,7 +492,8 @@ void ui::pane::animation::leave_animation() {
     // the model session, and only then rebuild the canvas from the persistent
     // project topology.
     canvases_->detach_animation_session_view();
-    if (project_->animation_mode()) project_->end_animation_session();
+    if (project_->animation_mode())
+        project_->end_animation_session();
     canvases_->show_animation_session(false);
 
     for (auto& [scene, pins] : pins_before_)

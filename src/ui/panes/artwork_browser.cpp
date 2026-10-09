@@ -778,19 +778,19 @@ ui::pane::artwork_browser::artwork_browser(
 				for (auto& s : changed.appearance_slots) {
 					if (s.slot == slot) {
 						switch (i) {
-						case 0:
+							case 0:
 							s.transform.translation.x = value;
 							break;
-						case 1:
+							case 1:
 							s.transform.translation.y = value;
 							break;
-						case 2:
+							case 2:
 							s.transform.rotation = value * std::numbers::pi / 180;
 							break;
-						case 3:
+							case 3:
 							s.transform.scale.x = value;
 							break;
-						case 4:
+							case 4:
 							s.transform.scale.y = value;
 							break;
 						}
@@ -925,25 +925,36 @@ ui::pane::artwork_browser::artwork_browser(
 		button->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
 		background_buttons->addWidget(button);
 		connect(button, &QPushButton::clicked, this, [this, fn] {
-			try { fn(); } catch (const std::exception& e) { QMessageBox::warning(this, "Artwork", e.what()); }
+			try {
+				fn();
+			} catch (const std::exception& e) {
+				QMessageBox::warning(this, "Artwork", e.what());
+			}
 		});
 		return button;
 	};
 	background_button("Import…", [this] { import_backgrounds(); })->setObjectName("background_import");
 	background_button("Rename", [this] {
 		auto id = selected_background_id();
-		if (!id) return;
+		if (!id)
+			return;
 		auto* current = project_.core().background(*id);
-		if (!current) return;
+		if (!current)
+			return;
 		auto name = ask_name("Rename background", QString::fromStdString(current->name));
-		if (name.isEmpty()) return;
+		if (name.isEmpty())
+			return;
 		project_.edit_backgrounds([&](auto& backgrounds) {
-			for (auto& background : backgrounds) if (background.id == *id) background.name = name.toStdString();
+			for (auto& background : backgrounds) {
+				if (background.id == *id)
+					background.name = name.toStdString();
+			}
 		});
 	})->setObjectName("background_rename");
 	background_button("Delete", [this] {
 		auto id = selected_background_id();
-		if (!id) return;
+		if (!id)
+			return;
 		project_.edit_backgrounds([&](auto& backgrounds) {
 			std::erase_if(backgrounds, [&](const auto& background) { return background.id == *id; });
 		});
@@ -990,23 +1001,39 @@ ui::pane::artwork_browser::artwork_browser(
 		background_transform_[i]->setObjectName(background_transform_names[i]);
 		background_transform_form->addRow(background_transform_labels[i], background_transform_[i]);
 		connect(background_transform_[i], &QDoubleSpinBox::valueChanged, this, [this, i](double value) {
-			if (refreshing_ || !backgrounds_target_) return;
+			if (refreshing_ || !backgrounds_target_)
+				return;
 			auto id = selected_background_id();
-			if (!id) return;
+			if (!id)
+				return;
 			auto* current = project_.core().background(*id);
-			if (!current) return;
+			if (!current)
+				return;
 			const auto& t = current->transform;
 			const std::array<double, 5> values{t.translation.x, t.translation.y, t.rotation * 180 / std::numbers::pi, t.scale.x, t.scale.y};
 			if (QString::number(value, 'f', background_transform_[i]->decimals()) ==
-			    QString::number(values[i], 'f', background_transform_[i]->decimals())) return;
+			    QString::number(values[i], 'f', background_transform_[i]->decimals()))
+				return;
 			project_.edit_backgrounds([&](auto& backgrounds) {
-				for (auto& background : backgrounds) if (background.id == *id) {
-					switch (i) {
-					case 0: background.transform.translation.x = value; break;
-					case 1: background.transform.translation.y = value; break;
-					case 2: background.transform.rotation = value * std::numbers::pi / 180; break;
-					case 3: background.transform.scale.x = value; break;
-					case 4: background.transform.scale.y = value; break;
+				for (auto& background : backgrounds) {
+					if (background.id == *id) {
+						switch (i) {
+						case 0:
+							background.transform.translation.x = value;
+							break;
+						case 1:
+							background.transform.translation.y = value;
+							break;
+						case 2:
+							background.transform.rotation = value * std::numbers::pi / 180;
+							break;
+						case 3:
+							background.transform.scale.x = value;
+							break;
+						case 4:
+							background.transform.scale.y = value;
+							break;
+						}
 					}
 				}
 			});
@@ -1017,11 +1044,16 @@ ui::pane::artwork_browser::artwork_browser(
 	background_transform_reset_->setObjectName("background_reset_transform");
 	background_transform_layout->addWidget(background_transform_reset_, 0, Qt::AlignLeft);
 	connect(background_transform_reset_, &QPushButton::clicked, this, [this] {
-		if (refreshing_) return;
+		if (refreshing_)
+			return;
 		auto id = selected_background_id();
-		if (!id) return;
+		if (!id)
+			return;
 		project_.edit_backgrounds([&](auto& backgrounds) {
-			for (auto& background : backgrounds) if (background.id == *id) background.transform = {};
+			for (auto& background : backgrounds) {
+				if (background.id == *id)
+					background.transform = {};
+			}
 		});
 	});
 	background_transform_panel_->setVisible(false);
@@ -1033,15 +1065,20 @@ ui::pane::artwork_browser::artwork_browser(
 		refresh_details();
 	});
 	connect(backgrounds_, &QListWidget::currentRowChanged, this, [this] {
-		if (refreshing_) return;
+		if (refreshing_)
+			return;
 		auto id = selected_background_id();
 		auto& layer = canvases_.active_canvas().artwork();
-		if (id) layer.set_selected_background(*id); else layer.clear_selected_background();
+		if (id)
+			layer.set_selected_background(*id);
+		else
+			layer.clear_selected_background();
 		refresh_details();
 	});
 
 	connect(target_, &QComboBox::currentIndexChanged, this, [this](int index) {
-		if (refreshing_ || index < 0) return;
+		if (refreshing_ || index < 0)
+			return;
 		auto value = target_->itemData(index).toString();
 		if (value.isEmpty()) {
 			character_.reset();

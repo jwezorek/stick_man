@@ -518,25 +518,34 @@ ui::canvas::artwork_layer::background_transform_target_at(QPointF position) cons
 			const auto h = handle_geometry(background.transform, background.image.width(),
 			    background.image.height(), scene_.scale());
 			const auto hit2 = h.hit_radius * h.hit_radius;
-			if (squared_distance(position, h.rotate) <= hit2) return sprite_drag::rotate;
-			for (auto corner : h.corners) if (squared_distance(position, corner) <= hit2) return sprite_drag::scale_xy;
-			if (squared_distance(position, h.left) <= hit2 || squared_distance(position, h.right) <= hit2) return sprite_drag::scale_x;
-			if (squared_distance(position, h.top) <= hit2 || squared_distance(position, h.bottom) <= hit2) return sprite_drag::scale_y;
+			if (squared_distance(position, h.rotate) <= hit2)
+				return sprite_drag::rotate;
+			for (auto corner : h.corners)
+				if (squared_distance(position, corner) <= hit2) return sprite_drag::scale_xy;
+			if (squared_distance(position, h.left) <= hit2 || squared_distance(position, h.right) <= hit2)
+				return sprite_drag::scale_x;
+			if (squared_distance(position, h.top) <= hit2 || squared_distance(position, h.bottom) <= hit2)
+				return sprite_drag::scale_y;
 		}
-		if (std::abs(background.transform.determinant()) < 1e-12) return {};
+		if (std::abs(background.transform.determinant()) < 1e-12)
+			return {};
 		auto local = sm::transform(point(position), background.transform.inverse());
 		auto x = local.x + half_width, y = half_height - local.y;
-		if (x < 0 || y < 0 || x >= background.image.width() || y >= background.image.height()) return {};
-		if (background.image.row(int(y))[int(x) * 4 + 3] == 0) return {};
+		if (x < 0 || y < 0 || x >= background.image.width() || y >= background.image.height())
+			return {};
+		if (background.image.row(int(y))[int(x) * 4 + 3] == 0)
+			return {};
 		return sprite_drag::translate;
 	};
 	auto backgrounds = background_drawables();
 	if (selected_background_)
 		for (const auto& background : backgrounds)
 			if (background.id == *selected_background_)
-				if (auto target = target_for(background, true)) return background_transform_target{background.id, *target};
+				if (auto target = target_for(background, true))
+					return background_transform_target{background.id, *target};
 	for (auto it = backgrounds.rbegin(); it != backgrounds.rend(); ++it)
-		if (auto target = target_for(*it, false)) return background_transform_target{it->id, *target};
+		if (auto target = target_for(*it, false))
+			return background_transform_target{it->id, *target};
 	return {};
 }
 
@@ -721,7 +730,8 @@ void ui::canvas::artwork_layer::end_transform(QPointF position) {
 		if (!same(d.before, d.preview)) {
 			project_.edit_backgrounds([&](auto& backgrounds) {
 				for (auto& background : backgrounds)
-					if (background.id == d.id) background.transform = d.preview;
+					if (background.id == d.id)
+						background.transform = d.preview;
 			});
 		}
 		scene_.update();

@@ -53,7 +53,8 @@ namespace {
             if (!rotation)
                 continue;
             sm::object_id id;
-            do id = sm::object_id::generate(); while (result.contains(id));
+            do id = sm::object_id::generate();
+            while (result.contains(id));
             result.emplace(id, sm::constraint{id, c.name(), *rotation});
         }
         return result;
@@ -216,7 +217,8 @@ void mdl::project::transform(const std::vector<handle>& nodes,
             after.emplace_back(node->id(), node->world_pos());
     {
         sm::geometry_batch batch(topology());
-        for (const auto& [h, pt] : before) commands::resolve<sm::node>(*this, h).set_world_pos(pt);
+        for (const auto& [h, pt] : before)
+            commands::resolve<sm::node>(*this, h).set_world_pos(pt);
         if (batch.commit() != sm::result::success)
             throw std::runtime_error("unable to restore animation edit probe");
     }
@@ -250,7 +252,8 @@ void mdl::project::transform(const std::vector<handle>& bones,
             after.emplace_back(node->id(), node->world_pos());
     {
         sm::geometry_batch batch(topology());
-        for (const auto& [h, pt] : before) commands::resolve<sm::node>(*this, h).set_world_pos(pt);
+        for (const auto& [h, pt] : before)
+            commands::resolve<sm::node>(*this, h).set_world_pos(pt);
         if (batch.commit() != sm::result::success)
             throw std::runtime_error("unable to restore animation edit probe");
     }
@@ -316,7 +319,7 @@ void mdl::project::transform_node_positions(
                 return status;
             }
             if (validate_pin_endpoints(candidate_animation, proj.core_.topology(), skeletons)
-                    != sm::result::success) {
+ != sm::result::success) {
                 sm::apply_skeletal_pose(before_pose, proj.topology(), skeletons);
                 emit proj.animation_authoring_error(QStringLiteral("This edit would violate the current animation pose constraints."));
                 emit proj.refresh_canvas(proj, false);
@@ -371,8 +374,10 @@ sm::result mdl::project::begin_animation_session(sm::object_id character_id, sm:
         if (!copied)
             return copied.error();
         copied->get().clear_user_data();
-        for (auto node : copied->get().nodes()) node->clear_user_data();
-        for (auto bone : copied->get().bones()) bone->clear_user_data();
+        for (auto node : copied->get().nodes())
+            node->clear_user_data();
+        for (auto bone : copied->get().bones())
+            bone->clear_user_data();
     }
     if (!source_animation->keyframes.empty())
         session.selected_keyframe = source_animation->keyframes.front().id;
@@ -389,7 +394,8 @@ sm::result mdl::project::begin_animation_session(sm::object_id character_id, sm:
     }
     emit refresh_undo_redo_state(false, false);
     emit refresh_canvas(*this, true);
-    if (animation_session_->selected_keyframe) emit animation_keyframe_selected(*animation_session_->selected_keyframe);
+    if (animation_session_->selected_keyframe)
+        emit animation_keyframe_selected(*animation_session_->selected_keyframe);
     return sm::result::success;
 }
 void mdl::project::end_animation_session() {
@@ -522,18 +528,27 @@ std::expected<sm::object_id, sm::result> mdl::project::add_animation_rotation_co
     auto apply = [character_id, animation_id, keyframe_id, skeletons](project& p,
             const sm::animation& value) {
         auto* a = p.core_.animation_data(character_id).find_animation(animation_id);
-        if (!a) throw std::runtime_error("animation missing during transition constraint edit");
+        if (!a)
+            throw std::runtime_error("animation missing during transition constraint edit");
         *a = value;
         p.animation_session_->selected_keyframe = keyframe_id;
         auto* selected = a->find_keyframe(keyframe_id);
-        if (!selected) throw std::runtime_error("selected keyframe missing during transition constraint edit");
+        if (!selected)
+            throw std::runtime_error("selected keyframe missing during transition constraint edit");
         sm::apply_skeletal_pose(selected->pose, p.topology(), skeletons);
         emit p.animation_keyframe_selected(keyframe_id);
         emit p.animation_preview_changed();
         emit p.refresh_canvas(p, false);
     };
-    command cmd{[apply, after](project& p){ apply(p, after); return sm::result::success; },
-                [apply, before](project& p){ apply(p, before); }};
+    command cmd{
+        [apply, after](project& p) {
+            apply(p, after);
+            return sm::result::success;
+        },
+        [apply, before](project& p) {
+            apply(p, before);
+        }
+    };
     cmd.animation_edit = true;
     if (auto status = execute_session_command(cmd); status != sm::result::success)
         return std::unexpected(status);
@@ -543,7 +558,8 @@ std::expected<sm::object_id, sm::result> mdl::project::add_animation_rotation_co
 std::optional<sm::rotation_constraint> mdl::project::animation_session_rotation_constraint(sm::object_id id) const {
     auto constraints = animation_session_rotation_constraints();
     auto it = constraints.find(id);
-    if (it == constraints.end() || !it->second.rotation()) return {};
+    if (it == constraints.end() || !it->second.rotation())
+        return {};
     return *it->second.rotation();
 }
 
@@ -553,10 +569,12 @@ sm::result mdl::project::preview_animation_rotation_constraint(
         return sm::result::not_found;
     auto* animation = core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
     auto index = animation ? animation->keyframe_index(*animation_session_->selected_keyframe) : std::nullopt;
-    if (!animation || !index || *index >= animation->transitions.size()) return sm::result::not_found;
+    if (!animation || !index || *index >= animation->transitions.size())
+        return sm::result::not_found;
     auto& transition = animation->transitions[*index];
     auto it = transition.rotation_constraints.find(id);
-    if (it == transition.rotation_constraints.end()) return sm::result::not_found;
+    if (it == transition.rotation_constraints.end())
+        return sm::result::not_found;
     sm::constraint replacement{id, it->second.name(), definition};
     auto proposed = core_.constraints();
     for (const auto& [other_id, other] : transition.rotation_constraints)
@@ -610,18 +628,27 @@ sm::result mdl::project::update_animation_rotation_constraint(
     auto apply = [character_id, animation_id, keyframe_id, skeletons](project& p,
             const sm::animation& value) {
         auto* a = p.core_.animation_data(character_id).find_animation(animation_id);
-        if (!a) throw std::runtime_error("animation missing during constraint edit");
+        if (!a)
+            throw std::runtime_error("animation missing during constraint edit");
         *a = value;
         p.animation_session_->selected_keyframe = keyframe_id;
         auto* selected = a->find_keyframe(keyframe_id);
-        if (!selected) throw std::runtime_error("selected keyframe missing during constraint edit");
+        if (!selected)
+            throw std::runtime_error("selected keyframe missing during constraint edit");
         sm::apply_skeletal_pose(selected->pose, p.topology(), skeletons);
         emit p.animation_keyframe_selected(keyframe_id);
         emit p.animation_preview_changed();
         emit p.refresh_canvas(p, false);
     };
-    command cmd{[apply, after](project& p){ apply(p, after); return sm::result::success; },
-                [apply, before](project& p){ apply(p, before); }};
+    command cmd{
+        [apply, after](project& p) {
+            apply(p, after);
+            return sm::result::success;
+        },
+        [apply, before](project& p) {
+            apply(p, before);
+        }
+    };
     cmd.animation_edit = true;
     return execute_session_command(cmd);
 }
@@ -635,23 +662,38 @@ sm::result mdl::project::remove_animation_rotation_constraint(sm::object_id id) 
     const auto keyframe_id = *animation_session_->selected_keyframe;
     auto* animation = core_.animation_data(character_id).find_animation(animation_id);
     auto index = animation ? animation->keyframe_index(keyframe_id) : std::nullopt;
-    if (!animation || !index || *index >= animation->transitions.size()) return sm::result::not_found;
+    if (!animation || !index || *index >= animation->transitions.size())
+        return sm::result::not_found;
     auto& transition = animation->transitions[*index];
     auto it = transition.rotation_constraints.find(id);
-    if (it == transition.rotation_constraints.end()) return sm::result::not_found;
+    if (it == transition.rotation_constraints.end())
+        return sm::result::not_found;
     const auto saved = it->second;
     const auto transition_id = transition.id;
     auto apply = [character_id, animation_id, keyframe_id, transition_id, saved](project& p, bool present) {
         auto* a = p.core_.animation_data(character_id).find_animation(animation_id);
-        if (!a) throw std::runtime_error("animation missing during constraint removal");
-        auto tr = std::ranges::find_if(a->transitions, [=](const auto& x){ return x.id == transition_id; });
-        if (tr == a->transitions.end()) throw std::runtime_error("transition missing during constraint removal");
-        if (present) tr->rotation_constraints.insert_or_assign(saved.id(), saved);
-        else tr->rotation_constraints.erase(saved.id());
+        if (!a)
+            throw std::runtime_error("animation missing during constraint removal");
+        auto tr = std::ranges::find_if(a->transitions, [ = ](const auto& x){ return x.id == transition_id; });
+        if (tr == a->transitions.end())
+            throw std::runtime_error("transition missing during constraint removal");
+        if (present)
+            tr->rotation_constraints.insert_or_assign(saved.id(), saved);
+        else
+            tr->rotation_constraints.erase(saved.id());
         p.animation_session_->selected_keyframe = keyframe_id;
-        emit p.animation_preview_changed(); emit p.refresh_canvas(p, false);
+        emit p.animation_preview_changed();
+        emit p.refresh_canvas(p, false);
     };
-    command cmd{[apply](project& p){ apply(p, false); return sm::result::success; }, [apply](project& p){ apply(p, true); }};
+    command cmd{
+        [apply](project& p) {
+            apply(p, false);
+            return sm::result::success;
+        },
+        [apply](project& p) {
+            apply(p, true);
+        }
+    };
     cmd.animation_edit = true;
     return execute_session_command(cmd);
 }
@@ -723,8 +765,10 @@ sm::result mdl::project::set_animation_outgoing_transition_node_pinned(sm::objec
         if (before == pinned)
             return sm::result::success;
         auto apply = [keyframe_id, node_id](project& p, bool value) {
-            if (value) p.animation_session_->terminal_pinned_nodes.insert(node_id);
-            else p.animation_session_->terminal_pinned_nodes.erase(node_id);
+            if (value)
+                p.animation_session_->terminal_pinned_nodes.insert(node_id);
+            else
+                p.animation_session_->terminal_pinned_nodes.erase(node_id);
             p.animation_session_->selected_keyframe = keyframe_id;
             emit p.animation_preview_changed();
             emit p.refresh_canvas(p, false);
@@ -771,8 +815,10 @@ sm::result mdl::project::set_animation_outgoing_transition_node_pinned(sm::objec
             [transition_id](const auto& candidate) { return candidate.id == transition_id; });
         if (transition == animation->transitions.end())
             throw std::runtime_error("animation transition missing during pin edit");
-        if (value) transition->pinned_nodes.insert(node_id);
-        else transition->pinned_nodes.erase(node_id);
+        if (value)
+            transition->pinned_nodes.insert(node_id);
+        else
+            transition->pinned_nodes.erase(node_id);
         p.animation_session_->selected_keyframe = keyframe_id;
         emit p.animation_preview_changed();
         emit p.refresh_canvas(p, false);
@@ -989,8 +1035,15 @@ sm::result mdl::project::set_animation_transition_duration(sm::object_id transit
         t->duration_seconds = value;
         emit p.animation_preview_changed();
     };
-    command cmd{[apply, seconds](project& p){ apply(p, seconds); return sm::result::success; },
-                [apply, before](project& p){ apply(p, before); }};
+    command cmd{
+        [apply, seconds](project& p) {
+            apply(p, seconds);
+            return sm::result::success;
+        },
+        [apply, before](project& p) {
+            apply(p, before);
+        }
+    };
     cmd.animation_edit = true;
     return execute_session_command(cmd);
 }
@@ -1072,8 +1125,15 @@ sm::result mdl::project::insert_animation_keyframe(double seconds) {
         emit p.animation_preview_changed();
         emit p.refresh_canvas(p, false);
     };
-    command cmd{[apply, after, inserted_id](project& p){ apply(p, after, inserted_id); return sm::result::success; },
-                [apply, before, previous_selection](project& p){ apply(p, before, previous_selection); }};
+    command cmd{
+        [apply, after, inserted_id](project& p) {
+            apply(p, after, inserted_id);
+            return sm::result::success;
+        },
+        [apply, before, previous_selection](project& p) {
+            apply(p, before, previous_selection);
+        }
+    };
     cmd.animation_edit = true;
     return execute_session_command(cmd);
 }
@@ -1236,6 +1296,7 @@ void mdl::project::edit_animation_data(sm::object_id id, const std::function<voi
     execute_command({[id, after](project& p) { p.core_.animation_data(id) = after; return sm::result::success; },
         [id, before](project& p) { p.core_.animation_data(id) = before; }});
 }
+
 void mdl::project::apply_pose(sm::object_id character, sm::object_id id) {
     if (animation_mode())
         return;
@@ -1254,75 +1315,100 @@ void mdl::project::apply_pose(sm::object_id character, sm::object_id id) {
 // A path edit is one session command; drag previews stay entirely in the editor.
 // Unlike terminal pins, paths never create an implicit outgoing transition.
 bool mdl::project::animation_has_outgoing_transition() const {
-    if (!animation_session_ || animation_preview_active() || !animation_session_->selected_keyframe) return false;
-    const auto* a=core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
-    const auto i=a ? a->keyframe_index(*animation_session_->selected_keyframe) : std::nullopt;
-    return i && *i<a->transitions.size();
+    if (!animation_session_ || animation_preview_active() || !animation_session_->selected_keyframe)
+        return false;
+    const auto* a = core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
+    const auto i = a ? a->keyframe_index(*animation_session_->selected_keyframe) : std::nullopt;
+    return i && *i < a->transitions.size();
 }
+
 std::vector<sm::object_id> mdl::project::animation_session_path_nodes() const {
     std::vector<sm::object_id> ids;
-    if (!animation_has_outgoing_transition()) return ids;
-    const auto* a=core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
-    const auto i=*a->keyframe_index(*animation_session_->selected_keyframe);
-    for (const auto& [id,path] : a->transitions[i].paths) ids.push_back(id);
+    if (!animation_has_outgoing_transition())
+        return ids;
+    const auto* a = core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
+    const auto i = *a->keyframe_index(*animation_session_->selected_keyframe);
+    for (const auto& [id, path] : a->transitions[i].paths)
+        ids.push_back(id);
     return ids;
 }
+
 std::optional<mdl::project::animation_path_context> mdl::project::animation_session_path_context(sm::object_id node) const {
-    if (!animation_has_outgoing_transition()) return {};
-    const auto* a=core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
-    const auto i=*a->keyframe_index(*animation_session_->selected_keyframe);
-    const auto* c=&a->transitions[i];
-    auto char_ref=core_.character(animation_session_->character);
-    if (!char_ref) return {};
-    const auto skeletons=char_ref->get().rig().skeleton_ids();
-    auto frame=sm::fixed_animation_root(*a,core_.topology(),skeletons,char_ref->get().character_root_bone());
-    auto start=sm::animation_pose_node(a->keyframes[i].pose,core_.topology(),skeletons,node);
-    auto end=sm::animation_pose_node(a->keyframes[i+1].pose,core_.topology(),skeletons,node);
-    if (!frame || !start || !end) return {};
-    const auto it=c->paths.find(node);
+    if (!animation_has_outgoing_transition())
+        return {};
+    const auto* a = core_.animation_data(animation_session_->character).find_animation(animation_session_->animation);
+    const auto i = *a->keyframe_index(*animation_session_->selected_keyframe);
+    const auto* c = &a->transitions[i];
+    auto char_ref = core_.character(animation_session_->character);
+    if (!char_ref)
+        return {};
+    const auto skeletons = char_ref->get().rig().skeleton_ids();
+    auto frame = sm::fixed_animation_root(*a, core_.topology(), skeletons, char_ref->get().character_root_bone());
+    auto start = sm::animation_pose_node(a->keyframes[i].pose, core_.topology(), skeletons, node);
+    auto end = sm::animation_pose_node(a->keyframes[i + 1].pose, core_.topology(), skeletons, node);
+    if (!frame || !start || !end)
+        return {};
+    const auto it = c->paths.find(node);
     sm::animation_path path;
-    if (it!=c->paths.end()) path=it->second;
-    path.node=node;
-    return animation_path_context{std::move(path),frame->to_local(*start),frame->to_local(*end),*frame};
+    if (it != c->paths.end())
+        path = it->second;
+    path.node = node;
+    return animation_path_context{std::move(path), frame->to_local(*start), frame->to_local(*end), *frame};
 }
-sm::result mdl::project::set_animation_path(sm::object_id node,std::optional<sm::animation_path> path) {
-    if (!animation_has_outgoing_transition()) return sm::result::invalid_animation;
-    const auto cid=animation_session_->character;
-    const auto aid=animation_session_->animation;
-    const auto kid=*animation_session_->selected_keyframe;
-    auto* a=core_.animation_data(cid).find_animation(aid);
-    const auto i=*a->keyframe_index(kid);
-    if (!animation_session_->working_topology.get<sm::node>(node)) return sm::result::invalid_membership;
-    if (path && path->node!=node) return sm::result::invalid_constraint;
+
+sm::result mdl::project::set_animation_path(sm::object_id node, std::optional<sm::animation_path> path) {
+    if (!animation_has_outgoing_transition())
+        return sm::result::invalid_animation;
+    const auto cid = animation_session_->character;
+    const auto aid = animation_session_->animation;
+    const auto kid = *animation_session_->selected_keyframe;
+    auto* a = core_.animation_data(cid).find_animation(aid);
+    const auto i = *a->keyframe_index(kid);
+    if (!animation_session_->working_topology.get<sm::node>(node))
+        return sm::result::invalid_membership;
+    if (path && path->node != node)
+        return sm::result::invalid_constraint;
     if (path) {
-        if (!path->is_smooth()) return sm::result::invalid_constraint;
+        if (!path->is_smooth())
+            return sm::result::invalid_constraint;
         for (const auto& knot : path->knots)
-            for (auto p : {knot.position,knot.handle_in,knot.handle_out})
-                if (!std::isfinite(p.x) || !std::isfinite(p.y)) return sm::result::out_of_bounds;
+            for (auto p : {knot.position, knot.handle_in, knot.handle_out})
+                if (!std::isfinite(p.x) || !std::isfinite(p.y))
+                    return sm::result::out_of_bounds;
     }
     // A path and a hard pin at the same node have incompatible meanings.
-    if (path && a->transitions[i].pinned_nodes.contains(node)) return sm::result::invalid_constraint;
-    const auto before=a->transitions[i].paths;
-    auto after=before;
-    if (path) after.insert_or_assign(node,std::move(*path));
-    else after.erase(node);
-    auto apply=[cid,aid,kid,i](project& p,const std::map<sm::object_id,sm::animation_path>& paths) {
-        auto* animation=p.core_.animation_data(cid).find_animation(aid);
-        if (!animation || i>=animation->transitions.size() ||
-            animation->keyframes[i].id!=kid)
+    if (path && a->transitions[i].pinned_nodes.contains(node))
+        return sm::result::invalid_constraint;
+    const auto before = a->transitions[i].paths;
+    auto after = before;
+    if (path)
+        after.insert_or_assign(node, std::move(*path));
+    else
+        after.erase(node);
+    auto apply = [cid, aid, kid, i](project& p, const std::map<sm::object_id, sm::animation_path>& paths) {
+        auto* animation = p.core_.animation_data(cid).find_animation(aid);
+        if (!animation || i >= animation->transitions.size() ||
+            animation->keyframes[i].id != kid)
             throw std::runtime_error("animation transition missing during path undo/redo");
-        animation->transitions[i].paths=paths;
-        if (p.animation_session_->selected_keyframe!=kid) {
-            p.animation_session_->selected_keyframe=kid;
-            const auto rig=p.core_.character(cid)->get().rig().skeleton_ids();
-            sm::apply_skeletal_pose(animation->keyframes[i].pose,p.topology(),rig);
+        animation->transitions[i].paths = paths;
+        if (p.animation_session_->selected_keyframe != kid) {
+            p.animation_session_->selected_keyframe = kid;
+            const auto rig = p.core_.character(cid)->get().rig().skeleton_ids();
+            sm::apply_skeletal_pose(animation->keyframes[i].pose, p.topology(), rig);
             emit p.animation_keyframe_selected(kid);
         }
         emit p.animation_preview_changed();
-        emit p.refresh_canvas(p,false);
+        emit p.refresh_canvas(p, false);
     };
-    command cmd{[apply,after](project& p){apply(p,after);return sm::result::success;},
-        [apply,before](project& p){apply(p,before);}};
-    cmd.animation_edit=true;
+    command cmd{
+        [apply, after](project& p) {
+            apply(p, after);
+            return sm::result::success;
+        },
+        [apply, before](project& p) {
+            apply(p, before);
+        }
+    };
+    cmd.animation_edit = true;
     return execute_session_command(cmd);
 }
